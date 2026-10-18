@@ -29,10 +29,12 @@ enum InspectorPanelTestSupport {
         width: CGFloat = 760,
         height: CGFloat = 700,
         environment: AppEnvironment? = nil,
+        commentStore: TaskCommentStore? = nil,
         onFrames: (([InspectorRenderAnchor: CGRect]) -> Void)? = nil
     ) -> NSHostingView<AnyView> {
         let probe = RenderProbe()
-        var root = AnyView(TaskInspectorShell(workspace: workspace, showBack: false)
+        var root = AnyView(TaskInspectorShell(workspace: workspace, showBack: false,
+                                              commentStore: commentStore)
             .frame(width: width, height: height)
             .coordinateSpace(name: "inspector-render")
             .onPreferenceChange(InspectorFramesKey.self) { probe.main = $0; onFrames?($0) }
@@ -173,7 +175,8 @@ enum InspectorPanelTestSupport {
                 "开始专注": .focusMenuRow, "关联主任务": .parentMenuRow,
                 "标签": .tagsMenuRow, "任务动态": .activityMenuRow, "创建副本": .duplicateMenuRow,
                 "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch,
-                "设置预计专注": .focusEstimate, "截止日期": .deadlineRow
+                "设置预计专注": .focusEstimate, "截止日期": .deadlineRow,
+                "任务类型": .kind, "笔记信息": .noteInfo, "在独立窗口打开": .detach, "评论": .footerComment
             ]
             let frames = window === owner ? probe.main : probe.popup
             var rect = anchors[labelFragment].flatMap { frames[$0] }

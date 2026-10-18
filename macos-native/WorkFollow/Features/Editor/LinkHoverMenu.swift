@@ -79,7 +79,7 @@ extension NativeTextView {
         } else {
             panel.contentView = NSHostingView(rootView: content)
         }
-        let size = NSSize(width: 178, height: 30)
+        let size = NSSize(width: 232, height: 30)
         let screenLine = window.convertToScreen(convert(line, to: nil))
         let bounds = (window.screen ?? NSScreen.main)?.visibleFrame
             ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -112,6 +112,7 @@ private struct LinkHoverMenuView: View {
             button("移除", symbol: "link.badge.minus", action: onRemove)
         }
         .padding(3)
+        .frame(width: 226)
         .background(WFColors.overlay)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder))

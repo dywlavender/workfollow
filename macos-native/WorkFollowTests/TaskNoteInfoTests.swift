@@ -23,14 +23,14 @@ final class TaskNoteInfoTests: XCTestCase {
         XCTAssertEqual(info.characterCountText, "7")
     }
 
-    func testDateTextUsesChinesePattern() throws {
+    func testDateTextUsesCompactPattern() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
         let date = Date(timeIntervalSince1970: 1_790_000_000)
         let text = TaskNoteInfoPanel.dateText(date, calendar: calendar)
-        XCTAssertTrue(text.contains("年"))
-        XCTAssertTrue(text.contains("月"))
-        XCTAssertTrue(text.contains("日"))
+        // 走查发现中文长格式在 220pt 面板里会被截断，改为紧凑的 yyyy/M/d HH:mm。
+        XCTAssertNotNil(text.range(of: #"^\d{4}/\d{1,2}/\d{1,2} \d{2}:\d{2}$"#, options: .regularExpression),
+                        "实际：\(text)")
     }
 
     func testHeaderOffersInfoOnlyWhenTheTaskHasBody() throws {

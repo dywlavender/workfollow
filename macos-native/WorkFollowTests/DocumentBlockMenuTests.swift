@@ -48,6 +48,38 @@ final class DocumentBlockMenuTests: XCTestCase {
         XCTAssertNil(view.slashSession)
     }
 
+    /// 走查发现的回归：手柄命中要按"点中的那一行"，而不是光标所在行。
+    func testGutterClickTargetsTheClickedLineNotTheCaretLine() throws {
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 200), textContainer: nil)
+        view.isEditable = true
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = view
+        window.orderFront(nil)
+        addTeardownBlock { view.dismissSlash() }
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "第一行")]),
+            DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "第二行")])
+        ])
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+
+        let secondStart = ("第一行\n" as NSString).length
+        let line = try XCTUnwrap(view.viewRect(forCharacterAt: secondStart))
+        let point = NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: view.decorationVisibleMinX) + 2,
+                            y: line.midY)
+
+        XCTAssertTrue(view.openBlockMenu(at: point))
+        XCTAssertEqual(view.slashSession?.start, secondStart,
+                       "光标停在第一行时点第二行沟槽，会话要落在第二行")
+        view.dismissSlash()
+        window.close()
+    }
+
     // MARK: - Helpers
 
     private func makeView(kind: DocumentBlockKind, text: String) throws -> (NativeTextView, NSWindow) {

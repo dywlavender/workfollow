@@ -143,7 +143,7 @@ struct TaskInspectorShell: View {
             }
         }
         .background {
-            AnchoredPropertyPanel(isPresented: $showNoteInfo, width: 200,
+            AnchoredPropertyPanel(isPresented: $showNoteInfo, width: 220,
                                   placement: .verticalInOwner,
                                   focusPolicy: .preservePresenter, title: "笔记信息") {
                 TaskNoteInfoPanel(info: TaskNoteInfo(task: task), calendar: workspace.calendar)

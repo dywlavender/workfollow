@@ -29,7 +29,7 @@ struct TaskNoteInfoPanel: View {
             row("修改", Self.dateText(info.updatedAt, calendar: calendar))
         }
         .padding(14)
-        .frame(width: 200)
+        .frame(width: 220)
     }
 
     private func row(_ title: String, _ value: String) -> some View {
@@ -51,7 +51,7 @@ struct TaskNoteInfoPanel: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy年M月d日 HH:mm"
+        formatter.dateFormat = "yyyy/M/d HH:mm"
         return formatter.string(from: date)
     }
 }

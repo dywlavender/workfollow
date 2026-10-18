@@ -447,11 +447,13 @@ final class NativeTextView: NSTextView {
     func openBlockMenu(at point: NSPoint) -> Bool {
         guard isEditable, let window, let storage = textStorage else { return false }
         let source = storage.string as NSString
-        // The marker is drawn only on the active line. Hit-test that same line:
-        // gutter clicks on a characterless trailing paragraph may otherwise
-        // resolve to the previous paragraph in TextKit's insertion lookup.
-        let offset = min(max(selectedRange().location, 0), source.length)
-        let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
+        // 命中"点中的那一行"而不是光标所在行：用户会去点自己看到的那一行，
+        // 光标不在那里时也应照常打开（文末空段用插入点矩形兜底）。
+        let clicked = characterIndexForInsertion(at: point)
+        let anchor = source.length == 0 ? 0 : min(max(clicked, 0), source.length - 1)
+        let paragraph = source.length == 0
+            ? NSRange(location: 0, length: 0)
+            : source.paragraphRange(for: NSRange(location: anchor, length: 0))
         let kind = paragraph.location < storage.length
             ? DocumentTextCodec.kind(storage.attribute(DocumentTextCodec.blockKey,
                 at: paragraph.location, effectiveRange: nil) as? String ?? "paragraph")
