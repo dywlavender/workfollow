@@ -128,7 +128,8 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(descriptors.map(\.toolbarSymbol),
                        ["bold", "italic", "underline", "strikethrough", "highlighter", "chevron.left.forwardslash.chevron.right"])
         XCTAssertEqual(descriptors.last?.formatToolbarTitle, "代码")
-        XCTAssertEqual(DocumentToolbarPicker.heading.titles, ["正文", "一级标题", "二级标题", "三级标题"])
+        XCTAssertEqual(DocumentToolbarPicker.heading.titles,
+                       ["正文", "一级标题", "二级标题", "三级标题", "四级标题", "五级标题", "六级标题"])
         for format in DocumentFormatCommand.commands {
             for style in [DocumentSelectionStyle(),
                           DocumentSelectionStyle(blockToken: DocumentTextCodec.blockToken(format.block ?? .paragraph),
@@ -146,10 +147,10 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(DocumentToolbarPicker.timeFormats,
                        ["yyyy年M月d日 HH:mm", "yyyy年M月d日", "yyyy/M/d", "HH:mm"])
         XCTAssertEqual(DocumentToolbarPicker.time.height, 156)
-        XCTAssertEqual(DocumentToolbarPicker.heading.height, 156)
+        XCTAssertEqual(DocumentToolbarPicker.heading.height, 264, "7 行：正文 + H1–H6")
         XCTAssertNil(DocumentToolbarPicker.heading.headingBadge(at: 0))
-        XCTAssertEqual((1...3).map { DocumentToolbarPicker.heading.headingBadge(at: $0) },
-                       ["H₁", "H₂", "H₃"])
+        XCTAssertEqual((1...6).map { DocumentToolbarPicker.heading.headingBadge(at: $0) },
+                       ["H₁", "H₂", "H₃", "H₄", "H₅", "H₆"])
         XCTAssertNil(DocumentToolbarPicker.time.headingBadge(at: 1))
         XCTAssertEqual(DocumentFormatToolbarMetrics.controlWidth, 26)
         XCTAssertEqual(DocumentFormatToolbarMetrics.controlHeight, 28)
@@ -280,8 +281,9 @@ final class DocumentProfileTests: XCTestCase {
 
     func testCatalogUsesUniqueSemanticIDsIndependentOfPresentationOrder() throws {
         let descriptors = EditorCommandCatalog.formats
-        XCTAssertEqual(Set(descriptors.map(\.id)).count, 16)
-        XCTAssertEqual(descriptors.count, 16)
+        // 19 = 原 16 + H4–H6（TI2-16）。用目录自身计数，避免再加级别时重复改断言。
+        XCTAssertEqual(Set(descriptors.map(\.id)).count, descriptors.count)
+        XCTAssertEqual(descriptors.count, DocumentFormatCommand.commands.count)
         let reversed = Dictionary(uniqueKeysWithValues: descriptors.reversed().map { ($0.id, $0.glyph) })
         for id in EditorCommandCatalog.compactSlashFormatIDs {
             let format = try XCTUnwrap(EditorCommandCatalog.format(id))
@@ -299,10 +301,12 @@ final class DocumentProfileTests: XCTestCase {
         let generic = DocumentProfile().slashCommands
         XCTAssertEqual(task.map(\.id), note.map(\.id))
         XCTAssertEqual(Array(task.prefix(7)).map(\.id), EditorCommandCatalog.compactSlashFormatIDs)
-        XCTAssertEqual(Array(generic.prefix(16)).map(\.id), DocumentFormatCommand.commands.map(\.id))
+        XCTAssertEqual(Array(generic.prefix(DocumentFormatCommand.commands.count)).map(\.id),
+                       DocumentFormatCommand.commands.map(\.id))
         XCTAssertEqual(Array(task.prefix(7)).map(\.resolvedGlyph),
                        [.heading(1), .heading(2), .heading(3), .bullet, .ordered, .checklist, .quote])
-        XCTAssertTrue(generic.prefix(16).allSatisfy { $0.resolvedGlyph == .symbol("text.alignleft") },
+        XCTAssertTrue(generic.prefix(DocumentFormatCommand.commands.count)
+            .allSatisfy { $0.resolvedGlyph == .symbol("text.alignleft") },
                       "Generic Slash keeps its existing visual policy during this refactor")
         for command in task.prefix(7) {
             let format = EditorCommandCatalog.format(command.id)

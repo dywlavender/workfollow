@@ -6,6 +6,9 @@ struct TaskEditorHostActions {
     let openTags: () -> Void
     let openRelation: () -> Void
     let openLink: (String) -> Bool
+    /// `#` 标签补全：候选来自工作区已有标签，选中后把标签挂到任务上。
+    var availableTags: () -> [String] = { [] }
+    var addTag: (String) -> Void = { _ in }
 }
 
 enum TaskDocumentProfile {
@@ -18,9 +21,12 @@ enum TaskDocumentProfile {
                                          keywords: "subtask child") { _ in host.createChild() })
         commands.append(DocumentCommand(id: "task.tags", title: "标签", group: "插入") { _ in host.openTags() })
         commands.append(DocumentCommand(id: "task.relation", title: "关联任务/笔记", group: "插入") { _ in host.openRelation() })
-        return DocumentProfile(commands: commands, taskSlash: true, onOpenLink: host.openLink,
-                               selectionToolbarEnabled: false,
-                               slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs) + commands)
+        var profile = DocumentProfile(commands: commands, taskSlash: true, onOpenLink: host.openLink,
+                                      selectionToolbarEnabled: false,
+                                      slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs) + commands)
+        profile.tagCandidates = host.availableTags
+        profile.onTagInserted = host.addTag
+        return profile
     }
 
     static func reference(to note: Note) -> EditorReference {

@@ -783,7 +783,13 @@ struct TaskInspectorShell: View {
                     openTags: { actionPresentation.open(.tags) },
                     openRelation: {
                         actionPresentation.open(.relation)
-                    }, openLink: openDocumentLink)),
+                    }, openLink: openDocumentLink,
+                    availableTags: { workspace.tagNames },
+                    addTag: { tag in
+                        guard let current = workspace.task(for: task.id) else { return }
+                        guard !current.tags.contains(tag) else { return }
+                        workspace.setTags(task.id, (current.tags + [tag]).sorted())
+                    })),
                 contentSized: true,
                 handle: editorHandle,
                 // 传给编辑器的是"宿主内可见的装饰槽宽度"（容器坐标），不是分栏线位置；

@@ -139,9 +139,12 @@ enum DocumentToolbarPicker: Equatable {
     static let timeFormats = ["yyyy年M月d日 HH:mm", "yyyy年M月d日", "yyyy/M/d", "HH:mm"]
 
     /// Decorative labels never become document text or command identities.
+    static let headingBadges = ["H₁", "H₂", "H₃", "H₄", "H₅", "H₆"]
+
     func headingBadge(at index: Int) -> String? {
-        guard self == .heading, index > 0, index < titles.count else { return nil }
-        return ["H₁", "H₂", "H₃"][index - 1]
+        guard self == .heading, index > 0, index < titles.count,
+              index - 1 < Self.headingBadges.count else { return nil }
+        return Self.headingBadges[index - 1]
     }
 
     /// 时间菜单显示的是**此刻的值**（原版把值当标签用：`2026年9月27日` /

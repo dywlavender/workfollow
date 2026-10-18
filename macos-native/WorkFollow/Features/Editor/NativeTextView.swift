@@ -22,6 +22,9 @@ final class NativeTextView: NSTextView {
     var profile = DocumentProfile()
     var slashSession: SlashSession?
     var slashPanel: NSPanel?
+    /// `#` 标签补全（TI2-08）的会话与候选面板。
+    var tagSession: TagCompletionSession?
+    var tagPanel: NSPanel?
     /// 斜杠面板"跟着滚动与窗口变化走"用的通知观察者（见 `startFollowingSlash`）。
     var slashObservers: [Any] = []
     /// 文末那个"一个字符都没有"的空段落当前的待定段落类型。
@@ -148,6 +151,7 @@ final class NativeTextView: NSTextView {
         syncPendingTrailingBlock()
         super.didChangeText()
         refreshSlash()
+        refreshTagCompletion()
         // 行首标记活在文本区外的沟槽里（标题角标 / 空行"+"），文字变化不会
         // 自动把它标脏：段落类型变了要显式重绘。
         needsDisplay = true
@@ -311,6 +315,7 @@ final class NativeTextView: NSTextView {
 
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
+        dismissTagCompletion()
         if openBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
         // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
         // 共享文档样式上，不分面）。
@@ -483,6 +488,7 @@ final class NativeTextView: NSTextView {
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         if newWindow == nil {
             dismissSlash()
+            dismissTagCompletion()
             dismissSelectionToolbar()
         }
         super.viewWillMove(toWindow: newWindow)
@@ -495,6 +501,16 @@ final class NativeTextView: NSTextView {
     }
 
     override func doCommand(by selector: Selector) {
+        // 标签候选优先于普通回车/Esc（面板开着时这三个键归面板）。
+        if tagSession != nil, !hasMarkedText() {
+            switch selector {
+            case #selector(moveUp(_:)): moveTagCompletion(-1); return
+            case #selector(moveDown(_:)): moveTagCompletion(1); return
+            case #selector(insertNewline(_:)): commitTagCompletion(); return
+            case #selector(cancelOperation(_:)): dismissTagCompletion(); return
+            default: break
+            }
+        }
         if slashSession != nil, !hasMarkedText() {
             switch selector {
             case #selector(moveUp(_:)): moveSlash(-1); return
