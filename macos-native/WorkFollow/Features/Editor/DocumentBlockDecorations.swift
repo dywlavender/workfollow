@@ -8,12 +8,8 @@ import AppKit
 /// macOS 14+ 的 TextKit 2 会自绘 NSTextList 标记并挤占行首空间，叠出"双点/1.1"。
 /// 模型不受影响：段落类型仍存在 blockKey 里，绘制只读不写。
 extension NativeTextView {
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        drawBlockDecorations(in: dirtyRect)
-    }
-
-    private func drawBlockDecorations(in dirtyRect: NSRect) {
+    /// 由 `BlockDecorationOverlay` 调用（选区视图之上），不再走文本视图自己的 draw。
+    func drawBlockDecorations(in dirtyRect: NSRect) {
         guard let storage = textStorage, window != nil else { return }
         let source = storage.string as NSString
         if source.length > 0 {

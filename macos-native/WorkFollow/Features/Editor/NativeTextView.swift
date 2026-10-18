@@ -448,12 +448,19 @@ final class NativeTextView: NSTextView {
         guard isEditable, let window, let storage = textStorage else { return false }
         let source = storage.string as NSString
         // 命中"点中的那一行"而不是光标所在行：用户会去点自己看到的那一行，
-        // 光标不在那里时也应照常打开（文末空段用插入点矩形兜底）。
-        let clicked = characterIndexForInsertion(at: point)
-        let anchor = source.length == 0 ? 0 : min(max(clicked, 0), source.length - 1)
-        let paragraph = source.length == 0
-            ? NSRange(location: 0, length: 0)
-            : source.paragraphRange(for: NSRange(location: anchor, length: 0))
+        // 光标不在那里时也应照常打开。沟槽的 x 在文本容器之外，TextKit 的
+        // `characterIndexForInsertion` 在那里会失真（实测恒返回 0），所以先按
+        // 段落首/末字符的行矩形做 y 命中，落空再退回插入点。
+        let paragraph: NSRange
+        if let matched = self.paragraph(forGutterClick: point, source: source) {
+            paragraph = matched
+        } else {
+            let clicked = characterIndexForInsertion(at: point)
+            let anchor = source.length == 0 ? 0 : min(max(clicked, 0), source.length - 1)
+            paragraph = source.length == 0
+                ? NSRange(location: 0, length: 0)
+                : source.paragraphRange(for: NSRange(location: anchor, length: 0))
+        }
         let kind = paragraph.location < storage.length
             ? DocumentTextCodec.kind(storage.attribute(DocumentTextCodec.blockKey,
                 at: paragraph.location, effectiveRange: nil) as? String ?? "paragraph")
@@ -473,6 +480,33 @@ final class NativeTextView: NSTextView {
         slashSession = SlashSession(start: paragraph.location, trigger: "")
         refreshSlash()
         return true
+    }
+
+    /// 沟槽点击落在哪一段（y 命中段落首/末字符的行矩形；文末空段用它自己的插入点矩形）。
+    private func paragraph(forGutterClick point: NSPoint, source: NSString) -> NSRange? {
+        func contains(_ rect: NSRect?) -> Bool {
+            guard let rect else { return false }
+            return point.y >= rect.minY - 2 && point.y <= rect.maxY + 2
+        }
+        if source.length == 0 {
+            return contains(viewRect(forCharacterAt: 0)) ? NSRange(location: 0, length: 0) : nil
+        }
+        var offset = 0
+        while offset < source.length {
+            let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
+            let lastIndex = max(paragraph.location, NSMaxRange(paragraph) - 1)
+            if let first = viewRect(forCharacterAt: paragraph.location),
+               let last = viewRect(forCharacterAt: lastIndex) {
+                let top = min(first.minY, last.minY) - 2
+                let bottom = max(first.maxY, last.maxY) + 2
+                if point.y >= top, point.y <= bottom { return paragraph }
+            }
+            offset = NSMaxRange(paragraph)
+        }
+        if source.hasSuffix("\n"), contains(viewRect(forCharacterAt: source.length)) {
+            return NSRange(location: source.length, length: 0)
+        }
+        return nil
     }
 
     /// 文末空段的检查项翻转：无字符可改，直接改输入属性与待定级别并注册撤销；
@@ -819,6 +853,32 @@ final class NativeTextView: NSTextView {
         return resigned
     }
 
+    /// 行首装饰层（选区之上）；见 `BlockDecorationOverlay`。
+    private var decorationOverlay: BlockDecorationOverlay?
+    private var decorationSelectionObserver: NSObjectProtocol?
+    private var decorationBoundsObserver: NSObjectProtocol?
+
+    override func layout() {
+        super.layout()
+        installDecorationOverlay()
+    }
+
+    /// 装饰层必须始终压在所有子视图（尤其是 TextKit 2 的 `_NSTextSelectionView`）之上。
+    private func installDecorationOverlay() {
+        if decorationOverlay == nil {
+            let overlay = BlockDecorationOverlay(textView: self)
+            addSubview(overlay)
+            decorationOverlay = overlay
+        }
+        decorationOverlay?.frame = bounds
+        reorderDecorationOverlay()
+    }
+
+    private func reorderDecorationOverlay() {
+        guard let decorationOverlay, subviews.last !== decorationOverlay else { return }
+        addSubview(decorationOverlay, positioned: .above, relativeTo: nil)
+    }
+
     override init(frame frameRect: NSRect, textContainer: NSTextContainer?) {
         let container: NSTextContainer
         var ownedContentStorage: NSTextContentStorage?
@@ -835,10 +895,28 @@ final class NativeTextView: NSTextView {
         }
         super.init(frame: frameRect, textContainer: container)
         ownedTextContentStorage = ownedContentStorage
+        installDecorationOverlay()
+        postsBoundsChangedNotifications = true
+        decorationSelectionObserver = NotificationCenter.default.addObserver(
+            forName: NSTextView.didChangeSelectionNotification, object: self, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.decorationOverlay?.needsDisplay = true
+                self?.reorderDecorationOverlay()
+            }
+        }
+        decorationBoundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: self, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.decorationOverlay?.needsDisplay = true }
+        }
         storageObserver = NotificationCenter.default.addObserver(
             forName: NSTextStorage.didProcessEditingNotification, object: textStorage, queue: nil
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.storageRevision += 1 }
+            MainActor.assumeIsolated {
+                self?.storageRevision += 1
+                self?.decorationOverlay?.needsDisplay = true
+            }
         }
         focusRingType = .none
         isRichText = true
@@ -875,6 +953,12 @@ final class NativeTextView: NSTextView {
 
     deinit {
         if let storageObserver { NotificationCenter.default.removeObserver(storageObserver) }
+        if let decorationSelectionObserver {
+            NotificationCenter.default.removeObserver(decorationSelectionObserver)
+        }
+        if let decorationBoundsObserver {
+            NotificationCenter.default.removeObserver(decorationBoundsObserver)
+        }
     }
 
     override func cancelOperation(_ sender: Any?) {

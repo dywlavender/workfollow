@@ -325,6 +325,49 @@ final class DocumentDecorationRenderTests: XCTestCase {
         return false
     }
 
+    /// 2026-10-18 走查：整行被选中时，TextKit 2 的选区视图会盖住行首缩进区，
+    /// 复选框必须在选区之上可见（装饰层已移到选区视图之上的 overlay）。
+    @MainActor
+    func testChecklistMarkerStaysVisibleUnderSelection() throws {
+        let width: CGFloat = 600
+        let height: CGFloat = 300
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: width, height: height), textContainer: nil)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.backgroundColor = .white
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = view
+        window.orderFrontRegardless()
+        window.makeFirstResponder(view)
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "检查项一")]),
+            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "已完成项")])
+        ])))
+        let length = (view.string as NSString).length
+        view.setSelectedRange(NSRange(location: 0, length: length))
+        view.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+
+        let cgImage = try XCTUnwrap(CGWindowListCreateImage(
+            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.bestResolution]))
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        let scale = CGFloat(rep.pixelsWide) / width
+
+        // 复选框几何：markerOrigin = 文字起点 41 − 16 + 1 = 26pt，宽 12.96pt。
+        // 选区灰是浅色（≈0.88），正文从 41pt 起；这一段里的深色像素只可能是复选框描边/填充。
+        var darkPixels = 0
+        let xRange = Int(24 * scale)..<Int(40 * scale)
+        for y in 0..<rep.pixelsHigh {
+            for x in xRange where x < rep.pixelsWide {
+                guard let color = rep.colorAt(x: x, y: y), color.alphaComponent > 0.5 else { continue }
+                let luminance = 0.299 * color.redComponent + 0.587 * color.greenComponent
+                    + 0.114 * color.blueComponent
+                if luminance < 0.6 { darkPixels += 1 }
+            }
+        }
+        XCTAssertGreaterThan(darkPixels, 20, "选中整行后复选框不可见（被选区盖住）：深色像素 \(darkPixels)")
+    }
+
     /// 光标在标题行：行首沟槽应出现 H2 角标。
     @MainActor
     func testHeadingBadgeDrawsInGutterForActiveHeadingLine() throws {
