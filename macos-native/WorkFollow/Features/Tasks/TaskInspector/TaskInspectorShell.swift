@@ -33,6 +33,8 @@ struct TaskInspectorShell: View {
     @State private var hoveringAddChild = false
     /// 文件拖到详情时的目标高亮（TI2-03：拖放即附件）。
     @State private var attachmentDropTargeted = false
+    /// 内联评论区的展开态（TI2-09）。
+    @State private var showComments = false
     @StateObject private var editorHandle = DocumentEditorHandle()
 
     var body: some View {
@@ -76,6 +78,7 @@ struct TaskInspectorShell: View {
             presentation.activePopover = nil
             actionPresentation.dismiss()
             showFormattingToolbar = false
+            showComments = false
         }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
         .onExitCommand {
@@ -173,7 +176,6 @@ struct TaskInspectorShell: View {
         case .more: 208
         case .tags: 264
         case .parent: 280
-        case .comments: 320
         default: 320
         }
     }
@@ -188,10 +190,6 @@ struct TaskInspectorShell: View {
             if actionPresentation.panel == .activity {
                 TaskActivityPanel(taskID: task.id, store: environment.taskActivityStore) {
                     actionPresentation.dismiss(.activity)
-                }
-            } else if actionPresentation.panel == .comments {
-                TaskCommentPanel(taskID: task.id, store: environment.taskCommentStore) {
-                    actionPresentation.dismiss(.comments)
                 }
             } else if actionPresentation.panel == .more {
                 moreActionsPopover(task)
@@ -399,6 +397,12 @@ struct TaskInspectorShell: View {
             // 仅在"已设预计专注或有专注记录"时显示，设置入口在「更多」菜单。
             if shouldShowFocusSummary(task) {
                 focusSummaryRow(task)
+                    .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                    .padding(.top, 12)
+            }
+            // 内联评论区（TI2-09）：有评论时显示标题行，底栏 💬 展开/收起。
+            if let commentStore {
+                TaskCommentSection(taskID: task.id, store: commentStore, isExpanded: $showComments)
                     .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
                     .padding(.top, 12)
             }
@@ -618,7 +622,7 @@ struct TaskInspectorShell: View {
                 .frame(width: 28, height: 28)
                 .inspectorRenderAnchor(.footerFormatting)
             // 评论出口（commentButton）：打开任务评论面板；有条数角标（TI2-09）。
-            footerIconButton("bubble.left", label: "评论") { actionPresentation.open(.comments) }
+            footerIconButton("bubble.left", label: "评论") { showComments.toggle() }
                 .overlay(alignment: .topTrailing) {
                     if let commentStore {
                         TaskCommentCountBadge(store: commentStore, taskID: task.id)

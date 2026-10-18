@@ -15,6 +15,8 @@ enum InspectorRenderAnchor: Hashable {
     case footerList, footerFormatting, footerMore, footerTag, footerMerge, footerComment
     /// 评论出口的条数角标（有评论才渲染）。
     case commentBadge
+    /// 内联评论区（TI2-09）。
+    case commentSection
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
     case focusPomodoro, focusStopwatch, focusEstimate
 }
