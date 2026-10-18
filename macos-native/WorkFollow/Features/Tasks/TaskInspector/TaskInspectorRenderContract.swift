@@ -19,6 +19,8 @@ enum InspectorRenderAnchor: Hashable {
     case commentSection
     /// 顶栏「在独立窗口打开」（TI2-17）。
     case detach
+    /// 顶栏「笔记信息」（TI2-15）。
+    case noteInfo
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
     case focusPomodoro, focusStopwatch, focusEstimate
 }

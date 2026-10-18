@@ -8,6 +8,8 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     let onRepeat: () -> Void
     /// 在独立窗口打开（TI2-17）：宿主不传就不渲染入口。
     var onDetach: (() -> Void)? = nil
+    /// 笔记信息（TI2-15）：只在宿主给出回调时渲染（有正文的任务）。
+    var onInfo: (() -> Void)? = nil
     @ViewBuilder let schedule: () -> Schedule
     @ViewBuilder let priority: () -> Priority
 
@@ -66,6 +68,14 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
             .frame(maxWidth: .infinity)
             .frame(height: WFMetrics.controlHeight)
             .inspectorRenderAnchor(.scheduleViewport)
+            if let onInfo {
+                AppKitIconButton(symbol: "info.circle", pointSize: 13,
+                                 tint: .inspectorSecondary, accessibilityLabel: "笔记信息",
+                                 action: onInfo)
+                    .frame(width: 24, height: WFMetrics.controlHeight)
+                    .help("笔记信息")
+                    .inspectorRenderAnchor(.noteInfo)
+            }
             if let onDetach {
                 AppKitIconButton(symbol: "arrow.up.forward.app", pointSize: 13,
                                  tint: .inspectorSecondary, accessibilityLabel: "在独立窗口打开",

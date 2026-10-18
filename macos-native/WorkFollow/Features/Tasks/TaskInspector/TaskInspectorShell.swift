@@ -35,6 +35,8 @@ struct TaskInspectorShell: View {
     @State private var attachmentDropTargeted = false
     /// 内联评论区的展开态（TI2-09）。
     @State private var showComments = false
+    /// 笔记信息浮层（TI2-15）。
+    @State private var showNoteInfo = false
     @StateObject private var editorHandle = DocumentEditorHandle()
 
     var body: some View {
@@ -79,6 +81,7 @@ struct TaskInspectorShell: View {
             actionPresentation.dismiss()
             showFormattingToolbar = false
             showComments = false
+            showNoteInfo = false
         }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
         .onExitCommand {
@@ -117,6 +120,7 @@ struct TaskInspectorShell: View {
                                 TaskDetailWindowController.shared.show(workspace: workspace,
                                                                        environment: environment)
                             },
+                            onInfo: task.document.isEmpty ? nil : { showNoteInfo.toggle() },
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
         // 子任务进度条（TI2-07）：贴在顶栏下沿，不改变 Header 高度/内容几何。
@@ -124,6 +128,13 @@ struct TaskInspectorShell: View {
             if let progress = TaskInspectorSubtaskProgress.parse(workspace.subtaskProgress(for: task.id)) {
                 TaskInspectorProgressBar(progress: progress)
                     .inspectorRenderAnchor(.progressBar)
+            }
+        }
+        .background {
+            AnchoredPropertyPanel(isPresented: $showNoteInfo, width: 200,
+                                  placement: .verticalInOwner,
+                                  focusPolicy: .preservePresenter, title: "笔记信息") {
+                TaskNoteInfoPanel(info: TaskNoteInfo(task: task), calendar: workspace.calendar)
             }
         }
         .schedulePopover(isPresented: popoverBinding(.recurrence), trigger: .recurrence) {

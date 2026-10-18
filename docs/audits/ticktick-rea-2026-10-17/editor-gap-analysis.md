@@ -391,6 +391,7 @@
 | TI2-04 | **部分完成** | ① 子任务行支持**同父级拖拽排序**（`pasteboardWriterForItem` / `validateDrop` / `acceptDrop` + `TaskActions.reorder(_:toSiblingIndex:)`，支持拖到末尾，位移为 0 时不产生撤销点）；② **折叠状态持久化**（`SubtaskFoldStore` 按子任务 id 存 `UserDefaults`，重开/切任务后恢复；用户折叠/展开时写回）。**未做**：`TTSubtasksLoadmoreCell` 的分页（一次全渲染在 30 条以内够用） | `SubtaskOrderAndFoldTests` 10 项（前移/后移/拖到末尾/钳制/无位移/只动同父级 + 落点判定 + 下标换算 + 折叠存取 + 视图恢复） |
 | TI2-08 | **部分完成** | ① `#` 标签补全：行首/空白后输入 `#` 列出宿主已有标签，↑↓/回车/Esc，选中落成 `#tag ` 并把标签挂到任务；代码块/`a#b` 不触发。② 链接悬停菜单：悬停链接出「复制 / 编辑 / 移除」，点击/移出/Esc/编辑文本都收起。**未做**：清单候选（`shouldShowQuickList`） | `DocumentTagCompletionTests` 6 项 + `DocumentLinkHoverTests` 5 项（命中范围/目标、普通文字不弹、复制、移除标记、面板显隐） |
 | TI2-05a | **部分完成** | 检查项整项操作：空项行首退格删掉该项、活动项行尾 × 删除整项（含换行、可撤销）。**未做**：逐项提醒、清单模式与形态切换（05b，需 Domain `TaskKind`） | `DocumentChecklistItemTests` 5 项（空项退格 / 非空不退 / 删中间项 / 删末项 / 行尾按钮几何） |
+| TI2-15 | **已完成** | 笔记信息：有正文时顶栏出现 `info.circle` 入口，浮层给「字数（不计空白）/ 创建 / 修改」三行（对齐 `TTTaskDetailNoteInfoViewController`）；空正文不显示 | `TaskNoteInfoTests` 3 项（字数口径 / 日期格式 / 入口显隐与位置） |
 | TI2-16 | **部分完成** | 标题级别 H4–H6：命令 + 工具条 H 选择器补到六级（Assets.car `md_header4..6`），选择器行徽标补 `H₄–H₆`、面板高 264；Slash 保持滴答实测的 12 项不扩。**未做**：工具条「更多」溢出（`md_more`） | `HeadingLevelTests` 3 项 + `DocumentProfileTests` 选择器契约更新 |
 | TI2-11 | **已完成** | 补「打印」（`TaskPrintService`：标题/属性/正文按块排版/子任务 ☐☑ 清单，`NSPrintOperation` 走系统面板）；顶层菜单恢复滴答 15 项顺序 | `TaskPrintServiceTests` 2 项（完整稿 / 空正文）+ `TaskMoreMenuRoundTwoTests` 顺序断言更新 |
 | TI2-21 | **已完成** | 行首块手柄：空行「+」、标题 H 角标、正文六点手柄共用同一条沟槽命中区，点开都是块类型菜单（Slash 空查询态）；列表/检查项/引用/代码行不接管（`openBlockMenu` 取代 `openEmptyBlockMenu`，检查项勾选不受影响） | `DocumentBlockMenuTests` 4 项 + `DocumentDecorationRenderTests` 手柄渲染 1 项（原"沟槽为空"守卫反转） |
@@ -408,7 +409,7 @@
 - 新增的渲染契约锚点：`InspectorRenderAnchor.deadlineLabel / attachments / tagStrip / focusEstimate`、`ScheduleRenderAnchor.deadlineRow`（测试与实现共用同一套锚点，不另建口径）。
 - 回归（第一批，截至 TI2-12）：全量 **1431 项：1424 通过 / 6 跳过 / 1 个与本轮无关的 flaky**（`FocusTaskPickerPanelFlowTests`，单独复跑通过）。
 - 回归（第二批，TI2-21 / TI2-07）：全量套件在本次会话后段被**测试宿主的源码读取门控**拖慢（读 `#filePath` 的契约测试单次约 2 分钟，与代码无关；沙箱/TCC 行为），改为**分组回归**并全部通过：inspector 组 32 项、子任务/专注/进度组逐个类通过（10 + 6 + 2 + 3）、文档组 23 项（块菜单 4 + 装饰 11 + 层级 5 + 进度 3）；`TaskMoreMenuRoundTwoTests` 2 项在门控下 138s 后通过。
-- 新增测试累计 **60** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5 + 标签补全 6 + 链接悬停 5 + 内联评论 2 + 独立窗口 2），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射、2 处选择器/目录计数断言随 H4–H6 更新。
+- 新增测试累计 **63** 个方法（截止 8 + 属性行 6 + 专注入口 1 + 排序折叠 10 + 行标记 2 + 角标 1 + 块菜单 4 + 进度 3 + 标题级别 3 + 打印 2 + 检查项整项 5 + 标签补全 6 + 链接悬停 5 + 内联评论 2 + 独立窗口 2 + 笔记信息 3），另反转 1 条既有断言（非空正文行沟槽从"必须干净"改为"必须有块手柄"）、扩充 1 条移除清单、1 处测试支撑锚点映射、2 处选择器/目录计数断言随 H4–H6 更新。
 - 测试环境注意：`AppEnvironment` + 承载 `NSHostingView` 的窗口在 XCTest 内存检查里"关窗后释放"会过释放（与本轮功能无关，最简 `Text` 复现）；内联评论的渲染断言因此不关窗，真机关窗路径未自动化复核。
 - 真机路径已由测试覆盖面板切换与写回（`testDeadlineRowSwitchesPanelAndWritesDeadlineThroughTheRealInspector`）；仍未做的是**视觉像素级复核**（AX 不可用），下次开 app 时按第 7 节顺手看一眼即可。
 
