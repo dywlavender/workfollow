@@ -354,18 +354,19 @@ final class DocumentDecorationRenderTests: XCTestCase {
         let scale = CGFloat(rep.pixelsWide) / width
 
         // 复选框几何：markerOrigin = 文字起点 41 − 16 + 1 = 26pt，宽 12.96pt。
-        // 选区灰是浅色（≈0.88），正文从 41pt 起；这一段里的深色像素只可能是复选框描边/填充。
-        var darkPixels = 0
+        // 选区灰是中性色（R≈G≈B），复选框描边/填充是偏冷的灰（B 比 R 高 4~10）；
+        // 正文从 41pt 起，所以这一段里的"冷灰"像素只可能来自复选框。
+        var markerPixels = 0
         let xRange = Int(24 * scale)..<Int(40 * scale)
         for y in 0..<rep.pixelsHigh {
             for x in xRange where x < rep.pixelsWide {
                 guard let color = rep.colorAt(x: x, y: y), color.alphaComponent > 0.5 else { continue }
-                let luminance = 0.299 * color.redComponent + 0.587 * color.greenComponent
-                    + 0.114 * color.blueComponent
-                if luminance < 0.6 { darkPixels += 1 }
+                let red = color.redComponent, green = color.greenComponent, blue = color.blueComponent
+                if red < 0.95, blue - red >= 0.015, green > red { markerPixels += 1 }
             }
         }
-        XCTAssertGreaterThan(darkPixels, 20, "选中整行后复选框不可见（被选区盖住）：深色像素 \(darkPixels)")
+        XCTAssertGreaterThan(markerPixels, 20,
+                             "选中整行后复选框不可见（被选区盖住）：冷灰像素 \(markerPixels)")
     }
 
     /// 光标在标题行：行首沟槽应出现 H2 角标。
