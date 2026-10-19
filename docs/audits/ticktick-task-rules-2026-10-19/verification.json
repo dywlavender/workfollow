@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-19",
+  "reference": {
+    "application": "/Applications/TickTick.app",
+    "version": "8.0.80",
+    "analysis_tool": "REA 6.5.0"
+  },
+  "dispatch_analysis": {
+    "record_limit": 20000,
+    "class_records_returned": 639,
+    "coverage": "partial",
+    "selected_declarations": [
+      {
+        "class": "_TtC8TickTick22TTKanbanViewController",
+        "selectors": [
+          "collectionView:validateDrop:proposedIndexPath:",
+          "collectionView:acceptDrop:",
+          "collectionView:draggingUpdated:",
+          "collectionView:canDragItemsAtIndexPaths:withEvent:"
+        ]
+      },
+      {
+        "class": "_TtC8TickTick28TTKanbanColumnViewController",
+        "selectors": [
+          "clearDropBeforeData",
+          "taskDraggingOverKanben:"
+        ]
+      }
+    ],
+    "proves_runtime_rules": false
+  },
+  "ui_observations": {
+    "period_entry": "premium_explanation",
+    "period_editor_exercised": false,
+    "new_fixture_list_visible_to_tool": false,
+    "reference_tasks_written_this_round": false,
+    "original_tag_view_restored": true
+  },
+  "pending_reference_rules": [
+    "mixed_and_or_precedence",
+    "parent_tag_sidebar_scope",
+    "parent_tag_filter_scope",
+    "kanban_primary_tag_replacement",
+    "recurring_and_child_task_drop_rules"
+  ],
+  "local_fix": {
+    "before": "changing_period_dates_drops_times_and_tab_switch_restores_stale_time",
+    "after": "date_changes_keep_times_and_tabs_transfer_latest_start_moment",
+    "reproduction": {
+      "test_cases": 5,
+      "failed_cases": 2,
+      "failed_assertions": 5
+    },
+    "working_tree_validation": {
+      "tests": 56,
+      "failures": 0
+    },
+    "isolated_validation": {
+      "status": "passed",
+      "tests": 38,
+      "failures": 0,
+      "scope": "date_draft_model_and_period_tab"
+    },
+    "full_regression_run": false
+  },
+  "scope": "existing_date_panel_ui_edits_remain_outside_this_code_batch"
+}

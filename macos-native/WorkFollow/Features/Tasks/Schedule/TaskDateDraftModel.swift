@@ -145,6 +145,23 @@ final class TaskDateDraftModel: ObservableObject {
         }
     }
 
+    /// 时间段页签：直接设置开始日期（对齐滴答两个独立日期行，不再靠月历两段点选）。
+    func setPeriodStart(_ day: Date) {
+        let day = calendar.startOfDay(for: day)
+        let start = TaskDateDraft.movingDay(periodStart ?? selectedDate, to: day, calendar: calendar)
+        periodStart = start
+        // 结束早于新的开始就清掉，由提交时的 rangeError 兜底提示。
+        if let end = periodEnd, end < start { periodEnd = nil }
+        displayedMonth = day
+    }
+
+    /// 日期行只改日期，已经编辑过的结束时刻继续保留。
+    func setPeriodEnd(_ day: Date) {
+        let day = calendar.startOfDay(for: day)
+        periodEnd = periodEnd.map { TaskDateDraft.movingDay($0, to: day, calendar: calendar) } ?? day
+        displayedMonth = day
+    }
+
     func quick(_ offset: Int) {
         select(dateFromToday(offset))
     }
@@ -178,15 +195,13 @@ final class TaskDateDraftModel: ObservableObject {
         guard !deadline, newTab != tab else { return }
         tab = newTab
         if newTab == .period {
-            // The date tab owns the start day: carry it over on every switch,
-            // keeping the range start's time of day.
-            periodStart = TaskDateDraft.movingDay(periodStart ?? selectedDate,
-                                                  to: calendar.startOfDay(for: selectedDate), calendar: calendar)
+            // Both tabs edit the same start moment; carry the latest time too.
+            periodStart = selectedDate
             if let start = periodStart, let end = periodEnd, end < start { periodEnd = nil }
             displayedMonth = calendar.startOfDay(for: periodStart ?? selectedDate)
         } else {
             if let start = periodStart {
-                selectedDate = TaskDateDraft.movingDay(selectedDate, to: calendar.startOfDay(for: start), calendar: calendar)
+                selectedDate = start
             }
             displayedMonth = calendar.startOfDay(for: selectedDate)
         }
