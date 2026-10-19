@@ -30,7 +30,7 @@ struct RootShellView: View {
         case .notes, .notesTrash:
             return AnyView(NotesWorkspaceView(notes: environment.notesWorkspace, navigation: pageCache.navigation(for: "notes", appNavigation: navigation, belongsToPage: { $0.isNotes }),
                                              tasks: workspace, navigationVisible: navigationVisible))
-        case .calendar: return AnyView(CalendarWorkspaceView(workspace: workspace))
+        case .calendar: return AnyView(CalendarWorkspaceView(workspace: workspace, systemCalendar: environment.systemCalendar))
         case .matrix: return AnyView(MatrixWorkspaceView(workspace: workspace))
         default:
             return AnyView(TaskWorkspaceView(workspace: workspace, navigation: pageCache.navigation(for: destination.rawValue, appNavigation: navigation, belongsToPage: { $0 == destination }),

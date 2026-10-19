@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-19",
+  "branch": "experiment/macos-native",
+  "runtime": "macOS 27.0.1",
+  "automated": {
+    "focusedCases": 68,
+    "focusedFailures": 0,
+    "followupCases": 16,
+    "followupFailures": 0,
+    "focusedLog": "/private/tmp/workfollow-calendar-final-focused-2026-10-19.log",
+    "followupLog": "/private/tmp/workfollow-reminder-final-followup-2026-10-19.log",
+    "panelFollowupCases": 5,
+    "panelFollowupFailures": 0,
+    "panelFollowupLog": "/private/tmp/workfollow-reminder-panel-focused-2026-10-19.log"
+  },
+  "native": {
+    "settingsEntry": "passed",
+    "firstListSyncPreview": "passed",
+    "dedicatedCalendarCreation": "passed",
+    "testCalendar": "WorkFollow 接入验收 10-18",
+    "calendarFullAccess": "granted and verified before reminder-only rebuild; QA permission reset after bundle update",
+    "firstExportedFixtureCount": 3,
+    "allDayRoundTrip": "passed: native timed CRUD and all-day refetch; three fixtures each display October 18 only",
+    "notificationAuthorization": "granted; retained on panel-fix build",
+    "externalEventOverlay": "passed: month, week, day and read-only details for October 19 10:00-10:30",
+    "linkedEventEditing": "passed: active task title and date backsync; one shared undo restores task and Apple Calendar",
+    "temporaryExternalEventCleanup": "passed",
+    "appleCalendarViewRestored": "month",
+    "foregroundSound": "system callback and active audio playback confirmed before panel-only fix",
+    "reminderPanelControls": "passed by user manual confirmation plus snooze and stop action records; automation could not select the independent reminder",
+    "reminderAppearance": "user confirmed a reminder appeared on the panel-fix build; automation remains bound to settings window",
+    "reminderStop": "user confirmed effective; application received stop actions",
+    "reminderSnooze": "user confirmed reminder appeared again and could be stopped; recorded action uses default 10 minutes",
+    "snoozeTimingEvidence": {
+      "userReportedMinutes": 5,
+      "recordedActionMinutes": 10,
+      "exactFiveMinuteIntervalVerified": false,
+      "conclusion": "functional redelivery confirmed by user; do not claim precise five-minute interval verification"
+    },
+    "defaultSnoozeMinutes": 10
+  },
+  "observations": [
+    {
+      "area": "all-day date boundary",
+      "input": "2026-10-18 00:00 to 2026-10-19 00:00",
+      "systemReadEnd": "2026-10-19 23:59:59",
+      "effect": "single day became two days; platform adapter now writes the last included second and reads a half-open range"
+    },
+    {
+      "area": "notification authorization",
+      "domain": "UNErrorDomain",
+      "code": 1,
+      "appWasActive": false,
+      "change": "permission button now waits for foreground activation before requesting authorization",
+      "foregroundRetry": {
+        "appWasActive": true,
+        "authorizationStatus": 0,
+        "domain": "UNErrorDomain",
+        "code": 1
+      },
+      "environment": "temporary-directory QA rejected; identical project output copy accepted authorization after user completed prompt",
+      "conclusion": "notification authorization now confirmed by API and UI"
+    },
+    {
+      "area": "reminder panel focus",
+      "finding": "test sound played while settings remained the key window",
+      "change": "foreground panel becomes key; panel stays visible on app deactivation; background presentation does not activate app",
+      "automated": "5 related reminder tests passed",
+      "native": "user confirmed reminder appeared and stop/snooze/redelivery controls worked; action records received; independent panel not selectable by automation"
+    },
+    {
+      "area": "manual snooze timing",
+      "userReport": "5-minute flow passed",
+      "actionRecordMinutes": 10,
+      "interpretation": "default 10-minute action received; record functional acceptance without asserting exact five-minute timing"
+    }
+  ],
+  "dataScope": "independent acceptance storage and named test calendar; temporary external event removed; linked task edit undone; no personal event edits",
+  "status": "first version implementation and scoped acceptance complete",
+  "submissionValidation": {
+    "source": "isolated snapshot exported from reviewed index",
+    "fileCount": 30,
+    "build": "passed",
+    "focusedCases": 68,
+    "focusedFailures": 0,
+    "log": "/private/tmp/workfollow-calendar-submit-2026-10-19/isolated-validation.log",
+    "scope": "calendar and reminder changes only; earlier task, tag and filter edits stay in working tree"
+  }
+}

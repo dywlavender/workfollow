@@ -28,6 +28,8 @@ struct CalendarTimelineView: View {
     let onHourHeightChange: (Double) -> Void
     let onAllDayHeightChange: (Double) -> Void
     let anchorSink: PlanningAnchorRef
+    var externalEvents: [SystemCalendarEvent] = []
+    var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
     @State private var scaleDraft: CalendarTimelineScaleDraft?
     @State private var pinchActive = false
     @State private var allDayHeightDraft: Double?
@@ -49,7 +51,8 @@ struct CalendarTimelineView: View {
                 dayHeader(columnWidth: columnWidth)
                 CalendarAllDayArea(days: days, tasks: tasks, preferences: displayedPreferences, calendar: calendar,
                     columnWidth: columnWidth, color: color, onOpen: onOpenTask, onToggle: onToggle,
-                    onCreate: onCreate, onDrop: onDrop, anchorSink: anchorSink)
+                    onCreate: onCreate, onDrop: onDrop, anchorSink: anchorSink,
+                    externalEvents: externalEvents, onOpenEvent: onOpenEvent)
                 CalendarAllDayHeightHandle(height: displayedPreferences.allDayHeight,
                     onPreview: { allDayHeightDraft = $0 }, onCommit: onAllDayHeightChange)
                     ScrollView(.vertical) {
@@ -62,7 +65,8 @@ struct CalendarTimelineView: View {
                                         placements: CalendarProjection.timed(on: day, tasks: tasks, preferences: preferences, calendar: calendar),
                                         hourHeight: CGFloat(hourHeight), columnWidth: columnWidth,
                                         calendar: calendar, color: color, onOpen: onOpenTask, onCreate: onCreate,
-                                        onMove: onMove, onDrop: onDrop, onToggle: onToggle, anchorSink: anchorSink)
+                                        onMove: onMove, onDrop: onDrop, onToggle: onToggle, anchorSink: anchorSink,
+                                        externalEvents: externalEvents, onOpenEvent: onOpenEvent)
                                     .frame(width: columnWidth)
                                 }
                             }
@@ -318,6 +322,8 @@ private struct CalendarAllDayArea: View {
     let onCreate: (TaskSchedule) -> Void
     let onDrop: ([String], CalendarDropDestination) -> Bool
     let anchorSink: PlanningAnchorRef
+    var externalEvents: [SystemCalendarEvent] = []
+    var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
     @State private var anchor = PlanningAnchorRef()
     private var visible: [Task] {
         guard let start = days.first, let last = days.last,
@@ -332,7 +338,8 @@ private struct CalendarAllDayArea: View {
     private var contentHeight: CGFloat {
         days.enumerated().reduce(CGFloat(preferences.allDayHeight)) { height, entry in
             let slots = CalendarSpans.slotsOver(spans, column: entry.offset)
-            let rowHeight = CGFloat(entries(on: entry.element).count) * (WFCalendarMetrics.taskBarHeight + 3)
+            let eventCount = ExternalCalendarProjection.events(on: entry.element, events: externalEvents, calendar: calendar).filter { $0.fields.allDay }.count
+            let rowHeight = CGFloat(entries(on: entry.element).count + eventCount) * (WFCalendarMetrics.taskBarHeight + 3)
             return max(height, CGFloat(slots) * WFCalendarMetrics.slotStride + rowHeight + 26)
         }
     }
@@ -353,6 +360,9 @@ private struct CalendarAllDayArea: View {
                                     CalendarTaskBarView(task: task, listColor: color(task.id), calendar: calendar,
                                                         onOpen: { onOpen(task.id) }, onToggleTask: onToggle, anchorSink: anchorSink)
                                     .draggable(task.id.uuidString)
+                                }
+                                ForEach(ExternalCalendarProjection.events(on: day, events: externalEvents, calendar: calendar).filter { $0.fields.allDay }, id: \.displayID) { event in
+                                    SystemCalendarEventBar(event: event) { onOpenEvent(event) }
                                 }
                                 Color.clear.frame(height: 20)
                             }
@@ -408,6 +418,8 @@ private struct CalendarTimelineDay: View {
     let onDrop: ([String], CalendarDropDestination) -> Bool
     let onToggle: (UUID) -> Void
     let anchorSink: PlanningAnchorRef
+    var externalEvents: [SystemCalendarEvent] = []
+    var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
     @State private var creationStart: Double?
     @State private var creationEnd: Double?
     @State private var gestureSession = CalendarGestureSession()
@@ -440,13 +452,30 @@ private struct CalendarTimelineDay: View {
                     .frame(width: columnWidth - 6, height: max(WFCalendarTimelineMetrics.minimumBlockHeight, CGFloat(abs(end - start)) / 60 * hourHeight))
                     .offset(x: 3, y: CGFloat(min(start, end)) / 60 * hourHeight).allowsHitTesting(false)
             }
-            ForEach(placements) { placement in
+            let mixed = ExternalCalendarProjection.timed(on: day, tasks: placements, events: externalEvents, calendar: calendar)
+            ForEach(mixed.tasks) { placement in
                 CalendarTimeBlock(placement: placement, dayIndex: dayIndex, days: days,
                     hourHeight: hourHeight, columnWidth: columnWidth, calendar: calendar, color: color(placement.id),
                     onOpen: { onOpen(placement.id) }, onMove: { onMove(placement.id, $0) },
                     onToggle: { onToggle(placement.id) }, anchorSink: anchorSink)
                 .frame(width: columnWidth / CGFloat(placement.laneCount) - 6)
                 .offset(x: CGFloat(placement.lane) * columnWidth / CGFloat(placement.laneCount) + 3)
+            }
+            ForEach(mixed.events) { placement in
+                Button { onOpenEvent(placement.event) } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Label(placement.event.fields.title, systemImage: "calendar").lineLimit(2)
+                        Text(placement.event.calendarTitle).font(.caption2).foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }.font(WFType.listMeta).padding(5)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: max(22, CGFloat(placement.endMinute - placement.startMinute) / 60 * hourHeight))
+                        .background(WFListPalette.swatch(placement.event.colorARGB).opacity(0.2), in: RoundedRectangle(cornerRadius: 4))
+                }.buttonStyle(.plain)
+                    .frame(width: max(1, columnWidth / CGFloat(placement.laneCount) - 6))
+                    .offset(x: CGFloat(placement.lane) * columnWidth / CGFloat(placement.laneCount) + 3,
+                            y: CGFloat(placement.startMinute) / 60 * hourHeight)
+                    .accessibilityIdentifier("calendar.system-event.\(placement.id)")
             }
         }
         .frame(height: 24 * hourHeight)

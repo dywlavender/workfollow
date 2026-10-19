@@ -509,6 +509,21 @@ final class TaskActions {
     func undo() { store.undo() }
     func redo() { store.redo() }
 
+    /// A Calendar edit is a single task command, including materialization.
+    @discardableResult
+    func applyCalendarEdit(_ occurrence: TaskOccurrence, title: String, schedule: TaskSchedule) -> TaskActionResult {
+        var result: TaskActionResult = .failure(.missingTask)
+        store.transaction {
+            result = occurrence.isVirtual ? materializeOccurrence(occurrence) : .success(occurrence.task.id)
+            guard let id = result.taskID else { return }
+            _ = setSchedule(id, schedule)
+            // A Calendar occurrence edit must not rewrite the series template
+            // or rebase editor text through earlier task undo frames.
+            result = edit(id) { $0.title = title.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+        return result
+    }
+
     /// One user action updates all attributes, including descendant list membership.
     @discardableResult
     func updateAttributes(_ id: UUID, priority: TaskPriority? = nil,

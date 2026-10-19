@@ -1192,6 +1192,13 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
+    func applyCalendarEdit(_ occurrence: TaskOccurrence, title: String, schedule: TaskSchedule) -> TaskActionResult {
+        let result = actions.applyCalendarEdit(occurrence, title: title, schedule: schedule)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.setDocument($0, document) }
         didMutate(result)

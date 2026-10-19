@@ -52,6 +52,8 @@ struct CalendarDayAgenda: View {
     let onOpen: (UUID) -> Void
     let onToggle: (UUID) -> Void
     let onCreate: () -> Void
+    var externalEvents: [SystemCalendarEvent] = []
+    var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -78,9 +80,12 @@ struct CalendarDayAgenda: View {
                         }
                         .padding(8).background(color(task.id).opacity(0.1), in: RoundedRectangle(cornerRadius: 5))
                     }
+                    ForEach(externalEvents, id: \.displayID) { event in
+                        SystemCalendarEventBar(event: event) { onOpenEvent(event) }
+                    }
                 }
             }
-            if tasks.isEmpty { Text("当天没有安排").foregroundStyle(WFColors.secondaryText) }
+            if tasks.isEmpty && externalEvents.isEmpty { Text("当天没有安排").foregroundStyle(WFColors.secondaryText) }
         }.padding(14).background(WFColors.content)
     }
 }

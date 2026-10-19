@@ -6,6 +6,8 @@ import SwiftUI
 struct CalendarWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var settings: PlanningSettingsStore
+    @ObservedObject private var integration: CalendarSyncCoordinator
+    @State private var systemEventDetails: SystemCalendarEvent?
     @State private var viewport: CalendarViewport
     @State private var topWeek: Date
     @State private var programmaticScrollTarget: Date?
@@ -19,9 +21,10 @@ struct CalendarWorkspaceView: View {
     @State private var pendingOccurrenceSchedule: CalendarOccurrenceScheduleRequest?
 
     @MainActor
-    init(workspace: TaskWorkspaceModel, settings: PlanningSettingsStore? = nil) {
+    init(workspace: TaskWorkspaceModel, settings: PlanningSettingsStore? = nil, systemCalendar: CalendarSyncCoordinator? = nil) {
         let settings = settings ?? PlanningSettingsStore.shared
         self.workspace = workspace; self.settings = settings
+        self.integration = systemCalendar ?? CalendarSyncCoordinator()
         let calendar = settings.calendar.configuredCalendar(workspace.calendar)
         let now = workspace.clock()
         _viewport = State(initialValue: CalendarViewport(date: now, mode: settings.calendar.mode, calendar: calendar))
@@ -87,6 +90,10 @@ struct CalendarWorkspaceView: View {
         .sheet(isPresented: $showDisplayOptions) {
             CalendarDisplayOptions(settings: settings, lists: workspace.availableListNames, tags: workspace.tagNames)
         }
+        .sheet(item: $systemEventDetails) { SystemCalendarEventDetails(event: $0) }
+        .onAppear { integration.showEvents(in: occurrenceWindow) }
+        .onChange(of: occurrenceWindow) { _, range in integration.showEvents(in: range) }
+        .onChange(of: integration.store.snapshot.visibleCalendarIDs) { _, _ in integration.showEvents(in: occurrenceWindow) }
         .confirmationDialog("修改重复任务", isPresented: Binding(get: { pendingOccurrenceSchedule != nil },
             set: { if !$0 { pendingOccurrenceSchedule = nil } }), titleVisibility: .visible) {
             if let request = pendingOccurrenceSchedule {
@@ -109,7 +116,8 @@ struct CalendarWorkspaceView: View {
                             self.agendaDay = nil; openTask(id)
                         }, onToggle: toggleTask, onCreate: {
                             self.agendaDay = nil; presentComposer(on: agendaDay)
-                        })
+                        }, externalEvents: ExternalCalendarProjection.events(on: agendaDay, events: integration.externalEvents, calendar: calendar),
+                        onOpenEvent: { self.agendaDay = nil; systemEventDetails = $0 })
                 }
             } else {
                 PlanningWorkspaceChrome(workspace: workspace, anchor: anchorSink,
@@ -132,7 +140,8 @@ struct CalendarWorkspaceView: View {
                 showCompleted: settings.calendar.showCompleted, calendar: calendar, tasks: visibleTasks,
                 barColor: barColor, onSelectDay: select, onOpenTask: openTask,
                 onCreateTask: presentComposer, onDropTask: moveToDay,
-                onToggleTask: toggleTask, onShowAgenda: showAgenda, anchorSink: anchorSink)
+                onToggleTask: toggleTask, onShowAgenda: showAgenda, anchorSink: anchorSink,
+                externalEvents: integration.externalEvents, onOpenEvent: { systemEventDetails = $0 })
         } else {
             CalendarTimelineView(workspace: workspace, days: mode == .day ? [selectedDay] : PlanningProjection.weekDays(containing: selectedDay, calendar: calendar),
                 tasks: visibleTasks, preferences: settings.calendar, calendar: calendar,
@@ -142,7 +151,7 @@ struct CalendarWorkspaceView: View {
                 onToggle: toggleTask,
                 onHourHeightChange: { value in settings.updateCalendar { $0.hourHeight = value } },
                 onAllDayHeightChange: { value in settings.updateCalendar { $0.allDayHeight = value } },
-                anchorSink: anchorSink)
+                anchorSink: anchorSink, externalEvents: integration.externalEvents, onOpenEvent: { systemEventDetails = $0 })
         }
     }
     private var toolbar: some View {
@@ -369,6 +378,8 @@ struct CalendarMonthGridView: View {
     let onShowAgenda: (Date) -> Void
     /// 浮层锚的落脚点：格与条在点击时把「自己是哪一块」写进去。
     let anchorSink: PlanningAnchorRef
+    let externalEvents: [SystemCalendarEvent]
+    let onOpenEvent: (SystemCalendarEvent) -> Void
 
     // 滚动性能三件套（2026-10-07，用户报"不够流畅"）：周行流、每日任务、
     // 每周色带全部预计算进 State——滚动期间的网格重估**零任务过滤/布局**，
@@ -400,7 +411,8 @@ struct CalendarMonthGridView: View {
          onOpenTask: @escaping (UUID) -> Void, onCreateTask: @escaping (Date) -> Void,
          onDropTask: @escaping (UUID, Date) -> Void, onToggleTask: @escaping (UUID) -> Void,
          onShowAgenda: @escaping (Date) -> Void,
-         anchorSink: PlanningAnchorRef) {
+         anchorSink: PlanningAnchorRef, externalEvents: [SystemCalendarEvent] = [],
+         onOpenEvent: @escaping (SystemCalendarEvent) -> Void = { _ in }) {
         _topWeek = topWeek
         _mountingTarget = State(initialValue: topWeek.wrappedValue)
         _programmaticTarget = programmaticTarget
@@ -410,6 +422,7 @@ struct CalendarMonthGridView: View {
         self.onSelectDay = onSelectDay; self.onOpenTask = onOpenTask
         self.onCreateTask = onCreateTask; self.onDropTask = onDropTask
         self.onToggleTask = onToggleTask; self.onShowAgenda = onShowAgenda; self.anchorSink = anchorSink
+        self.externalEvents = externalEvents; self.onOpenEvent = onOpenEvent
         // 周行流**时间正序**（过去 → 今天 → 未来，±30 周对称）：两个方向都
         // 能滚。初始定位 = defaultScrollAnchor(.center)（内容几何中心 ≈ 今天
         // 周，自动挂载其±预热行）+ onAppear 近距 scrollTo 微调到月首周——
@@ -551,7 +564,7 @@ struct CalendarMonthGridView: View {
             onDropTask: onDropTask,
             onToggleTask: onToggleTask,
             onShowAgenda: onShowAgenda,
-            anchorSink: anchorSink)
+            anchorSink: anchorSink, externalEvents: externalEvents, onOpenEvent: onOpenEvent)
         .id(weekStart)
         .frame(height: rowHeight)
     }
@@ -657,12 +670,15 @@ struct MonthWeekRow: View, Equatable {
     let onToggleTask: (UUID) -> Void
     let onShowAgenda: (Date) -> Void
     let anchorSink: PlanningAnchorRef
+    var externalEvents: [SystemCalendarEvent] = []
+    var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
 
     static func == (lhs: MonthWeekRow, rhs: MonthWeekRow) -> Bool {
         lhs.days == rhs.days && lhs.month == rhs.month && lhs.today == rhs.today
             && lhs.selectedDay == rhs.selectedDay && lhs.isLastRow == rhs.isLastRow
             && lhs.calendar == rhs.calendar
             && lhs.spans == rhs.spans && lhs.dayTasks == rhs.dayTasks
+            && lhs.externalEvents == rhs.externalEvents
     }
 
     var body: some View {
@@ -744,7 +760,8 @@ struct MonthWeekRow: View, Equatable {
             onDropTask: { id in onDropTask(id, day) },
             onToggleTask: onToggleTask,
             onShowAgenda: { onShowAgenda(day) },
-            anchorSink: anchorSink)
+            anchorSink: anchorSink,
+            externalEvents: ExternalCalendarProjection.events(on: day, events: externalEvents, calendar: calendar), onOpenEvent: onOpenEvent)
     }
 
     /// 一条色带：左端 = 列起点（未被裁剪的一端让出格内缩进），宽度覆盖本段各列，
@@ -826,6 +843,8 @@ struct CalendarDayCellView: View {
     let onToggleTask: (UUID) -> Void
     let onShowAgenda: () -> Void
     let anchorSink: PlanningAnchorRef
+    var externalEvents: [SystemCalendarEvent] = []
+    var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
 
     @State private var dropping = false
     /// 这一格自己的锚：双击新建时新建卡贴着这一格弹出来。
@@ -946,14 +965,20 @@ struct CalendarDayCellView: View {
     private var bars: some View {
         let totalCapacity = max(0, Int(floor((barAreaHeight + WFCalendarMetrics.taskBarGap) / WFCalendarMetrics.slotStride)))
         let capacity = max(0, totalCapacity - skipSlots)
-        let overflowing = tasks.count + hiddenSpanCount > capacity
+        let items = ExternalCalendarProjection.items(tasks: tasks, events: externalEvents)
+        let overflowing = items.count + hiddenSpanCount > capacity
         let counting = overflowing && capacity > 0
-        let visibleCount = min(tasks.count, max(0, capacity - (counting ? 1 : 0)))
+        let visibleCount = min(items.count, max(0, capacity - (counting ? 1 : 0)))
         VStack(alignment: .leading, spacing: WFCalendarMetrics.taskBarGap) {
             if skipSlots > 0 { Spacer().frame(height: CGFloat(skipSlots) * WFCalendarMetrics.slotStride - WFCalendarMetrics.taskBarGap) }
-            ForEach(Array(tasks.prefix(visibleCount))) { task in bar(task) }
+            ForEach(Array(items.prefix(visibleCount))) { item in
+                switch item {
+                case let .task(task): bar(task)
+                case let .event(event): SystemCalendarEventBar(event: event) { onOpenEvent(event) }
+                }
+            }
             if counting {
-                CalendarTaskOverflowView(hiddenCount: tasks.count - visibleCount + hiddenSpanCount, onTap: {
+                CalendarTaskOverflowView(hiddenCount: items.count - visibleCount + hiddenSpanCount, onTap: {
                     anchorSink.rect = anchor.rect
                     onShowAgenda()
                 })

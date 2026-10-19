@@ -5,12 +5,7 @@ import UserNotifications
 /// 单元测试不设置它，因此不会弹授权或发声。
 @MainActor
 final class FocusNotifier {
-    private let delegate = FocusNotificationDelegate()
     private var authorizationRequested = false
-
-    init() {
-        UNUserNotificationCenter.current().delegate = delegate
-    }
 
     func requestAuthorizationIfNeeded() {
         guard !authorizationRequested else { return }
@@ -25,6 +20,7 @@ final class FocusNotifier {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
+        content.categoryIdentifier = NotificationCoordinator.focusCategory
         // 选中的声音由应用播放一次；关闭时通知也保持静默。
         content.sound = nil
         let request = UNNotificationRequest(identifier: UUID().uuidString,
@@ -35,13 +31,5 @@ final class FocusNotifier {
     func preview(bell: String?) {
         guard let bell else { return }
         NSSound(named: bell)?.play()
-    }
-}
-
-/// 应用在前台也横幅展示（专注提醒往往发生在还没切走的时候）。
-private final class FocusNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner]
     }
 }

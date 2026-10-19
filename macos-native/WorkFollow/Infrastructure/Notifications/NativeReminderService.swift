@@ -1,4 +1,5 @@
 import UserNotifications
+import AppKit
 import Combine
 
 /// Pure mapping from a task to its notification fire dates: the legacy absolute
@@ -87,102 +88,204 @@ struct ReminderSignature: Equatable {
 }
 
 @MainActor
-final class NativeReminderService: ObservableObject {
+final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var message: String?
-
-    /// 倒计时记录的通知来源，由 `AppEnvironment` 装配时注入。
-    ///
-    /// 用 `weak`：这个服务比倒计时 Store 建得早，强持有会连出一条没必要的
-    /// 所有权链（服务 → Store → 界面），而服务本身不需要拥有它。
+    @Published private(set) var authorization: UNAuthorizationStatus = .notDetermined
+    @Published private(set) var pendingCount = 0
+    @Published private(set) var coverageEnd: Date?
+    @Published private(set) var missed: [ReminderDelivery] = []
+    let state: TaskReminderStateStore
+    let notifications = NotificationCoordinator()
     weak var countdownStore: CountdownStore?
-
-    private var pendingWork: _Concurrency.Task<Void, Never>?
-    private var signature: [ReminderSignature]?
+    var onOpen: ((ReminderDelivery) -> Void)?
+    private let client: TaskNotificationClient
+    private let presenter = TaskReminderPresenter()
     private let clock: () -> Date
     private let calendar: Calendar
+    private var pendingWork: _Concurrency.Task<Void, Never>?
+    private var generation = 0
+    private var tasks: [Task] = []
+    private(set) var deliveries: [ReminderDelivery] = []
+    private var timer: Timer?
+    private var presentedIDs: Set<String> = []
+    private var authorizationActivation: AnyCancellable?
 
-    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
-        self.clock = clock
-        self.calendar = calendar
+    init(clock: @escaping () -> Date = Date.init, calendar: Calendar = .current,
+         directory: URL = JSONFileStore<TaskReminderStateStore.Snapshot>.moduleDirectory,
+         client: TaskNotificationClient? = nil) {
+        self.clock = clock; self.calendar = calendar
+        self.client = client ?? SystemTaskNotificationClient()
+        state = TaskReminderStateStore(directory: directory)
+        state.onChange = { [weak self] in
+            guard let self else { return }
+            self.reconcile(self.tasks, force: true)
+            self.objectWillChange.send()
+        }
+        notifications.onPresent = { [weak self] value in self?.present(value, playSound: true) ?? false }
+        notifications.onAction = { [weak self] value, snooze in
+            guard let self else { return }
+            await self.handle(value, snoozeMinutes: snooze ? self.state.snapshot.preferences.snoozeMinutes : nil)
+        }
+        notifications.onOpen = { [weak self] value in self?.openReminder(value) }
     }
 
-    // Permission is requested only by the user's explicit enable button.
+    func install() { notifications.install() }
+
     func enable(for tasks: [Task]) {
+        if !NSApp.isActive {
+            message = "请将 WorkFollow 置于前台，系统会显示通知授权。"
+            authorizationActivation = NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+                .first().sink { [weak self] _ in self?.beginAuthorization(for: tasks) }
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        beginAuthorization(for: tasks)
+    }
+
+    private func beginAuthorization(for tasks: [Task]) {
+        authorizationActivation = nil
         _Concurrency.Task {
             do {
-                let allowed = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+                let allowed = try await client.authorize()
+                NativeAcceptanceInteractionTrace.record("reminder.authorization", ["allowed": allowed, "active": NSApp.isActive])
                 message = allowed ? nil : "请在系统设置中允许 WorkFollow Native 通知。"
-                if allowed { reconcile(tasks, force: true) }
-            } catch { message = error.localizedDescription }
+                reconcile(tasks, force: true)
+            } catch {
+                authorization = await client.authorization()
+                message = "系统未允许通知：\(error.localizedDescription)"
+                let failure = error as NSError
+                NativeAcceptanceInteractionTrace.record("reminder.authorization-error", ["domain": failure.domain, "code": failure.code,
+                    "active": NSApp.isActive, "authorization": authorization.rawValue])
+            }
         }
     }
 
-    /// 重排全部通知：任务 + 倒计时记录。
-    ///
-    /// 倒计时记录从 `countdownStore` 现取，而不是让调用方传进来——调用点分布在
-    /// 任务侧（检查器里的授权按钮、工作区 revision 订阅），把它们都改成同时传
-    /// 两类记录，等于把「倒计时也有提醒」这件事散到几个不相干的界面里。
+    /// A serial drain ensures an old asynchronous add cannot finish after the
+    /// latest reconciliation and leave a stale request behind.
     func reconcile(_ tasks: [Task], force: Bool = false) {
-        let countdowns = countdownStore?.events ?? []
-        let next = ReminderSignature.values(tasks, countdowns: countdowns,
-                                            calendar: calendar, now: clock())
-        guard force || signature != next else { return }
-        signature = next
-        pendingWork?.cancel()
+        self.tasks = tasks
+        generation += 1
+        guard pendingWork == nil else { return }
         pendingWork = _Concurrency.Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            guard !_Concurrency.Task.isCancelled else { return }
-            guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
-            let pending = await center.pendingNotificationRequests()
-            guard !_Concurrency.Task.isCancelled else { return }
-            // 只清我们自己排的两种前缀；其他来源（比如专注计时）的通知不动。
-            let prefixes = [ReminderSignature.Source.task.identifierPrefix,
-                            ReminderSignature.Source.countdown.identifierPrefix]
-            center.removePendingNotificationRequests(
-                withIdentifiers: pending
-                    .filter { request in prefixes.contains { request.identifier.hasPrefix($0) } }
-                    .map(\.identifier))
-            for task in tasks where task.deletedAt == nil && task.skippedAt == nil && !task.isClosed {
-                guard !_Concurrency.Task.isCancelled else { return }
-                let dates = ReminderSchedule.fireDates(for: task, calendar: calendar)
-                for (index, date) in dates.enumerated() where date > clock() {
-                    guard !_Concurrency.Task.isCancelled else { return }
-                    await add(center, title: task.title.isEmpty ? "任务提醒" : task.title,
-                              body: task.list.name, date: date,
-                              source: .task, id: task.id, index: index, count: dates.count)
-                }
+            while true {
+                let revision = generation
+                await synchronize()
+                if revision == generation { break }
             }
-            for event in countdowns {
-                guard !_Concurrency.Task.isCancelled else { return }
-                let dates = ReminderSchedule.fireDates(for: event, calendar: calendar, now: clock())
-                for (index, date) in dates.enumerated() where date > clock() {
-                    guard !_Concurrency.Task.isCancelled else { return }
-                    await add(center, title: event.displayName, body: event.kind.title,
-                              date: date, source: .countdown, id: event.id,
-                              index: index, count: dates.count)
+            pendingWork = nil
+        }
+    }
+
+    func waitForReconciliation() async { await pendingWork?.value }
+
+    private func synchronize() async {
+        let now = clock()
+        deliveries = TaskReminderPlanner.deliveries(tasks: tasks, countdowns: countdownStore?.events ?? [],
+            now: now, calendar: calendar, decisions: state.snapshot.decisions)
+        missed = deliveries.filter { $0.fireDate <= now && $0.fireDate > now.addingTimeInterval(-86400) }
+        if let active = presenter.activeID, !deliveries.contains(where: { $0.id == active }) { presenter.stop() }
+        authorization = await client.authorization()
+        guard authorization == .authorized || authorization == .provisional else {
+            timer?.invalidate(); timer = nil
+            return
+        }
+        let desired = deliveries.filter { $0.fireDate > now }.prefix(256).map {
+            ScheduledTaskNotification(delivery: $0, sound: state.snapshot.preferences.soundEnabled,
+                                      bell: state.snapshot.preferences.bell)
+        }
+        let valid = Set(deliveries.map(\.id))
+        let delivered = await client.delivered()
+        client.removeDelivered(delivered.filter { $0.kind != .test && !valid.contains($0.id) }.map(\.id))
+        let current = await client.pending()
+        let ids = await client.pendingManagedIDs()
+        let wanted = Set(desired.map { $0.delivery.id })
+        client.removePending(ids.filter { !wanted.contains($0) })
+        let previous = Dictionary(current.map { ($0.delivery.id, $0) }, uniquingKeysWith: { _, next in next })
+        var failed: String?
+        for value in desired where previous[value.delivery.id] != value {
+            do { try await client.add(value, calendar: calendar) }
+            catch { failed = error.localizedDescription }
+        }
+        message = failed
+        let successful = await client.pending().filter { wanted.contains($0.delivery.id) }
+        pendingCount = successful.count
+        coverageEnd = successful.map { $0.delivery.fireDate }.max()
+        schedulePresentation()
+    }
+
+    func handle(_ delivery: ReminderDelivery, snoozeMinutes: Int?) async {
+        NativeAcceptanceInteractionTrace.record("reminder.action", ["kind": delivery.kind.rawValue,
+            "action": snoozeMinutes == nil ? "stop" : "snooze", "minutes": snoozeMinutes ?? 0])
+        // A notification from before a task was completed or rescheduled is inert.
+        guard delivery.kind == .test || deliveries.contains(where: { $0.id == delivery.id }) else {
+            client.removeDelivered([delivery.id]); return
+        }
+        presenter.stop(id: delivery.id)
+        client.removeDelivered([delivery.id])
+        if delivery.kind == .test {
+            if let minutes = snoozeMinutes {
+                var next = delivery; next.fireDate = clock().addingTimeInterval(Double(minutes) * 60)
+                try? await client.add(.init(delivery: next, sound: state.snapshot.preferences.soundEnabled,
+                    bell: state.snapshot.preferences.bell), calendar: calendar)
+            }
+            return
+        }
+        let until = snoozeMinutes.map { clock().addingTimeInterval(Double($0) * 60) }
+        presentedIDs.remove(delivery.id)
+        state.decide(delivery, snoozeUntil: until)
+        let error: Error? = await withCheckedContinuation { continuation in
+            state.flush { continuation.resume(returning: $0) }
+        }
+        if let error { message = "提醒状态保存失败：\(error.localizedDescription)" }
+        await waitForReconciliation()
+    }
+
+    func openReminder(_ delivery: ReminderDelivery) {
+        presenter.stop(id: delivery.id)
+        client.removeDelivered([delivery.id])
+        onOpen?(delivery)
+    }
+
+    @discardableResult
+    private func present(_ value: ReminderDelivery, playSound: Bool) -> Bool {
+        guard value.kind == .test || deliveries.contains(where: { $0.id == value.id }) else { return false }
+        presentedIDs.insert(value.id)
+        return presenter.show(value, preferences: state.snapshot.preferences, playSound: playSound,
+            onSnooze: { [weak self] minutes in
+                _Concurrency.Task { await self?.handle(value, snoozeMinutes: minutes) }
+            }, onStop: { [weak self] in
+                _Concurrency.Task { await self?.handle(value, snoozeMinutes: nil) }
+            }, onOpen: { [weak self] in self?.openReminder(value) })
+    }
+
+    private func schedulePresentation() {
+        timer?.invalidate()
+        guard let next = deliveries.first(where: { $0.fireDate > clock() && !presentedIDs.contains($0.id) }) else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: max(0.1, next.fireDate.timeIntervalSince(clock())), repeats: false) { [weak self] _ in
+            _Concurrency.Task { @MainActor in
+                guard let self else { return }
+                // Background audio belongs to the system notification. Foreground
+                // notification callbacks and this timer share the same presenter.
+                if let current = self.deliveries.first(where: { $0.id == next.id }) {
+                    _ = self.present(current, playSound: NSApp.isActive)
                 }
+                // Refill the bounded system queue after a delivery, even when
+                // the user leaves the app running without editing any tasks.
+                self.reconcile(self.tasks, force: true)
             }
         }
     }
 
-    /// 排一条通知。
-    ///
-    /// 单条偏移量时标识符**不带序号**（`task.<uuid>`），与加偏移量之前的旧版本
-    /// 保持一致，升级上来才不会出现新旧两条重复通知。
-    private func add(_ center: UNUserNotificationCenter, title: String, body: String,
-                     date: Date, source: ReminderSignature.Source, id: UUID,
-                     index: Int, count: Int) async {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let trigger = UNCalendarNotificationTrigger(dateMatching: calendar.dateComponents(
-            [.year, .month, .day, .hour, .minute, .second], from: date), repeats: false)
-        let identifier = count > 1
-            ? "\(source.rawValue).\(id.uuidString)#\(index)"
-            : "\(source.rawValue).\(id.uuidString)"
-        do { try await center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)) }
-        catch { message = error.localizedDescription }
+    func sendTest() {
+        _Concurrency.Task {
+            let value = ReminderDelivery(id: "reminder.test.\(UUID().uuidString)", kind: .test,
+                sourceID: UUID(), title: "WorkFollow 测试提醒", body: "可以试用稍后提醒和停止。",
+                originalDate: clock().addingTimeInterval(5), fireDate: clock().addingTimeInterval(5))
+            do { try await client.add(.init(delivery: value, sound: state.snapshot.preferences.soundEnabled,
+                bell: state.snapshot.preferences.bell), calendar: calendar) }
+            catch { message = error.localizedDescription }
+        }
     }
+    func previewSound() { ReminderAudio.sound(state.snapshot.preferences.bell)?.play() }
+    func flush(_ completion: @escaping (Error?) -> Void) { state.flush(completion) }
 }

@@ -27,6 +27,7 @@ final class AppEnvironment: ObservableObject {
     let taskWorkspace: TaskWorkspaceModel
     let notesWorkspace: NotesWorkspaceModel
     let reminders: NativeReminderService
+    let systemCalendar: CalendarSyncCoordinator
     let focusStore: FocusStore
     let taskActivityStore: TaskActivityStore
     let taskCommentStore: TaskCommentStore
@@ -47,6 +48,7 @@ final class AppEnvironment: ObservableObject {
     private var storageReplacementPending = false
     private var subscriptions = Set<AnyCancellable>()
     private var loadFailed = false
+    private var calendarNeedsSync = false
     var documentReadCount: Int { repository.documentReadCount }
     var originalContentReadCount: Int { repository.originalContentReadCount }
     @Published var commandPalettePresented = false
@@ -62,7 +64,8 @@ final class AppEnvironment: ObservableObject {
          directory: URL = NativePreviewRepository.directory) {
         repository = NativePreviewRepository(directory: directory)
         persistence = PersistenceCoordinator(repository: repository)
-        reminders = NativeReminderService(clock: clock, calendar: calendar)
+        reminders = NativeReminderService(clock: clock, calendar: calendar, directory: directory.appendingPathComponent("modules"))
+        systemCalendar = CalendarSyncCoordinator(directory: directory.appendingPathComponent("modules"), clock: clock, calendar: calendar)
         let preferences = UserDefaults.standard
         self.preferences = preferences
         appearance = NativeAcceptanceConfiguration.appearance ?? NativeAppearance(rawValue:
@@ -99,7 +102,31 @@ final class AppEnvironment: ObservableObject {
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences]
+        moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences, reminders, systemCalendar]
+        reminders.onOpen = { [weak self] delivery in
+            switch delivery.kind {
+            case .task: self?.openCalendarTask(.init(taskID: delivery.sourceID, occurrence: delivery.occurrence))
+            case .countdown: self?.navigation.destination = .countdown
+            case .test: break
+            }
+        }
+        reminders.install()
+        systemCalendar.onNeedsSync = { [weak self] in self?.flushThenSyncCalendar() }
+        systemCalendar.applyExternal = { [weak self] reference, fields, baseline, derived in
+            guard let self, !self.loadFailed, !self.storageNeedsReload,
+                  let occurrence = CalendarTaskReference.resolve(reference, tasks: self.taskWorkspace.tasksInActiveLists, calendar: calendar),
+                  occurrence.task.isActiveSeriesOccurrence else { return false }
+            let cal = occurrence.task.series?.calendar(matching: calendar) ?? calendar
+            let schedule = CalendarTaskMapping.schedule(from: fields, original: occurrence.task.schedule,
+                baseline: baseline, derivedDuration: derived, calendar: cal, eventCalendar: calendar)
+            guard self.taskWorkspace.applyCalendarEdit(occurrence, title: fields.title, schedule: schedule).taskID != nil else { return false }
+            return await withCheckedContinuation { continuation in
+                self.persistence.flush { continuation.resume(returning: $0 == nil) }
+            }
+        }
+        for publisher in [reminders.objectWillChange.eraseToAnyPublisher(), systemCalendar.objectWillChange.eraseToAnyPublisher()] {
+            publisher.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &subscriptions)
+        }
         repository.onDocumentFailure = { [weak self] error in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -115,6 +142,10 @@ final class AppEnvironment: ObservableObject {
                 else if let error = self.focusStore.storageError ?? self.taskActivityStore.storageError {
                     self.storageError = "历史记录读取失败，该模块保存已停用：\(error.localizedDescription)"
                 } else { self.storageError = nil }
+                if error == nil, self.calendarNeedsSync {
+                    self.calendarNeedsSync = false
+                    self.syncCalendarNow()
+                }
             }
         }
         if let failure { loadFailed = true; storageError = "预览数据读取失败，自动保存已停用：\(failure.localizedDescription)" }
@@ -138,6 +169,7 @@ final class AppEnvironment: ObservableObject {
             .sink { [weak self] _ in
                 self?.taskWorkspace.refreshDates()
                 self?.countdownStore.refresh()
+                self?.refreshSystemIntegrations()
             }
             .store(in: &subscriptions)
         // B2 笔记↔任务联动：笔记详情展示/勾选/打开 sourceNoteID 关联的任务。
@@ -160,9 +192,12 @@ final class AppEnvironment: ObservableObject {
         taskWorkspace.listArchiveChanges.sink { [weak self] _ in
             guard let self, !self.loadFailed else { return }
             self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
+            self.calendarNeedsSync = true
+            DispatchQueue.main.async { [weak self] in self?.flushThenSyncCalendar() }
         }.store(in: &subscriptions)
         taskWorkspace.taskChanges.sink { [weak self] changes in
             guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
+            if changes.affectsReminders || changes.entries.contains(where: { $0.changedFields.contains(.title) }) { self.calendarNeedsSync = true }
             self.persistence.schedule(changes: changes)
         }.store(in: &subscriptions)
         notesWorkspace.persistenceChanges.sink { [weak self] changes in
@@ -191,8 +226,42 @@ final class AppEnvironment: ObservableObject {
             .store(in: &subscriptions)
         if !loadFailed {
             reminders.reconcile(taskWorkspace.tasksInActiveLists)
+            syncCalendarNow()
             if snapshot == nil, let initial = makePreviewSnapshot() { persistence.schedule(initial) }
         }
+        for name in [NSWorkspace.didWakeNotification] {
+            NSWorkspace.shared.notificationCenter.publisher(for: name).sink { [weak self] _ in
+                self?.refreshSystemIntegrations()
+            }.store(in: &subscriptions)
+        }
+        for name in [NSNotification.Name.NSSystemTimeZoneDidChange, .NSCalendarDayChanged, NSNotification.Name("NSSystemClockDidChangeNotification")] {
+            NotificationCenter.default.publisher(for: name).sink { [weak self] _ in
+                self?.refreshSystemIntegrations()
+            }.store(in: &subscriptions)
+        }
+    }
+
+    private func syncCalendarNow() {
+        guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
+        systemCalendar.requestSync(tasks: taskWorkspace.allTasks, activeLists: taskWorkspace.availableListNames)
+    }
+    private func flushThenSyncCalendar() {
+        guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
+        persistence.flush { [weak self] error in if error == nil { self?.syncCalendarNow() } }
+    }
+    private func refreshSystemIntegrations() {
+        guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
+        reminders.reconcile(taskWorkspace.tasksInActiveLists, force: true)
+        systemCalendar.refreshAccess(); flushThenSyncCalendar()
+    }
+    @discardableResult
+    func openCalendarTask(_ reference: CalendarTaskReference) -> Bool {
+        guard let occurrence = CalendarTaskReference.resolve(reference, tasks: taskWorkspace.allTasks, calendar: taskWorkspace.calendar) else { return false }
+        openTask(occurrence.sourceTaskID)
+        taskWorkspace.selectOccurrence(occurrence)
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.windows.first(where: { $0.identifier?.rawValue == "WorkFollowNativeMain" })?.makeKeyAndOrderFront(nil)
+        return true
     }
 
     /// 从任务侧发起专注：跳到专注页并直接开始该任务的番茄；已有进行中会话

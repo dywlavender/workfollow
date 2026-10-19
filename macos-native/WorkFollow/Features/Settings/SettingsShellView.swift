@@ -18,8 +18,12 @@ struct SettingsShellView: View {
 
             SettingsDataView()
                 .tabItem { Label("数据", systemImage: "externaldrive") }
+
+            SettingsCalendarReminderView(reminders: environment.reminders,
+                integration: environment.systemCalendar, workspace: environment.taskWorkspace)
+                .tabItem { Label("日历与提醒", systemImage: "calendar.badge.clock") }
         }
-        .frame(width: 420, height: 620)
+        .frame(width: 500, height: 660)
         .navigationTitle("设置")
     }
 }
