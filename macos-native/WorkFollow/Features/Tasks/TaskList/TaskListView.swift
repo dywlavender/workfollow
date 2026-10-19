@@ -527,6 +527,7 @@ struct TaskListView: View {
                     }
                     .buttonStyle(.plain)
                     .help("安排日期、提醒和重复")
+                    .quickAddRenderAnchor(.schedule)
                     .schedulePopover(isPresented: $showQuickAddSchedule) {
                         TaskDatePopoverV2(
                             task: quickAddScheduleTask(in: scope),
@@ -785,6 +786,7 @@ struct TaskListView: View {
             recurrence: timing.repeatFrequency,
             recurrenceRule: timing.recurrenceRule,
             reminderAt: timing.reminderAt,
+            reminderOffsets: timing.reminderOffsetsOrNil,
             list: TaskList(name: quickAddListOverride ?? parsed.listName
                 ?? workspace.activeList ?? TaskList.inbox.name),
             priority: quickAddPriorityOverride ?? parsed.priority,
