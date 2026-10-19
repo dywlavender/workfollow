@@ -331,26 +331,44 @@ final class TaskKanbanDropTests: XCTestCase {
         InspectorPanelTestSupport.settle(window)
         let insertion = try XCTUnwrap(column.insertion)
         XCTAssertEqual(insertion.placement, .before(first.id))
-        let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
-            CGWindowID(window.windowNumber), [.bestResolution]))
-        let bitmap = NSBitmapImageRep(cgImage: image)
-        let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
-        let markerPoint = column.convert(CGPoint(x: column.bounds.midX,
-            y: column.isFlipped ? insertion.y : column.bounds.height - insertion.y), to: host)
-        let imageY = host.isFlipped ? markerPoint.y : host.bounds.height - markerPoint.y
-        var coloredSamples = 0
-        for x in stride(from: markerPoint.x - 80, through: markerPoint.x + 80, by: 4) {
-            let hasInk = (-2...2).contains { offset in
-                guard let color = bitmap.colorAt(x: Int(x * scale),
-                    y: Int((imageY + CGFloat(offset)) * scale))?.usingColorSpace(.sRGB) else { return false }
-                return color.blueComponent > color.redComponent + 0.15
-                    && color.blueComponent > color.greenComponent + 0.1
+        func markerSamples(at y: CGFloat) throws -> Int {
+            let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+                CGWindowID(window.windowNumber), [.bestResolution]))
+            let bitmap = NSBitmapImageRep(cgImage: image)
+            let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
+            let markerPoint = column.convert(CGPoint(x: column.bounds.midX,
+                y: column.isFlipped ? y : column.bounds.height - y), to: host)
+            let imageY = host.isFlipped ? markerPoint.y : host.bounds.height - markerPoint.y
+            var count = 0
+            for x in stride(from: markerPoint.x - 80, through: markerPoint.x + 80, by: 4) {
+                let hasInk = (-2...2).contains { offset in
+                    guard let color = bitmap.colorAt(x: Int(x * scale),
+                        y: Int((imageY + CGFloat(offset)) * scale))?.usingColorSpace(.sRGB) else { return false }
+                    return color.blueComponent > color.redComponent + 0.15
+                        && color.blueComponent > color.greenComponent + 0.1
+                }
+                if hasInk { count += 1 }
             }
-            if hasInk { coloredSamples += 1 }
+            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: "/tmp/workfollow-kanban-insertion-feedback.png"))
+            return count
         }
-        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-            .write(to: URL(fileURLWithPath: "/tmp/workfollow-kanban-insertion-feedback.png"))
-        XCTAssertGreaterThan(coloredSamples, 30, "真实看板重绘列高亮后仍应绘制连续的插入线")
+        XCTAssertGreaterThan(try markerSamples(at: insertion.y), 30,
+                             "真实看板重绘列高亮后仍应绘制连续的插入线")
+        // Drag feedback must not inherit a surrounding view animation and
+        // visibly slide behind the pointer when it crosses another gap.
+        drag.draggingLocation = column.convert(CGPoint(x: 100,
+            y: column.isFlipped ? firstFrame.maxY + 5 : column.bounds.height - firstFrame.maxY - 5), to: nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.5
+            context.allowsImplicitAnimation = true
+            _ = column.draggingUpdated(drag)
+        }
+        let movedInsertion = try XCTUnwrap(column.insertion)
+        XCTAssertEqual(movedInsertion.placement, .after(first.id))
+        InspectorPanelTestSupport.settle(window, duration: 0.03)
+        XCTAssertGreaterThan(try markerSamples(at: movedInsertion.y), 30,
+                             "落点切换应立即绘制，不能等位置动画追上鼠标")
         column.draggingExited(drag)
         XCTAssertNil(column.insertion)
         XCTAssertFalse(workspace.canUndo, "悬停反馈不改动任务")

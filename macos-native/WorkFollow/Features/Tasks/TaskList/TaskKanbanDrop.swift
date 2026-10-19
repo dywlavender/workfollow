@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 /// Own the destination lifecycle so an accepted drop removes the system preview
@@ -140,7 +141,7 @@ final class TaskKanbanColumnDropView: NSView {
     private func updateFeedback(_ sender: NSDraggingInfo, operation: NSDragOperation) {
         onTargeted(!operation.isEmpty)
         insertion = operation.isEmpty ? nil : resolvedInsertion(for: sender)
-        guard let insertion else { insertionMarker?.isHidden = true; return }
+        guard let insertion else { insertionMarker?.update(frame: nil); return }
         let marker: TaskKanbanInsertionMarker
         if let insertionMarker {
             marker = insertionMarker
@@ -156,16 +157,15 @@ final class TaskKanbanColumnDropView: NSView {
         } else {
             leading = WFSpace.xs
         }
-        marker.frame = CGRect(x: leading,
+        marker.update(frame: CGRect(x: leading,
             y: isFlipped ? insertion.y - height / 2 : bounds.height - insertion.y - height / 2,
-            width: max(0, bounds.width - leading - WFSpace.xs), height: height)
-        marker.isHidden = false
+            width: max(0, bounds.width - leading - WFSpace.xs), height: height))
     }
 
     private func clearFeedback() {
         onTargeted(false)
         insertion = nil
-        insertionMarker?.isHidden = true
+        insertionMarker?.update(frame: nil)
     }
 
     private func resolvedInsertion(for sender: NSDraggingInfo) -> TaskKanbanInsertion? {
@@ -211,6 +211,21 @@ private final class TaskKanbanInsertionMarker: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func update(frame: CGRect?) {
+        // Gap feedback follows the current drag event. Inheriting a surrounding
+        // view animation makes the line slide behind the pointer between gaps.
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0
+            context.allowsImplicitAnimation = false
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            if let frame { self.frame = frame }
+            isHidden = frame == nil
+            layer?.removeAllAnimations()
+            CATransaction.commit()
+        }
+    }
 }
 
 extension TaskListGroup {
