@@ -28,9 +28,13 @@ final class TaskSchedulePanelRenderTests: XCTestCase {
     }
 
     func testThreeMainPanelScenesMatchDisplayedLabelsAndGeometry() throws {
-        for (name, timed, repeating) in [("empty", false, false), ("timed", true, false), ("monthly-timed", true, true)] {
+        let scenes: [(String, Bool, Bool, ColorScheme)] = [
+            ("empty", false, false, .light), ("empty-dark", false, false, .dark),
+            ("timed", true, false, .light), ("timed-dark", true, false, .dark),
+            ("monthly-timed", true, true, .light), ("monthly-timed-dark", true, true, .dark)]
+        for (name, timed, repeating, scheme) in scenes {
             let (workspace, task) = fixture(timed: timed, repeating: repeating)
-            let values = try render(task, workspace: workspace, name: name)
+            let values = try render(task, workspace: workspace, name: name, scheme: scheme)
             XCTAssertEqual(values[.panel]?.frame.width, 260)
             let panel = try XCTUnwrap(values[.panel]).frame
             let footer = try XCTUnwrap(values[.mainFooter]).frame
@@ -84,15 +88,16 @@ final class TaskSchedulePanelRenderTests: XCTestCase {
         XCTAssertEqual(workspace.revision, revision)
     }
 
-    private func render(_ task: Task, workspace: TaskWorkspaceModel, name: String) throws -> [ScheduleRenderAnchor: ScheduleRenderValue] {
+    private func render(_ task: Task, workspace: TaskWorkspaceModel, name: String,
+                        scheme: ColorScheme = .light) throws -> [ScheduleRenderAnchor: ScheduleRenderValue] {
         var values: [ScheduleRenderAnchor: ScheduleRenderValue] = [:]
         let root = TaskDatePopoverV2(task: task, workspace: workspace) {}
             .background(WFColors.content)
-            .environment(\.colorScheme, .light)
+            .environment(\.colorScheme, scheme)
             .coordinateSpace(name: "schedule-render")
             .onPreferenceChange(ScheduleFramesKey.self) { values = $0 }
         let host = NSHostingView(rootView: root)
-        host.appearance = NSAppearance(named: .aqua)
+        host.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
         let size = NSHostingController(rootView: root).sizeThatFits(in: CGSize(width: 260, height: 900))
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                               styleMask: [.borderless], backing: .buffered, defer: false)

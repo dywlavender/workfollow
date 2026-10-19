@@ -274,7 +274,137 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         XCTAssertEqual(fixture.workspace.bulkSelection, originalSelection)
     }
 
-    private func makeFixture() throws -> Fixture {
+    func testShortcutAndReturnConfirmCommitOneUndoableEdit() throws {
+        let fixture = try makeFixture()
+        defer { close(fixture) }
+        let revision = fixture.workspace.revision
+        let parent = try openSchedulePanel(in: fixture)
+        try clickMain(.shortcut("明天"), in: parent, fixture: fixture)
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+
+        try InspectorPanelTestSupport.sendReturn(to: parent)
+        settle(fixture)
+        XCTAssertFalse(parent.isVisible, "绘制按钮仍需保留 Return 确认")
+        let edited = try XCTUnwrap(fixture.workspace.task(for: fixture.task.id))
+        XCTAssertEqual(edited.schedule.dueAt, fixture.workspace.dateFromToday(1))
+        XCTAssertEqual(fixture.workspace.revision, revision + 1)
+        fixture.workspace.undo()
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+    }
+
+    func testPeriodDatePickersPreserveTimesAndCommitOnlyAtMainConfirm() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        func date(_ day: Int, _ hour: Int, _ minute: Int) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 10, day: day,
+                                               hour: hour, minute: minute))!
+        }
+        let fixture = try makeFixture(schedule: TaskSchedule(dueAt: date(2, 9, 17), hasTime: true,
+                                                              dueEndAt: date(4, 11, 43)))
+        defer { close(fixture) }
+        let parent = try openSchedulePanel(in: fixture)
+        XCTAssertTrue(try XCTUnwrap(fixture.layout.frames[.option("时间段")]).active)
+        XCTAssertNil(fixture.layout.frames[.shortcut("今天")])
+
+        try clickMain(.option("period-结束"), in: parent, fixture: fixture)
+        var child = try XCTUnwrap(childPanel(in: parent))
+        captureChildFrames(in: child, fixture: fixture)
+        // 选择下限应作用于真实按钮；无效日期不会关闭选择器或修改草稿。
+        try clickChild(.option("2026年10月1日"), in: child, fixture: fixture)
+        XCTAssertTrue(child.isVisible)
+        XCTAssertEqual(fixture.layout.frames[.option("period-结束")]?.label, "2026/10/4")
+        try clickChild(.option("2026年10月5日"), in: child, fixture: fixture)
+        XCTAssertFalse(child.isVisible)
+
+        try clickMain(.option("period-开始"), in: parent, fixture: fixture)
+        child = try XCTUnwrap(childPanel(in: parent))
+        captureChildFrames(in: child, fixture: fixture)
+        try clickChild(.option("2026年10月3日"), in: child, fixture: fixture)
+        XCTAssertFalse(child.isVisible)
+        XCTAssertEqual(fixture.layout.frames[.row(.time)]?.label, "09:17")
+        XCTAssertEqual(fixture.layout.frames[.row(.endTime)]?.label, "结束 11:43")
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+
+        try InspectorPanelTestSupport.sendReturn(to: parent)
+        settle(fixture)
+        let edited = try XCTUnwrap(fixture.workspace.task(for: fixture.task.id))
+        XCTAssertEqual(edited.schedule.dueAt, date(3, 9, 17))
+        XCTAssertEqual(edited.schedule.dueEndAt, date(5, 11, 43))
+        fixture.workspace.undo()
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+    }
+
+    func testPeriodPickerEscapeAndCalendarNavigationKeepDraftIsolated() throws {
+        let fixture = try makeFixture()
+        defer { close(fixture) }
+        let parent = try openSchedulePanel(in: fixture)
+        try clickMain(.option("时间段"), in: parent, fixture: fixture)
+        try clickMain(.option("period-开始"), in: parent, fixture: fixture)
+        let child = try XCTUnwrap(childPanel(in: parent))
+        try sendEscape(to: parent)
+        settle(fixture)
+        XCTAssertFalse(child.isVisible)
+        XCTAssertTrue(parent.isVisible)
+
+        try clickMain(.option("日期"), in: parent, fixture: fixture)
+        try clickMain(.option("下个月"), in: parent, fixture: fixture)
+        XCTAssertEqual(fixture.layout.frames[.option("month-title")]?.label, "2026年11月")
+        try clickMain(.option("回到今天"), in: parent, fixture: fixture)
+        XCTAssertEqual(fixture.layout.frames[.option("month-title")]?.label, "2026年10月")
+        XCTAssertTrue(try XCTUnwrap(fixture.layout.frames[.option("2026年10月2日")]).active)
+        try sendEscape(to: parent)
+        settle(fixture)
+        XCTAssertFalse(parent.isVisible)
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+    }
+
+    func testAllDaySwitchAndClearFooterKeepDeadlineAndUndoableState() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        func date(_ day: Int, _ hour: Int = 0) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour))!
+        }
+        let fixture = try makeFixture(schedule: TaskSchedule(dueAt: date(2, 9), hasTime: true,
+            dueEndAt: date(4, 11), deadlineAt: date(7)))
+        defer { close(fixture) }
+        var parent = try openSchedulePanel(in: fixture)
+        let timedHeight = parent.frame.height
+        let allDay = try XCTUnwrap(fixture.layout.frames[.option("全天")]).frame
+        try sendClick(in: try XCTUnwrap(parent.contentView),
+                      frame: CGRect(x: allDay.maxX - 24, y: allDay.minY, width: 24, height: allDay.height),
+                      window: parent)
+        settle(fixture)
+        XCTAssertTrue(try XCTUnwrap(fixture.layout.frames[.option("全天")]).active)
+        XCTAssertNil(fixture.layout.frames[.row(.time)])
+        XCTAssertNil(fixture.layout.frames[.row(.endTime)])
+        XCTAssertEqual(parent.frame.height, timedHeight - ScheduleMetrics.rowHeight * 2, accuracy: 0.5)
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+        try InspectorPanelTestSupport.sendReturn(to: parent)
+        settle(fixture)
+        let allDayTask = try XCTUnwrap(fixture.workspace.task(for: fixture.task.id))
+        XCTAssertFalse(allDayTask.schedule.hasTime)
+        XCTAssertEqual(allDayTask.schedule.dueAt, date(2))
+        XCTAssertEqual(allDayTask.schedule.dueEndAt, date(4))
+        XCTAssertEqual(allDayTask.schedule.deadlineAt, date(7))
+        fixture.workspace.undo()
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+
+        parent = try openSchedulePanel(in: fixture)
+        let footer = try XCTUnwrap(fixture.layout.frames[.mainFooter]).frame
+        try sendClick(in: try XCTUnwrap(parent.contentView),
+                      frame: CGRect(x: footer.minX, y: footer.minY, width: footer.width / 2 - 6,
+                                    height: footer.height), window: parent)
+        settle(fixture)
+        XCTAssertFalse(parent.isVisible)
+        let cleared = try XCTUnwrap(fixture.workspace.task(for: fixture.task.id))
+        XCTAssertNil(cleared.schedule.dueAt)
+        XCTAssertNil(cleared.schedule.dueEndAt)
+        XCTAssertEqual(cleared.schedule.deadlineAt, date(7))
+        fixture.workspace.undo()
+        XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
+    }
+
+    private func makeFixture(schedule: TaskSchedule? = nil) throws -> Fixture {
         _ = NSApplication.shared
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
@@ -283,7 +413,7 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
                                                      hour: 12))!
         let due = calendar.startOfDay(for: now)
         let task = Task(id: UUID(), title: "日程窗口 Esc 验收", list: .inbox, priority: .none,
-                        schedule: TaskSchedule(dueAt: due), parentID: nil, childOrder: 0,
+                        schedule: schedule ?? TaskSchedule(dueAt: due), parentID: nil, childOrder: 0,
                         createdAt: now, updatedAt: now)
         let otherTask = Task(id: UUID(), title: "保留批量选择", list: .inbox, priority: .none,
                              schedule: TaskSchedule(), parentID: nil, childOrder: 0,

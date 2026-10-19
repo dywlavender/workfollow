@@ -483,7 +483,7 @@ struct TaskInspectorShell: View {
     }
 
     /// 顶部日期入口：安排日期 chip；有截止日期时右侧并列「截止 …」标签（滴答 `secondaryDateLabel`）。
-    /// 两个面板都锚在日期 chip 上——安排日期面板里再点「截止日期」，宿主就把面板切到截止日期。
+    /// 安排日期锚在 chip 上；已有截止日期的次要入口使用同一日程浮层呈现壳。
     private func scheduleChip(_ task: Task, field: ScheduleField) -> some View {
         HStack(spacing: WFSpace.dense) {
             AppKitScheduleChip(symbol: field.symbol,
@@ -495,12 +495,15 @@ struct TaskInspectorShell: View {
             // 显式标出 chip 矩形：两个 popover 都读 `.date` 锚点，没有它时外层面板
             // 会退化成"整行（chip + 截止日期标签）"锚点。
             .scheduleTrigger(.date)
+            // 日程区（`.schedule`）现在并列着截止入口，点击 chip 用这个更精确的锚点。
+            .inspectorRenderAnchor(.scheduleChip)
             .schedulePopover(isPresented: popoverBinding(field.popover)) {
-                TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline,
-                                  onRequestDeadline: field == .due ? { openSchedulePanel(.deadline) } : nil) {
+                TaskDatePopoverV2(task: task, workspace: workspace, deadline: field == .deadline) {
                     presentation.activePopover = nil
                 }
             }
+            // 滴答顶栏只在任务已有截止日期时显示 `secondaryDateLabel`（不是常驻入口）；
+            // 日期面板也没有「截止日期」行，所以未设置时顶栏不占位。
             if field == .due, let deadline = task.schedule.deadlineAt {
                 deadlineLabel(task, deadline: deadline)
                     .inspectorRenderAnchor(.deadlineLabel)
@@ -530,7 +533,7 @@ struct TaskInspectorShell: View {
         return TaskInspectorSubtaskProgress(done: done, total: total)
     }
 
-    /// 顶栏次要日期：只在有截止日期时占位，逾期红字；点击直接改截止日期。
+    /// 顶栏次要日期（滴答 `secondaryDateLabel`）：只在任务已有截止日期时渲染，逾期红字。
     private func deadlineLabel(_ task: Task, deadline: Date) -> some View {
         let now = workspace.clock()
         let overdue = !task.isClosed
@@ -1011,9 +1014,13 @@ struct TaskInspectorShell: View {
 
     private func scheduleChipLabel(_ task: Task, field: ScheduleField) -> String {
         guard let date = field.date(in: task) else { return field.emptyLabel }
+        let now = workspace.clock()
+        let calendar = workspace.calendar
+        if field == .due {
+            return TaskInspectorSchedulePresentation.label(schedule: task.schedule, now: now, calendar: calendar)
+        }
         return TaskInspectorSchedulePresentation.label(date: date,
-            hasTime: field == .due && task.schedule.hasTime,
-            now: workspace.clock(), calendar: workspace.calendar)
+            hasTime: false, now: now, calendar: calendar)
     }
 
     private func priorityColor(_ priority: TaskPriority) -> Color {

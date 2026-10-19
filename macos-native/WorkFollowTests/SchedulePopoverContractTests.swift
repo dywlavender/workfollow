@@ -91,12 +91,14 @@ final class SchedulePopoverContractTests: XCTestCase {
     }
 
     /// 时间段页签增加结束时间行和区间说明区域，宽度契约不变。
-    func testPeriodTabAddsTheEndTimeRow() {
+    func testPeriodTabOmitsCalendarAndStaysCompact() {
         let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 28, hour: 10))!
         let dateOnly = size(of: TaskDatePopoverV2(task: makeTask(), workspace: workspace(now: now)) {})
         let ranged = size(of: TaskDatePopoverV2(task: makeRangedTask(),
                                                 workspace: workspace(now: now)) {})
         XCTAssertEqual(ranged.width, ScheduleMetrics.panelWidth, accuracy: 0.5)
-        XCTAssertEqual(ranged.height, dateOnly.height + ScheduleMetrics.rowHeight + 24, accuracy: 0.5)
+        // 滴答「时间段」没有月历（开始 / 结束 / 全天 + 提醒 / 重复），比日期页签更矮。
+        XCTAssertLessThan(ranged.height, dateOnly.height,
+                          "时间段页签不应再背着月历和结束时间行")
     }
 }

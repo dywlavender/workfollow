@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-19",
+  "branch": "experiment/macos-native",
+  "reference": {
+    "app": "TickTick",
+    "version": "8.0.80",
+    "ordinary_date_panel": "previous_runtime_observation",
+    "period_panel": "premium_introduction_structure_only",
+    "period_editor_runtime_verified": false
+  },
+  "validation": {
+    "isolated_source_paths": 18,
+    "unique_related_cases_passed": 80,
+    "full_regression": false,
+    "base_case_count": 79,
+    "base_cases_passed": true,
+    "added_case": "Unset schedule chip opens real inspector date panel, selects tomorrow, Return commits, undo restores",
+    "inspector_final_rerun": {
+      "executed": 5,
+      "passed": 5,
+      "failed": 0
+    },
+    "overlapping_counts_not_added": true,
+    "intermediate_issue": "In-process test host AX traversal returned no virtual buttons; the new entry test now clicks actual published window layout frames.",
+    "logs": [
+      "/private/tmp/workfollow-date-panel-final-2026-10-19/isolated-validation.log",
+      "/private/tmp/workfollow-date-panel-final-2026-10-19/final-validation.log",
+      "/private/tmp/workfollow-date-panel-final-2026-10-19/inspector-entry-validation.log"
+    ]
+  },
+  "native_qa": {
+    "app": "WorkFollow Date QA",
+    "isolated_storage": true,
+    "verified": [
+      "period layout",
+      "date/period selected state names",
+      "all-day toggle and compact property area",
+      "end-date child calendar with disabled earlier days visible",
+      "all-day save updates header summary",
+      "one undo restores 09:00 to 10:00 range"
+    ],
+    "ordinary_date_full_native_flow": "tool_interrupted; covered by actual-window event tests",
+    "light_and_dark_render_inspection": "passed"
+  },
+  "cleanup": {
+    "task_count": 14,
+    "task_date_and_other_semantics_restored": true,
+    "body_records_unchanged": true,
+    "raw_metadata_bytes_unchanged": false,
+    "metadata_note": "Repository persisted default text kind and document projection; normalized task fields and separate body table match baseline.",
+    "original_qa_storage_modified": false
+  }
+}

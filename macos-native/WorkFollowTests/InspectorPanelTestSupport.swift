@@ -171,11 +171,11 @@ enum InspectorPanelTestSupport {
         while let parent = owner.parent { owner = parent }
         if let host = owner.contentView, let probe = probes[ObjectIdentifier(host)] {
             let anchors: [String: InspectorRenderAnchor] = [
-                "更多任务操作": .footerMore, "设置日期": .schedule, "任务标题": .title,
+                "更多任务操作": .footerMore, "设置日期": .scheduleChip, "任务标题": .title,
                 "开始专注": .focusMenuRow, "关联主任务": .parentMenuRow,
                 "标签": .tagsMenuRow, "任务动态": .activityMenuRow, "创建副本": .duplicateMenuRow,
                 "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch,
-                "设置预计专注": .focusEstimate, "截止日期": .deadlineRow,
+                "设置预计专注": .focusEstimate, "截止日期": .deadlineLabel,
                 "任务类型": .kind, "笔记信息": .noteInfo, "在独立窗口打开": .detach, "评论": .footerComment
             ]
             let frames = window === owner ? probe.main : probe.popup

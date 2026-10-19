@@ -79,17 +79,15 @@ struct TaskDatePopoverV2: View {
     /// 草稿宿主（日历/四象限的新建卡）：任务还没被创建，确定与清除只把计划交回
     /// 调用方，不写工作区，也不动批量选择。
     private let draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)?
-    /// 详情编辑栏专用：安排日期面板里多一行「截止日期」，点击把宿主切到截止日期面板。
-    /// 其它宿主不传（行为不变），所以任务行/快速添加/批量面板仍只有安排日期。
-    private let onRequestDeadline: (() -> Void)?
     private let availableHeight: CGFloat
-    /// 截止日期入口只在"安排日期面板"出现，且只对传了回调的宿主出现。
-    private var showsDeadlineRow: Bool { !deadline && onRequestDeadline != nil }
     private var panelHeight: CGFloat {
-        SchedulePopoverLayoutV2.height(availableHeight: availableHeight,
-            repeating: !deadline && model.frequency != .never,
-            period: !deadline && model.tab == .period,
-            deadlineRow: showsDeadlineRow)
+        // 时间段页签没有月历，高度只跟「开始/结束/全天 + 属性行」相关。
+        if !deadline && model.tab == .period {
+            let sectionRows = 3 + periodPropertyRowCount       // 开始 / 结束 / 全天 + 属性行
+            return CGFloat(sectionRows) * ScheduleMetrics.rowHeight + 130
+        }
+        return SchedulePopoverLayoutV2.height(availableHeight: availableHeight,
+            repeating: !deadline && model.frequency != .never)
     }
 
     typealias InlineSheet = ScheduleExpandedSection
@@ -132,10 +130,17 @@ struct TaskDatePopoverV2: View {
     @State private var selectedRepeatDraftDate = Date()
     @State private var repeatEndDraftDate = Date()
     @State private var repeatEndDisplayedMonth = Date()
+    /// 时间段页签：点「开始 / 结束」行打开的单日选择子面板。
+    @State private var showPeriodPicker = false
+    @State private var periodPickerTarget: PeriodPickerTarget = .start
+    @State private var periodPickerMonth = Date()
+
+    private enum PeriodPickerTarget: Equatable {
+        case start, end
+    }
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
          draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)? = nil,
-         onRequestDeadline: (() -> Void)? = nil,
          onClose: @escaping () -> Void) {
         taskID = task.id
         self.task = task
@@ -143,7 +148,6 @@ struct TaskDatePopoverV2: View {
         self.deadline = deadline
         self.initialPage = initialPage
         self.draftCommit = draftCommit
-        self.onRequestDeadline = onRequestDeadline
         availableHeight = NSScreen.main?.visibleFrame.height ?? 900
         self.onClose = onClose
         let draftModel = TaskDateDraftModel(
@@ -190,39 +194,43 @@ struct TaskDatePopoverV2: View {
                 if !deadline {
                     segmented
                 }
-                shortcutRow
-                LunarMonthGridView(
-                    calendar: workspace.calendar,
-                    displayedMonth: $model.displayedMonth,
-                    today: workspace.dateFromToday(0),
-                    selection: deadline || model.tab == .date ? model.selectedDate : nil,
-                    range: !deadline && model.tab == .period ? model.periodRange : nil,
-                    onSelect: { day in
-                        model.select(day)
-                        closeSheet()
-                    }
-                )
-                .overlay(alignment: .top) {
-                    // Pale accent discs for future occurrences, plus 班/休 badges
-                    // and statutory festival names from ChineseWorkCalendar.
-                    CalendarAnnotationOverlay(
+                if !deadline && model.tab == .period {
+                    // 参考会员说明图的结构；实际编辑规则由本地草稿负责。
+                    periodDateSection
+                } else {
+                    shortcutRow
+                    AppKitMonthGridView(
                         calendar: workspace.calendar,
-                        displayedMonth: model.displayedMonth,
-                        occurrenceDays: model.occurrencePreviewDays(),
-                        showBadges: true)
-                        .allowsHitTesting(false)
+                        displayedMonth: $model.displayedMonth,
+                        today: workspace.dateFromToday(0),
+                        selection: deadline || model.tab == .date ? model.selectedDate : nil,
+                        range: !deadline && model.tab == .period ? model.periodRange : nil,
+                        onSelect: { day in
+                            model.select(day)
+                            closeSheet()
+                        }
+                    )
+                    .frame(height: AppKitMonthGridView.contentHeight)
+                    .overlay(alignment: .top) {
+                        // Pale accent discs for future occurrences, plus 班/休 badges
+                        // and statutory festival names from ChineseWorkCalendar.
+                        CalendarAnnotationOverlay(
+                            calendar: workspace.calendar,
+                            displayedMonth: model.displayedMonth,
+                            occurrenceDays: model.occurrencePreviewDays(),
+                            showBadges: true)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
         } propertyContent: {
             VStack(spacing: 12) {
-                if !deadline && model.tab == .period {
-                    Text(rangeCaption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(WFColors.secondaryText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
                 if !deadline {
-                    propertyRows
+                    if model.tab == .period {
+                        periodPropertyRows
+                    } else {
+                        propertyRows
+                    }
                 }
                 if showRangeError, let message = model.rangeError {
                     Text(message)
@@ -259,19 +267,16 @@ struct TaskDatePopoverV2: View {
 
     private var propertyRows: some View {
         VStack(spacing: 0) {
-            // 截止日期是与安排日期并列的独立字段（`TaskDateDraftModel` 的 deadline 分支），
-            // 入口放在属性行最上方；点它由宿主切到截止日期面板。
-            if showsDeadlineRow {
-                deadlineEntryRow
-            }
             propertyRow(.time, icon: "clock", title: "时间", active: model.hasTime,
-                     editor: AnyView(timeRowEditor),
+                     // 未设时间时只显示「时间」占位（滴答口径），不挂输入框——
+                     // 否则会露出默认 09:00 且没有清除入口，看起来像已经设过。
+                     editor: model.hasTime ? AnyView(timeRowEditor) : nil,
                      canClear: model.hasTime) { timePanelBody }
             // 结束时间：只在时间段页签出现（Flutter `if (range) _property('schedule-end-time' …)`），
             // 紧跟在开始时间之后、提醒之前。
             if visiblePropertyRows.contains(.endTime) {
                 propertyRow(.endTime, icon: "clock", title: "结束时间", active: model.hasEndTime,
-                         editor: AnyView(endTimeRowEditor),
+                         editor: model.hasEndTime ? AnyView(endTimeRowEditor) : nil,
                          canClear: model.hasEndTime) { endTimePanelBody }
             }
             if visiblePropertyRows.contains(.reminder) {
@@ -293,57 +298,155 @@ struct TaskDatePopoverV2: View {
                 }
             }
         }
+        // 属性区高度确定（行数 × 行高），避免条件插入「重复结束」行时
+        // NSHostingController 推导 preferredContentSize 与 host frame 错位。
+        .frame(height: CGFloat(propertyRowCount) * ScheduleMetrics.rowHeight, alignment: .top)
     }
 
-    private var visiblePropertyRows: [InlineSheet] {
-        InlineSheet.visibleRows(expanded: inlineSheet, period: model.tab == .period,
-                               repeating: model.frequency != .never)
+    private var propertyRowCount: Int {
+        visiblePropertyRows.count
     }
 
-    // MARK: 截止日期入口（详情编辑栏）
+    // MARK: 时间段页签（开始 / 结束 / 全天，结构参考会员说明图）
 
-    /// 现有截止日期（只读展示；写入走截止日期面板的「确定」）。
-    private var deadlineEntryDate: Date? { task.schedule.deadlineAt }
-
-    private var deadlineEntryTitle: String {
-        guard let deadline = deadlineEntryDate else { return "截止日期" }
-        let day = TaskDateLabel.text(deadline, hasTime: false,
-                                     now: workspace.clock(), calendar: workspace.calendar)
-        return "截止 \(day)"
+    /// 开始 / 结束两个日期行 + 全天开关，替换整个日历区。
+    private var periodDateSection: some View {
+        VStack(spacing: 0) {
+            periodDateRow(title: "开始", date: periodStartDate, target: .start)
+            periodDateRow(title: "结束", date: model.periodEnd, target: .end)
+            allDayRow
+        }
     }
 
-    /// 行宽、行高、内边距与其它属性行一致；行尾用 › 表示"打开子面板"，
-    /// 且**不带清除 ×**——清除截止日期只在截止日期面板里通过「清除」完成。
-    private var deadlineEntryRow: some View {
+    private var periodStartDate: Date { model.periodStart ?? model.selectedDate }
+
+    private func periodDateRow(title: String, date: Date?, target: PeriodPickerTarget) -> some View {
         Button {
-            onRequestDeadline?()
+            closeSheet()
+            periodPickerTarget = target
+            periodPickerMonth = date ?? periodStartDate
+            showPeriodPicker = true
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "calendar.badge.exclamationmark")
-                    .font(.system(size: 14))
-                    .foregroundStyle(deadlineEntryDate == nil ? WFColors.secondaryText : WFColors.accent)
-                    .frame(width: 18)
-                Text(deadlineEntryTitle)
+                Text(title)
                     .font(WFType.body)
-                    .foregroundStyle(deadlineEntryDate == nil ? WFColors.text : WFColors.accent)
-                    .lineLimit(1)
+                    .foregroundStyle(WFColors.text)
+                    .frame(width: 32, alignment: .leading)
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(WFColors.tertiaryText)
-                    .frame(width: 18, height: 18)
+                Text(date.map { periodDateText($0) } ?? "未选择")
+                    .font(WFType.body)
+                    .foregroundStyle(date == nil ? WFColors.tertiaryText : WFColors.text)
+                Image(systemName: "calendar")
+                    .font(.system(size: 12))
+                    .foregroundStyle(WFColors.secondaryText)
             }
             .padding(.horizontal, ScheduleMetrics.propertyRowHorizontalPadding)
             .frame(height: ScheduleMetrics.rowHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("设置截止日期")
-        .accessibilityLabel(deadlineEntryTitle)
-        .scheduleRenderAnchor(.deadlineRow, label: deadlineEntryTitle,
-                              active: deadlineEntryDate != nil)
-        // 同时进 Inspector 锚点：测试里要像点顶栏控件一样点这一行（面板窗口没有 AX 树）。
-        .inspectorRenderAnchor(.deadlineRow)
+        .scheduleRenderAnchor(.option("period-\(title)"),
+                              label: date.map { periodDateText($0) } ?? title,
+                              active: date != nil)
+        .background {
+            AnchoredPropertyPanel(isPresented: Binding(
+                get: { showPeriodPicker && periodPickerTarget == target },
+                set: { if !$0, periodPickerTarget == target { showPeriodPicker = false } }),
+                width: SchedulePopoverLayoutV2.panelWidth,
+                placement: .vertical, focusPolicy: .preservePresenter) {
+                    periodPickerPanel
+                }
+        }
+    }
+
+    private var allDayRow: some View {
+        HStack(spacing: 8) {
+            Text("全天")
+                .font(WFType.body)
+                .foregroundStyle(WFColors.text)
+                .frame(width: 32, alignment: .leading)
+            Spacer(minLength: 4)
+            Toggle("", isOn: Binding(get: { !model.hasTime },
+                                     set: { model.setHasTime(!$0) }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .controlSize(.mini)
+                .accessibilityLabel("全天")
+        }
+        .padding(.horizontal, ScheduleMetrics.propertyRowHorizontalPadding)
+        .frame(height: ScheduleMetrics.rowHeight)
+        .scheduleRenderAnchor(.option("全天"), label: model.hasTime ? "关" : "开",
+                              active: !model.hasTime)
+    }
+
+    private func periodDateText(_ date: Date) -> String {
+        let components = workspace.calendar.dateComponents([.year, .month, .day], from: date)
+        return "\(components.year ?? 0)/\(components.month ?? 0)/\(components.day ?? 0)"
+    }
+
+    /// 点「开始 / 结束」弹出的单日选择。
+    private var periodPickerPanel: some View {
+        AppKitMonthGridView(
+            calendar: workspace.calendar,
+            displayedMonth: $periodPickerMonth,
+            today: workspace.dateFromToday(0),
+            selection: periodPickerTarget == .start ? periodStartDate : model.periodEnd,
+            // 结束日期不能早于开始（早于的日期变灰不可选）。
+            minimumDate: periodPickerTarget == .end ? periodStartDate : nil,
+            onSelect: { day in
+                if periodPickerTarget == .start {
+                    model.setPeriodStart(day)
+                } else {
+                    model.setPeriodEnd(day)
+                }
+                showPeriodPicker = false
+            }
+        )
+        .frame(height: AppKitMonthGridView.contentHeight)
+        // 和日期页签的月历同一套叠加层：节假日/班休标记不能只在日期页签才有。
+        .overlay(alignment: .top) {
+            CalendarAnnotationOverlay(
+                calendar: workspace.calendar,
+                displayedMonth: periodPickerMonth,
+                occurrenceDays: model.occurrencePreviewDays(),
+                showBadges: true)
+                .allowsHitTesting(false)
+        }
+        .padding(14)
+    }
+
+    /// 时间段属性区：全天关时才出现「时间 / 结束时间」，提醒/重复始终保留。
+    private var periodPropertyRows: some View {
+        VStack(spacing: 0) {
+            if model.hasTime {
+                propertyRow(.time, icon: "clock", title: "时间", active: model.hasTime,
+                            editor: AnyView(timeRowEditor), canClear: model.hasTime) { timePanelBody }
+                propertyRow(.endTime, icon: "clock", title: "结束时间", active: model.hasEndTime,
+                            editor: model.hasEndTime ? AnyView(endTimeRowEditor) : nil,
+                            canClear: model.hasEndTime) { endTimePanelBody }
+            }
+            propertyRow(.reminder, icon: "alarm", title: reminderRowLabel,
+                        active: model.hasReminderDraft, canClear: model.hasReminderDraft) { reminderPanelBody }
+            propertyRow(.repeat, icon: "repeat", title: repeatRowLabel,
+                        active: model.frequency != .never, canClear: model.frequency != .never) { repeatPanelBody }
+            if model.frequency != .never {
+                propertyRow(.repeatEnd, icon: "repeat", title: endRowLabel,
+                            active: model.ending != .never, canClear: model.ending != .never) { repeatEndPanelBody }
+            }
+        }
+        .frame(height: CGFloat(periodPropertyRowCount) * ScheduleMetrics.rowHeight, alignment: .top)
+    }
+
+    private var periodPropertyRowCount: Int {
+        var count = 2 // reminder + repeat
+        if model.hasTime { count += 2 }
+        if model.frequency != .never { count += 1 }
+        return count
+    }
+
+    private var visiblePropertyRows: [InlineSheet] {
+        InlineSheet.visibleRows(expanded: inlineSheet, period: model.tab == .period,
+                               repeating: model.frequency != .never)
     }
 
     @ViewBuilder
@@ -383,6 +486,9 @@ struct TaskDatePopoverV2: View {
                 syncTimeField()
             },
             onHover: { presentation.hover(sheet, inside: $0) })
+            // 条件插入「重复结束」行时，NSViewRepresentable 会沿用上一行 host frame，
+            // 用稳定 id 强制 SwiftUI 区分各行，避免重叠。
+            .id(sheet)
     }
 
     /// 时间行的行内编辑（滴答：行即 HH:mm 输入框，列表给半点粒度、输入框给分钟）。
@@ -936,12 +1042,13 @@ struct TaskDatePopoverV2: View {
         VStack(spacing: 0) {
             if let edit = presentation.repeatEndEdit {
                 if edit == .date {
-                    LunarMonthGridView(calendar: calendar, displayedMonth: $repeatEndDisplayedMonth,
+                    AppKitMonthGridView(calendar: calendar, displayedMonth: $repeatEndDisplayedMonth,
                         today: workspace.dateFromToday(0), selection: repeatEndDraftDate,
                         minimumDate: model.selectedDate, showsTodayButton: false) { date in
                             repeatEndDraftDate = date
                             applyEndEdit(.date)
                         }
+                        .frame(height: AppKitMonthGridView.contentHeight)
                         .padding(14)
                         .scheduleRenderAnchor(.option("repeat-end-calendar"))
                 } else {
@@ -1170,6 +1277,7 @@ struct TaskDatePopoverV2: View {
     }
 
     private func openSheet(_ sheet: InlineSheet) {
+        showPeriodPicker = false
         SchedulePanelInteraction.open(sheet, state: &presentation, model: model,
                                       now: workspace.clock(), calendar: workspace.calendar)
         switch sheet {
@@ -1199,46 +1307,17 @@ struct TaskDatePopoverV2: View {
 
     // MARK: 分段 / 快捷行 / 底部按钮
 
-    /// Pill segmented control replicating the reference design: grey track,
-    /// floating white capsule on the selected tab.
+    /// 「日期 / 时间段」分段：AppKit 灰底 + 白色选中胶囊。
     private var segmented: some View {
-        HStack(spacing: 3) {
-            segment("日期", .date)
-            segment("时间段", .period)
-        }
-        .padding(3)
-        .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 9))
-    }
-
-    private func segment(_ title: String, _ value: TaskDateDraftModel.Tab) -> some View {
-        let selected = model.tab == value
-        return Button {
-            closeSheet()
-            model.setTab(value)
-        } label: {
-            Text(title)
-                // 原版分段文字取 `body`（14）配 regular：选中由下面那块填色胶囊表达，
-                // 不再叠一层字重。
-                .font(.system(size: 14))
-                .foregroundStyle(selected ? WFColors.text : WFColors.secondaryText)
-                .frame(maxWidth: .infinity, minHeight: 24)
-                .background {
-                    if selected {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(WFColors.content)
-                            .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var rangeCaption: String {
-        guard let range = model.periodRange else { return "在日历上点选开始与结束日期" }
-        if range.lowerBound == range.upperBound {
-            return "开始：\(dayText(range.lowerBound))，继续点选结束日期"
-        }
-        return "\(dayText(range.lowerBound)) – \(dayText(range.upperBound))"
+        AppKitScheduleSegmented(
+            titles: ["日期", "时间段"],
+            selectedIndex: model.tab == .date ? 0 : 1,
+            onSelect: { index in
+                closeSheet()
+                model.setTab(index == 0 ? .date : .period)
+            }
+        )
+        .frame(height: AppKitScheduleSegmented.contentHeight)
     }
 
     /// 实现只有一处：`ScheduleDisplay.dayText(_:calendar:)`。
@@ -1247,74 +1326,15 @@ struct TaskDatePopoverV2: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 12) {
-            Button {
-                clear()
-            } label: {
-                Text("清除")
-                    .font(.system(size: 14))
-                    .foregroundStyle(WFColors.text)
-                    .frame(maxWidth: .infinity, minHeight: 28)
-                    .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                save()
-            } label: {
-                Text("确定")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity, minHeight: 28)
-                    .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 8))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut(.defaultAction)
-            .accessibilityIdentifier("schedule-confirm")
-        }
-        .scheduleRenderAnchor(.mainFooter, label: "清除 / 确定")
+        AppKitScheduleFooter(onClear: clear, onConfirm: save)
     }
 
     private var shortcutRow: some View {
-        HStack(spacing: 0) {
-            shortcutButton("sun.max", "今天") { model.quick(0) }
-            shortcutButton("sunrise", "明天") { model.quick(1) }
-            shortcutButton(badge: "+7", "下周") { model.quick(7) }
-            shortcutButton("moon", "周末") { model.selectWeekend() }
-        }
-    }
-
-    private func shortcutButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
-        shortcutLabel(help, action: action) {
-            Image(systemName: symbol).font(.system(size: 16))
-        }
-    }
-
-    private func shortcutButton(badge: String, _ help: String, action: @escaping () -> Void) -> some View {
-        shortcutLabel(help, action: action) {
-            Image(systemName: "calendar").font(.system(size: 16))
-                .overlay(alignment: .topTrailing) {
-                    Text(badge).font(.system(size: 7, weight: .bold)).offset(x: 4, y: -2)
-                }
-        }
-    }
-
-    private func shortcutLabel(_ help: String, action: @escaping () -> Void, @ViewBuilder icon: () -> some View) -> some View {
-        Button {
+        AppKitScheduleShortcutRow { value in
             closeSheet()
-            action()
-        } label: {
-            icon()
-                .foregroundStyle(WFColors.secondaryText)
-                .frame(maxWidth: .infinity, minHeight: 26)
-                .contentShape(Rectangle())
+            if value == -1 { model.selectWeekend() }
+            else { model.quick(value) }
         }
-        .buttonStyle(.plain)
-        .help(help)
-        .scheduleRenderAnchor(.shortcut(help))
     }
 
     // MARK: Commit

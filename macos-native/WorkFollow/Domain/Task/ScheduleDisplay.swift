@@ -176,7 +176,7 @@ enum ScheduleDisplay {
         return String(format: "%04d年", components.year ?? 0) + day
     }
 
-    private static func clockText(_ date: Date, calendar: Calendar) -> String {
+    static func clockText(_ date: Date, calendar: Calendar) -> String {
         guard calendar.identifier == .gregorian else {
             return clockFormatter(calendar: calendar).string(from: date)
         }

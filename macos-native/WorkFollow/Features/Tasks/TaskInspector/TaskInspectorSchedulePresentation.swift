@@ -18,4 +18,14 @@ enum TaskInspectorSchedulePresentation {
         return ScheduleDisplay.dateText(date, hasTime: hasTime, now: now,
                                         calendar: calendar, style: .full)
     }
+
+    static func label(schedule: TaskSchedule, now: Date, calendar: Calendar) -> String {
+        let start = label(date: schedule.dueAt, hasTime: schedule.hasTime, now: now, calendar: calendar)
+        guard let date = schedule.dueAt, let end = schedule.dueEndAt else { return start }
+        if calendar.isDate(date, inSameDayAs: end) {
+            guard schedule.hasTime else { return start }
+            return start + " - " + ScheduleDisplay.clockText(end, calendar: calendar)
+        }
+        return start + " - " + label(date: end, hasTime: schedule.hasTime, now: now, calendar: calendar)
+    }
 }

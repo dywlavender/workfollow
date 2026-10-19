@@ -107,6 +107,25 @@ final class TaskInspectorShellContractTests: XCTestCase {
         XCTAssertEqual(Schedule.tone(date: future, hasTime: false, now: now, calendar: calendar), .scheduled)
     }
 
+    func testScheduleChipIncludesTimedAndAllDayRangeEnds() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        func date(_ day: Int, _ hour: Int = 0, _ minute: Int = 0) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 10, day: day,
+                                               hour: hour, minute: minute))!
+        }
+        let start = date(19, 9, 17)
+        typealias Presentation = TaskInspectorSchedulePresentation
+        XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: start, hasTime: true,
+            dueEndAt: date(19, 11, 43)), now: date(19, 12), calendar: calendar),
+            "今天, 10月19日, 09:17 - 11:43")
+        XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: date(19),
+            dueEndAt: date(20)), now: date(19, 12), calendar: calendar),
+            "今天, 10月19日 - 明天, 10月20日")
+        XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: date(19),
+            dueEndAt: date(19)), now: date(19, 12), calendar: calendar), "今天, 10月19日")
+    }
+
     private func render<V: View>(_ view: V, width: CGFloat,
                                   height: CGFloat) -> [InspectorRenderAnchor: CGRect] {
         var frames: [InspectorRenderAnchor: CGRect] = [:]

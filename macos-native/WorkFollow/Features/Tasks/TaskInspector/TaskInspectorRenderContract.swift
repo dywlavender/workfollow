@@ -2,12 +2,12 @@ import SwiftUI
 
 enum InspectorRenderAnchor: Hashable {
     case header, back, completion, completionInk, divider, schedule, scheduleViewport
-    /// 顶栏次要日期（有截止日期才渲染）。
+    /// 顶栏「设置日期」chip 本体（日程区里还并列着截止日期入口，点击要精确到 chip）。
+    case scheduleChip
+    /// 顶栏次要日期（任务已有截止日期时才渲染）。
     case deadlineLabel
     /// 顶栏下沿的子任务进度条（有子任务才渲染）。
     case progressBar
-    /// 安排日期面板里的「截止日期」入口行（详情宿主专属；测试用它点开截止面板）。
-    case deadlineRow
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
     case document, childSection, addChild
     /// 正文后、子任务前的两行属性：附件列表 / 标签 chips（TI2-02/TI2-03）。

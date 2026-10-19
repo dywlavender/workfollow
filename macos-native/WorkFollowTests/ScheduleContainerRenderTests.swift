@@ -105,14 +105,15 @@ final class ScheduleContainerRenderTests: XCTestCase {
         let task = workspace.task(for: id)!
         var values: [ScheduleRenderAnchor: ScheduleRenderValue] = [:]
         let root = TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .recurrence) {}
-            .environment(\.colorScheme, .light)
             .background(WFColors.content)
+            .environment(\.colorScheme, .light)
             .coordinateSpace(name: "schedule-render")
             .onPreferenceChange(ScheduleFramesKey.self) { values = $0 }
         let controller = NSHostingController(rootView: root)
         let owner = NSWindow(contentRect: NSRect(x: 80, y: 80, width: 900, height: 1000),
             styleMask: [.borderless], backing: .buffered, defer: false)
         owner.isReleasedWhenClosed = false
+        owner.appearance = NSAppearance(named: .aqua)
         let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 900, height: 1000))
         owner.contentView = anchor
         owner.orderFront(nil)
