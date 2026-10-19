@@ -112,6 +112,7 @@ private struct TaskKanbanTaskRow: View {
         .modifier(TaskRowActivationPolicy())
         .onHover { hovering = $0 }
         .taskTreeRenderAnchor(task.id, .row)
+        .kanbanDropFrame(.row(task.id))
         .overlay {
             SecondaryClickCapture { rowView, point in
                 guard let current = workspace.task(for: task.id) else { return }
@@ -130,6 +131,9 @@ private struct TaskKanbanTaskRow: View {
             }
         }
         .draggable(SidebarDragPayload.encode(.task(task.id)))
+        // Existing sidebar/calendar destinations accept the transferable's
+        // copy operation but perform a domain move; board columns propose move.
+        .modifier(TaskReorderDragPolicy(allowsCopyWithinApp: true))
     }
 
     @ViewBuilder

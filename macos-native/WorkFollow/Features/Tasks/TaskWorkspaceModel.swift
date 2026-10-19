@@ -597,6 +597,64 @@ final class TaskWorkspaceModel: ObservableObject {
         if changed { revision += 1 }
         return changed
     }
+
+    /// Visible children belong to their parent's column even when their own
+    /// attributes differ. Column membership therefore precedes target policy.
+    func canAcceptKanbanDrop(_ id: UUID, to target: TaskKanbanCreationTarget?,
+                             columnTaskIDs: [UUID]) -> Bool {
+        guard let source = store.task(id), source.deletedAt == nil, source.skippedAt == nil,
+              !source.isConverted, !isListArchived(source.list.name) else { return false }
+        if columnTaskIDs.contains(id) { return true }
+        guard let target else { return false }
+        return canAcceptKanbanTask(id, to: target)
+    }
+
+    /// Attribute and sibling-position changes share one business undo step.
+    /// A nil insertion leaves manual order intact for views sorted by a field.
+    @discardableResult
+    func applyKanbanDrop(_ id: UUID, to target: TaskKanbanCreationTarget?,
+                         insertion: TaskDropPlacement?, columnTaskIDs: [UUID]) -> Bool {
+        guard canAcceptKanbanDrop(id, to: target, columnTaskIDs: columnTaskIDs),
+              let source = store.task(id) else { return false }
+        let anchorID: UUID?
+        let insertsAfter: Bool
+        switch insertion {
+        case .some(.before(let id)):
+            anchorID = id; insertsAfter = false
+        case .some(.after(let id)):
+            anchorID = id; insertsAfter = true
+        case nil:
+            anchorID = nil; insertsAfter = false
+        default:
+            return false
+        }
+        if let anchorID {
+            guard !source.isClosed, anchorID != id, columnTaskIDs.contains(anchorID),
+                  let anchor = store.task(anchorID), anchor.parentID == source.parentID,
+                  !anchor.isClosed else { return false }
+        }
+
+        let before = store.tasks
+        var reordered = false
+        var attributesChanged = false
+        store.transaction {
+            if let anchorID {
+                let siblings = store.tasks.filter { $0.parentID == source.parentID && $0.id != id }
+                if let anchorIndex = siblings.firstIndex(where: { $0.id == anchorID }) {
+                    reordered = actions.reorder(id, toSiblingIndex: anchorIndex + (insertsAfter ? 1 : 0))
+                }
+            }
+            // Shared attribute actions publish the final presentation revision;
+            // position is already committed when that publication happens.
+            if !columnTaskIDs.contains(id), let target {
+                attributesChanged = moveKanbanTask(id, to: target)
+            }
+        }
+        let changed = before != store.tasks
+        if changed && reordered && !attributesChanged { didMutate(.success(id)) }
+        return changed
+    }
+
     /// 已过期组头"顺延"（对齐 Flutter _postponeOverdue）：逐任务保留各自时钟，
     /// 整组动作是单条事务，一次撤销整组生效；HUD 报告顺延数量。
     func postponeOverdue(_ ids: Set<UUID>) {

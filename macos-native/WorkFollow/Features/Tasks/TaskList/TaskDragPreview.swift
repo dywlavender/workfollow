@@ -58,10 +58,12 @@ final class TaskDropFeedback: ObservableObject {
 
 /// Reordering is a move, never a copy/export of the internal task identifier.
 struct TaskReorderDragPolicy: ViewModifier {
+    var allowsCopyWithinApp = false
+
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content.dragConfiguration(DragConfiguration(
-                operationsWithinApp: .init(allowCopy: false, allowMove: true),
+                operationsWithinApp: .init(allowCopy: allowsCopyWithinApp, allowMove: true),
                 operationsOutsideApp: .init(allowCopy: false)))
         } else {
             content

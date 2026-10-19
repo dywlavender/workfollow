@@ -92,16 +92,20 @@ final class TaskKanbanCardTests: XCTestCase {
         _ = workspace.setDueDate(id, now)
         let task = try XCTUnwrap(workspace.task(for: id))
         let probe = Probe()
-        let root = VStack(alignment: .leading, spacing: 0) {
-            TaskKanbanCardView(task: task, workspace: workspace,
-                               onSelect: { _ in probe.selections += 1 })
-                .frame(width: 256)
-            Spacer(minLength: 0)
+        let root = TaskKanbanColumnDropHost(workspace: workspace, target: .priority(.high),
+                                            allowsMove: true, onTargeted: { _ in }) {
+            VStack(alignment: .leading, spacing: 0) {
+                TaskKanbanCardView(task: task, workspace: workspace,
+                                   onSelect: { _ in probe.selections += 1 })
+                    .frame(width: 256)
+                Spacer(minLength: 0)
+            }
+            .frame(width: 600, height: 700, alignment: .topLeading)
+            .coordinateSpace(name: "task-tree-render")
+            .environment(\.recordsTaskTreeFrames, true)
+            .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 }
         }
         .frame(width: 600, height: 700, alignment: .topLeading)
-        .coordinateSpace(name: "task-tree-render")
-        .environment(\.recordsTaskTreeFrames, true)
-        .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 }
         .environmentObject(AppEnvironment())
         let host = NSHostingView(rootView: AnyView(root))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 600, height: 700)

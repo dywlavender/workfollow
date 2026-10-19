@@ -20,6 +20,7 @@ struct TaskKanbanView: View {
     @State private var addingGroupID: String?
     @State private var newCardTitle = ""
     @State private var closedExpansion = TaskGroupExpansionState()
+    @State private var targetedColumnID: String?
     @FocusState private var newCardFocused: Bool
 
     private static let columnWidth: CGFloat = 264
@@ -44,94 +45,111 @@ struct TaskKanbanView: View {
         let closed = scope.isClosedScope ? [] : group.tasks.filter(\.isClosed).sorted {
             ($0.closedAt ?? .distantPast) > ($1.closedAt ?? .distantPast)
         }
-        return VStack(alignment: .leading, spacing: WFSpace.sm) {
-            HStack(spacing: WFSpace.xs) {
-                Text(TaskGroupDisplay.title(group, now: workspace.clock()))
-                    .font(WFType.sectionSemibold)
-                    .foregroundStyle(WFColors.secondaryText)
-                    .lineLimit(1)
-                Text("\(open.count)")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.tertiaryText)
-                Spacer(minLength: 0)
-                if allowsCreation, group.creationTarget != nil {
-                    Button {
-                        addingGroupID = group.id
-                        newCardTitle = ""
-                        newCardFocused = true
-                    } label: {
-                        Image(systemName: "plus").frame(width: 22, height: 24).contentShape(Rectangle())
-                    }.buttonStyle(.plain).help("添加任务").accessibilityLabel("在" + (group.label ?? "此分组") + "添加任务")
+        return TaskKanbanColumnDropHost(
+            workspace: workspace, target: group.kanbanDropTarget,
+            allowsMove: allowsCreation && !scope.isClosedScope,
+            columnTaskIDs: open.flatMap {
+                workspace.kanbanNodes(for: $0, hidesCompleted: hidesCompleted)
+                    .filter { !$0.task.isClosed }.map(\.task.id)
+            },
+            allowsReorder: sortMode == .manual,
+            onTargeted: { targeted in
+                if targeted && targetedColumnID != group.id {
+                    targetedColumnID = group.id
+                } else if !targeted && targetedColumnID == group.id {
+                    targetedColumnID = nil
                 }
             }
-            .padding(.horizontal, WFSpace.sm)
+        ) {
+            VStack(alignment: .leading, spacing: WFSpace.sm) {
+                HStack(spacing: WFSpace.xs) {
+                    Text(TaskGroupDisplay.title(group, now: workspace.clock()))
+                        .font(WFType.sectionSemibold)
+                        .foregroundStyle(WFColors.secondaryText)
+                        .lineLimit(1)
+                    Text("\(open.count)")
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.tertiaryText)
+                    Spacer(minLength: 0)
+                    if allowsCreation, group.creationTarget != nil {
+                        Button {
+                            addingGroupID = group.id
+                            newCardTitle = ""
+                            newCardFocused = true
+                        } label: {
+                            Image(systemName: "plus").frame(width: 22, height: 24).contentShape(Rectangle())
+                        }.buttonStyle(.plain).help("添加任务").accessibilityLabel("在" + (group.label ?? "此分组") + "添加任务")
+                    }
+                }
+                .padding(.horizontal, WFSpace.sm)
 
-            if allowsCreation, addingGroupID == group.id {
-                TextField("任务标题", text: $newCardTitle)
-                    .textFieldStyle(.plain).font(WFType.listBody)
-                    .focused($newCardFocused)
-                    .padding(WFSpace.sm)
-                    .background(WFColors.content, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: WFMetrics.corner)
-                            .stroke(WFColors.accent, lineWidth: 1)
+                if allowsCreation, addingGroupID == group.id {
+                    TextField("任务标题", text: $newCardTitle)
+                        .textFieldStyle(.plain).font(WFType.listBody)
+                        .focused($newCardFocused)
+                        .padding(WFSpace.sm)
+                        .background(WFColors.content, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: WFMetrics.corner)
+                                .stroke(WFColors.accent, lineWidth: 1)
+                        }
+                        .padding(.horizontal, WFSpace.xs)
+                        .onSubmit { addCard(in: group) }
+                        .onExitCommand { addingGroupID = nil; newCardTitle = "" }
+                        .accessibilityLabel("看板新任务标题")
+                }
+
+                ScrollView {
+                    VStack(spacing: WFSpace.xs) {
+                        ForEach(open) { task in
+                            card(task).kanbanDropFrame(.card(task.id))
+                        }
+                        if !closed.isEmpty {
+                            Button {
+                                closedExpansion.toggle(group)
+                            } label: {
+                                HStack(spacing: WFSpace.xs) {
+                                    Image(systemName: closedExpansion.isCollapsed(group) ? "chevron.right" : "chevron.down")
+                                        .font(.system(size: 9, weight: .semibold))
+                                    Text(TaskListGroup.closedTitle(for: closed))
+                                    Text("\(closed.count)").foregroundStyle(WFColors.tertiaryText)
+                                    Spacer(minLength: 0)
+                                }
+                                .font(WFType.supporting)
+                                .foregroundStyle(WFColors.secondaryText)
+                                .contentShape(Rectangle())
+                                .padding(.horizontal, WFSpace.xs)
+                                .padding(.top, WFSpace.sm)
+                                .padding(.bottom, WFSpace.xs)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel((closedExpansion.isCollapsed(group) ? "展开" : "收起")
+                                + TaskGroupDisplay.title(group, now: workspace.clock()) + "的关闭任务")
+                            .accessibilityValue("\(closed.count) 项")
+                            if !closedExpansion.isCollapsed(group) {
+                                ForEach(closed) { task in card(task) }
+                            }
+                        }
                     }
                     .padding(.horizontal, WFSpace.xs)
-                    .onSubmit { addCard(in: group) }
-                    .onExitCommand { addingGroupID = nil; newCardTitle = "" }
-                    .accessibilityLabel("看板新任务标题")
-            }
-
-            ScrollView {
-                VStack(spacing: WFSpace.xs) {
-                    ForEach(open) { task in card(task) }
-                    if !closed.isEmpty {
-                        Button {
-                            closedExpansion.toggle(group)
-                        } label: {
-                            HStack(spacing: WFSpace.xs) {
-                                Image(systemName: closedExpansion.isCollapsed(group) ? "chevron.right" : "chevron.down")
-                                    .font(.system(size: 9, weight: .semibold))
-                                Text(TaskListGroup.closedTitle(for: closed))
-                                Text("\(closed.count)").foregroundStyle(WFColors.tertiaryText)
-                                Spacer(minLength: 0)
-                            }
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.secondaryText)
-                            .contentShape(Rectangle())
-                            .padding(.horizontal, WFSpace.xs)
-                            .padding(.top, WFSpace.sm)
-                            .padding(.bottom, WFSpace.xs)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel((closedExpansion.isCollapsed(group) ? "展开" : "收起")
-                            + TaskGroupDisplay.title(group, now: workspace.clock()) + "的关闭任务")
-                        .accessibilityValue("\(closed.count) 项")
-                        if !closedExpansion.isCollapsed(group) {
-                            ForEach(closed) { task in card(task) }
-                        }
-                    }
+                    .padding(.bottom, WFSpace.sm)
                 }
-                .padding(.horizontal, WFSpace.xs)
-                .padding(.bottom, WFSpace.sm)
+                .kanbanDropFrame(.viewport)
+            }
+            .frame(width: Self.columnWidth, alignment: .topLeading)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+            .background(WFColors.content)
+            .contentShape(Rectangle())
+            .overlay {
+                if targetedColumnID == group.id {
+                    RoundedRectangle(cornerRadius: WFMetrics.corner)
+                        .stroke(WFColors.accent, lineWidth: 1.5)
+                        .allowsHitTesting(false)
+                }
             }
         }
-        .frame(width: Self.columnWidth, alignment: .topLeading)
-        .background(WFColors.content)
-        // 自定义分组的列拖放复用列表中的归属动作。
-        .dropDestination(for: String.self) { values, _ in
-            guard let id = TaskSectionDropTarget.taskID(for: values.first),
-                  let intent = TaskSectionDropTarget.intent(
-                      for: values.first,
-                      target: .of(sectionID: group.sectionID,
-                                  isUnsectionedBucket: group.isUnsectionedBucket)) else { return false }
-            switch intent {
-            case .assign(let sectionID):
-                return workspace.setTaskSection(id, sectionID: sectionID).taskID != nil
-            case .clear:
-                return workspace.setTaskSection(id, sectionID: nil).taskID != nil
-            }
-        }
+        .frame(width: Self.columnWidth)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func card(_ task: Task) -> some View {
