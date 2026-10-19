@@ -169,10 +169,20 @@ private struct TaskKanbanTaskRow: View {
             }
             if !details.tags.isEmpty {
                 let tags = details.tags.map { "#" + $0 }.joined(separator: "  ")
-                Text(tags).lineLimit(1).frame(maxWidth: 112, alignment: .leading)
+                Text(coloredTags).lineLimit(1).frame(maxWidth: 112, alignment: .leading)
                     .help(tags).accessibilityLabel("标签：" + tags)
             }
         }
+    }
+
+    private var coloredTags: AttributedString {
+        var text = AttributedString()
+        for (index, name) in details.tags.enumerated() {
+            var part = AttributedString((index == 0 ? "" : "  ") + "#" + name)
+            part.foregroundColor = workspace.tag(named: name)?.colorARGB.map(WFListPalette.swatch) ?? muted
+            text.append(part)
+        }
+        return text
     }
 
     private var scheduleDetails: some View {

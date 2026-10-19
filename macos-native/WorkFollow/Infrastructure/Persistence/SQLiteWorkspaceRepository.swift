@@ -141,6 +141,7 @@ final class SQLiteWorkspaceRepository {
         NativeWorkspaceSnapshot(version: metadata.version, tasks: tasks, notes: notes,
             taskLists: metadata.taskLists, taskListMeta: metadata.taskListMeta,
             taskListFolders: metadata.taskListFolders, taskListSections: metadata.taskListSections,
+            taskTags: metadata.taskTags,
             noteFolders: metadata.noteFolders, noteFolderMetadata: metadata.noteFolderMetadata)
     }
 

@@ -6,7 +6,7 @@ final class TaskTagPickerSessionTests: XCTestCase {
         let session = TaskTagPickerSession(initialTags: [" #work# ", "学习", "work", " ## "])
 
         XCTAssertEqual(session.selectedTags, ["work", "学习"])
-        XCTAssertEqual(session.allTags(availableTags: ["已有", "学习", "已有"]), ["已有", "学习", "work"].sorted())
+        XCTAssertEqual(session.allTags(availableTags: ["已有", "学习", "已有"]), ["已有", "学习", "work"])
     }
 
     func testMatchingTagsSearchesCaseInsensitivelyAndNormalizesQuery() {
@@ -31,7 +31,7 @@ final class TaskTagPickerSessionTests: XCTestCase {
 
         XCTAssertEqual(session.selectedTags, ["已有", "保留", "新标签", "带空格"])
         XCTAssertEqual(session.allTags(availableTags: ["目录标签"]),
-                       ["目录标签", "已有", "保留", "新标签", "带空格"].sorted())
+                       ["目录标签", "已有", "保留", "新标签", "带空格"])
         XCTAssertEqual(session.query, "")
     }
 
@@ -79,6 +79,18 @@ final class TaskTagPickerSessionTests: XCTestCase {
 
         XCTAssertEqual(availableTags, ["全局标签"])
         XCTAssertEqual(nextSession.selectedTags, ["Quick Add"])
-        XCTAssertEqual(nextSession.allTags(availableTags: availableTags), ["全局标签", "Quick Add"].sorted())
+        XCTAssertEqual(nextSession.allTags(availableTags: availableTags), ["全局标签", "Quick Add"])
+    }
+
+    func testConfirmPreservesPrimaryTagAndAppendsNewSelectionsInClickOrder() {
+        var session = TaskTagPickerSession(initialTags: ["z-primary", "a-secondary"])
+        session.toggle("new-b")
+        session.toggle("new-a")
+        XCTAssertEqual(session.orderedSelection, ["z-primary", "a-secondary", "new-b", "new-a"])
+        session.toggle("a-secondary")
+        XCTAssertEqual(session.orderedSelection, ["z-primary", "new-b", "new-a"])
+        session.query = "created-z,created-a"
+        session.createFromQuery(availableTags: [])
+        XCTAssertEqual(session.orderedSelection, ["z-primary", "new-b", "new-a", "created-z", "created-a"])
     }
 }

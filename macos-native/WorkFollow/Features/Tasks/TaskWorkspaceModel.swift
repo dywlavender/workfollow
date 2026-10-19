@@ -84,6 +84,7 @@ final class TaskWorkspaceModel: ObservableObject {
     private var filterStore: FilterStore?
     private var filterCancellable: AnyCancellable?
     private var activityCancellable: AnyCancellable?
+    private var coalescesOrganizationRevision = false
     let clock: () -> Date
     let calendar: Calendar
 
@@ -92,17 +93,27 @@ final class TaskWorkspaceModel: ObservableObject {
          seedDemoData: Bool = true, initialTasks: [Task]? = nil, initialLists: [String] = [],
          initialListMeta: [TaskListMeta]? = nil,
          initialListFolders: [TaskListFolder]? = nil,
-         initialListSections: [TaskListSection]? = nil) {
+         initialListSections: [TaskListSection]? = nil,
+         initialTags: [TaskTag]? = nil) {
         self.clock = clock
         self.calendar = calendar
         let store = WorkspaceStore()
         self.store = store
         self.actions = TaskActions(store: store, clock: clock, calendar: calendar)
+        store.commit([], undoPolicy: .skip, tags: initialTags)
         if let initialTasks { store.commit(initialTasks); store.clearUndo() }
         else if seedDemoData { seed() }
         store.commit(store.tasks, lists: initialLists, listMetas: initialListMeta,
                      listFolders: initialListFolders,
                      listSections: initialListSections)
+        if initialTags == nil {
+            // The old sidebar used alphabetical tag names. Adopt that order
+            // once when no independent directory has previously been saved.
+            let tags = store.tags.sorted { $0.name < $1.name }.enumerated().map { index, tag in
+                var value = tag; value.sortOrder = index; return value
+            }
+            store.commit(store.tasks, undoPolicy: .skip, tags: tags)
+        }
         actions.hydrateOrganization()
         actions.hydrateSeries()
         store.clearUndo()
@@ -144,7 +155,71 @@ final class TaskWorkspaceModel: ObservableObject {
         let archived = store.archivedListNames
         return store.tasks.filter { !archived.contains($0.list.name) }
     }
-    var tagNames: [String] { Array(Set(allTasks.flatMap(\.tags))).sorted() }
+    var taskTags: [TaskTag] { _ = revision; return store.tags }
+    var orderedTags: [TaskTag] { TaskTag.ordered(taskTags) }
+    var tagNames: [String] { taskTags.map(\.name).sorted() }
+    func tag(for id: UUID) -> TaskTag? { _ = revision; return store.tag(id) }
+    func tag(named name: String) -> TaskTag? {
+        _ = revision
+        return store.tag(named: TaskTag.normalizedName(name) ?? name)
+    }
+
+    @discardableResult
+    func createTag(_ name: String, colorARGB: UInt32? = nil, parentID: UUID? = nil) -> UUID? {
+        let id = actions.createTag(name, colorARGB: colorARGB, parentID: parentID)
+        if id != nil { revision += 1 }
+        return id
+    }
+
+    @discardableResult
+    func saveTag(_ id: UUID? = nil, name: String, colorARGB: UInt32?, parentID: UUID?) -> UUID? {
+        let previous = store.tags
+        let wasCoalescing = coalescesOrganizationRevision
+        coalescesOrganizationRevision = true
+        defer { coalescesOrganizationRevision = wasCoalescing }
+        let savedID = actions.saveTag(id, name: name, colorARGB: colorARGB, parentID: parentID)
+        if store.tags != previous { revision += 1 }
+        return savedID
+    }
+
+    @discardableResult
+    func renameTag(_ id: UUID, to name: String) -> Bool {
+        let changed = actions.renameTag(id, to: name)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func setTagColor(_ id: UUID, colorARGB: UInt32?) -> Bool {
+        let changed = actions.setTagColor(id, colorARGB: colorARGB)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func reparentTag(_ id: UUID, parentID: UUID?) -> Bool {
+        let changed = actions.reparentTag(id, parentID: parentID)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func reorderTag(_ id: UUID, before targetID: UUID?) -> Bool {
+        let changed = actions.reorderTag(id, before: targetID)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    @discardableResult
+    func removeTag(_ id: UUID) -> Bool {
+        let name = store.tag(id)?.name
+        let changed = actions.removeTag(id)
+        if changed {
+            if activeTag == name { activeTag = nil }
+            revision += 1
+        }
+        return changed
+    }
 
     // MARK: 清单元数据（Round B1 加法）
 
@@ -347,10 +422,11 @@ final class TaskWorkspaceModel: ObservableObject {
         if activeList == name { activeList = nil }
         revision += 1
     }
-    func renameTag(_ old: String, to value: String?) {
-        actions.renameTag(old, to: value)
-        if activeTag == old { activeTag = value }
-        revision += 1
+    @discardableResult
+    func renameTag(_ old: String, to value: String?) -> Bool {
+        guard let tag = tag(named: old) else { return false }
+        if let value { return renameTag(tag.id, to: value) }
+        return removeTag(tag.id)
     }
 
     /// Called once by AppEnvironment after both stores exist. Resolves
@@ -371,7 +447,7 @@ final class TaskWorkspaceModel: ObservableObject {
         store.resolveOrganizationReferences()
         filterCancellable = store.$filters.sink { [weak self] filters in
             guard let self else { return }
-            self.revision += 1
+            if !self.coalescesOrganizationRevision { self.revision += 1 }
             if let activeFilterID = self.activeFilterID,
                !filters.contains(where: { $0.id == activeFilterID }) {
                 self.activeFilterID = nil

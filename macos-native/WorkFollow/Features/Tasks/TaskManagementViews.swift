@@ -521,63 +521,6 @@ extension WFListPalette {
     }
 }
 
-/// 侧栏"标签"分组，行样式与智能清单/清单一致（小图标 + 名称，行高 32）。
-struct TaskTagsSectionView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
-    @ObservedObject var navigation: AppNavigation
-    var onNavigate: () -> Void = {}
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("标签")
-            if workspace.tagNames.isEmpty {
-                Text("在任务属性中添加标签").font(.caption).foregroundStyle(.tertiary)
-                    .padding(.horizontal, WFSpace.sm)
-            }
-            ForEach(workspace.tagNames, id: \.self) { tag in
-                tagRow(tag)
-            }
-        }.buttonStyle(.plain).font(WFType.navigation)
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(WFType.supporting)
-            .foregroundStyle(WFColors.secondaryText)
-            .padding(.horizontal, WFSpace.sm)
-            .padding(.top, WFSpace.lg)
-            .padding(.bottom, WFSpace.xs)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func tagRow(_ tag: String) -> some View {
-        Button {
-            navigation.destination = .allTasks; workspace.activeList = nil; workspace.activeTag = tag; onNavigate()
-        } label: {
-            // 与清单行同一套几何（滴答实测）：行内 8 起图标框、图标右缘即文字起点。
-            HStack(spacing: 0) {
-                Image(systemName: "tag").font(.system(size: 12)).frame(width: 12)
-                Text(tag).lineLimit(1)
-                Spacer(minLength: WFSpace.xs)
-            }
-            .padding(.horizontal, WFSpace.sm)
-            .frame(height: NavigationMetrics.rowHeight)
-            .background(workspace.activeTag == tag ? WFColors.listSelection : .clear,
-                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-            .contentShape(Rectangle())
-        }
-        .contextMenu {
-            Button("重命名标签") {
-                if let value = TaskNamePrompt.ask("重命名标签", value: tag), !value.isEmpty { workspace.renameTag(tag, to: value) }
-            }
-            Button("移除标签…") {
-                if TaskNamePrompt.confirm("移除标签“\(tag)”？", message: "从所有任务移除此标签，不删除任务。可撤销。",
-                                          action: "移除") { workspace.renameTag(tag, to: nil) }
-            }
-        }
-    }
-}
-
 struct TaskComposer: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     let onClose: (Bool) -> Void

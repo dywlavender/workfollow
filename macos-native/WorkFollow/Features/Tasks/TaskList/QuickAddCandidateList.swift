@@ -1,5 +1,28 @@
 import SwiftUI
 
+/// Both quick-add hosts read the same directory presentation as the sidebar.
+struct QuickAddTagCatalog {
+    let names: [String]
+    let colors: [String: UInt32]
+    let depths: [String: Int]
+
+    init(tags: [TaskTag]) {
+        let ordered = TaskTag.ordered(tags)
+        names = ordered.map(\.name)
+        colors = Dictionary(uniqueKeysWithValues: ordered.compactMap { tag in
+            tag.colorARGB.map { (tag.name, $0) }
+        })
+        var depthsByID: [UUID: Int] = [:]
+        var depthsByName: [String: Int] = [:]
+        for tag in ordered {
+            let depth = tag.parentID.flatMap { depthsByID[$0] }.map { $0 + 1 } ?? 0
+            depthsByID[tag.id] = depth
+            depthsByName[tag.name] = depth
+        }
+        depths = depthsByName
+    }
+}
+
 /// `#` / `@` 的实时候选列表，浮在快速添加条下方。
 ///
 /// 用 `overlay` 而不是 `.popover`：候选列表要在用户**继续打字**时一直存在，
@@ -15,6 +38,8 @@ struct QuickAddCandidateList: View {
     let icon: String
     let onHover: (Int) -> Void
     let onCommit: (String) -> Void
+    var colors: [String: UInt32] = [:]
+    var depths: [String: Int] = [:]
 
     static let rowHeight: CGFloat = 28
     static let verticalPadding: CGFloat = 6
@@ -44,7 +69,8 @@ struct QuickAddCandidateList: View {
                         HStack(spacing: WFSpace.sm) {
                             Image(systemName: icon)
                                 .font(.system(size: 11))
-                                .foregroundStyle(index == selectedIndex ? WFColors.accent : WFColors.secondaryText)
+                                .foregroundStyle(colors[name].map(WFListPalette.swatch)
+                                    ?? (index == selectedIndex ? WFColors.accent : WFColors.secondaryText))
                             Text(name)
                                 .font(WFType.control)
                                 .foregroundStyle(WFColors.text)
@@ -52,6 +78,7 @@ struct QuickAddCandidateList: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.leading, CGFloat(depths[name, default: 0]) * 12)
                         .frame(height: Self.rowHeight)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(index == selectedIndex ? WFColors.selection : .clear,

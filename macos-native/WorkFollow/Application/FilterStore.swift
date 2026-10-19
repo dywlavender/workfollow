@@ -71,11 +71,7 @@ final class FilterStore: ObservableObject, ModuleStoreFlushable {
     func resolveOrganizationReferences() {
         guard let resolver = organizationResolver else { return }
         let resolved = filters.map { filter -> SavedFilter in
-            var value = filter
-            let (lists, tags) = resolver(value.listNames, value.tags)
-            value.listIDs = lists.isEmpty ? nil : lists
-            value.tagIDs = tags.isEmpty ? nil : tags
-            return value
+            resolvingReferences(in: filter, using: resolver)
         }
         if filters != resolved { filters = resolved; persist() }
     }
@@ -84,9 +80,35 @@ final class FilterStore: ObservableObject, ModuleStoreFlushable {
         let resolved = filters.map { filter -> SavedFilter in
             var value = filter
             if change.kind == .list {
-                value.listNames = value.listNames.map { $0 == change.oldName ? change.newName : $0 }
+                if value.listIDs?.isEmpty != false || value.listIDs?.contains(change.id) == true {
+                    value.listNames = value.listNames.map { $0 == change.oldName ? change.newName : $0 }
+                }
             } else {
-                value.tags = value.tags.map { $0 == change.oldName ? change.newName : $0 }
+                if value.tagIDs?.isEmpty != false || value.tagIDs?.contains(change.id) == true {
+                    value.tags = value.tags.map { $0 == change.oldName ? change.newName : $0 }
+                }
+            }
+            value.expression = value.expression?.mapConditions { condition in
+                guard (change.kind == .list && condition.kind == .lists)
+                    || (change.kind == .tag && condition.kind == .tags) else { return condition }
+                var updated = condition
+                if let ids = condition.legacyOrganizationIDs, !ids.isEmpty {
+                    guard ids.contains(change.id) else { return condition }
+                    updated.organizationSelections = condition.organizationSelections.map { selection in
+                        var selection = selection
+                        if selection.name == change.oldName { selection.name = change.newName }
+                        return selection
+                    }
+                } else {
+                    updated.organizationSelections = condition.organizationSelections.map { selection in
+                        var selection = selection
+                        if selection.id == change.id || (selection.id == nil && selection.name == change.oldName) {
+                            selection.name = change.newName
+                        }
+                        return selection
+                    }
+                }
+                return updated
             }
             return value
         }
@@ -107,9 +129,37 @@ final class FilterStore: ObservableObject, ModuleStoreFlushable {
         var value = filter
         value.name = name
         if let resolver = organizationResolver {
-            let (lists, tags) = resolver(value.listNames, value.tags)
-            value.listIDs = lists.isEmpty ? nil : lists
-            value.tagIDs = tags.isEmpty ? nil : tags
+            value = resolvingReferences(in: value, using: resolver)
+        }
+        return value
+    }
+
+    private func resolvingReferences(in filter: SavedFilter,
+                                     using resolver: ([String], [String]) -> ([UUID], [UUID])) -> SavedFilter {
+        var value = filter
+        if value.listIDs?.isEmpty != false, !value.listNames.isEmpty {
+            let ids = resolver(value.listNames, []).0
+            value.listIDs = ids.isEmpty ? nil : ids
+        }
+        if value.tagIDs?.isEmpty != false, !value.tags.isEmpty {
+            let ids = resolver([], value.tags).1
+            value.tagIDs = ids.isEmpty ? nil : ids
+        }
+        value.expression = value.expression?.mapConditions { condition in
+            guard condition.kind == .lists || condition.kind == .tags,
+                  condition.legacyOrganizationIDs?.isEmpty != false else { return condition }
+            var updated = condition
+            updated.organizationSelections = condition.organizationSelections.map { selection in
+                guard selection.id == nil else { return selection }
+                var selection = selection
+                // Resolve one name at a time: an old pair of arrays never
+                // establishes which ID belongs to which name.
+                selection.id = condition.kind == .lists
+                    ? resolver([selection.name], []).0.first
+                    : resolver([], [selection.name]).1.first
+                return selection
+            }
+            return updated
         }
         return value
     }

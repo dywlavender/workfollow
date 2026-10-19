@@ -111,6 +111,7 @@ final class TaskInspectorShellContractTests: XCTestCase {
                                   height: CGFloat) -> [InspectorRenderAnchor: CGRect] {
         var frames: [InspectorRenderAnchor: CGRect] = [:]
         let root = view.frame(width: width, height: height)
+            .environmentObject(AppEnvironment())
             .coordinateSpace(name: "inspector-render")
             .onPreferenceChange(InspectorFramesKey.self) { frames = $0 }
         let host = NSHostingView(rootView: root)

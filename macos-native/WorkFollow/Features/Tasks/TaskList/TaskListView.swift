@@ -18,6 +18,8 @@ private struct TaskOutlineRowState: Equatable {
 
 private struct TaskOutlineRowLayout: Equatable {
     let hasPreview: Bool
+    /// 有标签时行底下多一行胶囊，行高随之变高。
+    let hasTags: Bool
     let completed: Bool
     let depth: Int
 }
@@ -184,6 +186,9 @@ struct TaskListView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
+        .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
+            quickAddTagsOverride = QuickAddPropertiesOverrides.renamedTags(quickAddTagsOverride, notification: notification)
+        }
         .onChange(of: environment.quickAddRequest) { _, _ in quickAddFocused = true }
         .onChange(of: draft) { _, _ in
             // 文本一变，「已被忽略」和候选高亮都作废：候选列表要按新的查询重开。
@@ -629,13 +634,16 @@ struct TaskListView: View {
     @ViewBuilder
     private var candidateList: some View {
         if let marker = activeMarkerQuery {
+            let tags = tagCandidateCatalog
             QuickAddCandidateList(
                 names: candidateNames,
                 selectedIndex: min(candidate.selection, max(0, candidateNames.count - 1)),
                 emptyMessage: marker.kind == .tag ? "没有匹配的标签" : "没有匹配的清单",
                 icon: marker.kind == .tag ? "tag" : "list.bullet",
                 onHover: { candidate.selection = $0 },
-                onCommit: { commitCandidate($0) }
+                onCommit: { commitCandidate($0) },
+                colors: marker.kind == .tag ? tags.colors : [:],
+                depths: marker.kind == .tag ? tags.depths : [:]
             )
         }
     }
@@ -647,8 +655,10 @@ struct TaskListView: View {
     }
 
     /// 候选来源：`#` 查已有标签、`@` 查已有清单。
+    private var tagCandidateCatalog: QuickAddTagCatalog { QuickAddTagCatalog(tags: workspace.taskTags) }
+
     private func candidateSource(_ kind: QuickAddComposition.MarkerQuery.Kind) -> [String] {
-        kind == .tag ? workspace.tagNames : workspace.availableListNames
+        kind == .tag ? tagCandidateCatalog.names : workspace.availableListNames
     }
 
     private var candidateNames: [String] {
@@ -1112,9 +1122,13 @@ struct TaskListView: View {
                         allowsReordering: sortMode == .manual && !node.task.isClosed,
                         progress: workspace.subtaskProgress(for: node.task.id),
                         day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision)
-                    let layout = TaskOutlineRowLayout(hasPreview: preview != nil,
+                    let hasTags = !node.task.tags.isEmpty
+                    let layout = TaskOutlineRowLayout(hasPreview: preview != nil, hasTags: hasTags,
                         completed: node.task.status == .completed, depth: node.depth)
-                    rows.append(.init(id: rowIdentity(group: group, task: node.task), state: state, layout: layout) {
+                    rows.append(.init(id: rowIdentity(group: group, task: node.task), state: state,
+                                      layout: layout,
+                                      height: TaskListMetrics.taskRowHeight(hasPreview: preview != nil,
+                                                                            hasTags: hasTags)) {
                         taskRow(group: group, node: node).environmentObject(environment)
                     })
                 }
@@ -1371,6 +1385,7 @@ struct TaskRowView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .taskTreeRenderAnchor(task.id, .preview)
                 }
+                if !task.tags.isEmpty { tagRow }
             }
             .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
         }
@@ -1444,6 +1459,38 @@ struct TaskRowView: View {
     }
 
     /// Folding hides children; only this task's own body supplies its preview.
+    /// 标签行：标题下方一排只读胶囊（滴答把任务的标签直接画在列表行里）。
+    /// 只读——编辑仍在详情 / 右键菜单里，行内不做第二个标签编辑入口。
+    private var tagRow: some View {
+        let visible = Array(task.tags.prefix(TaskListMetrics.maxVisibleTags))
+        let overflow = task.tags.count - visible.count
+        return HStack(spacing: 4) {
+            ForEach(visible, id: \.self) { name in
+                tagChip(name)
+            }
+            if overflow > 0 {
+                Text("+\(overflow)")
+                    .font(WFType.listMeta)
+                    .foregroundStyle(WFColors.secondaryText)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("标签：" + task.tags.joined(separator: "、"))
+    }
+
+    private func tagChip(_ name: String) -> some View {
+        let color = workspace.tag(named: name)?.colorARGB.map(WFListPalette.swatch)
+        return Text(name)
+            .font(WFType.listMeta)
+            .foregroundStyle(color ?? WFColors.text)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(color?.opacity(0.1) ?? WFColors.hover, in: Capsule())
+    }
+
     private var rowPreview: String? {
         TaskListViewDefaults.bodyPreview(of: task.document)
     }

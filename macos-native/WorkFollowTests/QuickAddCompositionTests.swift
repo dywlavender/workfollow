@@ -135,6 +135,26 @@ final class QuickAddCompositionTests: XCTestCase {
         XCTAssertEqual(QuickAddComposition.replacingTrailingMarker(in: "", with: "工作"), "")
     }
 
+    func testQuotedCandidateNamesRoundTripWithoutChangingTaskTitle() {
+        for name in ["客户 A", "计划，复盘", "客户 \"A\""] {
+            let committed = QuickAddComposition.replacingTrailingMarker(in: "跟进 #客", with: name)
+            XCTAssertTrue(committed.hasPrefix("跟进 #\""))
+            let parsed = QuickAddParser.parse(committed, now: now, calendar: calendar, knownLists: [])
+            XCTAssertEqual(parsed.title, "跟进")
+            XCTAssertEqual(parsed.tags, [name])
+            XCTAssertNil(QuickAddComposition.markerQuery(in: committed))
+        }
+    }
+
+    func testQuotedKnownListCandidateKeepsItsCompleteName() {
+        let name = "客户 A"
+        let committed = QuickAddComposition.replacingTrailingMarker(in: "归档 @客", with: name)
+        let parsed = QuickAddParser.parse(committed, now: now, calendar: calendar, knownLists: [name])
+        XCTAssertEqual(parsed.title, "归档")
+        XCTAssertEqual(parsed.listName, name)
+        XCTAssertEqual(parsed.tokens.map(\.kind), [.list])
+    }
+
     func testReplacedTextNoLongerCarriesAMarkerQuery() {
         // 提交之后候选列表必须自己消失，否则 Tab / 回车会被一直吞掉。
         let committed = QuickAddComposition.replacingTrailingMarker(in: "买牛奶 #工", with: "工作")

@@ -11,7 +11,7 @@ final class TaskKanbanMultiTagTests: XCTestCase {
         return value
     }
 
-    func testMultiTagCardsShareIdentitySelectionHierarchyAndCompletionAcrossColumns() throws {
+    func testMultiTagTaskUsesOnePrimaryColumnWithItsIdentityAndHierarchy() throws {
         let parent = task("双标签任务", tags: ["设计", "本周"])
         let child = task("检查材料", parent: parent.id)
         let untagged = task("未分类")
@@ -19,10 +19,12 @@ final class TaskKanbanMultiTagTests: XCTestCase {
             initialTasks: [parent, child, untagged])
         let columns = workspace.groups(for: .allTasks, grouping: .byTag, viewMode: .kanban)
         let tagged = columns.filter { $0.label != "无标签" }
-        XCTAssertEqual(Set(tagged.compactMap(\.label)), ["设计", "本周"])
+        XCTAssertEqual(tagged.compactMap(\.label), ["设计"])
         XCTAssertTrue(tagged.allSatisfy { $0.tasks.map(\.id) == [parent.id] })
         XCTAssertEqual(columns.last?.tasks.map(\.id), [untagged.id])
-        XCTAssertEqual(workspace.allTasks.count, 3, "重复显示不能复制领域任务")
+        XCTAssertEqual(workspace.allTasks.count, 3)
+        XCTAssertEqual(try XCTUnwrap(workspace.task(for: parent.id)).tags, ["设计", "本周"],
+                       "单列归属不移除任务的其他标签")
         for group in tagged {
             XCTAssertEqual(workspace.kanbanNodes(for: try XCTUnwrap(group.tasks.first)).map { $0.task.id },
                            [parent.id, child.id])
@@ -51,10 +53,10 @@ final class TaskKanbanMultiTagTests: XCTestCase {
         let workspace = TaskWorkspaceModel(clock: { self.now }, seedDemoData: false, initialTasks: [])
         let id = try XCTUnwrap(workspace.createKanbanTask(title: "列内创建 #本周", target: .tag("设计")))
         XCTAssertEqual(Set(try XCTUnwrap(workspace.task(for: id)).tags), ["设计", "本周"])
-        XCTAssertEqual(workspace.groups(for: .allTasks, grouping: .byTag, viewMode: .kanban).count, 2)
+        XCTAssertEqual(workspace.groups(for: .allTasks, grouping: .byTag, viewMode: .kanban).map(\.label), ["设计"])
         _ = workspace.setTags(id, ["本周"])
         XCTAssertEqual(workspace.groups(for: .allTasks, grouping: .byTag, viewMode: .kanban).map(\.label), ["本周"])
         workspace.undo()
-        XCTAssertEqual(workspace.groups(for: .allTasks, grouping: .byTag, viewMode: .kanban).count, 2)
+        XCTAssertEqual(workspace.groups(for: .allTasks, grouping: .byTag, viewMode: .kanban).map(\.label), ["设计"])
     }
 }

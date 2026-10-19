@@ -308,7 +308,7 @@ enum TaskListProjection {
             case .byList:
                 groups += listGroups(ordinary, knownLists: store.lists)
             case .byTag:
-                groups += tagGroups(ordinary, repeatsAcrossTags: viewMode == .kanban)
+                groups += tagGroups(ordinary, directory: store.tags)
             case .byCreatedAt:
                 groups += createdAtGroups(ordinary, now: now, calendar: calendar)
             }
@@ -443,17 +443,19 @@ enum TaskListProjection {
         }
     }
 
-    /// 看板的卡片身份位于列内部，同一任务可同时出现在多个标签列。
-    /// 平铺的原生列表仍使用唯一 task.id；无标签任务收进最后一组。
-    private static func tagGroups(_ tasks: [Task], repeatsAcrossTags: Bool) -> [TaskListGroup] {
+    /// 按现有任务的首标签归列，卡片仍显示完整标签；一项任务只占一个位置。
+    /// 列表与看板共用该归列规则，无标签任务收进最后一组。
+    static func tagGroups(_ tasks: [Task], directory: [TaskTag]) -> [TaskListGroup] {
         var buckets: [String: [Task]] = [:]
         var untagged: [Task] = []
         for task in tasks {
-            let tags = repeatsAcrossTags ? Array(Set(task.tags)).sorted() : Array(task.tags.prefix(1))
-            if tags.isEmpty { untagged.append(task) }
-            else { for tag in tags { buckets[tag, default: []].append(task) } }
+            if let tag = task.tags.first { buckets[tag, default: []].append(task) }
+            else { untagged.append(task) }
         }
-        var groups = buckets.keys.sorted().map { name in
+        let knownNames = TaskTag.ordered(directory).map(\.name)
+        let known = Set(knownNames)
+        let names = knownNames.filter { buckets[$0] != nil } + buckets.keys.filter { !known.contains($0) }.sorted()
+        var groups = names.map { name in
             TaskListGroup(kind: .plain, day: nil, tasks: buckets[name]!, label: name,
                           creationTarget: .tag(name))
         }

@@ -8,13 +8,14 @@ import SwiftUI
 /// 末尾 + 仍走原来的 `TaskTagPickerPopover`（不新增第二套标签编辑）。
 struct TaskTagStrip: View {
     let tags: [String]
+    var colors: [String: UInt32] = [:]
     let onEdit: () -> Void
     let onRemove: (String) -> Void
 
     var body: some View {
         TagFlowLayout(spacing: 6, rowSpacing: 6) {
             ForEach(tags, id: \.self) { tag in
-                TagChip(name: tag, onEdit: onEdit) { onRemove(tag) }
+                TagChip(name: tag, color: colors[tag].map(WFListPalette.swatch), onEdit: onEdit) { onRemove(tag) }
             }
             Button(action: onEdit) {
                 Image(systemName: "plus")
@@ -32,6 +33,7 @@ struct TaskTagStrip: View {
 
     private struct TagChip: View {
         let name: String
+        let color: Color?
         let onEdit: () -> Void
         let onRemove: () -> Void
         @State private var hovered = false
@@ -41,7 +43,7 @@ struct TaskTagStrip: View {
                 Button(action: onEdit) {
                     Text(name)
                         .font(WFType.listMeta)
-                        .foregroundStyle(WFColors.text)
+                        .foregroundStyle(color ?? WFColors.text)
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
@@ -60,7 +62,7 @@ struct TaskTagStrip: View {
             .padding(.leading, 8)
             .padding(.trailing, 6)
             .frame(height: 22)
-            .background(hovered ? WFColors.border : WFColors.hover, in: Capsule())
+            .background(color?.opacity(hovered ? 0.18 : 0.1) ?? (hovered ? WFColors.border : WFColors.hover), in: Capsule())
             .onHover { hovered = $0 }
         }
     }

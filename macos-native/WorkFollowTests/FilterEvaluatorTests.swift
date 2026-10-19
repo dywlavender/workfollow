@@ -113,6 +113,7 @@ final class FilterEvaluatorTests: XCTestCase {
         let decoded = try JSONDecoder().decode([SavedFilter].self, from: Data(json.utf8))
         XCTAssertEqual(decoded.first?.keywords, [], "旧 filters.json 缺 keywords 键必须能解码")
         XCTAssertEqual(decoded.first?.listNames, ["收集箱"], "其余维度照旧")
+        XCTAssertNil(decoded.first?.expression)
     }
 
     func testKeywordsRoundTripThroughCodable() throws {
@@ -244,6 +245,158 @@ final class FilterEvaluatorTests: XCTestCase {
         let data = try JSONEncoder().encode(filter)
         let decoded = try JSONDecoder().decode(SavedFilter.self, from: data)
         XCTAssertEqual(decoded, filter)
+    }
+
+    func testAdvancedExpressionCombinesRowsWithoutReapplyingLegacyDimensions() {
+        let list = FilterExpression.condition(FilterCondition(kind: .lists,
+            organizationSelections: [FilterOrganizationSelection(name: "工作")]))
+        let tag = FilterExpression.condition(FilterCondition(kind: .tags,
+            organizationSelections: [FilterOrganizationSelection(name: "重点")]))
+        let priority = FilterExpression.condition(FilterCondition(kind: .priorities, priorities: [.high]))
+        let filter = SavedFilter(name: "高级", listNames: ["已被高级条件替代"],
+                                 expression: .all([.any([list, tag]), priority]))
+        XCTAssertTrue(matches(makeTask(list: "工作", priority: .high), filter))
+        XCTAssertTrue(matches(makeTask(list: "个人", tags: ["重点"], priority: .high), filter))
+        XCTAssertFalse(matches(makeTask(list: "工作", priority: .low), filter))
+        XCTAssertFalse(matches(makeTask(list: "个人", priority: .high), filter))
+    }
+
+    func testAdvancedTagAnyAndAllUseStableIdentityWithLegacyNameFallback() {
+        let firstID = UUID(), secondID = UUID()
+        let selections = [FilterOrganizationSelection(id: firstID, name: "工作"),
+                          FilterOrganizationSelection(id: secondID, name: "重点")]
+        let any = SavedFilter(name: "任一", expression: .condition(FilterCondition(
+            kind: .tags, organizationSelections: selections, tagMatch: .any)))
+        let all = SavedFilter(name: "全部", expression: .condition(FilterCondition(
+            kind: .tags, organizationSelections: selections, tagMatch: .all)))
+        var both = makeTask(tags: ["工作", "重点"])
+        both.tagReferences = [TaskTagReference(id: firstID, name: "工作"),
+                              TaskTagReference(id: secondID, name: "重点")]
+        XCTAssertTrue(matches(both, all))
+        var one = both
+        one.tags = ["工作"]
+        one.tagReferences = [TaskTagReference(id: firstID, name: "已改名")]
+        XCTAssertTrue(matches(one, any), "相同 ID 的显示名称变化不影响命中")
+        XCTAssertFalse(matches(one, all))
+        var recreated = both
+        recreated.tagReferences = [TaskTagReference(id: UUID(), name: "工作"),
+                                   TaskTagReference(id: UUID(), name: "重点")]
+        XCTAssertFalse(matches(recreated, any), "删除后同名重建的标签有独立身份")
+        XCTAssertTrue(matches(makeTask(tags: ["工作", "重点"]), all), "旧任务没有引用时按名称匹配")
+    }
+
+    func testAdvancedCodableRoundTripKeepsEveryConditionAndOrganizationReference() throws {
+        let expression = FilterExpression.all([
+            .condition(FilterCondition(kind: .lists,
+                organizationSelections: [FilterOrganizationSelection(id: UUID(), name: "工作")])),
+            .any([.condition(FilterCondition(kind: .tags,
+                organizationSelections: [FilterOrganizationSelection(id: UUID(), name: "重点")], tagMatch: .all)),
+                  .condition(FilterCondition(kind: .keywords, keywords: ["报告", "review"]))]),
+            .condition(FilterCondition(kind: .priorities, priorities: [.none, .high])),
+            .condition(FilterCondition(kind: .date, dateRange: .today))
+        ])
+        let original = SavedFilter(name: "保存高级条件", expression: expression)
+        let data = try JSONEncoder().encode(original)
+        XCTAssertEqual(try JSONDecoder().decode(SavedFilter.self, from: data), original)
+    }
+
+    func testLegacyConditionMappingPreservesDateAndIndependentIdentitySetSemantics() {
+        let listID = UUID(), tagID = UUID()
+        var identified = makeTask(title: "报告", list: "已改名的清单", tags: ["已改名的标签"],
+                                  priority: .high, dueAt: day(-1))
+        identified.listID = listID
+        identified.tagReferences = [TaskTagReference(id: tagID, name: "已改名的标签")]
+        let nameOnly = makeTask(title: "报告", list: "工作", tags: ["重点"], priority: .high)
+        var unrelatedIdentity = nameOnly
+        unrelatedIdentity.listID = UUID()
+        unrelatedIdentity.tagReferences = [TaskTagReference(id: UUID(), name: "重点")]
+        let tasks = [identified, nameOnly, unrelatedIdentity,
+                     makeTask(title: "报告", list: "工作", tags: ["重点"], priority: .high, dueAt: day(6)),
+                     makeTask(title: "报告", list: "工作", tags: ["重点"], priority: .high, dueAt: day(7)),
+                     makeTask(title: "报告", list: "工作", tags: ["重点"], priority: .high, deadlineAt: startOfToday)]
+        for range in SavedFilterDateRange.allCases {
+            var legacy = makeFilter(listNames: ["工作"], tags: ["重点"], priorities: [.high],
+                                    dateRange: range, keywords: ["报告"])
+            legacy.listIDs = [listID]
+            legacy.tagIDs = [tagID]
+            var advanced = legacy
+            advanced.expression = .all(legacy.legacyConditions.map(FilterExpression.condition))
+            for task in tasks { XCTAssertEqual(matches(task, advanced), matches(task, legacy), range.rawValue) }
+        }
+    }
+
+    func testStoreResolvesOnlyNewOrganizationSelectionsAndPersistsTheExpression() async throws {
+        let (store, directory) = makeStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let existingList = UUID(), existingTag = UUID(), newList = UUID()
+        var resolvedNames: [String] = []
+        store.organizationResolver = { lists, tags in
+            resolvedNames += lists + tags
+            return (lists.map { _ in newList }, tags.map { _ in UUID() })
+        }
+        let original = SavedFilter(name: "高级引用", expression: .all([
+            .condition(FilterCondition(kind: .lists, organizationSelections: [
+                FilterOrganizationSelection(id: existingList, name: "工作"),
+                FilterOrganizationSelection(name: "学习")])),
+            .condition(FilterCondition(kind: .tags, organizationSelections: [
+                FilterOrganizationSelection(id: existingTag, name: "重点")]))
+        ]))
+        XCTAssertTrue(store.add(original))
+        let expected = FilterExpression.all([
+            .condition(FilterCondition(kind: .lists, organizationSelections: [
+                FilterOrganizationSelection(id: existingList, name: "工作"),
+                FilterOrganizationSelection(id: newList, name: "学习")])),
+            .condition(FilterCondition(kind: .tags, organizationSelections: [
+                FilterOrganizationSelection(id: existingTag, name: "重点")]))
+        ])
+        XCTAssertEqual(store.filters.first?.expression, expected)
+        XCTAssertEqual(resolvedNames, ["学习"])
+        XCTAssertTrue(store.rename(original.id, to: "只改过滤器名"))
+        store.resolveOrganizationReferences()
+        XCTAssertEqual(store.filters.first?.expression, expected)
+        XCTAssertEqual(resolvedNames, ["学习"])
+        let done = expectation(description: "advanced filter saved")
+        store.flush { error in XCTAssertNil(error); done.fulfill() }
+        await fulfillment(of: [done], timeout: 5)
+        XCTAssertEqual(FilterStore(directory: directory).filters.first?.expression, expected)
+    }
+
+    func testStoreNameChangesDoNotRebindExistingOrdinaryOrganizationIDs() {
+        let (store, _) = makeStore()
+        store.organizationResolver = { _, _ in ([UUID()], [UUID()]) }
+        var original = SavedFilter(name: "保留普通身份", listNames: ["工作"], tags: ["重点"])
+        original.listIDs = [UUID()]
+        original.tagIDs = [UUID()]
+        XCTAssertTrue(store.add(original))
+        XCTAssertTrue(store.rename(original.id, to: "仅改名"))
+        store.resolveOrganizationReferences()
+        XCTAssertEqual(store.filters.first?.listIDs, original.listIDs)
+        XCTAssertEqual(store.filters.first?.tagIDs, original.tagIDs)
+    }
+
+    func testAdvancedOrganizationRenameUndoRedoUpdatesOnlyTheMatchingIdentity() throws {
+        var task = makeTask(title: "报告", list: "工作", tags: ["项目"])
+        let tagID = UUID(), unrelatedID = UUID()
+        task.tagReferences = [TaskTagReference(id: tagID, name: "项目")]
+        let workspace = makeWorkspace(tasks: [task])
+        let (store, directory) = makeStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        workspace.attachFilterStore(store)
+        func expression(_ name: String) -> FilterExpression {
+            .all([.condition(FilterCondition(kind: .tags, organizationSelections: [
+                FilterOrganizationSelection(id: tagID, name: name)])),
+                  .any([.condition(FilterCondition(kind: .keywords, keywords: ["报告"])),
+                        .condition(FilterCondition(kind: .tags, organizationSelections: [
+                            FilterOrganizationSelection(id: unrelatedID, name: "项目")]))])])
+        }
+        XCTAssertTrue(store.add(SavedFilter(name: "项目报告", expression: expression("项目"))))
+        XCTAssertTrue(workspace.renameTag(tagID, to: "交付项目"))
+        XCTAssertEqual(store.filters.first?.expression, expression("交付项目"))
+        XCTAssertTrue(matches(try XCTUnwrap(workspace.task(for: task.id)), store.filters[0]))
+        workspace.undo()
+        XCTAssertEqual(store.filters.first?.expression, expression("项目"))
+        workspace.redo()
+        XCTAssertEqual(store.filters.first?.expression, expression("交付项目"))
     }
 
     // MARK: - FilterStore

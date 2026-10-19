@@ -274,6 +274,68 @@ final class MigrationSnapshotTests: XCTestCase {
                        "清单归属随导入落地")
     }
 
+    func testTaskTagCatalogSurvivesExportParseAndReplacementIncludingUnusedHierarchy() throws {
+        let parent = TaskTag(id: UUID(), name: "项目", colorARGB: 0xFF123456,
+                             sortOrder: 4, parentID: nil)
+        let child = TaskTag(id: UUID(), name: "待评审", colorARGB: 0xFFABCDEF,
+                            sortOrder: 3, parentID: parent.id)
+        let unused = TaskTag(id: UUID(), name: "暂存", colorARGB: nil,
+                             sortOrder: 8, parentID: nil)
+        let tags = [parent, child, unused]
+        var task = makeTask(id: UUID(), title: "评审稿")
+        task.tags = [child.name]
+        task.tagReferences = [TaskTagReference(id: child.id, name: child.name)]
+        let snapshot = NativeWorkspaceSnapshot(tasks: [task], notes: [], taskTags: tags)
+        let data = try MigrationSnapshot.exportJSON(from: snapshot, attachmentDirectory: nil, now: fixedDate)
+        let bundle = try MigrationSnapshot.parse(data)
+        XCTAssertEqual(bundle.taskTags, tags)
+
+        let (replaced, _) = MigrationSnapshot.replaced(bundle, attachmentNames: [], now: fixedDate)
+        XCTAssertEqual(replaced.taskTags, tags)
+        XCTAssertEqual(replaced.tasks.first?.tagReferences, task.tagReferences)
+        try repository.save(replaced)
+        XCTAssertEqual(try repository.load()?.taskTags, tags)
+    }
+
+    func testTagMergeKeepsLocalMetadataAndRemapsImportedHierarchyAndTaskReferences() throws {
+        let root = TaskTag(id: UUID(), name: "本地项目", colorARGB: 0xFF123456,
+                           sortOrder: 7, parentID: nil)
+        let shared = TaskTag(id: UUID(), name: "共有", colorARGB: 0xFF445566,
+                             sortOrder: 4, parentID: root.id)
+        let unused = TaskTag(id: UUID(), name: "本地空标签", colorARGB: nil,
+                             sortOrder: 1, parentID: shared.id)
+        let local = NativeWorkspaceSnapshot(tasks: [], notes: [], taskTags: [root, shared, unused])
+
+        let incomingRoot = TaskTag(id: root.id, name: "项目旧名", colorARGB: 0xFFEEEEEE,
+                                   sortOrder: 0, parentID: nil)
+        let incomingShared = TaskTag(id: UUID(), name: shared.name, colorARGB: 0xFFFFFFFF,
+                                     sortOrder: 0, parentID: incomingRoot.id)
+        let incomingChild = TaskTag(id: UUID(), name: "导入子标签", colorARGB: 0xFFABCDEF,
+                                    sortOrder: 0, parentID: incomingShared.id)
+        var incomingTask = makeTask(id: UUID(), title: "导入的任务")
+        incomingTask.tags = [incomingRoot.name, incomingShared.name, incomingChild.name]
+        let incoming = NativeWorkspaceSnapshot(tasks: [incomingTask], notes: [],
+                                               taskTags: [incomingRoot, incomingShared, incomingChild])
+        let data = try MigrationSnapshot.exportJSON(from: incoming, attachmentDirectory: nil, now: fixedDate)
+        let bundle = try MigrationSnapshot.parse(data)
+        let (merged, _) = MigrationSnapshot.merged(bundle, into: local, attachmentNames: [], now: fixedDate)
+        let tags = try XCTUnwrap(merged.taskTags)
+        for localTag in [root, shared, unused] {
+            XCTAssertEqual(tags.first { $0.id == localTag.id }, localTag)
+        }
+        XCTAssertEqual(tags.count, 4)
+        let importedChild = try XCTUnwrap(tags.first { $0.id == incomingChild.id })
+        XCTAssertEqual(importedChild.parentID, shared.id)
+        XCTAssertEqual(importedChild.colorARGB, incomingChild.colorARGB)
+        XCTAssertGreaterThan(importedChild.sortOrder, unused.sortOrder)
+        let importedTask = try XCTUnwrap(merged.tasks.first)
+        XCTAssertEqual(importedTask.tags, [root.name, shared.name, incomingChild.name])
+        XCTAssertEqual(importedTask.tagReferences,
+                       [TaskTagReference(id: root.id, name: root.name),
+                        TaskTagReference(id: shared.id, name: shared.name),
+                        TaskTagReference(id: incomingChild.id, name: incomingChild.name)])
+    }
+
     // MARK: v1/v2 旧格式读取 + legacy 子任务展开
 
     func testParseV1ExpandsLegacySubtasksToDeterministicRealTasks() throws {

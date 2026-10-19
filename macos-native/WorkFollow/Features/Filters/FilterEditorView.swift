@@ -12,6 +12,7 @@ struct FilterEditorView: View {
 
     @State private var draft: FilterEditorDraft
     @State private var conflict = false
+    @State private var modeIssue: String?
 
     init(store: FilterStore, workspace: TaskWorkspaceModel,
          initial: SavedFilter?, onDismiss: @escaping () -> Void) {
@@ -23,7 +24,7 @@ struct FilterEditorView: View {
     }
 
     private var listOptions: [String] { draft.listOptions(allListNames: workspace.availableListNames) }
-    private var tagOptions: [String] { draft.tagOptions(tagNames: workspace.tagNames) }
+    private var tagOptions: [String] { draft.tagOptions(tagNames: workspace.orderedTags.map(\.name)) }
     private var preview: FilterEditorPreview {
         FilterEditorPreview.project(tasks: workspace.tasksInActiveLists, filter: draft.filter,
                                     now: workspace.clock(), calendar: workspace.calendar)
@@ -37,12 +38,25 @@ struct FilterEditorView: View {
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("filter.editor.name")
                     .onChange(of: draft.name) { _, _ in conflict = false }
+                Picker("筛选方式", selection: Binding(get: { draft.mode }, set: { mode in
+                    if draft.switchMode(to: mode) { modeIssue = nil }
+                    else { modeIssue = draft.basicConversionIssue }
+                })) {
+                    Text("普通").tag(FilterEditorMode.basic)
+                    Text("高级").tag(FilterEditorMode.advanced)
+                }
+                .pickerStyle(.segmented).labelsHidden()
+                .accessibilityIdentifier("filter.editor.mode")
+                if modeIssue != nil, let issue = draft.basicConversionIssue {
+                    Text(issue).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                }
             }
             .padding(WFSpace.xxl)
 
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: WFSpace.xl) {
+                    if draft.mode == .basic {
                     Text("不同条件需同时满足。清单、标签和优先级多选时匹配任一项，关键词需全部包含。不选择的条件不作限制。")
                         .font(WFType.supporting)
                         .foregroundStyle(WFColors.secondaryText)
@@ -57,7 +71,7 @@ struct FilterEditorView: View {
                     VStack(alignment: .leading, spacing: WFSpace.sm) {
                         sectionLabel("标签")
                         if tagOptions.isEmpty {
-                            emptyHint("在任务属性中添加标签")
+                            emptyHint("先在侧栏新建标签")
                         } else {
                             chips(tagOptions, symbol: "tag", selection: draft.selectedTags,
                                   onToggle: { draft.selectedTags = $0 })
@@ -96,6 +110,9 @@ struct FilterEditorView: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                     }
+                    } else {
+                        advancedConditions
+                    }
 
                     previewSection
                 }
@@ -124,7 +141,7 @@ struct FilterEditorView: View {
             .padding(.horizontal, WFSpace.xxl)
             .padding(.vertical, WFSpace.lg)
         }
-        .frame(width: 440, height: 560)
+        .frame(width: 520, height: 600)
     }
 
     private func save() {
@@ -138,6 +155,35 @@ struct FilterEditorView: View {
     }
 
     // MARK: Pieces
+
+    private var advancedConditions: some View {
+        VStack(alignment: .leading, spacing: WFSpace.md) {
+            if let issue = draft.advancedEditingIssue {
+                Text(issue).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            }
+            if draft.canEditAdvancedRules {
+                ForEach($draft.rules) { $rule in
+                    AdvancedFilterRuleEditor(rule: $rule, workspace: workspace,
+                        showsConnector: rule.id != draft.rules.first?.id,
+                        listOptions: listOptions, tagOptions: tagOptions,
+                        onRemove: { draft.removeRule(id: rule.id) })
+                }
+                Menu {
+                    ForEach([FilterEditorRuleKind.lists, .tags, .priorities, .date, .keywords], id: \.self) { kind in
+                        Button(kind.title) { draft.addRule(kind: kind) }
+                    }
+                } label: { Label("添加条件", systemImage: "plus") }
+                    .menuStyle(.borderlessButton).fixedSize()
+                    .accessibilityIdentifier("filter.editor.addRule")
+            }
+            VStack(alignment: .leading, spacing: WFSpace.xs) {
+                Text("条件组合").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                Text(draft.expressionSummary).font(WFType.supporting)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("filter.editor.expression")
+            }
+        }
+    }
 
     private var previewSection: some View {
         let result = preview

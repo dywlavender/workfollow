@@ -408,6 +408,9 @@ struct TaskInspectorShell: View {
             // 标签集合行（TI2-02）：对齐滴答 `TTTaskDetailTagCollectionCell` 的可见 chip。
             if !task.tags.isEmpty {
                 TaskTagStrip(tags: task.tags,
+                             colors: Dictionary(uniqueKeysWithValues: workspace.taskTags.compactMap { tag in
+                                 tag.colorARGB.map { (tag.name, $0) }
+                             }),
                              onEdit: { actionPresentation.open(.tags) },
                              onRemove: { tag in
                                  workspace.setTags(task.id, task.tags.filter { $0 != tag })
@@ -839,7 +842,7 @@ struct TaskInspectorShell: View {
                     addTag: { tag in
                         guard let current = workspace.task(for: task.id) else { return }
                         guard !current.tags.contains(tag) else { return }
-                        workspace.setTags(task.id, (current.tags + [tag]).sorted())
+                        workspace.setTags(task.id, current.tags + [tag])
                     },
                     pasteFiles: { urls in
                         guard let imported = try? NativeAttachmentFiles.importFiles(urls),

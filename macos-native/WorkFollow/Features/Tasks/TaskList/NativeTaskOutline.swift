@@ -27,17 +27,22 @@ struct NativeTaskOutline: NSViewRepresentable {
     struct Row {
         let id: String
         let makeContent: () -> AnyView
+        /// 行高由 `TaskListMetrics.taskRowHeight` 给出（预览行 / 标签行各一档）。
+        var height: CGFloat = WFMetrics.rowHeight
         private var contentState: ComparisonValue?
         private var layoutState: ComparisonValue?
 
-        init<Content: View>(id: String, @ViewBuilder content: @escaping () -> Content) {
+        init<Content: View>(id: String, height: CGFloat = WFMetrics.rowHeight,
+                            @ViewBuilder content: @escaping () -> Content) {
             self.id = id
+            self.height = height
             makeContent = { AnyView(content()) }
         }
 
         init<State: Equatable, Layout: Equatable, Content: View>(id: String,
-            state: State, layout: Layout, @ViewBuilder content: @escaping () -> Content) {
-            self.init(id: id, content: content)
+            state: State, layout: Layout, height: CGFloat = WFMetrics.rowHeight,
+            @ViewBuilder content: @escaping () -> Content) {
+            self.init(id: id, height: height, content: content)
             contentState = ComparisonValue(state)
             layoutState = ComparisonValue(layout)
         }
@@ -292,6 +297,10 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
             items[index]
+        }
+
+        func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+            (item as? Item)?.row.height ?? WFMetrics.rowHeight
         }
 
         func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool { false }

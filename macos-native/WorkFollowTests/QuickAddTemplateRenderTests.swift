@@ -58,6 +58,7 @@ final class QuickAddTemplateRenderTests: XCTestCase {
         let id = try XCTUnwrap(TemplateApplier.apply(BuiltInTaskTemplates.all[0], to: workspace))
         XCTAssertEqual(workspace.selectedTaskID, id)
         let root = TaskInspectorShell(workspace: workspace, showBack: false)
+            .environmentObject(AppEnvironment())
             .frame(width: 880, height: 900)
             .environment(\.colorScheme, .light)
         let host = NSHostingView(rootView: root)

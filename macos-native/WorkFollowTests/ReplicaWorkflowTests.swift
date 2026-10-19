@@ -1,8 +1,31 @@
 import XCTest
+import Combine
 @testable import WorkFollow
 
 @MainActor
 final class ReplicaWorkflowTests: XCTestCase {
+    func testViewPreferencesInvalidateEnvironmentWithoutChangingTasks() {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("replica-view-preferences-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let environment = AppEnvironment(directory: directory)
+        let tasks = environment.taskWorkspace.allTasks
+        let revision = environment.taskWorkspace.revision
+        let key = "acceptance:\(UUID().uuidString)"
+        var invalidations = 0
+        let subscription = environment.objectWillChange.sink { invalidations += 1 }
+
+        environment.viewPreferences.setGrouping(.byPriority, for: key)
+        XCTAssertEqual(invalidations, 1, "A grouping menu change must redraw environment readers")
+        environment.viewPreferences.setViewMode(.kanban, for: key)
+        XCTAssertEqual(invalidations, 2, "A view-mode menu change must redraw immediately")
+        environment.viewPreferences.setHidesDetails(true, for: key)
+        XCTAssertEqual(invalidations, 3, "Card details must update without changing a task")
+        XCTAssertEqual(environment.taskWorkspace.allTasks, tasks)
+        XCTAssertEqual(environment.taskWorkspace.revision, revision)
+        withExtendedLifetime(subscription) {}
+    }
+
     func testAcceptanceClockKeepsTimeAdvancingFromFixtureDate() throws {
         var wall = Date(timeIntervalSince1970: 100)
         let clock = NativeAcceptanceConfiguration.clock(

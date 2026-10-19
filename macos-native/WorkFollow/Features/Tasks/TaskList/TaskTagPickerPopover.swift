@@ -17,7 +17,7 @@ struct TaskTagPickerPopover: View {
         _session = State(initialValue: TaskTagPickerSession(initialTags: initialTags))
     }
 
-    private var matchingTags: [String] { session.matchingTags(availableTags: workspace.tagNames) }
+    private var matchingTags: [String] { session.matchingTags(availableTags: workspace.orderedTags.map(\.name)) }
     private var creatableTags: [String] { session.creatableTags(availableTags: workspace.tagNames) }
 
     var body: some View {
@@ -46,13 +46,14 @@ struct TaskTagPickerPopover: View {
                     ForEach(matchingTags, id: \.self) { tag in
                         Button { session.toggle(tag) } label: {
                             HStack(spacing: WFSpace.md) {
-                                Image(systemName: "tag").foregroundStyle(WFColors.secondaryText)
+                                Image(systemName: "tag").foregroundStyle(workspace.tagColor(tag))
                                 Text(tag).frame(maxWidth: .infinity, alignment: .leading)
                                 if session.selectedTags.contains(tag) {
                                     Image(systemName: "checkmark").foregroundStyle(WFColors.accent)
                                 }
                             }
                             .padding(.horizontal, WFSpace.md).padding(.vertical, WFSpace.sm)
+                            .padding(.leading, session.query.isEmpty ? CGFloat(workspace.tagDepth(tag)) * 12 : 0)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -76,7 +77,7 @@ struct TaskTagPickerPopover: View {
             HStack(spacing: WFSpace.sm) {
                 Button("取消", action: onCancel).frame(maxWidth: .infinity)
                     .tagPickerRenderAnchor(.cancel)
-                Button("确定") { onApply(Array(session.selectedTags).sorted()) }
+                Button("确定") { onApply(session.orderedSelection) }
                     .buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
                     .tagPickerRenderAnchor(.confirm)
             }

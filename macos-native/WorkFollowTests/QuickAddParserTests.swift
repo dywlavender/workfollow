@@ -106,6 +106,32 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(result.recurrenceRule?.monthDay, 15)
     }
 
+    func testDateAndRecurrenceWordsInsideQuotedTagStayInItsName() {
+        let name = "明天 9点 每天"
+        let input = QuickAddComposition.replacingTrailingMarker(in: "跟进 #明", with: name)
+        let parsed = QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: [])
+        XCTAssertEqual(parsed.title, "跟进")
+        XCTAssertEqual(parsed.tags, [name])
+        XCTAssertNil(parsed.dueAt)
+        XCTAssertNil(parsed.reminderAt)
+        XCTAssertEqual(parsed.recurrence, .never)
+        XCTAssertEqual(parsed.tokens.map(\.kind), [.tag])
+    }
+
+    func testDismissedQuotedTagKeepsLiteralTextWithoutReactivatingItsDateWords() throws {
+        let input = QuickAddComposition.replacingTrailingMarker(in: "跟进 #明", with: "明天 9点") + "#工作"
+        let parsed = QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: [])
+        let token = try XCTUnwrap(parsed.tokens.first { $0.raw.hasPrefix("#\"") })
+        let dismissed = QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: [],
+                                             dismissedTokenIDs: [token.id])
+        XCTAssertEqual(dismissed.title, "跟进 " + token.raw)
+        XCTAssertEqual(dismissed.tags, ["工作"])
+        XCTAssertNil(dismissed.dueAt)
+        XCTAssertNil(dismissed.reminderAt)
+        XCTAssertEqual(dismissed.tokens.map(\.label), ["#工作"])
+        XCTAssertEqual(parsed.text(removing: token), dismissed.title)
+    }
+
     func testHalfHourRelativeTokenMeansThirtyMinutes() {
         let result = QuickAddParser.parse("半小时后提醒我", now: now,
                                          calendar: calendar, knownLists: ["收集箱"])

@@ -30,7 +30,10 @@ final class SQLitePersistenceTests: XCTestCase {
         let note = Note(id: UUID(), title: "笔记", document: NativeDocument(plainText: "正文"),
                         folder: "工作", linkedTaskIDs: [parent.id], updatedAt: now,
                         originalContentJson: "{\"rich\":true}")
-        let original = NativeWorkspaceSnapshot(tasks: [parent, child], notes: [note], taskLists: ["工作"], noteFolders: ["工作"])
+        let unusedTag = TaskTag(id: UUID(), name: "未使用的标签", colorARGB: 0xFF123456,
+                                sortOrder: 3, parentID: nil)
+        let original = NativeWorkspaceSnapshot(tasks: [parent, child], notes: [note], taskLists: ["工作"],
+                                               taskTags: [unusedTag], noteFolders: ["工作"])
         let bytes = try JSONEncoder().encode(original)
         let legacy = directory.appendingPathComponent("workspace.json")
         try bytes.write(to: legacy)
@@ -39,6 +42,7 @@ final class SQLitePersistenceTests: XCTestCase {
         XCTAssertEqual(restored.tasks, original.tasks)
         XCTAssertEqual(restored.notes, original.notes)
         XCTAssertEqual(restored.taskLists, original.taskLists)
+        XCTAssertEqual(restored.taskTags, original.taskTags)
         XCTAssertEqual(try Data(contentsOf: legacy), bytes)
 
         var changed = parent; changed.title = "数据库中的新标题"
@@ -59,6 +63,81 @@ final class SQLitePersistenceTests: XCTestCase {
         XCTAssertThrowsError(try NativePreviewRepository(directory: directory).load())
         XCTAssertEqual(try Data(contentsOf: file), bytes)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspace.sqlite").path))
+    }
+
+    func testPreviewSnapshotWithoutTagCatalogStillDecodes() throws {
+        let data = Data(#"{"version":1,"tasks":[],"notes":[]}"#.utf8)
+        let snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: data)
+        XCTAssertNil(snapshot.taskTags)
+    }
+
+    func testTagCatalogPersistsThroughDeferredLoadMetadataChangesAndBackupRestore() throws {
+        let root = TaskTag(id: UUID(), name: "项目", colorARGB: 0xFF123456,
+                           sortOrder: 4, parentID: nil)
+        let unused = TaskTag(id: UUID(), name: "尚未使用", colorARGB: nil,
+                             sortOrder: 8, parentID: root.id)
+        var tagged = task("带标签的任务")
+        tagged.tags = [root.name]
+        tagged.tagReferences = [TaskTagReference(id: root.id, name: root.name)]
+        tagged.document = NativeDocument(plainText: "目录变化不改正文")
+        let repository = NativePreviewRepository(directory: directory)
+        try repository.save(NativeWorkspaceSnapshot(tasks: [tagged], notes: [], taskTags: [root, unused]))
+        XCTAssertEqual(try repository.loadDeferred()?.taskTags, [root, unused])
+
+        let db = try SQLiteDatabase(url: directory.appendingPathComponent("workspace.sqlite"))
+        try db.execute("CREATE TABLE tag_body_audit(id TEXT)")
+        try db.execute("CREATE TRIGGER tag_body_audit AFTER UPDATE ON task_documents BEGIN INSERT INTO tag_body_audit VALUES (new.id); END")
+        var renamed = unused
+        renamed.name = "保留的空标签"
+        renamed.colorARGB = 0xFF445566
+        renamed.sortOrder = 2
+        var batch = SQLiteWorkspaceRepository.Batch()
+        batch.metadata = NativeWorkspaceSnapshot(tasks: [], notes: [], taskTags: [root, renamed])
+        try repository.apply(batch)
+        XCTAssertEqual(try repository.load()?.taskTags, [root, renamed])
+        XCTAssertEqual(try repository.load()?.tasks, [tagged])
+        XCTAssertEqual(try db.rows("SELECT id FROM tag_body_audit").count, 0)
+
+        let backup = try XCTUnwrap(repository.backupNow(now: now))
+        XCTAssertEqual(try SQLiteWorkspaceRepository(directory: directory).readBackup(at: backup).taskTags,
+                       [root, renamed])
+        batch.metadata = NativeWorkspaceSnapshot(tasks: [], notes: [], taskTags: [])
+        try repository.apply(batch)
+        try repository.restoreBackup(at: backup, now: now.addingTimeInterval(60))
+        XCTAssertEqual(try repository.load()?.taskTags, [root, renamed])
+        XCTAssertEqual(try repository.load()?.tasks, [tagged])
+    }
+
+    func testApplicationPersistsHydratedLegacyTagReferencesBeforeAnyTaskEdit() throws {
+        let existingTagID = UUID()
+        var legacyTask = task("旧快照中的任务")
+        legacyTask.tags = ["已有身份", "仅有名称"]
+        legacyTask.tagReferences = [TaskTagReference(id: existingTagID, name: "已有身份")]
+        legacyTask.document = NativeDocument(plainText: "启动补目录时保持正文延迟读取")
+        let legacy = NativeWorkspaceSnapshot(tasks: [legacyTask], notes: [])
+        try JSONEncoder().encode(legacy).write(to: directory.appendingPathComponent("workspace.json"))
+
+        let environment = AppEnvironment(clock: { self.now }, directory: directory)
+        let hydrated = try XCTUnwrap(environment.taskWorkspace.task(for: legacyTask.id))
+        let newTag = try XCTUnwrap(environment.taskWorkspace.taskTags.first { $0.name == "仅有名称" })
+        let references = [TaskTagReference(id: existingTagID, name: "已有身份"),
+                          TaskTagReference(id: newTag.id, name: newTag.name)]
+        XCTAssertEqual(hydrated.tagReferences, references)
+        XCTAssertEqual(environment.documentReadCount, 0)
+        let saved = expectation(description: "hydrated tag directory committed")
+        environment.flush { error in XCTAssertNil(error); saved.fulfill() }
+        wait(for: [saved], timeout: 5)
+
+        let repository = NativePreviewRepository(directory: directory)
+        let snapshot = try XCTUnwrap(try repository.load())
+        XCTAssertEqual(snapshot.tasks.first?.tagReferences, references)
+        XCTAssertEqual(snapshot.taskTags?.first { $0.name == "已有身份" }?.id, existingTagID)
+        XCTAssertEqual(snapshot.taskTags?.first { $0.name == newTag.name }?.id, newTag.id)
+        XCTAssertEqual(snapshot.tasks.first?.document, legacyTask.document)
+        XCTAssertEqual(environment.documentReadCount, 0)
+        let restarted = TaskWorkspaceModel(clock: { self.now }, initialTasks: snapshot.tasks,
+                                          initialTags: snapshot.taskTags)
+        XCTAssertEqual(restarted.task(for: legacyTask.id)?.tagReferences, references)
     }
 
     func testRepeatedTitleChangesWriteOneTaskAndDoNotRewriteItsDocument() throws {

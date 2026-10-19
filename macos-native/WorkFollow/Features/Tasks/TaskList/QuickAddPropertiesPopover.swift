@@ -25,6 +25,13 @@ struct QuickAddPropertiesOverrides: Equatable {
     var priority: TaskPriority?
     var listName: String?
     var tags: [String]?
+
+    static func renamedTags(_ tags: [String]?, notification: Notification) -> [String]? {
+        guard notification.userInfo?["kind"] as? String == TaskOrganizationRename.Kind.tag.rawValue,
+              let old = notification.userInfo?["old"] as? String,
+              let new = notification.userInfo?["new"] as? String else { return tags }
+        return tags.map { $0.map { $0 == old ? new : $0 } }
+    }
 }
 
 struct QuickAddPropertiesPopover: View {

@@ -23,4 +23,17 @@ enum TaskListMetrics {
     static let countdownRowHeight: CGFloat = 36
     static let dragMarkerHeight: CGFloat = 1
     static let dragPreviewMaxWidth: CGFloat = 220
+
+    /// 任务行里最多平铺几个标签胶囊（其余折成「+N」），避免行被撑爆。
+    static let maxVisibleTags = 3
+
+    /// 任务行高度：标题行固定，预览行与标签行各占一档（滴答的行会随之变高）。
+    /// 行高必须由这里给出确定值——`NSOutlineView` 的 `heightOfRowByItem` 不能反查
+    /// SwiftUI 的 fittingSize（cell 高度与内容高度会互相依赖）。
+    static func taskRowHeight(hasPreview: Bool, hasTags: Bool) -> CGFloat {
+        var content: CGFloat = 18                     // 标题行
+        if hasPreview { content += 1 + 17 }           // 预览行（spacing + 行高）
+        if hasTags { content += 4 + 22 }              // 标签胶囊行
+        return max(WFMetrics.rowHeight, content + WFMetrics.rowVerticalPadding * 2)
+    }
 }

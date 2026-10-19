@@ -66,11 +66,13 @@ struct TaskRowTitleField: NSViewRepresentable {
                 }
             }
             super.mouseDown(with: event)
+            styleEditorBackground()
             if let editor = currentEditor() as? NSTextView { selection = editor.selectedRange() }
             DispatchQueue.main.async { [weak self] in self?.restoreEditingFocus() }
         }
         func restoreEditingFocus() {
             guard editingSession, let window else { return }
+            styleEditorBackground()
             if window.firstResponder === currentEditor(), currentEditor() != nil { return }
             selectText(nil)
             if let editor = currentEditor() as? NSTextView {
@@ -78,6 +80,15 @@ struct TaskRowTitleField: NSViewRepresentable {
                 editor.setSelectedRange(NSRange(location: min(selection.location, count),
                                                length: min(selection.length, max(0, count - selection.location))))
             }
+        }
+
+        /// 行内编辑的 field editor 默认是白底，会把选中行的底色挖出一块白；
+        /// 改成透明，编辑时沿用行本身的选中色（对齐滴答）。
+        func styleEditorBackground() {
+            guard let editor = currentEditor() as? NSTextView else { return }
+            editor.drawsBackground = false
+            editor.backgroundColor = .clear
+            editor.textContainerInset = .zero
         }
         func stopObserving() {
             if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }

@@ -364,14 +364,18 @@ private struct NotesNavigationSection: View {
 /// only when the shell wires a FilterStore through `NavigationColumnView.filterStore`.
 /// Clicking an entry navigates to 所有任务 and activates it; clicking the active
 /// entry again cancels the filter. Editing/deleting lives in the row's context menu.
+private struct FilterEditorRequest: Identifiable {
+    let id = UUID()
+    let filter: SavedFilter?
+}
+
 private struct TaskFiltersSectionView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var filterStore: FilterStore
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
     @EnvironmentObject private var environment: AppEnvironment
-    @State private var showEditor = false
-    @State private var editingFilter: SavedFilter?
+    @State private var editorRequest: FilterEditorRequest?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -380,8 +384,7 @@ private struct TaskFiltersSectionView: View {
                 filterRow(filter)
             }
             Button {
-                editingFilter = nil
-                showEditor = true
+                editorRequest = FilterEditorRequest(filter: nil)
             } label: {
                 HStack(spacing: 0) {
                     Image(systemName: "plus").font(.system(size: 13)).frame(width: 12)
@@ -397,9 +400,9 @@ private struct TaskFiltersSectionView: View {
         }
         .buttonStyle(.plain)
         .font(WFType.navigation)
-        .sheet(isPresented: $showEditor) {
+        .sheet(item: $editorRequest) { request in
             FilterEditorView(store: filterStore, workspace: workspace,
-                             initial: editingFilter) { showEditor = false }
+                             initial: request.filter) { editorRequest = nil }
         }
     }
 
@@ -440,8 +443,7 @@ private struct TaskFiltersSectionView: View {
         }
         .contextMenu {
             Button("编辑") {
-                editingFilter = filter
-                showEditor = true
+                editorRequest = FilterEditorRequest(filter: filter)
             }
             Button("删除…") {
                 if TaskNamePrompt.confirm("删除过滤器“\(filter.name)”？",

@@ -77,7 +77,7 @@ final class AppEnvironment: ObservableObject {
             completionSoundEnabled: preferences.object(forKey: "completionSoundEnabled") as? Bool ?? true,
             playSound: { Self.playFeedbackSound($0) })
         self.feedback = feedback
-        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta, initialListFolders: snapshot?.taskListFolders, initialListSections: snapshot?.taskListSections)
+        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta, initialListFolders: snapshot?.taskListFolders, initialListSections: snapshot?.taskListSections, initialTags: snapshot?.taskTags)
         StickyNoteWindowController.shared.attach(workspace: taskWorkspace)
         notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [],
                                              folders: snapshot?.noteFolders ?? [],
@@ -127,6 +127,11 @@ final class AppEnvironment: ObservableObject {
         for publisher in [reminders.objectWillChange.eraseToAnyPublisher(), systemCalendar.objectWillChange.eraseToAnyPublisher()] {
             publisher.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &subscriptions)
         }
+        // Views read these nested preferences through their environment object.
+        // Forward invalidation so menu changes redraw without a task mutation.
+        viewPreferences.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &subscriptions)
         repository.onDocumentFailure = { [weak self] error in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -227,7 +232,19 @@ final class AppEnvironment: ObservableObject {
         if !loadFailed {
             reminders.reconcile(taskWorkspace.tasksInActiveLists)
             syncCalendarNow()
-            if snapshot == nil, let initial = makePreviewSnapshot() { persistence.schedule(initial) }
+            if let snapshot {
+                // Hydration runs before change listeners are installed. Persist
+                // its stable references with the directory on the first load.
+                let hydration = TaskChangeSet(before: snapshot.tasks, after: taskWorkspace.allTasks)
+                if !hydration.entries.isEmpty || hydration.order != nil {
+                    persistence.schedule(changes: hydration)
+                }
+                if snapshot.taskTags != taskWorkspace.taskTags || !hydration.entries.isEmpty {
+                    flushMetadata()
+                }
+            } else if let initial = makePreviewSnapshot() {
+                persistence.schedule(initial)
+            }
         }
         for name in [NSWorkspace.didWakeNotification] {
             NSWorkspace.shared.notificationCenter.publisher(for: name).sink { [weak self] _ in
@@ -310,6 +327,7 @@ final class AppEnvironment: ObservableObject {
         let metadata = NativeWorkspaceSnapshot(tasks: [], notes: [],
             taskLists: taskWorkspace.listNames, taskListMeta: taskWorkspace.listMetas,
             taskListFolders: taskWorkspace.listFolders, taskListSections: taskWorkspace.listSections,
+            taskTags: taskWorkspace.taskTags,
             noteFolders: notesWorkspace.folders,
             noteFolderMetadata: notesWorkspace.folderMetadataForPersistence)
         persistence.schedule(metadata: metadata)
@@ -323,6 +341,7 @@ final class AppEnvironment: ObservableObject {
                                        taskListMeta: taskWorkspace.listMetas,
                                        taskListFolders: taskWorkspace.listFolders,
                                        taskListSections: taskWorkspace.listSections,
+                                       taskTags: taskWorkspace.taskTags,
                                        noteFolders: notesWorkspace.folders,
                                        noteFolderMetadata: notesWorkspace.folderMetadataForPersistence)
     }

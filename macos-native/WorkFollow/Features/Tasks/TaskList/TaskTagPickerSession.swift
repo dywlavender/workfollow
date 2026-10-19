@@ -3,6 +3,9 @@ import Foundation
 struct TaskTagPickerSession {
     var query: String = ""
     private(set) var selectedTags: Set<String>
+    private var selectionOrder: [String]
+
+    var orderedSelection: [String] { selectionOrder.filter { selectedTags.contains($0) } }
 
     /// Tags owned by this draft stay in its catalog even when deselected.
     private var localCatalog: [String]
@@ -10,11 +13,12 @@ struct TaskTagPickerSession {
     init(initialTags: [String]) {
         let initial = Self.uniqueTags(initialTags)
         selectedTags = Set(initial)
+        selectionOrder = initial
         localCatalog = initial
     }
 
     func allTags(availableTags: [String]) -> [String] {
-        Self.uniqueTags(availableTags + localCatalog).sorted()
+        Self.uniqueTags(availableTags + localCatalog)
     }
 
     func matchingTags(availableTags: [String]) -> [String] {
@@ -38,6 +42,8 @@ struct TaskTagPickerSession {
         remember(tag)
         if !selectedTags.insert(tag).inserted {
             selectedTags.remove(tag)
+        } else if !selectionOrder.contains(tag) {
+            selectionOrder.append(tag)
         }
     }
 
@@ -45,6 +51,7 @@ struct TaskTagPickerSession {
         let created = creatableTags(availableTags: availableTags)
         for tag in created {
             remember(tag)
+            if !selectionOrder.contains(tag) { selectionOrder.append(tag) }
         }
         selectedTags.formUnion(created)
         query = ""

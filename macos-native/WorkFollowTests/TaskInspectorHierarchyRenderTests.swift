@@ -11,6 +11,7 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
         let child = workspace.createChild(parent, title: "归纳高频问题").taskID!
         workspace.select(child)
         let host = NSHostingView(rootView: TaskInspectorShell(workspace: workspace, showBack: false)
+            .environmentObject(AppEnvironment())
             .frame(width: 320, height: 600))
         let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 320, height: 600),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -149,6 +150,7 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
     private func render(_ workspace: TaskWorkspaceModel, name: String) throws -> [InspectorRenderAnchor: CGRect] {
         var frames: [InspectorRenderAnchor: CGRect] = [:]
         let root = TaskInspectorShell(workspace: workspace, showBack: false)
+            .environmentObject(AppEnvironment())
             .frame(width: 880, height: 900)
             .environment(\.colorScheme, .light)
             .coordinateSpace(name: "inspector-render")

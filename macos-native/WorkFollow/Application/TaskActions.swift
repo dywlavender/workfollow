@@ -462,9 +462,9 @@ final class TaskActions {
         let values = tags.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "#")) }
             .filter { !$0.isEmpty && seen.insert($0).inserted }
         return edit(id) { task in
-            task.tags = values
             task.tagReferences = tagReferences(values)
-            task.series?.template.tags = values
+            task.tags = task.tagReferences?.map(\.name) ?? values
+            task.series?.template.tags = task.tags
             task.series?.template.tagReferences = task.tagReferences
         }
     }
@@ -554,8 +554,13 @@ final class TaskActions {
                     snapshot[index].schedule = schedule
                 }
                 if let tags {
-                    snapshot[index].tags = Array(NSOrderedSet(array: tags)) as? [String] ?? tags
-                    snapshot[index].tagReferences = tagReferences(snapshot[index].tags)
+                    let names = Array(NSOrderedSet(array: tags)) as? [String] ?? tags
+                    let references = tagReferences(names)
+                    let resolvedNames = references.map(\.name)
+                    snapshot[index].tagReferences = references
+                    snapshot[index].tags = resolvedNames
+                    snapshot[index].series?.template.tags = resolvedNames
+                    snapshot[index].series?.template.tagReferences = references
                 }
             }
             if let list, snapshot[index].id == id || snapshot[index].parentID == id {
@@ -636,9 +641,18 @@ final class TaskActions {
     }
 
     func tagReferences(_ names: [String]) -> [TaskTagReference] {
-        let references = store.tasks.flatMap { $0.tagReferences ?? [] }
-        return names.map { name in
-            let id = references.first(where: { $0.name == name })?.id ?? knownTagIDs[name] ?? UUID()
+        let references = store.tasks.flatMap { ($0.tagReferences ?? []) + ($0.series?.template.tagReferences ?? []) }
+        return names.map { raw in
+            let name = TaskTag.normalizedName(raw) ?? raw
+            let previous = references.first { $0.name == name }
+            if let tag = store.tag(named: name) ?? previous.flatMap({ store.tag($0.id) }) {
+                knownTagIDs[tag.name] = tag.id
+                return TaskTagReference(id: tag.id, name: tag.name)
+            }
+            let cached = knownTagIDs[name].flatMap { id in
+                store.tag(id) == nil ? id : nil
+            }
+            let id = previous?.id ?? cached ?? UUID()
             knownTagIDs[name] = id
             return TaskTagReference(id: id, name: name)
         }
@@ -650,7 +664,13 @@ final class TaskActions {
         let values = store.tasks.map { task -> Task in
             var value = task
             value.listID = task.listID ?? listReferenceID(task.list.name)
-            value.tagReferences = task.tagReferences ?? tagReferences(task.tags)
+            value.tagReferences = tagReferences(task.tags)
+            value.tags = value.tagReferences?.map(\.name) ?? task.tags
+            if var series = value.series {
+                series.template.tagReferences = tagReferences(series.template.tags)
+                series.template.tags = series.template.tagReferences?.map(\.name) ?? series.template.tags
+                value.series = series
+            }
             return value
         }
         store.commit(values, undoPolicy: .skip, listMetas: metas)
@@ -998,24 +1018,166 @@ final class TaskActions {
         }, lists: store.lists.filter { $0 != name })
     }
 
-    func renameTag(_ old: String, to raw: String?) {
-        let name = raw?.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        store.commit(store.tasks.map { task in
+    @discardableResult
+    func createTag(_ raw: String, colorARGB: UInt32? = nil, parentID: UUID? = nil) -> UUID? {
+        guard let name = availableTagName(raw, excluding: nil), canParentTag(nil, parentID: parentID) else { return nil }
+        let id = tagReferences([name])[0].id
+        let order = (store.tags.filter { $0.parentID == parentID }.map(\.sortOrder).max() ?? -1) + 1
+        store.commit(store.tasks, tags: store.tags + [TaskTag(id: id, name: name, colorARGB: colorARGB,
+                                                           sortOrder: order, parentID: parentID)])
+        return id
+    }
+
+    /// Validate the complete editor draft before reusing the individual actions.
+    @discardableResult
+    func saveTag(_ id: UUID? = nil, name raw: String, colorARGB: UInt32?, parentID: UUID?) -> UUID? {
+        guard let name = availableTagName(raw, excluding: id), canParentTag(id, parentID: parentID) else { return nil }
+        if let id, store.tag(id) == nil { return nil }
+        var savedID = id
+        store.transaction {
+            if let id {
+                _ = renameTag(id, to: name)
+                _ = setTagColor(id, colorARGB: colorARGB)
+                _ = reparentTag(id, parentID: parentID)
+            } else {
+                savedID = createTag(name, colorARGB: colorARGB, parentID: parentID)
+            }
+        }
+        return savedID
+    }
+
+    @discardableResult
+    func renameTag(_ id: UUID, to raw: String) -> Bool {
+        guard let tag = store.tag(id), let name = availableTagName(raw, excluding: id), name != tag.name else { return false }
+        var directory = store.tags
+        directory[directory.firstIndex(where: { $0.id == id })!].name = name
+        func renamed(_ references: [TaskTagReference]) -> [TaskTagReference] {
+            references.map { reference in
+                reference.id == id || reference.name == tag.name
+                    ? TaskTagReference(id: id, name: name) : reference
+            }
+        }
+        let values = store.tasks.map { task -> Task in
             var value = task
-            guard value.tags.contains(old) else { return value }
-            value.tags.removeAll { $0 == old }
-            if let name, !name.isEmpty, !value.tags.contains(name) { value.tags.append(name) }
-            if let index = value.tagReferences?.firstIndex(where: { $0.name == old }) {
-                if let name, !name.isEmpty { value.tagReferences?[index].name = name }
-                else { value.tagReferences?.remove(at: index) }
+            if task.tags.contains(tag.name) || task.tagReferences?.contains(where: { $0.id == id }) == true {
+                value.tags = task.tags.map { $0 == tag.name ? name : $0 }
+                value.tagReferences = renamed(task.tagReferences ?? tagReferences(task.tags))
             }
-            if let series = value.series {
-                value.series?.template.tags = series.template.tags.map { $0 == old ? (name ?? "") : $0 }.filter { !$0.isEmpty }
-                value.series?.template.tagReferences = value.tagReferences
+            if var series = value.series,
+               series.template.tags.contains(tag.name) || series.template.tagReferences?.contains(where: { $0.id == id }) == true {
+                series.template.tagReferences = renamed(series.template.tagReferences ?? tagReferences(series.template.tags))
+                series.template.tags = series.template.tags.map { $0 == tag.name ? name : $0 }
+                value.series = series
             }
-            value.updatedAt = clock()
+            if value != task { value.updatedAt = clock() }
             return value
-        })
+        }
+        knownTagIDs.removeValue(forKey: tag.name)
+        knownTagIDs[name] = id
+        store.commit(values, tags: directory)
+        return true
+    }
+
+    @discardableResult
+    func renameTag(_ old: String, to raw: String?) -> Bool {
+        guard let tag = store.tag(named: TaskTag.normalizedName(old) ?? old) else { return false }
+        if let raw { return renameTag(tag.id, to: raw) }
+        return removeTag(tag.id)
+    }
+
+    @discardableResult
+    func setTagColor(_ id: UUID, colorARGB: UInt32?) -> Bool {
+        guard let index = store.tags.firstIndex(where: { $0.id == id }),
+              store.tags[index].colorARGB != colorARGB else { return false }
+        var directory = store.tags
+        directory[index].colorARGB = colorARGB
+        store.commit(store.tasks, tags: directory)
+        return true
+    }
+
+    @discardableResult
+    func reparentTag(_ id: UUID, parentID: UUID?) -> Bool {
+        guard let tag = store.tag(id), tag.parentID != parentID, canParentTag(id, parentID: parentID) else { return false }
+        let previousSiblings = tagSiblingIDs(parentID: tag.parentID).filter { $0 != id }
+        let nextSiblings = tagSiblingIDs(parentID: parentID) + [id]
+        var directory = store.tags
+        directory[directory.firstIndex(where: { $0.id == id })!].parentID = parentID
+        directory = assigningTagOrder(directory, siblingIDs: previousSiblings)
+        directory = assigningTagOrder(directory, siblingIDs: nextSiblings)
+        store.commit(store.tasks, tags: directory)
+        return true
+    }
+
+    @discardableResult
+    func reorderTag(_ id: UUID, before targetID: UUID?) -> Bool {
+        guard let tag = store.tag(id), targetID != id else { return false }
+        if let targetID {
+            guard let target = store.tag(targetID), target.parentID == tag.parentID else { return false }
+        }
+        let previous = tagSiblingIDs(parentID: tag.parentID)
+        var siblings = previous.filter { $0 != id }
+        if let targetID, let index = siblings.firstIndex(of: targetID) { siblings.insert(id, at: index) }
+        else { siblings.append(id) }
+        guard siblings != previous else { return false }
+        store.commit(store.tasks, tags: assigningTagOrder(store.tags, siblingIDs: siblings))
+        return true
+    }
+
+    /// Direct children take the deleted tag's place under its own parent.
+    @discardableResult
+    func removeTag(_ id: UUID) -> Bool {
+        guard let tag = store.tag(id) else { return false }
+        let children = tagSiblingIDs(parentID: id)
+        let siblings = tagSiblingIDs(parentID: tag.parentID).flatMap { $0 == id ? children : [$0] }
+        var directory = store.tags.filter { $0.id != id }
+        for index in directory.indices where directory[index].parentID == id {
+            directory[index].parentID = tag.parentID
+        }
+        directory = assigningTagOrder(directory, siblingIDs: siblings)
+        let values = store.tasks.map { task -> Task in
+            var value = task
+            value.tags.removeAll { $0 == tag.name }
+            value.tagReferences?.removeAll { $0.id == id || $0.name == tag.name }
+            if var series = value.series {
+                series.template.tags.removeAll { $0 == tag.name }
+                series.template.tagReferences?.removeAll { $0.id == id || $0.name == tag.name }
+                value.series = series
+            }
+            if value != task { value.updatedAt = clock() }
+            return value
+        }
+        knownTagIDs.removeValue(forKey: tag.name)
+        store.commit(values, tags: directory)
+        return true
+    }
+
+    private func availableTagName(_ raw: String, excluding id: UUID?) -> String? {
+        guard let name = TaskTag.normalizedName(raw),
+              !store.tags.contains(where: { $0.id != id && $0.name == name }) else { return nil }
+        return name
+    }
+
+    private func canParentTag(_ id: UUID?, parentID: UUID?) -> Bool {
+        var ancestor = parentID
+        var visited = Set<UUID>()
+        while let current = ancestor {
+            guard current != id, visited.insert(current).inserted, let parent = store.tag(current) else { return false }
+            ancestor = parent.parentID
+        }
+        return true
+    }
+
+    private func tagSiblingIDs(parentID: UUID?) -> [UUID] {
+        TaskTag.ordered(store.tags).filter { $0.parentID == parentID }.map(\.id)
+    }
+
+    private func assigningTagOrder(_ tags: [TaskTag], siblingIDs: [UUID]) -> [TaskTag] {
+        let positions = Dictionary(uniqueKeysWithValues: siblingIDs.enumerated().map { ($0.element, $0.offset) })
+        return tags.map { tag in
+            var value = tag
+            if let position = positions[tag.id] { value.sortOrder = position }
+            return value
+        }
     }
 
     func batch(_ ids: Set<UUID>, operation: TaskBatchOperation) {
@@ -1086,10 +1248,12 @@ final class TaskActions {
         let title = template.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, !store.archivedListNames.contains(list.name) else { return .failure(.invalidList) }
         let now = clock()
-        let parent = Task(id: UUID(), title: title, document: template.document,
+        var parent = Task(id: UUID(), title: title, document: template.document,
                           tags: template.tags, list: list, priority: template.priority ?? .none,
                           schedule: TaskSchedule(dueAt: template.schedule?.date(from: now, calendar: calendar)),
                           parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
+        parent.tagReferences = tagReferences(parent.tags)
+        parent.tags = parent.tagReferences?.map(\.name) ?? parent.tags
         let children = template.childTitles.enumerated().map { index, title in
             Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                  list: list, priority: .none, schedule: TaskSchedule(),
@@ -1110,7 +1274,7 @@ final class TaskActions {
 
         let now = clock()
         func copy(_ source: Task, parent: UUID?, childOrder: Int) -> Task {
-            Task(id: UUID(), title: source.title, document: source.document,
+            var value = Task(id: UUID(), title: source.title, document: source.document,
                  tags: source.tags, recurrence: source.recurrence,
                  recurrenceRule: source.recurrenceRule, reminderAt: source.reminderAt,
                  reminderOffsets: source.reminderOffsets, attachments: source.attachments,
@@ -1119,6 +1283,8 @@ final class TaskActions {
                  createdAt: now, updatedAt: now, completedAt: nil, deletedAt: nil,
                  isPinned: false, abandonedAt: nil, skippedAt: nil,
                  convertedNoteID: nil, sourceNoteID: source.sourceNoteID)
+            value.tagReferences = source.tagReferences
+            return value
         }
 
         let childOrder: Int

@@ -97,9 +97,20 @@ enum QuickAddComposition {
         let text = NSMutableString(string: input)
         let symbol = marker.kind == .tag ? "#" : "@"
         let suffixSpace = NSMaxRange(marker.range) == text.length ? " " : ""
-        let replacement = "\(symbol)\(name)" + suffixSpace
+        let replacement = symbol + encodedMarkerName(name) + suffixSpace
         text.replaceCharacters(in: marker.range, with: replacement)
         return (text as String, NSRange(location: marker.range.location + (replacement as NSString).length, length: 0))
+    }
+
+    /// Quoted markers carry a complete directory name through smart parsing.
+    /// JSON string escaping also keeps quotes and backslashes unambiguous.
+    static func encodedMarkerName(_ name: String) -> String {
+        let separators = CharacterSet.whitespacesAndNewlines
+            .union(CharacterSet(charactersIn: "#@，,。;；！!\"\\"))
+        guard name.rangeOfCharacter(from: separators) != nil,
+              let data = try? JSONEncoder().encode(name),
+              let quoted = String(data: data, encoding: .utf8) else { return name }
+        return quoted
     }
 }
 

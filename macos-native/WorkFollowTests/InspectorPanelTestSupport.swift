@@ -47,7 +47,7 @@ enum InspectorPanelTestSupport {
                     }
                     .onPreferenceChange(TaskTagPickerFrames.self) { probe.tags = $0 })
             }))
-        if let environment { root = AnyView(root.environmentObject(environment)) }
+        root = AnyView(root.environmentObject(environment ?? AppEnvironment()))
         let host = NSHostingView(rootView: root)
         probes[ObjectIdentifier(host)] = probe
         return host

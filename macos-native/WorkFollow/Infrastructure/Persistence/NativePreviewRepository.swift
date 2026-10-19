@@ -11,6 +11,8 @@ struct NativeWorkspaceSnapshot: Codable {
     var taskListFolders: [TaskListFolder]? = nil
     /// 清单内自定义分组（滴答第三级：清单 → 分组 → 任务）。
     var taskListSections: [TaskListSection]? = nil
+    /// 独立标签目录：旧快照缺键时由任务引用补齐，空标签也独立保留。
+    var taskTags: [TaskTag]? = nil
     var noteFolders: [String]? = nil
     /// Full stable folder records; additive so older preview snapshots still decode.
     var noteFolderMetadata: [NoteFolderMeta]? = nil

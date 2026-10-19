@@ -299,6 +299,19 @@ enum QuickAddParser {
             return nil
         }
 
+        // The full quoted marker starts before any date, clock or priority
+        // text inside its name, so overlap resolution keeps that text literal.
+        append(#"([#@])("(?:[^"\\]|\\.)*")"#) { match in
+            guard let symbol = capture(match, 1), let quoted = capture(match, 2),
+                  let name = try? JSONDecoder().decode(String.self, from: Data(quoted.utf8)),
+                  !name.isEmpty else { return nil }
+            if symbol == "#" {
+                return Candidate(token: token(match, kind: .tag, label: "#\(name)"), tag: name)
+            }
+            let known = knownLists.contains(name)
+            return Candidate(token: token(match, kind: .list, label: "@\(name)", retainsInTitle: !known),
+                             list: known ? name : nil)
+        }
         append("#([^\\s#@，,。;；！!]+)") { match in
             guard let name = capture(match, 1), !name.isEmpty else { return nil }
             return Candidate(token: token(match, kind: .tag, label: "#\(name)"), tag: name)

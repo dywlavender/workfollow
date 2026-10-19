@@ -131,6 +131,8 @@ struct MigrationBundle: Equatable {
     /// 清单文件夹名（滴答第一级：文件夹 → 清单）。**空文件夹也要活下来**，故单独存名字表；
     /// 键名是本机格式自有（滴答自身导出的键名未核实）。旧包缺键 → 空数组。
     let listFolders: [String]
+    /// 原生独立标签目录；旧迁移包缺键时从任务标签补齐。
+    let taskTags: [TaskTag]
     let folders: [MigrationFolderRecord]
     let tasks: [MigrationTaskRecord]
     let notes: [MigrationNoteRecord]
@@ -201,6 +203,7 @@ enum MigrationSnapshot {
             exportedAt: nullableString(object["exportedAt"]),
             lists: try records(object["lists"], listRecord),
             listFolders: (object["listFolders"] as? [Any])?.compactMap { nullableString($0) } ?? [],
+            taskTags: try records(object["taskTags"], taskTagRecord),
             folders: try records(object["folders"], folderRecord),
             tasks: try records(object["tasks"], taskRecord),
             notes: try records(object["notes"], noteRecord),
@@ -231,6 +234,14 @@ enum MigrationSnapshot {
             createdAt: nullableString(json["createdAt"]),
             updatedAt: nullableString(json["updatedAt"])
         )
+    }
+
+    private static func taskTagRecord(_ json: [String: Any]) throws -> TaskTag {
+        TaskTag(id: uuid(forRawID: try requiredString(json, "id")),
+                name: try requiredString(json, "name"),
+                colorARGB: optionalInt(json["colorARGB"]).flatMap { UInt32(exactly: $0) },
+                sortOrder: intValue(json["sortOrder"]),
+                parentID: nullableString(json["parentID"] ?? json["parentId"]).map(uuid(forRawID:)))
     }
 
     private static func subtaskRecord(_ json: [String: Any]) throws -> MigrationSubtaskRecord {
@@ -535,13 +546,21 @@ enum MigrationSnapshot {
         let listMetas = normalizedListMetas(orderedNames, metadata: listMetaByName)
         let orderedFolderRecords = normalizedNoteFolderMetadata(folderRecords)
         let savedFolderNames = uniqueFolderNames((local.noteFolders ?? []) + orderedFolderRecords.map(\.name))
+        let localTags = TaskTag.reconciled(local.taskTags ?? [], tasks: local.tasks)
+        let tagMerge = mergedTaskTags(bundle.taskTags, into: localTags)
+        let importedWithAliases = resolvingTagReferences(importedTasks + legacyChildren,
+                                                         directory: tagMerge.tags,
+                                                         aliases: tagMerge.aliases)
+        let taskTags = TaskTag.reconciled(tagMerge.tags, tasks: importedWithAliases + local.tasks)
+        let importedWithReferences = resolvingTagReferences(importedWithAliases, directory: taskTags)
         let snapshot = NativeWorkspaceSnapshot(
-            tasks: importedTasks + legacyChildren + local.tasks,
+            tasks: importedWithReferences + local.tasks,
             notes: importedNotes + local.notes,
             taskLists: orderedNames,
             taskListMeta: listMetas,
             taskListFolders: listFolderEntities(bundle.listFolders, metas: listMetas,
                                                 local: local.taskListFolders ?? []),
+            taskTags: taskTags,
             noteFolders: savedFolderNames,
             noteFolderMetadata: orderedFolderRecords)
         summary.importedTasks = importedTasks.count + legacyChildren.count
@@ -600,16 +619,65 @@ enum MigrationSnapshot {
 
         let orderedNames = orderedListNames(lists, metadata: listMetaByName)
         let listMetas = normalizedListMetas(orderedNames, metadata: listMetaByName)
-        let snapshot = NativeWorkspaceSnapshot(tasks: tasks, notes: notes,
+        let taskTags = TaskTag.reconciled(bundle.taskTags, tasks: tasks)
+        let snapshot = NativeWorkspaceSnapshot(tasks: resolvingTagReferences(tasks, directory: taskTags), notes: notes,
                                                taskLists: orderedNames, taskListMeta: listMetas,
                                                taskListFolders: listFolderEntities(bundle.listFolders,
                                                                                    metas: listMetas),
+                                               taskTags: taskTags,
                                                noteFolders: uniqueFolderNames(folderRecords.map(\.name)),
                                                noteFolderMetadata: folderRecords)
         summary.importedTasks = tasks.count
         summary.importedNotes = notes.count
         summary.importedLists = lists.count
         return (snapshot, summary)
+    }
+
+    /// Local metadata wins; incoming siblings follow the existing local order.
+    /// Names that resolve to a local identity also remap incoming parent links.
+    private static func mergedTaskTags(_ incoming: [TaskTag], into local: [TaskTag])
+        -> (tags: [TaskTag], aliases: [String: UUID]) {
+        var tags = local
+        var identities: [UUID: UUID] = [:]
+        var aliases: [String: UUID] = [:]
+        for incomingTag in TaskTag.ordered(incoming) {
+            if let existing = tags.first(where: { $0.id == incomingTag.id })
+                ?? tags.first(where: { $0.name == incomingTag.name }) {
+                identities[incomingTag.id] = existing.id
+                aliases[incomingTag.name] = existing.id
+                continue
+            }
+            var tag = incomingTag
+            tag.parentID = incomingTag.parentID.map { identities[$0] ?? $0 }
+            let siblings = tags.filter { $0.parentID == tag.parentID }
+            if !siblings.isEmpty { tag.sortOrder = (siblings.map(\.sortOrder).max() ?? -1) + 1 }
+            tags.append(tag)
+            identities[incomingTag.id] = tag.id
+            aliases[incomingTag.name] = tag.id
+        }
+        return (TaskTag.ordered(tags), aliases)
+    }
+
+    private static func resolvingTagReferences(_ tasks: [Task], directory: [TaskTag],
+                                               aliases: [String: UUID] = [:]) -> [Task] {
+        let byID = Dictionary(directory.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current })
+        let byName = Dictionary(directory.map { ($0.name, $0) }, uniquingKeysWith: { current, _ in current })
+        return tasks.map { task in
+            guard !task.tags.isEmpty else { return task }
+            var value = task
+            var names: [String] = []
+            var references: [TaskTagReference] = []
+            for name in task.tags {
+                let tag = aliases[name].flatMap { byID[$0] } ?? byName[name]
+                let resolvedName = tag?.name ?? name
+                guard !names.contains(resolvedName) else { continue }
+                names.append(resolvedName)
+                if let tag { references.append(TaskTagReference(id: tag.id, name: tag.name)) }
+            }
+            value.tags = names
+            value.tagReferences = references
+            return value
+        }
     }
 
     /// 清单文件夹实体：本机已排好的顺序优先，随后是包里显式列出的名字，
@@ -964,6 +1032,12 @@ enum MigrationSnapshot {
             // 清单文件夹（空文件夹也写出来，否则导入后消失）。
             "listFolders": listFolderEntities([], metas: snapshot.taskListMeta ?? [],
                                               local: snapshot.taskListFolders ?? []).map(\.name),
+            "taskTags": TaskTag.reconciled(snapshot.taskTags ?? [], tasks: snapshot.tasks).map { tag in
+                ["id": tag.id.uuidString, "name": tag.name,
+                 "colorARGB": tag.colorARGB.map { $0 as Any } ?? NSNull(),
+                 "sortOrder": tag.sortOrder,
+                 "parentID": tag.parentID.map { $0.uuidString as Any } ?? NSNull()] as [String: Any]
+            },
             "tasks": snapshot.tasks.map(taskRecord),
             "notes": snapshot.notes.map { noteRecord($0, folderIDsByName: folderIDsByName) },
         ]

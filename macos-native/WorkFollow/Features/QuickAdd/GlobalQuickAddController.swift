@@ -346,6 +346,9 @@ private struct GlobalQuickAddPanelView: View {
         )
         .onPreferenceChange(GlobalPanelHeightKey.self) { onHeightChange($0) }
         .onChange(of: text) { _, _ in candidate.textDidChange() }
+        .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
+            tagsOverride = QuickAddPropertiesOverrides.renamedTags(tagsOverride, notification: notification)
+        }
         // 面板一弹出就把焦点交给输入框。以前这行是无效写（`@FocusState` 死信号），
         // 面板弹出来焦点还停在宿主视图上，打字没反应。
         .onAppear { DispatchQueue.main.async { inputFocused = true } }
@@ -467,13 +470,16 @@ private struct GlobalQuickAddPanelView: View {
     @ViewBuilder
     private var candidateList: some View {
         if let marker = activeMarker {
+            let tags = tagCandidateCatalog
             QuickAddCandidateList(
                 names: candidateNames,
                 selectedIndex: min(candidate.selection, max(0, candidateNames.count - 1)),
                 emptyMessage: marker.kind == .tag ? "没有匹配的标签" : "没有匹配的清单",
                 icon: marker.kind == .tag ? "tag" : "list.bullet",
                 onHover: { candidate.selection = $0 },
-                onCommit: { commitCandidate($0) }
+                onCommit: { commitCandidate($0) },
+                colors: marker.kind == .tag ? tags.colors : [:],
+                depths: marker.kind == .tag ? tags.depths : [:]
             )
             .padding(.leading, 24)
         }
@@ -486,8 +492,10 @@ private struct GlobalQuickAddPanelView: View {
     }
 
     /// 候选来源：`#` 查已有标签、`@` 查已有清单。
+    private var tagCandidateCatalog: QuickAddTagCatalog { QuickAddTagCatalog(tags: composer.workspace.taskTags) }
+
     private func candidateSource(_ kind: QuickAddComposition.MarkerQuery.Kind) -> [String] {
-        kind == .tag ? composer.workspace.tagNames : composer.workspace.availableListNames
+        kind == .tag ? tagCandidateCatalog.names : composer.workspace.availableListNames
     }
 
     private var candidateNames: [String] {
