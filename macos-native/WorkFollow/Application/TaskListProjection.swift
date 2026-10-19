@@ -24,10 +24,13 @@ struct TaskListQuery: Equatable {
     var list: String?
     var tag: String?
     var isFiltering: Bool { !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || list != nil || tag != nil }
-    func matches(_ task: Task) -> Bool {
+    func matches(_ task: Task, matchingTags: Set<String>? = nil) -> Bool {
         let text = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matchesTag = tag.map { name in
+            task.tags.contains(where: (matchingTags ?? [name]).contains)
+        } ?? true
         return (list == nil || task.list.name == list) &&
-            (tag == nil || task.tags.contains(tag!)) &&
+            matchesTag &&
             (text.isEmpty || task.document.matches(text, prefix: task.title + "\n"))
     }
 }
@@ -201,19 +204,20 @@ enum TaskListProjection {
     static func matches(in scope: TaskListScope, store: WorkspaceStore,
                         now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
         matches(in: scope, tasks: store.tasks, now: now, calendar: calendar, query: query,
-                archivedLists: store.archivedListNames)
+                archivedLists: store.archivedListNames, tags: store.tags)
     }
 
     /// Value-input overload for feature projections that need the exact same
     /// scope/query membership rules without owning or mutating a WorkspaceStore.
     static func matches(in scope: TaskListScope, tasks: [Task],
                         now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery(),
-                        archivedLists: Set<String> = []) -> [Task] {
-        tasks.filter { task in
+                        archivedLists: Set<String> = [], tags: [TaskTag] = []) -> [Task] {
+        let matchingTags = query.tag.map { TaskTagHierarchy(tags).names(includingDescendantsOf: $0) }
+        return tasks.filter { task in
             guard task.deletedAt == nil && task.skippedAt == nil && !task.isConverted else { return false }
             guard !archivedLists.contains(task.list.name)
                 || (scope == .allTasks && query.list == task.list.name) else { return false }
-            guard query.matches(task) else { return false }
+            guard query.matches(task, matchingTags: matchingTags) else { return false }
             switch scope {
             case .allTasks: return true
             case .nextSevenDays:

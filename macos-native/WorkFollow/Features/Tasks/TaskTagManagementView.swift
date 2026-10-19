@@ -37,16 +37,8 @@ struct TaskTagsSectionView: View {
     @State private var colorTag: UUID?
     @State private var editor: TaskTagEditorRequest?
 
-    private var counts: [String: Int] {
-        var result: [String: Int] = [:]
-        for task in workspace.tasksInActiveLists where !task.isClosed && !task.isConverted && task.deletedAt == nil && task.skippedAt == nil {
-            for tag in task.tags { result[tag, default: 0] += 1 }
-        }
-        return result
-    }
-
     var body: some View {
-        let counts = counts
+        let counts = workspace.tagSidebarCounts
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("标签").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)

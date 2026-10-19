@@ -91,3 +91,42 @@ struct TaskTag: Identifiable, Equatable, Codable {
         return directory + additions
     }
 }
+
+/// Browsing a parent tag includes its descendants without assigning those
+/// parents to the task. Sidebar badges use the same hierarchy in reverse.
+struct TaskTagHierarchy {
+    private let tagsByID: [UUID: TaskTag]
+    private let tagsByName: [String: TaskTag]
+    private let children: [UUID: [TaskTag]]
+
+    init(_ tags: [TaskTag]) {
+        tagsByID = Dictionary(uniqueKeysWithValues: tags.map { ($0.id, $0) })
+        tagsByName = Dictionary(uniqueKeysWithValues: tags.map { ($0.name, $0) })
+        children = Dictionary(grouping: tags.filter { $0.parentID != nil }, by: { $0.parentID! })
+    }
+
+    func names(includingDescendantsOf name: String) -> Set<String> {
+        guard let root = tagsByName[name] else { return [name] }
+        var names: Set<String> = []
+        var visited: Set<UUID> = []
+        var pending = [root.id]
+        while let id = pending.popLast() {
+            guard visited.insert(id).inserted, let tag = tagsByID[id] else { continue }
+            names.insert(tag.name)
+            pending.append(contentsOf: (children[id] ?? []).map(\.id))
+        }
+        return names
+    }
+
+    func names(includingAncestorsOf names: [String]) -> Set<String> {
+        var result = Set(names)
+        var visited: Set<UUID> = []
+        var pending = names.compactMap { tagsByName[$0]?.parentID }
+        while let id = pending.popLast() {
+            guard visited.insert(id).inserted, let tag = tagsByID[id] else { continue }
+            result.insert(tag.name)
+            if let parent = tag.parentID { pending.append(parent) }
+        }
+        return result
+    }
+}

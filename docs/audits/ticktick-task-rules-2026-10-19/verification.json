@@ -32,13 +32,20 @@
   "ui_observations": {
     "period_entry": "premium_explanation",
     "period_editor_exercised": false,
-    "new_fixture_list_visible_to_tool": false,
-    "reference_tasks_written_this_round": false,
-    "original_tag_view_restored": true
+    "new_fixture_list_visible_to_tool": true,
+    "reference_tasks_written_this_round": true,
+    "filter_entry": "premium_explanation",
+    "filter_editor_exercised": false,
+    "parent_tag_sidebar_includes_children": true,
+    "reference_parent_scope_task_count": 2,
+    "reference_tasks_created": 2,
+    "reference_tasks_moved_to_trash": 2,
+    "reference_temporary_tags_removed": 3,
+    "reference_empty_qa_list_preserved": true,
+    "restored_view": "empty_qa_list"
   },
   "pending_reference_rules": [
     "mixed_and_or_precedence",
-    "parent_tag_sidebar_scope",
     "parent_tag_filter_scope",
     "kanban_primary_tag_replacement",
     "recurring_and_child_task_drop_rules"
@@ -63,5 +70,40 @@
     },
     "full_regression_run": false
   },
-  "scope": "existing_date_panel_ui_edits_remain_outside_this_code_batch"
+  "scope": "existing_date_panel_ui_edits_remain_outside_this_code_batch",
+  "drop_handler_trace": {
+    "action": "taskDraggingOverKanben:",
+    "status": "provider_unavailable",
+    "proves_drop_rules": false
+  },
+  "parent_tag_fix": {
+    "scope": "sidebar_tag_browsing_and_badges",
+    "reproduction": {
+      "test_cases": 2,
+      "failed_cases": 2,
+      "failed_assertions": 6
+    },
+    "working_tree_validation": {
+      "tests": 45,
+      "failures": 0
+    },
+    "isolated_validation": {
+      "tests": 45,
+      "failures": 0
+    },
+    "same_suite_in_both_builds": true,
+    "full_regression_run": false,
+    "native_qa": {
+      "application": "WorkFollow Tag Scope QA",
+      "parent": "本周",
+      "child": "验收",
+      "parent_open_count": 7,
+      "child_open_count": 4,
+      "list_and_kanban_scope_verified": true,
+      "duplicate_parent_child_assignment_counted_once": true,
+      "task_rows_and_documents_equal_original_qa": true,
+      "original_qa_task_count": 14
+    },
+    "saved_filter_evaluation_changed": false
+  }
 }

@@ -158,6 +158,17 @@ final class TaskWorkspaceModel: ObservableObject {
     var taskTags: [TaskTag] { _ = revision; return store.tags }
     var orderedTags: [TaskTag] { TaskTag.ordered(taskTags) }
     var tagNames: [String] { taskTags.map(\.name).sorted() }
+    var tagSidebarCounts: [String: Int] {
+        let hierarchy = TaskTagHierarchy(taskTags)
+        var counts: [String: Int] = [:]
+        for task in tasksInActiveLists where !task.isClosed && !task.isConverted
+            && task.deletedAt == nil && task.skippedAt == nil {
+            for name in hierarchy.names(includingAncestorsOf: task.tags) {
+                counts[name, default: 0] += 1
+            }
+        }
+        return counts
+    }
     func tag(for id: UUID) -> TaskTag? { _ = revision; return store.tag(id) }
     func tag(named name: String) -> TaskTag? {
         _ = revision
