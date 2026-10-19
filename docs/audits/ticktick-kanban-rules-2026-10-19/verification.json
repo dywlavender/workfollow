@@ -48,12 +48,11 @@
       }
     ],
     "dispatch_coverage": "partial; record budget exhausted",
-    "declarations_establish_behavior": false,
-    "retained_evidence_id": "ev_7df2b6bde11172f469e51e4119a62eefc58486d7161b93948e6a6e143941f184"
+    "declarations_establish_behavior": false
   },
   "reference_runtime": {
     "temporary_list_observed_empty": true,
-    "new_tasks_created": 0,
+    "new_tasks_created": 3,
     "blockers": [
       "frontmostApplicationChanged",
       "Dock activation timeout",
@@ -62,7 +61,30 @@
     "foreground_handoff_requested": true,
     "tag_drop_verified": false,
     "recurring_drop_verified": false,
-    "subtask_drop_verified": false
+    "subtask_drop_verified": false,
+    "new_tags_created": 2,
+    "foreground_handoff_resolved": true,
+    "view_popup_coordinate_action_completed": false,
+    "alignment_status": "tag kanban alignment deferred by user; remaining drag rules unverified",
+    "user_decision": "算了，我觉得这个功能不是很重要",
+    "cleanup": {
+      "temporary_tasks_moved_to_trash": [
+        "REA1019 跨标签 A",
+        "REA1019 对照 B",
+        "REA1019 无标签对照"
+      ],
+      "temporary_tags_removed": [
+        "REA1019列甲",
+        "REA1019列乙"
+      ],
+      "temporary_list_empty": true,
+      "temporary_list_retained": true,
+      "all_active_tasks_before": 40,
+      "all_active_tasks_after": 40,
+      "original_sidebar_tags_and_counts_preserved": true,
+      "trash_emptied": false,
+      "list_view_at_finish": "kanban with user-named custom section 标签; tag grouping not established"
+    }
   },
   "local_reproduction": {
     "cases": 2,
