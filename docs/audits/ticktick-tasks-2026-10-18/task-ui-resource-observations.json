@@ -1,0 +1,103 @@
+{
+  "client": "TickTick 8.0.80",
+  "tool": "REA decode-interface-builder",
+  "source": "Copies of four selected compiled UI archives from /Applications/TickTick.app; no reference application code was executed.",
+  "documents": [
+    {
+      "relative_path": "Contents/Resources/TTFilterEditViewController.nib",
+      "object_count": 63,
+      "connection_count": 14,
+      "hierarchy_complete": true
+    },
+    {
+      "relative_path": "Contents/Resources/TTFilterNormalEditorCell.nib",
+      "object_count": 29,
+      "connection_count": 4,
+      "hierarchy_complete": true
+    },
+    {
+      "relative_path": "Contents/Resources/TTTagEditViewController.nib",
+      "object_count": 67,
+      "connection_count": 14,
+      "hierarchy_complete": true
+    },
+    {
+      "relative_path": "Contents/Resources/TTTagManagementViewController.nib",
+      "object_count": 99,
+      "connection_count": 13,
+      "hierarchy_complete": true
+    }
+  ],
+  "controls": [
+    "Cancel",
+    "Save",
+    "Add smartlist",
+    "Lists",
+    "Cancel",
+    "Color",
+    "Parent tag",
+    "OK",
+    "OK",
+    "Cancel"
+  ],
+  "outlets": [
+    "cancelButton",
+    "contentView",
+    "emojiButton",
+    "nameBorderedView",
+    "nameInvalidationLabel",
+    "nameInvalidationLabelHeightLC",
+    "saveButton",
+    "segmentedControl",
+    "titleBar",
+    "titleLabel",
+    "view",
+    "containerLeadingLC",
+    "containerView",
+    "nameLabel",
+    "warnningImageView",
+    "cancelButton",
+    "colorLabel",
+    "colorPickerView",
+    "nameBorderedView",
+    "nameInvalidationLabel",
+    "nameInvalidationLabelHeightLC",
+    "parentHintLabel",
+    "parentPopUpButton",
+    "saveButton",
+    "titleBar",
+    "titleLabel",
+    "view",
+    "bottomView",
+    "cancelButton",
+    "emptyImageView",
+    "emptyTitleLabel",
+    "inputView",
+    "invalidNameErrorLabel",
+    "okButton",
+    "tableView",
+    "view",
+    "backgroundView",
+    "container"
+  ],
+  "actions": [
+    "cancelButtonClicked:",
+    "emojiButtonClicked:",
+    "saveButtonClicked:",
+    "cancelButtonClicked:",
+    "saveButtonClicked:",
+    "okClicked:",
+    "cancelButtonClicked:"
+  ],
+  "limitations": [
+    "The graph reflects recognized Interface Builder archive fields and connections; omitted private or unrecognized archive fields remain unknown.",
+    "A target-action selector is an Interface Builder observation and does not prove that the binary contains a matching implementation.",
+    "Decoded constraints, runtime visibility, dynamic UI creation, and pixel geometry are not inferred from these archives.",
+    "Compiled Interface Builder archives are private serialized object graphs. The decoder reports only recognized keyed-archive objects and connections; unrecognized object classes and fields remain unknown."
+  ],
+  "conclusions": [
+    "The tag editor declares name, color and parent controls in the same archive.",
+    "The filter editor declares a segmented control and save/cancel controls.",
+    "These declarations do not establish runtime visibility, exact geometry, advanced expression precedence or gesture rules."
+  ]
+}

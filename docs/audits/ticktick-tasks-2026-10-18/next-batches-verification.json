@@ -1,0 +1,224 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/macos-native",
+  "kanban": {
+    "tests": 39,
+    "failures": 0,
+    "native_insertion_gesture": "passed_with_user_gestures; same-column reorder, cross-column insertion and immediate gap feedback observed",
+    "insertion_feedback_fix": {
+      "date": "2026-10-19",
+      "user_observation": "没有插入线，但是排在首位",
+      "baseline_restored": true,
+      "before_fix": "New rendered-feedback test failed with zero marker samples while task insertion resolved correctly.",
+      "implementation": "Own the hosting content and insertion marker as sibling views in a native container; SwiftUI redraw no longer obscures feedback.",
+      "related_tests": 33,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban-feedback-container.log",
+      "pointer_followup": {
+        "observation": "线会切换间隙，但明显跟不上鼠标",
+        "cross_column_result": "整理交付检查项 moved to the first position of 验收; task identity retained.",
+        "restoration": "Final cleanup restored the isolated SQLite fixture from this turn baseline. All 13 task rows and task_documents rows match exactly; earlier user fixture changes are included in that baseline.",
+        "follow_latency": "passed_with_user_observation after the animation correction",
+        "related_tests": 21,
+        "failures": 0,
+        "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban-follow-after.log",
+        "before_fix_log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban-follow-before.log",
+        "acceptance_trace": "Per-event diagnostic file tracing disabled for the final gesture feel check; ordinary app builds already leave it disabled.",
+        "confirmed_by_user": "切换及时，不再拖后"
+      }
+    }
+  },
+  "tags_core": {
+    "tests": 92,
+    "failures": 0,
+    "log": "/private/tmp/workfollow-tags-targeted-2026-10-18.log"
+  },
+  "filter_and_tag_followup": {
+    "tests": 190,
+    "passed": 189,
+    "failures": 1,
+    "issue": "Outdated ordering assertion; corrected to explicitly reorder the independent directory.",
+    "filter_tests": 46,
+    "filter_failures": 0,
+    "log": "/private/tmp/workfollow-filters-tags-targeted-2026-10-18.log"
+  },
+  "ordering_followup": {
+    "tests": 55,
+    "failures": 0,
+    "log": "/private/tmp/workfollow-tag-order-followup-2026-10-18.log"
+  },
+  "native_tags": {
+    "empty_create": "passed",
+    "pending": [],
+    "temporary_tag": "REA 空标签验收 10-18",
+    "blocker": null,
+    "edit_name_color_parent": "passed",
+    "restart": "passed",
+    "cancel_draft": "passed",
+    "temporary_tag_cleanup_in_current_copy": "passed",
+    "source_qa_temporary_tag_cleanup": "pending in older Kanban QA storage; current Tasks QA copy has been cleaned"
+  },
+  "full_regression": "not run for these batches; focused checks only",
+  "reference_unknowns": [
+    "Recurring and child Kanban pointer rules",
+    "Exact primary-tag replacement on reference drop",
+    "Mixed advanced condition evaluation and mode conversion on local TickTick",
+    "Local native timeline geometry and behavior"
+  ],
+  "reference_navigation": {
+    "original": "Temporary tag REAREA标签丙标签丙 and REA 多标签验收 10-16 #",
+    "last_observed": "Original tag REAREA标签丙标签丙 and task REA 多标签验收 10-16 # were visible again in the reference AX tree.",
+    "reference_task_data_changed": false,
+    "restoration": "Original scope observed; custom reference controls remain unreliable for pointer automation."
+  },
+  "tag_editor_atomic_save": {
+    "directory_tests": 15,
+    "directory_failures": 0,
+    "interaction_tests": 1,
+    "interaction_failures": 0,
+    "covered": [
+      "Combined name, color and parent save with a single publication and undo",
+      "Cancel and reopen retain no color draft",
+      "Actual native color and confirmation clicks"
+    ],
+    "logs": [
+      "/private/tmp/workfollow-timeline-tag-editor-final-2026-10-18.log",
+      "/private/tmp/workfollow-tag-editor-interaction-2026-10-18.log"
+    ],
+    "initial_interaction_failure": "AX-only lookup did not expose color buttons; use rendered control geometry while retaining assertions."
+  },
+  "timeline": {
+    "implemented": [
+      "Day, week and month scales",
+      "Fixed task labels with aligned scrolling header/grid",
+      "Single-click creation through shared task composer",
+      "Task and unscheduled pool details",
+      "Move and both-edge resize with local draft and Escape cancel",
+      "Shared recurrence scope and undo"
+    ],
+    "initial_related_run": {
+      "tests": 80,
+      "failed_cases": 2,
+      "failed_assertions": 3,
+      "log": "/private/tmp/workfollow-timeline-targeted-2026-10-18.log"
+    },
+    "correction": "Apply the existing first-window-activation click policy and exclude frame probes from hit testing.",
+    "final_layout_tests": 14,
+    "final_layout_failures": 0,
+    "interaction_tests": 10,
+    "interaction_failures": 0,
+    "scope_tests": 3,
+    "scope_failures": 0,
+    "final_layout_log": "/private/tmp/workfollow-timeline-viewport-polish-2026-10-18.log",
+    "interaction_log": "/private/tmp/workfollow-timeline-tag-editor-final-2026-10-18.log",
+    "local_reference_native_comparison": "pending",
+    "native": {
+      "scale_switching": "passed",
+      "shared_details_from_real_bar_click": "passed",
+      "move": "10/16 10:30-11:30 to 10/17 10:30-11:30",
+      "right_resize": "10/17 10:30 to 10/18 11:30",
+      "left_resize": "10/16 10:30 to 10/18 11:30",
+      "three_step_undo": "passed; restored 10/16 10:30-11:30",
+      "month_anchor_visible": "passed in rendered app; 10/16 appears in first screen starting 9/24",
+      "chinese_range_title": "passed",
+      "pool_drop": "passed_with_user_gesture; user confirmed 已拖入，任务进入时间线 after dropping REA 多标签联动验收 onto 10/18; task schedule was restored afterwards"
+    }
+  },
+  "rea_resource_observations": "task-ui-resource-observations.json",
+  "acceptance_package": {
+    "app": "/Users/dongyangwei/Documents/学习/代办笔记/workfollow-macos-native/output/tasks-finish-qa/WorkFollowTasksQA.app",
+    "storage": "/private/tmp/workfollow-tasks-batches-qa-2026-10-18/storage",
+    "signature_verification": "passed",
+    "launched": true,
+    "fixture_copy": "SQLite backup API, source opened read-only; original running QA copy preserved.",
+    "current_build": "Includes atomic filter presentation and the separate native insertion overlay container."
+  },
+  "native_filter": {
+    "tag_any_count": 7,
+    "tag_all_count": 1,
+    "tag_all_or_keyword_count": 2,
+    "saved_result_count": 2,
+    "matched_titles": [
+      "联调与回归",
+      "REA 多标签联动验收"
+    ],
+    "save_and_reload": "passed",
+    "lossless_mode_guard": "passed",
+    "temporary_filter": "REA 高级过滤验收 10-18",
+    "cleanup": "passed on 2026-10-19; removed only REA 高级过滤验收 10-18 from the stopped isolated fixture and retained the Inbox filter",
+    "visual_issue": "Connector picker label wrapped vertically; labels hidden while retaining accessible relationship label.",
+    "visual_correction_recheck": "passed on 2026-10-19; 且/或 connectors are horizontal and the saved expression is shown on first edit",
+    "first_edit_presentation": {
+      "issue": "Opening the existing saved filter could initialize an empty new-filter draft before the edit target arrived.",
+      "fix": "Use an identifiable sheet request that carries the target filter and presentation together.",
+      "native_checks": [
+        "First edit contains the saved name, advanced mode, all-tags rule, OR keyword and count 2.",
+        "Switch to the other basic filter opens its own name and Inbox condition.",
+        "New filter starts with an empty name and disabled save.",
+        "Cancel after editing a draft preserves baseline filters.json exactly."
+      ],
+      "related_tests": 46,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/filter-edit-focused.log"
+    }
+  },
+  "native_polish_regression": {
+    "filter_draft_tests": 14,
+    "filter_draft_failures": 0,
+    "timeline_layout_tests": 14,
+    "timeline_layout_failures": 0,
+    "initial_run_issue": "Old header assertion required the first band to exceed one day. Updated to permit a partial first month and verify all subsequent calendar boundaries.",
+    "logs": [
+      "/private/tmp/workfollow-native-polish-focused-2026-10-18.log",
+      "/private/tmp/workfollow-timeline-viewport-polish-2026-10-18.log"
+    ]
+  },
+  "native_evidence": [
+    "kanban/workfollow-tags-hierarchy-saved.png",
+    "kanban/workfollow-timeline-month-visible-today.png",
+    "kanban/workfollow-timeline-resize-both-edges.png",
+    "kanban/workfollow-insertion-feedback-render.png"
+  ],
+  "isolated_submission_checks": {
+    "date": "2026-10-19",
+    "foundation": {
+      "title": "feat(tasks): add persistent tags and advanced saved filters",
+      "tests": 167,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/foundation/validation.log"
+    },
+    "kanban": {
+      "title": "feat(tasks): support native kanban moves and insertion ordering",
+      "tests": 35,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban/validation.log"
+    },
+    "timeline": {
+      "title": "feat(tasks): enable scheduling through the task timeline",
+      "tests": 61,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/timeline/validation.log"
+    },
+    "scope": "Each source snapshot contains only its batch and prior committed dependencies; pending date-panel edits were excluded. No full-suite run.",
+    "feedback_followup": {
+      "title": "fix(tasks): update kanban insertion feedback without animation",
+      "tests": 21,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban-follow-after.log"
+    }
+  },
+  "final_fixture_cleanup": {
+    "date": "2026-10-19",
+    "application_stopped_before_restore": true,
+    "restored_from": "/private/tmp/workfollow-tasks-finish-2026-10-19/baseline.sqlite",
+    "pre_cleanup_copy": "/private/tmp/workfollow-tasks-finish-2026-10-19/before-fixture-cleanup",
+    "task_count": 13,
+    "all_task_rows_equal_baseline": true,
+    "all_task_document_rows_equal_baseline": true,
+    "view": "All Tasks / list / tag grouping",
+    "native_reopen": "passed; original task order, tag groups and Inbox filter visible; temporary advanced filter absent",
+    "remaining_manual_checks": [
+      "Date, list and custom-section pointer destinations; their shared domain paths are covered by focused tests."
+    ]
+  }
+}

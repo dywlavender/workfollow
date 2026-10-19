@@ -1,0 +1,292 @@
+{
+  "date": "2026-10-18",
+  "branch": "experiment/macos-native",
+  "phase": "Kanban column moves and primary tag correction",
+  "reference": {
+    "client": "TickTick 8.0.80",
+    "tool": "REA observe-native-ui",
+    "screenshot": "ticktick-primary-tag-column.png",
+    "selected_evidence": "rea-board-selected.json",
+    "confirmed": "The named two-tag task appears in one tag column and retains both tag chips.",
+    "not_confirmed": [
+      "Global tag ordering and hierarchy precedence.",
+      "Exact tag replacement rules and recurring task drag behavior."
+    ],
+    "restored": "All uses grouping by time and list view; task data was not changed."
+  },
+  "implementation": [
+    "Use one primary tag column while retaining every task tag and the same task identity.",
+    "Apply typed date, priority, list, tag and custom-section column moves through shared actions.",
+    "Preserve the timed interval, absolute reminder offset and independent deadline when rescheduling.",
+    "Move parent and children to a list with one undo; retain child identities and parent relations.",
+    "Highlight writable columns and declare in-app card drags as move operations."
+  ],
+  "new_tests": 11,
+  "targeted_regression": {
+    "total": 24,
+    "passed": 24,
+    "skipped": 0,
+    "failures": 0,
+    "log": "/private/tmp/workfollow-kanban-targeted-2026-10-18.log"
+  },
+  "full_regression": {
+    "build": "passed",
+    "total": 1425,
+    "passed": 1420,
+    "skipped": 5,
+    "failures": 0,
+    "seconds": 187.577,
+    "log": "/private/tmp/workfollow-kanban-full-final-2026-10-18.log"
+  },
+  "skip_reasons": [
+    "Four real Pi meeting service integrations are not enabled.",
+    "One property-panel focus test requires a foreground test host."
+  ],
+  "native_acceptance": {
+    "app": "/private/tmp/workfollow-kanban-qa-2026-10-18/WorkFollowKanbanQA.app",
+    "bundle": "com.workfollow.native.kanban.qa",
+    "storage": "/private/tmp/workfollow-kanban-qa-2026-10-18/storage",
+    "signing_verification": "passed",
+    "observed": [
+      "The multi-tag QA task appears once under 本周 with both 本周 and 验收 metadata.",
+      "Column counts are 本周 6, 验收 1, 无标签 2.",
+      "Dragging 本周 to 验收 changed column counts from 6/1 to 5/2 and retained only 验收 on the QA task; undo and redo were observed.",
+      "Dragging the QA task to 无标签 removed both tags and changed its column count from 2 to 3; one undo restored both tags and original counts.",
+      "The rebuilt app changed from priority grouping to tag grouping immediately after selecting the menu item, without navigation or a task mutation.",
+      "The user completed the priority drag in the final build; native AX, REA screenshot and persisted task priority agreed.",
+      "The date panel opened and Escape cancelled its unsaved range draft; the persisted 10:30–11:30 interval remained unchanged."
+    ],
+    "pointer_drag_status": "priority_smoke_passed_with_user_gesture_and_observed_undo_redo",
+    "screenshot": "workfollow-primary-tag-column.png",
+    "window_visible": true,
+    "screenshots": [
+      "workfollow-primary-tag-column.png",
+      "workfollow-tag-drop.png",
+      "workfollow-untagged-drop.png",
+      "workfollow-priority-drop.png",
+      "workfollow-restored.png"
+    ],
+    "pending": [
+      "Native pointer gestures for date, list and custom-section destinations; their shared domain transaction paths pass automated tests."
+    ],
+    "latest_build": "The current native receiver release fix passed the user tag-column gesture with immediate preview removal; the original task was restored through its tag picker. See release_preview_fix for final acceptance and focused regression scope.",
+    "screen_lock": "Resolved by the user on 2026-10-18; CUA could read and click the QA window.",
+    "pointer_input_probe": {
+      "fixture": "/private/tmp/workfollow-kanban-qa-2026-10-18/input-probe",
+      "application": "Finder",
+      "result": "Source file remained in its parent; target folder stayed empty after two drag calls. File selection worked after raising the Finder window.",
+      "user_files_modified": false,
+      "cleaned_up": true
+    },
+    "manual_priority_check": {
+      "result": "passed",
+      "confirmed_by_user": "已移到高优先级，旗标变红",
+      "observed": "High/medium columns changed from 1/3 to 2/2, the card and inspector showed high priority, and the same task identity remained.",
+      "undo_redo": "CUA undo restored 1/3 and medium priority; redo restored 2/2 and high priority; a final undo restored medium priority.",
+      "screenshot": "workfollow-priority-drop.png"
+    },
+    "fixture_restoration": {
+      "task_count": 13,
+      "task_identities": "unchanged",
+      "priority": "medium",
+      "schedule": "2026-10-16 10:30–11:30 Asia/Shanghai",
+      "tags": "unchanged",
+      "task_document_rows": "All 13 stored document rows equal the isolated pre-check backup.",
+      "view": "All / kanban / tag grouping; counts 本周 6, 验收 1, 无标签 2.",
+      "metadata_note": "The opened task has a refreshed modification timestamp and empty serialized document placeholder identity; stored task document content is unchanged.",
+      "screenshot": "workfollow-restored.png"
+    }
+  },
+  "live_preferences_fix": "Forward nested view preference invalidation through AppEnvironment so grouping, view mode and detail changes redraw without a task mutation.",
+  "latest_targeted_regression": {
+    "total": 78,
+    "passed": 78,
+    "skipped": 0,
+    "failures": 0,
+    "log": "/private/tmp/workfollow-kanban-targeted-final-2026-10-18.log"
+  },
+  "drag_protocol": "Native NSDraggingDestination accepts an existing task payload synchronously and prefers move; legacy copy sources keep the shared domain move semantics.",
+  "release_preview_fix": {
+    "reported_by_user": "On release, the drag image slowly slides into the destination and lingers over the inserted card.",
+    "native_contract": "Set NSDraggingInfo.animatesToDestination=false during prepareForDragOperation; AppKit removes accepted drag images without animation before performDragOperation.",
+    "source": "https://developer.apple.com/documentation/appkit/nsdragginginfo/animatestodestination",
+    "implementation": [
+      "Host each column in a native drop destination, forwarding the SwiftUI environment and retaining controls.",
+      "Read the task payload synchronously and apply the existing shared move action in a transaction with animations disabled.",
+      "Accept same-column releases without mutation or undo history; clear only the highlight when dragging exits.",
+      "Keep the normal system preview while the pointer is still dragging."
+    ],
+    "targeted_regression": {
+      "build": "passed",
+      "total": 81,
+      "passed": 81,
+      "skipped": 0,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-kanban-release-targeted-2026-10-18.log"
+    },
+    "coverage": [
+      "Animation flag changes during prepare before any task mutation; perform completes the original task move synchronously.",
+      "One undo and redo, accepted same-column release with no undo, and exit preserving the preview.",
+      "Card selection, checkbox completion, date panel and secondary-click menu work inside the native host.",
+      "Actual board column quick-add receives keyboard focus, preserves priority and supports continued input."
+    ],
+    "full_regression": {
+      "build": "passed",
+      "total": 1431,
+      "passed": 1426,
+      "skipped": 5,
+      "failures": 0,
+      "seconds": 162.6,
+      "log": "/private/tmp/workfollow-kanban-release-full-2026-10-18.log"
+    },
+    "native_acceptance": {
+      "app": "/private/tmp/workfollow-kanban-qa-2026-10-18/WorkFollowKanbanQA.app",
+      "status": "passed_with_user_gesture_and_observed_task_state",
+      "signing_verification": "passed",
+      "confirmed_by_user": "预览立即消失，移列自然",
+      "visual_release_result": "passed_by_user_observation",
+      "observed": "联调与回归 moved from 本周 to 验收 in the native column host. AX, REA screenshot and persisted tags agreed; task count and task identities remained unchanged.",
+      "screenshot": "workfollow-release-drop.png",
+      "screenshots": [
+        "workfollow-release-ready.png",
+        "workfollow-release-drop.png"
+      ],
+      "restoration": {
+        "task_count": 13,
+        "checks": {
+          "tags": true,
+          "priority": true,
+          "schedule": true,
+          "list": true,
+          "task_identities": true,
+          "document": true
+        },
+        "restored_tags": [
+          "本周"
+        ],
+        "other_qa_task_tags_preserved": {
+          "完善本周方案": [
+            "验收"
+          ],
+          "每周回顾": [
+            "验收"
+          ]
+        },
+        "method": "Use Quick Open to open the original task, then its tag picker to restore 本周; no global history rollback.",
+        "status": "passed",
+        "native_ax": "Task inspector shows 标签：本周; All / kanban / tag grouping shows 本周 4, 验收 3, 无标签 3. Other manual test moves were retained.",
+        "capture_note": "The optional final REA screenshot was unavailable: the selected process did not expose an application executable URL. CUA AX and read-only database checks verified restoration."
+      },
+      "input_note": "Earlier pointer inputs did not take effect. Cleanup succeeded via Quick Open, opening the original task and restoring its original tag in the task tag picker. Other manual test changes were retained."
+    },
+    "test_fixture_environment": "The current inspector renders an AppEnvironment-backed badge. Standalone inspector and board render fixtures now inject the same required environment as the app; the first full run exposed the missing fixture dependency before the final rerun.",
+    "relevant_regression": {
+      "suites": {
+        "TaskKanbanCardTests": {
+          "total": 5,
+          "failures": 0
+        },
+        "TaskKanbanColumnHostTests": {
+          "total": 1,
+          "failures": 0
+        },
+        "TaskKanbanDropTests": {
+          "total": 12,
+          "failures": 0
+        }
+      },
+      "total": 18,
+      "failures": 0,
+      "result_source": "Extracted from the already completed fresh-build regression log; no tests rerun during acceptance cleanup.",
+      "log": "/private/tmp/workfollow-kanban-release-full-2026-10-18.log"
+    },
+    "regression_scope_agreement": {
+      "user_direction": "回归要回归相关改动的部分案例，不用全量回归",
+      "current_scope": [
+        "Native drop lifecycle, preview release timing, synchronous move and undo.",
+        "Card selection, completion, schedule panel and secondary-click menu inside the new host.",
+        "Column quick-add keyboard focus and repeated creation."
+      ],
+      "command": "bash macos-native/scripts/run-tests.sh TaskKanbanDropTests TaskKanbanCardTests TaskKanbanColumnHostTests",
+      "expansion": "Add corresponding domain or shared-interaction suites when code changes or failures show that they are affected; do not run the full suite by default."
+    }
+  },
+  "position_order_batch": {
+    "date": "2026-10-18",
+    "status": "source_submitted_native_same_and_cross_column_insertion_and_feedback_passed",
+    "implemented": [
+      "Compute native insertion feedback from live card and viewport geometry.",
+      "Reorder siblings in manual mode without changing parent membership.",
+      "Combine insertion and destination attributes into one publication and one undo.",
+      "Keep field sorting authoritative; do not rewrite manual order in field-sorted mode.",
+      "Retain immediate drag preview removal on accepted release."
+    ],
+    "targeted_regression": {
+      "total": 39,
+      "passed": 39,
+      "failures": 0,
+      "seconds": 5.43,
+      "log": "/private/tmp/workfollow-kanban-order-targeted-2026-10-18.log",
+      "classes": [
+        "TaskKanbanDropTests",
+        "TaskKanbanDropLayoutTests",
+        "TaskKanbanReorderTests",
+        "TaskKanbanCardTests",
+        "TaskKanbanColumnHostTests",
+        "TaskKanbanHierarchyTests",
+        "TaskKanbanMultiTagTests"
+      ]
+    },
+    "native_observation": {
+      "screenshot": "workfollow-position-order-ready.png",
+      "tool": "REA observe-native-ui",
+      "result": "The rebuilt isolated app renders the original tag board and its 13 fixtures; CUA AX includes card content after Quick Open is dismissed. A CUA drag attempt did not move the task; no successful new pointer-gesture result claimed.",
+      "pending": [
+        "date/list/section pointer destinations"
+      ],
+      "followup_2026_10_19": {
+        "same_column": "User moved 整理交付检查项 before 需求评审; AX order and stored position agreed.",
+        "cross_column": "The same task moved to the first position of 验收; AX and task tags agreed.",
+        "feedback": "Both missing feedback and delayed movement were corrected; the user confirmed 切换及时，不再拖后 in the latest build.",
+        "restoration": "Final cleanup restored the isolated SQLite fixture from this turn baseline. All 13 task rows and task_documents rows match exactly; earlier user fixture changes are included in that baseline."
+      }
+    },
+    "reference_boundary": "TickTick UI readable; pointer operation still returned windowNotFoundAtPosition/noWindowsAvailable after user switched to the window. Exact recurring/tag replacement and child drag rules remain unconfirmed.",
+    "submission_focused_regression": {
+      "title": "feat(tasks): support native kanban moves and insertion ordering",
+      "tests": 35,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban/validation.log"
+    },
+    "feedback_animation_correction": {
+      "observation": "线会切换间隙，但明显跟不上鼠标",
+      "cross_column_result": "整理交付检查项 moved to the first position of 验收; task identity retained.",
+      "restoration": "Final cleanup restored the isolated SQLite fixture from this turn baseline. All 13 task rows and task_documents rows match exactly; earlier user fixture changes are included in that baseline.",
+      "follow_latency": "passed_with_user_observation after the animation correction",
+      "related_tests": 21,
+      "failures": 0,
+      "log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban-follow-after.log",
+      "before_fix_log": "/private/tmp/workfollow-tasks-finish-2026-10-19/kanban-follow-before.log",
+      "acceptance_trace": "Per-event diagnostic file tracing disabled for the final gesture feel check; ordinary app builds already leave it disabled.",
+      "confirmed_by_user": "切换及时，不再拖后"
+    },
+    "rendered_evidence": {
+      "path": "workfollow-insertion-feedback-render.png",
+      "source": "XCTest renders the actual board in an NSWindow; this is a focused fixture capture, not the reference app."
+    },
+    "final_fixture_cleanup": {
+      "date": "2026-10-19",
+      "application_stopped_before_restore": true,
+      "restored_from": "/private/tmp/workfollow-tasks-finish-2026-10-19/baseline.sqlite",
+      "pre_cleanup_copy": "/private/tmp/workfollow-tasks-finish-2026-10-19/before-fixture-cleanup",
+      "task_count": 13,
+      "all_task_rows_equal_baseline": true,
+      "all_task_document_rows_equal_baseline": true,
+      "view": "All Tasks / list / tag grouping",
+      "native_reopen": "passed; original task order, tag groups and Inbox filter visible; temporary advanced filter absent",
+      "remaining_manual_checks": [
+        "Date, list and custom-section pointer destinations; their shared domain paths are covered by focused tests."
+      ]
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-18",
+  "client": "TickTick 8.0.80",
+  "source": "REA observe-native-ui; CUA switched All to kanban and grouping by tag",
+  "reference_screenshot": "ticktick-primary-tag-column.png",
+  "observed": "The named task has two visible tag chips and appears once, under REAREA标签丙标签丙. No separate REA标签乙 column appears in this view.",
+  "selected_native_nodes": [
+    {
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REAREA标签丙标签丙"
+    },
+    {
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA标签乙"
+    },
+    {
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REAREA标签丙标签丙"
+    },
+    {
+      "role": "AXStaticText",
+      "title": null,
+      "value": "REA 多标签验收 10-16 #"
+    },
+    {
+      "role": "AXStaticText",
+      "title": null,
+      "value": "没有标签"
+    }
+  ],
+  "interpretation": "Use one primary tag column, retaining all task tags. Displayed tag order and independent tag ordering need further audit.",
+  "drag_probe": "Two attempted CUA drags did not change the reference state, so exact tag replacement and date-clearing behavior are not dynamically established.",
+  "reference_restored": "All returned to grouping by time and list view; no task content or tags changed."
+}
