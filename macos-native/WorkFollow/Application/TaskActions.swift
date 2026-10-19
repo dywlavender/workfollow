@@ -323,6 +323,7 @@ final class TaskActions {
                 // 子任务跟着父任务换清单，但**分组不跟随**——留着就是跨清单的孤儿分组。
                 value.sectionID = nil
             }
+            value.series?.template.sectionID = value.sectionID
             value.updatedAt = now
             return value
         })
@@ -406,7 +407,10 @@ final class TaskActions {
 
     @discardableResult
     func setPriority(_ id: UUID, _ priority: TaskPriority) -> TaskActionResult {
-        edit(id) { $0.priority = priority }
+        edit(id) { task in
+            task.priority = priority
+            task.series?.template.priority = priority
+        }
     }
 
     @discardableResult
@@ -541,7 +545,10 @@ final class TaskActions {
         var snapshot = store.tasks
         for index in snapshot.indices {
             if snapshot[index].id == id {
-                if let priority { snapshot[index].priority = priority }
+                if let priority {
+                    snapshot[index].priority = priority
+                    snapshot[index].series?.template.priority = priority
+                }
                 if let schedule {
                     if let key = current.occurrenceKey, schedule != current.schedule {
                         snapshot[index].occurrenceOverride = OccurrenceOverride(occurrence: key,
@@ -1762,6 +1769,7 @@ final class TaskActions {
         guard store.tasks[index].sectionID != sectionID else { return .success(id) }
         var tasks = store.tasks
         tasks[index].sectionID = sectionID
+        tasks[index].series?.template.sectionID = sectionID
         store.commit(tasks)
         return .success(id)
     }
