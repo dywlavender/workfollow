@@ -41,7 +41,7 @@ enum TaskListGrouping: String, CaseIterable, Codable, Identifiable {
 }
 
 /// 视图形态（滴答清单页 ··· → 视图：列表 / 看板 / 时间线）。
-/// 本轮落**列表 / 看板**两态；时间线未做（登记）。
+/// 时间线按普通清单或保存过滤器的范围开放。
 enum TaskListViewMode: String, CaseIterable, Codable, Identifiable {
     case list
     case kanban
@@ -57,13 +57,16 @@ enum TaskListViewMode: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// 界面上**暴露**的视图。
-    ///
-    /// `.timeline` 留在 `allCases` 里是因为几何/投影有测试固定、将来补"排期闭环"
-    /// （左列钉住 + 拖拽改期 + 未排期池）时会复用；但按自测结论它现在**不进 UI**：
-    /// 缺了拖拽改期，它就只是个比列表视图没有任何优势的只读表格，
-    /// 1 条有日期的任务撑起 21 天空网格，看起来像页面坏了。
+    /// Smart scopes keep their existing two presentations. Ordinary lists and
+    /// saved filters opt into the schedule-capable timeline below.
     static let exposedCases: [TaskListViewMode] = [.list, .kanban]
+
+    static func availableOptions(destination: NativeDestination, activeList: String?,
+                                 activeTag: String?, activeFilterID: UUID? = nil) -> [TaskListViewMode] {
+        guard destination == .allTasks, activeTag == nil else { return exposedCases }
+        let ordinaryList = activeList.map { $0 != TaskList.inbox.name } ?? false
+        return ordinaryList || activeFilterID != nil ? [.list, .kanban, .timeline] : exposedCases
+    }
 }
 
 /// 智能清单的显示状态（对齐滴答：显示 / 隐藏 / 有内容时显示）。
@@ -98,7 +101,9 @@ enum SmartListVisibility: String, Codable, CaseIterable, Identifiable {
 /// 视图偏好的键：清单/标签视图按名字，智能视图按 destination。
 /// 改名时迁移兼容名称键，保留排序、分组及看板选择。
 enum TaskViewScopeKey {
-    static func key(destination: NativeDestination, activeList: String?, activeTag: String?) -> String {
+    static func key(destination: NativeDestination, activeList: String?, activeTag: String?,
+                    activeFilterID: UUID? = nil) -> String {
+        if let activeFilterID { return "filter:" + activeFilterID.uuidString }
         if let activeList { return "list:" + activeList }
         if let activeTag { return "tag:" + activeTag }
         return "scope:" + destination.rawValue
@@ -306,11 +311,10 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     }
 
     /// 未设过 = 列表（滴答默认）。
-    /// 存量的 `timeline` 偏好读回时回落到列表：入口收起后如果照样返回时间线，
-    /// 用户会"看不见入口却一直停在那一个视图里"。
-    func viewMode(for key: String) -> TaskListViewMode {
+    /// A preference from another scope cannot activate an unavailable mode.
+    func viewMode(for key: String, availableModes: [TaskListViewMode] = TaskListViewMode.exposedCases) -> TaskListViewMode {
         let stored = storedViewMode(for: key)
-        return TaskListViewMode.exposedCases.contains(stored) ? stored : .list
+        return availableModes.contains(stored) ? stored : .list
     }
 
     func storedViewMode(for key: String) -> TaskListViewMode {

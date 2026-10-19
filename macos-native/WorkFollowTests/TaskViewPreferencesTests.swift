@@ -199,13 +199,16 @@ final class TaskViewPreferencesTests: XCTestCase {
         let dated = try XCTUnwrap(actions.create(title: "dated").taskID)
         _ = actions.setTags(dated, ["日期"])
         let untagged = try XCTUnwrap(actions.create(title: "none").taskID)
+        let firstTag = try XCTUnwrap(store.tag(named: "验收"))
+        let secondTag = try XCTUnwrap(store.tag(named: "日期"))
+        XCTAssertTrue(actions.reorderTag(firstTag.id, before: secondTag.id))
 
         let groups = TaskListProjection.groups(in: .allTasks, store: store, now: now,
                                                calendar: calendar, grouping: .byTag)
         // "both" 只出现在"验收"组：列表以 task.id 为身份，跨组重复会撞 ForEach ID。
-        // 组顺序按标签名字典序，"日"(U+65E5) < "验"(U+9A8C)。
+        // 组顺序跟随人工调整的目录顺序，任务自身的首标签保持原样。
         XCTAssertEqual(groups.filter { $0.kind != .pinned }.map(\.label),
-                       ["日期", "验收", "无标签"])
+                       ["验收", "日期", "无标签"])
         XCTAssertEqual(groups.first { $0.label == "验收" }?.tasks.map(\.id), [both])
         XCTAssertEqual(groups.first { $0.label == "日期" }?.tasks.map(\.id), [dated])
         XCTAssertEqual(groups.first { $0.label == "无标签" }?.tasks.map(\.id), [untagged])

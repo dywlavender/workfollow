@@ -38,6 +38,11 @@ private struct TaskOutlineCountdownState: Equatable {
     let collapsed: Bool
 }
 
+private struct TaskTimelineCreation: Identifiable {
+    let id = UUID()
+    let schedule: TaskSchedule
+}
+
 struct TaskListView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
@@ -49,6 +54,7 @@ struct TaskListView: View {
     @State private var showTemplatePicker = false
     /// 清单动态弹层（事件模型与任务动态共用 `TaskActivityStore`）。
     @State private var showListActivity = false
+    @State private var timelineCreation: TaskTimelineCreation?
     @State private var showQuickAddSchedule = false
     @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
     /// 光标落在哪个分组标题上（滴答的 `+` / `⋯` 是 hover 才出现的，未悬停时标题行
@@ -108,7 +114,8 @@ struct TaskListView: View {
     /// 避免历史上 @FocusState/@State 双真值导致守卫静默失效的那类问题。
     private var preferenceKey: String {
         TaskViewScopeKey.key(destination: navigation.destination,
-                             activeList: workspace.activeList, activeTag: workspace.activeTag)
+                             activeList: workspace.activeList, activeTag: workspace.activeTag,
+                             activeFilterID: workspace.activeFilter?.id)
     }
     private var sortMode: TaskListSortMode { environment.viewPreferences.sortMode(for: preferenceKey) }
     /// 分组只对"所有任务"（含清单/标签过滤）生效；时间型视图的日期分组是视图本体。
@@ -176,10 +183,9 @@ struct TaskListView: View {
                                hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
                                scope: scope ?? .allTasks, allowsCreation: canAdd)
             } else if viewMode == .timeline {
-                // 时间线：按天分栏的跨天条（结构照滴答 TimelineContentBlock）。
-                TaskTimelineView(groups: groups, workspace: workspace) { id in
-                    workspace.select(id)
-                }
+                TaskTimelineView(tasks: timelineTasks, workspace: workspace, allowsCreation: canAdd,
+                    onCreate: { timelineCreation = TaskTimelineCreation(schedule: $0) },
+                    onSelect: { workspace.select($0) })
             } else {
                 taskListSection()
             }
@@ -230,6 +236,13 @@ struct TaskListView: View {
                     showListActivity = false
                 }
             }
+        }
+        .sheet(item: $timelineCreation) { creation in
+            TaskComposer(workspace: workspace, onClose: { _ in timelineCreation = nil },
+                title: "", list: workspace.activeList ?? TaskList.inbox.name,
+                scheduled: true, date: creation.schedule.dueAt ?? workspace.clock(),
+                initialSchedule: QuickAddScheduleDraft(dueAt: creation.schedule.dueAt,
+                    dueEndAt: creation.schedule.dueEndAt, hasTime: creation.schedule.hasTime))
         }
         .onChange(of: showTemplatePicker) { _, presented in
             if presented { quickAddFocused = false; descriptionFocused = false }
@@ -335,11 +348,25 @@ struct TaskListView: View {
 
 
     private var viewMode: TaskListViewMode {
-        environment.viewPreferences.viewMode(for: preferenceKey)
+        environment.viewPreferences.viewMode(for: preferenceKey, availableModes: availableViewModes)
+    }
+
+    private var availableViewModes: [TaskListViewMode] {
+        TaskListViewMode.availableOptions(destination: navigation.destination,
+            activeList: workspace.activeList, activeTag: workspace.activeTag,
+            activeFilterID: workspace.activeFilter?.id)
+    }
+
+    private var timelineTasks: [Task] {
+        TaskTimelineProjection.tasks(in: scope ?? .allTasks, source: workspace.allTasks,
+            now: workspace.clock(), calendar: workspace.calendar, query: query,
+            archivedLists: Set(workspace.archivedListNames), filter: workspace.activeFilter,
+            hidesCompleted: environment.viewPreferences.hidesCompleted(for: preferenceKey),
+            sortMode: sortMode, descending: sortDescending)
     }
 
     private var viewModeBinding: Binding<TaskListViewMode> {
-        Binding(get: { environment.viewPreferences.viewMode(for: preferenceKey) },
+        Binding(get: { viewMode },
                 set: { environment.viewPreferences.setViewMode($0, for: preferenceKey) })
     }
 
@@ -401,7 +428,7 @@ struct TaskListView: View {
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
             Picker("视图", selection: viewModeBinding) {
-                ForEach(TaskListViewMode.exposedCases) { mode in
+                ForEach(availableViewModes) { mode in
                     Text(mode.title).tag(mode)
                 }
             }

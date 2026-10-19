@@ -160,7 +160,8 @@ private struct TaskWorkspaceView: View {
     /// 视图偏好的键（与 TaskListView 同一套派生，真值源唯一）。
     private var preferenceKey: String {
         TaskViewScopeKey.key(destination: navigation.destination,
-                             activeList: workspace.activeList, activeTag: workspace.activeTag)
+                             activeList: workspace.activeList, activeTag: workspace.activeTag,
+                             activeFilterID: workspace.activeFilter?.id)
     }
 
     var body: some View {
@@ -168,7 +169,10 @@ private struct TaskWorkspaceView: View {
             let wide = geometry.size.width >= WFMetrics.splitMinimum
             // 看板/时间线是**宽视图**：滴答里它们占满内容区，不该被"列表列"的上限
             // （listMaximum = 470）夹住——实测截图里那会让时间线只剩左边一条窄栏。
-            let wideView = environment.viewPreferences.viewMode(for: preferenceKey) != .list
+            let modes = TaskListViewMode.availableOptions(destination: navigation.destination,
+                activeList: workspace.activeList, activeTag: workspace.activeTag,
+                activeFilterID: workspace.activeFilter?.id)
+            let wideView = environment.viewPreferences.viewMode(for: preferenceKey, availableModes: modes) != .list
             // 宽视图下详情面板**按需出现**：没选中任务时（本来只显示空态插画）
             // 整块让给时间线/看板。
             let showsInspector = !wideView || workspace.selectedTaskID != nil || !workspace.bulkSelection.isEmpty
