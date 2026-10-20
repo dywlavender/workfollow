@@ -1,0 +1,41 @@
+# 原生日用版本收口与验证
+
+日期：2026-10-20。分支：`experiment/macos-native`。
+
+## 实施结果
+
+- 标签颜色、过滤器取值选择统一使用无箭头弹层；过滤器宿主修正为与内容一致的 264pt。
+- 详情渲染测试补齐 `AppEnvironment`；新增原生列表测试，验证标签行出现后的实际行高及一次撤销恢复。
+- 新增 `macos-native/scripts/local-app.py`，提供 Release 构建、固定位置安装、更新、状态查询和应用回退。安装前验证应用标识、签名及日用包配置；正在运行的应用须正常退出，不强制终止进程。
+- 日用包不含 `WorkFollowAcceptance*` 配置或测试插件，临时 DerivedData 在构建完成或失败后自动清理。每次更新只保留一份上一版应用。
+- 本次已安装 **0.2.0 (2)** 到 `/Applications/WorkFollow.app`。继续使用 `com.workfollow.native.preview` 及原数据目录，安装过程前后任务、笔记和正文记录数一致。
+
+## 定向验证
+
+| 范围 | 结果 |
+| --- | --- |
+| 弹层、过滤器、详情、标签行 | 执行 58 项，57 通过、1 跳过、0 失败 |
+| 创建、日程、提醒、日历、重复、持久化 | 40 项通过、0 失败 |
+| 本机包安装、更新、回退及验收配置隔离 | 2 项通过、0 失败 |
+| Release 构建、本机签名、安装后包检查 | 通过 |
+
+新增 `TaskDailyWorkflowTests` 使用真实快速添加、共享动作、SQLite 持久化、提醒规划器及日历同步协调器，系统通知和日历传输使用测试客户端，不写入真实日历：
+
+1. 带正文、日期和两级提醒的任务创建后导出日程；改期替换旧提醒并复用日程；完成取消提醒并标记日程；撤销和重启恢复相同提醒、正文及关联，不产生重复日程。
+2. 每日重复任务完成后，下一周期从投影变为真实任务，提醒与日程复用周期身份；重启保留已完成记录及下一周期。
+
+跳过项为临时 XCTest 宿主无法激活前台的搜索面板键盘焦点测试。实际应用前台验收因 Mac 锁屏暂未完成。
+
+## 安装与恢复位置
+
+- 日用应用：`/Applications/WorkFollow.app`
+- 上一版应用：`~/Library/Application Support/WorkFollowNativeUpdates/previous/WorkFollow.app`
+- 本次升级前完整数据副本：`~/Library/Application Support/WorkFollowNativeUpdates/data-before-2026-10-20`
+- 实际数据：`~/Library/Application Support/WorkFollowNativePreview`
+- 最新构建日志：`~/Library/Logs/WorkFollowNativeUpdates/build.log`
+
+安装和回退脚本只替换应用，不自动回退任务数据。本次升级前已在应用退出状态复制完整数据，并用 SQLite 备份接口生成可独立读取的数据库；原数据库检查正常。
+
+更新命令和签名说明见 [Native README](../macos-native/README.md)。本机没有可用签名证书，使用本机签名；固定标识与位置保留数据位置，但不能保证不同构建间保留系统隐私授权。需要持续保留授权时，应配置并沿用同一签名证书。[Apple 签名要求说明](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+
+当前日用数据未配置 Apple 日历同步。本次没有自动开启全量同步；真实日历写入仍需在应用内选定目标日历和清单后验证。

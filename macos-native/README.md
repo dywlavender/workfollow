@@ -1,10 +1,33 @@
 # WorkFollow Native 实验
 
-> 当前以 [功能迁移清单](../docs/native-feature-migration-status.md) 为准。已按新路线完成 Stage A 基础设施收口，完整测试 48/48 通过；全量交互、IME、性能仍待统一验收。下面早期阶段记录不代表所有新增功能已经验收。
+> 当前功能以 [功能迁移清单](../docs/native-feature-migration-status.md) 及各批验收记录为准。本文后半部分保留早期实验记录，其中的功能范围和测试数量不代表当前版本。
 
 Native macOS 实验版本，不是 Flutter 的替代版本。要求 macOS 14+、支持同步文件组的 Xcode 16+；本轮使用 Xcode 26.6 编译。
 
-## 运行
+## 日用版构建与更新
+
+固定安装到 `/Applications/WorkFollow.app`，沿用标识 `com.workfollow.native.preview`，任务及模块数据继续位于 `~/Library/Application Support/WorkFollowNativePreview`。日用版使用 Release 配置，打包时移除验收配置，不包含测试插件。
+
+先从 WorkFollow 菜单正常退出，等待保存完成，然后在仓库根目录运行：
+
+```sh
+python3 macos-native/scripts/local-app.py update
+python3 macos-native/scripts/local-app.py status
+```
+
+更新前会验证新包，并保留一份上一版应用至 `~/Library/Application Support/WorkFollowNativeUpdates/previous/WorkFollow.app`。安装脚本不改任务数据；退出后可用下面的命令回退应用。跨数据格式版本的回退需要同时考虑升级前的数据备份，不能把旧程序直接当作数据恢复工具。
+
+```sh
+python3 macos-native/scripts/local-app.py rollback
+```
+
+只构建不安装：`python3 macos-native/scripts/local-app.py build`，输出到 `/private/tmp/workfollow-local-build/WorkFollow.app`。也可用 `--output` 指定位置，再用 `install <应用路径>` 安装。构建号默认取已安装版本加一，构建日志覆盖写入 `~/Library/Logs/WorkFollowNativeUpdates/build.log`，临时 DerivedData 自动清理。
+
+当前机器没有可用签名证书，默认使用本机签名。固定应用标识和路径保留数据位置，但本机签名无法保证更新后沿用日历等隐私授权；系统可能再次询问。有可用证书后，构建或更新时传 `--signing-identity '证书名称'`，后续持续沿用同一身份。[Apple 对签名身份与隐私授权的说明](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+
+安装流程验证：`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s macos-native/scripts/tests -p 'test_local_app.py'`。应用功能验证使用 `scripts/run-tests.sh` 指定相关测试类，避免为局部改动重复全量回归。
+
+## 开发运行
 
 用 Xcode 打开 `WorkFollow.xcodeproj`，选择 WorkFollow scheme / My Mac，Run。无需第三方依赖。
 
@@ -15,7 +38,7 @@ xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -config
 open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 ```
 
-## 本轮范围
+## 早期实验范围记录
 
 - SwiftUI 图标栏、导航栏、Today / 收集箱 / 已完成任务列表和原生 Task Inspector。
 - Task 列表由纯 Swift Domain、`TaskActions` 和 Projection 驱动；完成框独立于行选择，Quick Add 经动作层创建真实 Domain Task。
