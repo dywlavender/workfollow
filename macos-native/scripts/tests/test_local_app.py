@@ -22,7 +22,7 @@ class LocalAppTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def app(self, name, version, qa=False):
+    def app(self, name, version, qa=False, legacy=False):
         app = self.root / (name + ".app")
         contents = app / "Contents"
         (contents / "MacOS").mkdir(parents=True)
@@ -33,6 +33,8 @@ class LocalAppTests(unittest.TestCase):
                  "CFBundleVersion": str(version), "CFBundleShortVersionString": "0.2.0"}
         if qa:
             value["WorkFollowAcceptanceStorageRoot"] = "/private/tmp/qa"
+        elif legacy:
+            value["WorkFollowAcceptanceStorageRoot"] = ""
         with (contents / "Info.plist").open("wb") as stream:
             plistlib.dump(value, stream)
         subprocess.run(["/usr/bin/codesign", "--force", "--sign", "-", str(app)],
@@ -40,7 +42,7 @@ class LocalAppTests(unittest.TestCase):
         return app
 
     def test_install_update_and_rollback_keep_one_previous_app(self):
-        first = self.app("first", 1)
+        first = self.app("first", 1, legacy=True)
         second = self.app("second", 2)
         local_app.install(first, self.destination, self.backup)
         self.assertFalse((self.backup / "WorkFollow.app").exists())

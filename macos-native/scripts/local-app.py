@@ -41,7 +41,9 @@ def validate(app):
     value = info(app)
     if value.get("CFBundleIdentifier") != BUNDLE_ID:
         raise AppError("应用标识不符，不能作为日用版安装。")
-    if any(key.startswith("WorkFollowAcceptance") for key in value):
+    # Older daily packages carried an empty storage-root placeholder. It does
+    # not redirect data and must remain eligible for rollback.
+    if any(key.startswith("WorkFollowAcceptance") and item != "" for key, item in value.items()):
         raise AppError("应用带有验收配置，请使用 build 命令生成日用版。")
     executable = value.get("CFBundleExecutable", "")
     if not executable or Path(executable).name != executable or not os.access(

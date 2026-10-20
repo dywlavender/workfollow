@@ -6,7 +6,7 @@
 
 - 标签颜色、过滤器取值选择统一使用无箭头弹层；过滤器宿主修正为与内容一致的 264pt。
 - 详情渲染测试补齐 `AppEnvironment`；新增原生列表测试，验证标签行出现后的实际行高及一次撤销恢复。
-- 新增 `macos-native/scripts/local-app.py`，提供 Release 构建、固定位置安装、更新、状态查询和应用回退。安装前验证应用标识、签名及日用包配置；正在运行的应用须正常退出，不强制终止进程。
+- 新增 `macos-native/scripts/local-app.py`，提供 Release 构建、固定位置安装、更新、状态查询和应用回退。安装前验证应用标识、签名及日用包配置；拒绝有效验收配置，兼容上一版日用包的空存储路径占位。正在运行的应用须正常退出，不强制终止进程。
 - 日用包不含 `WorkFollowAcceptance*` 配置或测试插件，临时 DerivedData 在构建完成或失败后自动清理。每次更新只保留一份上一版应用。
 - 本次已安装 **0.2.0 (2)** 到 `/Applications/WorkFollow.app`。继续使用 `com.workfollow.native.preview` 及原数据目录，安装过程前后任务、笔记和正文记录数一致。
 
