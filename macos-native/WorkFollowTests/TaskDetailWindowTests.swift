@@ -48,6 +48,9 @@ final class TaskDetailWindowTests: XCTestCase {
         var frames: [InspectorRenderAnchor: CGRect] = [:]
         let host = NSHostingView(rootView: root
             .frame(width: 880, height: 900)
+            // TaskInspectorShell 声明了 @EnvironmentObject AppEnvironment，
+            // 其他渲染测试（ScheduleContainerRenderTests 等）也都显式注入。
+            .environmentObject(AppEnvironment())
             .environment(\.colorScheme, .light)
             .coordinateSpace(name: "inspector-render")
             .onPreferenceChange(InspectorFramesKey.self) { frames = $0 })

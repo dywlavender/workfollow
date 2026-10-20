@@ -48,6 +48,7 @@ final class TaskInspectorProgressBarTests: XCTestCase {
         var frames: [InspectorRenderAnchor: CGRect] = [:]
         let root = TaskInspectorShell(workspace: workspace, showBack: false)
             .frame(width: 880, height: 900)
+            .environmentObject(AppEnvironment())
             .environment(\.colorScheme, .light)
             .coordinateSpace(name: "inspector-render")
             .onPreferenceChange(InspectorFramesKey.self) { frames = $0 }

@@ -58,7 +58,14 @@ struct AdvancedFilterRuleEditor: View {
                 .background(WFColors.content, in: RoundedRectangle(cornerRadius: 5))
             }
             .buttonStyle(.plain)
-            .popover(isPresented: $showingOptions) { organizationOptions }
+            // 业务弹层统一走无箭头呈现（与任务详情/日期面板同一套壳）。
+            .background {
+                AnchoredPropertyPanel(isPresented: $showingOptions, width: 264,
+                                      placement: .verticalInOwner,
+                                      focusPolicy: .preservePresenter) {
+                    organizationOptions
+                }
+            }
             if rule.kind == .tags {
                 Picker("标签匹配", selection: $rule.tagMatch) {
                     Text("包含任一标签").tag(FilterTagMatch.any)

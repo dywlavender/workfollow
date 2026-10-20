@@ -262,9 +262,39 @@ UI 放开嵌套：`TaskInspectorShell` 更多菜单/子任务区/添加行、`Ta
 - 单击打开详情（标题非编辑态 `hitTest` 返回 nil 穿透 + NSOutlineView 单击手势）；完成框点击双向切换（active ↔ completed）；悬停高亮（`draw` 绘制 7% 墨色）。
 - 交互坑修复（已写入实现注释）：① `reloadData` 后 cell 懒加载，`view(atColumn:row:makeIfNecessary:false)` 找不到新行 → 用 `makeIfNecessary:true`；② `updateNSView` 反复 `reloadData` 重置编辑态 → 加数据变化检测；③ **子任务区不再用 `NSScrollView` 包裹**，直接返回 `NSOutlineView` 随宿主详情 `ScrollView` 滚动——独立滚动会与宿主滚动冲突导致窗口坐标错乱（`convert` 到窗口 y 为负，点击永久落空）；④ 折叠箭头/层级缩进交给 NSOutlineView 自动（`NSTableCellView` 继承，但**不绑定 `textField`**，否则 NSOutlineView 重新管理标题导致其 AX 消失）。
 
-待替换（按此顺序）：
+### 14.3 日期面板 AppKit 化（2026-10-18 至 2026-10-20）
 
-1. 日期面板内部控件（面板宿主已是独立窗口，非 SwiftUI `.popover`）。
+面板宿主已是独立 `PopupPresentingWindow`，本轮把内部可见控件替换为 AppKit（保留 SwiftUI 草稿模型与子卡片宿主）。
+
+已完成（代码 + 真机验证 + 全量测试）：
+- **月历网格** `AppKitMonthGridView`（自绘 `MonthGridCanvas`）：标题栏（年月 + 上/下月/回到今天）、星期行、6×7 日期格；选中实心圆、今天描边环、区间高亮、节日小字；点击格选日期、点击箭头翻月。主面板与「重复结束 → 按日期结束」两处都替换。
+- **日期 / 时间段分段** `AppKitScheduleSegmented`（自绘灰底 + 白色选中胶囊），点击切换页签。
+- **属性行** `AppKitSchedulePropertyRow`（自绘图标 / 标题或值 / 尾控件 / 展开灰底，时间行嵌 `NSHostingView` 输入框）：图标、值、尾控件、`row` / `expandedRow` 五个渲染锚点与点击命中全部保留在 SwiftUI 层（透明按钮 + `.onHover`），画布只做绘制。**关键教训**：`NSViewRepresentable` 的 host frame 在 `NSHostingController` / 子窗口宿主下会滞后一拍，条件插入「重复结束」行时与上一行重叠且点击落空；把交互与锚点交回 SwiftUI 后，真机与测试都稳定（真机 5 行清晰、展开灰底与 `chevron.down` 正确）。
+- 颜色坑（已写入注释）：`NSColor(WFColors.text)` 这类动态 `Color` 转 `NSColor` 会固定成某个外观值（亮色下文字变白），自绘统一改用 `NSColor.labelColor` 系 + 手写动态 accent；SwiftUI 版 `LunarMonthGridView` 仍保留给未替换的宿主。
+
+**滴答实测纠偏（2026-10-18，直接操作滴答 8.0.80）**：
+- 「日期」页签 = 分段 + 快捷行 + 月历 + **时间 / 提醒 / 重复** + 清除/确定，**没有「截止日期」行**。
+- 「时间段」入口在当前账号下显示高级会员说明；说明图展示 **开始日期 + 结束日期 + 全天开关** + 提醒 + 重复。该图只能确认展示结构，不能证明实际编辑规则，也不能据此认定「截止日期」与区间结束是同一数据字段。2026-10-19 再次打开仍为会员说明，实际编辑行为未验。
+- 因此本地此前「日期面板里加一行截止日期」「顶栏常驻截止日期入口」都是自造设计，已撤销：面板不再渲染 `.deadlineRow`；顶栏恢复滴答 `secondaryDateLabel` 行为——**只在任务已有 `deadlineAt` 时**显示「截止 …」，未设置时不占位。本地 `dueEndAt` 与 `deadlineAt` 保持独立，当前证据不足以归并，也不推断时间段入口承担独立截止日期编辑。
+- 顺带修正：顶栏日程区现在只有 chip 时 `.schedule` 覆盖整块，`设置日期` 的点击改用更精确的 `.scheduleChip` 锚点，避免多一个入口后 midX 落到两个控件之间。
+
+**时间段页签对齐（2026-10-18）**：
+- 滴答会员说明图中的「时间段」= 开始日期 + 结束日期 + **全天开关** + 提醒 + 重复，未展示月历与快捷行；当前账号尚不能进入实际编辑页。
+- 本地改造：时间段页签不再渲染月历/快捷行，改为 `periodDateSection`（开始 / 结束 / 全天）；属性区换成 `periodPropertyRows`（全天关时才出现时间 / 结束时间，提醒/重复始终保留）；面板高度按「3 行 + 属性行」收紧（比日期页签矮）。
+- 开始 / 结束是独立行，点击各自弹 `AppKitMonthGridView` 单日选择；结束日期的选择下限取开始日（早于开始的日期变灰）。草稿层新增 `setPeriodStart` / `setPeriodEnd`（开始挪到结束之后会清空旧结束）。
+- 测试：新增 `SchedulePeriodTabTests`（直接设置 / 清空非法区间 / 全天开关）；`SchedulePopoverContractTests` 的旧断言「时间段多一行结束时间」改为「时间段不再背月历、面板变矮」。
+- 后续补两处（同日）：① 顶栏日期 chip 之前只取 `dueAt`，时间段任务看不到结束日；改为 `dueEndAt` 与开始不同日时输出「开始 - 结束」（如「今天, 10月18日 - 明天, 10月19日」）。② 时间段「开始/结束」弹出的单日选择缺 `CalendarAnnotationOverlay`，节假日/班休标记只在日期页签月历里；已补同一套叠加层（`showBadges: true`）。
+- 「时间」行占位（同日）：全天任务（`hasTime=false`）此前把默认锚点 09:00 当值显示，看着像已设时间却没有清除入口；改为**不挂输入框**、只画占位「时间」（`hasTime` 才挂 `timeRowEditor`，结束时间同理），对齐滴答面板。
+- 任务列表行内编辑的底色（同日，`TaskRowTitleField`）：field editor（`NSTextView`）默认白底会在选中行上挖出一块白，改为 `drawsBackground = false` + 清空 `textContainerInset`，编辑时底色与选中行一致。
+- 任务列表的标签行（2026-10-19，对齐滴答）：`TaskRowView` 在标题/预览下方补一排**只读胶囊**（最多 `TaskListMetrics.maxVisibleTags` 个，其余折成「+N」），色值取 `workspace.tag(named:)?.colorARGB` → `WFListPalette.swatch`，底 10% 透明 + 同色文字。`NativeTaskOutline` 通过 `heightOfRowByItem` 按标题、预览、标签内容动态计算行高，并保留最小行高。
+- 弹层契约与测试环境（同日）：`TaskTagManagementView`（颜色选择）与 `AdvancedFilterRuleEditor`（清单/标签取值）的 `.popover(` 改为 `AnchoredPropertyPanel`，业务弹层统一无箭头；`TaskKindTests` / `TaskNoteInfoTests` / `TaskInspectorProgressBarTests` 的渲染宿主补 `.environmentObject(AppEnvironment())`（`TaskInspectorShell` 声明了该 `@EnvironmentObject`，缺失会在渲染期直接 fatal）。
+
+收尾状态：
+- 快捷行与清除/确定按钮已完成 AppKit 绘制；透明 SwiftUI 按钮保留渲染锚点、辅助功能和回车确认。2026-10-19 的 80 项定向验证见 [日期面板收尾记录](ticktick-date-panel-finish-2026-10-19.md)。
+- 时间、提醒、重复规则及重复结束的子面板保留 SwiftUI；当前没有为统一技术栈而重写它们的计划。
+- 2026-10-20 修正过滤器取值弹层的宿主宽度，使其与 264pt 内容一致；新增原生列表测试，验证添加标签后实际行高增长、一次撤销恢复。弹层、过滤器、详情渲染及标签相关共执行 **58 项，1 项跳过，0 失败**；跳过项为临时 XCTest 宿主不能激活前台的键盘焦点测试，需日用应用前台补验。
+
+历史全量回归：**1479 项（6 跳过）0 失败**（2026-10-18；顺带修正标题扩到六级后 `SlashSessionTests` 的遗留断言 3→6）。此数值不是 2026-10-20 的验证结果。
 
 ## 证据索引
 

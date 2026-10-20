@@ -54,6 +54,7 @@ final class TaskNoteInfoTests: XCTestCase {
         var frames: [InspectorRenderAnchor: CGRect] = [:]
         let host = NSHostingView(rootView: root
             .frame(width: 880, height: 900)
+            .environmentObject(AppEnvironment())
             .environment(\.colorScheme, .light)
             .coordinateSpace(name: "inspector-render")
             .onPreferenceChange(InspectorFramesKey.self) { frames = $0 })

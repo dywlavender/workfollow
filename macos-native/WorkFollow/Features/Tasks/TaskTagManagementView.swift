@@ -115,8 +115,14 @@ struct TaskTagsSectionView: View {
                 } isTargeted: { active in targeted = active ? tag.id : nil }
         }
         .contextMenu { tagMenu(tag) }
-        .popover(isPresented: Binding(get: { colorTag == tag.id }, set: { if !$0 { colorTag = nil } })) {
-            TaskTagColorPicker(workspace: workspace, tagID: tag.id) { colorTag = nil }
+        // 业务弹层统一走无箭头呈现（和任务详情、日期面板同一套壳）。
+        .background {
+            AnchoredPropertyPanel(
+                isPresented: Binding(get: { colorTag == tag.id }, set: { if !$0 { colorTag = nil } }),
+                width: 220, placement: .verticalInOwner,
+                focusPolicy: .preservePresenter) {
+                TaskTagColorPicker(workspace: workspace, tagID: tag.id) { colorTag = nil }
+            }
         }
     }
 
