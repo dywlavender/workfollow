@@ -109,24 +109,17 @@ struct MatrixWorkspaceView: View {
                 .font(WFType.pageTitle)
                 .foregroundStyle(WFColors.text)
             Spacer(minLength: 0)
-            Menu {
+            BusinessMenu {
                 ForEach([MatrixPreset.priority, .timeAndPriority, .legacyThreeDays], id: \.self) { preset in
-                    Button(preset.title) { settings.updateMatrix { $0 = .makePreset(preset) } }
+                    BusinessMenuOption(preset.title, selected: settings.matrix.preset == preset) { settings.updateMatrix { $0 = .makePreset(preset) } }
                 }
             } label: { Label(settings.matrix.preset.title, systemImage: "slider.horizontal.3") }
-            .menuStyle(.borderlessButton)
             .fixedSize()
             Spacer().frame(width: WFSpace.sm)
-            Menu {
-                Button {
-                    settings.updateMatrix { $0.showCompleted.toggle() }
-                } label: {
-                    if showCompleted {
-                        Label("显示已完成任务", systemImage: "checkmark")
-                    } else {
-                        Text("显示已完成任务")
-                    }
-                }
+            BusinessMenu {
+                Toggle("显示已完成任务", isOn: Binding(get: { showCompleted }, set: { flag in
+                    settings.updateMatrix { $0.showCompleted = flag }
+                }))
                 Divider()
                 Button("撤销配置修改") { settings.undoConfiguration() }.disabled(!settings.canUndoConfiguration)
                 Button("重做配置修改") { settings.redoConfiguration() }.disabled(!settings.canRedoConfiguration)
@@ -140,8 +133,6 @@ struct MatrixWorkspaceView: View {
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("四象限设置")
         }
@@ -407,7 +398,7 @@ struct MatrixQuadrantCard: View {
     /// 象限菜单：新建、显示/隐藏已完成、展开全部、折叠全部。
     /// 已完成是页面的偏好，所以那一项回传给页面，象限自己不留第二份状态。
     private var quadrantMenu: some View {
-        Menu {
+        BusinessMenu {
             Button("新建任务") {
                 anchorSink.rect = anchor.rect
                 onAddTask()
@@ -429,8 +420,6 @@ struct MatrixQuadrantCard: View {
                        height: WFMatrixMetrics.quadrantActionSize)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
         .opacity(hovering ? 1 : 0)
         .disabled(!hovering)

@@ -87,11 +87,96 @@ final class TaskActions {
     }
 
     @discardableResult
-    func complete(_ id: UUID) -> TaskActionResult {
+    func createWeeklyTask(title: String, list: String, weekOf: Date) -> TaskActionResult {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return .failure(.missingTask) }
+        var result: TaskActionResult = .failure(.missingTask)
+        store.transaction {
+            result = create(title: clean, list: TaskList(name: list))
+            if let id = result.taskID { _ = planTasks([id], weekOf: weekOf) }
+        }
+        return result
+    }
+
+    @discardableResult
+    func planTasks(_ ids: Set<UUID>, weekOf: Date) -> Int {
+        let start = SummaryReviewBuilder.weekStart(of: weekOf, calendar: calendar)
+        let key = TaskWeeklyPlanning.key(for: start, calendar: calendar)
+        let selected = store.tasks.filter { ids.contains($0.id) && !$0.isClosed && !$0.isConverted
+            && $0.deletedAt == nil && $0.skippedAt == nil && !store.archivedListNames.contains($0.list.name) }
+        let roots = selected.filter { $0.parentID.map { !ids.contains($0) } ?? true }
+        guard !roots.isEmpty else { return 0 }
+        var snapshot = store.tasks
+        let now = clock()
+        var changedRoots = 0
+        for root in roots {
+            let oldWeek = root.weeklyPlanning?.currentWeek ?? root.schedule.dueAt.map { TaskWeeklyPlanning.key(for: $0, calendar: calendar) }
+            guard oldWeek != key else { continue }
+            var members: Set<UUID> = [root.id]
+            var expanded = true
+            while expanded {
+                let previous = members
+                for task in snapshot where task.parentID.map({ members.contains($0) }) == true && !task.isClosed {
+                    let childWeek = task.weeklyPlanning?.currentWeek ?? task.schedule.dueAt.map { TaskWeeklyPlanning.key(for: $0, calendar: calendar) }
+                    if childWeek == nil || childWeek == oldWeek { members.insert(task.id) }
+                }
+                expanded = members != previous
+            }
+            for index in snapshot.indices where members.contains(snapshot[index].id)
+                && snapshot[index].deletedAt == nil && snapshot[index].skippedAt == nil {
+                let original = snapshot[index]
+                var planning = original.weeklyPlanning ?? TaskWeeklyPlanning()
+                if planning.history.isEmpty, let due = original.schedule.dueAt {
+                    planning.enter(TaskWeeklyPlanning.key(for: due, calendar: calendar), task: original, at: now)
+                }
+                planning.enter(key, task: original, at: now)
+                snapshot[index].weeklyPlanning = planning
+                if let due = original.schedule.dueAt {
+                    let from = SummaryReviewBuilder.weekStart(of: due, calendar: calendar)
+                    let days = calendar.dateComponents([.day], from: from, to: start).day ?? 0
+                    snapshot[index].schedule.dueAt = ScheduleSemantics.shifted(due, byDays: days, calendar: calendar)
+                    snapshot[index].schedule.dueEndAt = ScheduleSemantics.shifted(original.schedule.dueEndAt, byDays: days, calendar: calendar)
+                    // Carrying a plan changes when to work, not the separately
+                    // agreed delivery deadline.
+                    snapshot[index].reminderAt = ScheduleSemantics.shifted(original.reminderAt, byDays: days, calendar: calendar)
+                    if let occurrence = original.occurrenceKey {
+                        snapshot[index].occurrenceOverride = .init(occurrence: occurrence,
+                            actualSchedule: snapshot[index].schedule, outcome: .active)
+                    }
+                }
+                snapshot[index].updatedAt = now
+            }
+            changedRoots += 1
+        }
+        if changedRoots > 0 { store.commit(snapshot) }
+        return changedRoots
+    }
+
+    @discardableResult
+    func captureWeekPlan(weekOf: Date) -> Bool {
+        let projection = WeeklyPlanProjection(weekStart: SummaryReviewBuilder.weekStart(of: weekOf, calendar: calendar), calendar: calendar)
+        var snapshot = store.tasks
+        var changed = false
+        for index in snapshot.indices where projection.includes(snapshot[index]) {
+            let task = snapshot[index]
+            guard task.weeklyPlanning == nil else { continue }
+            var planning = TaskWeeklyPlanning()
+            let week = task.schedule.dueAt.map { TaskWeeklyPlanning.key(for: $0, calendar: calendar) } ?? projection.weekKey
+            planning.enter(week, task: task, at: clock())
+            snapshot[index].weeklyPlanning = planning
+            changed = true
+        }
+        if changed { store.commit(snapshot, undoPolicy: .skip) }
+        return changed
+    }
+
+    @discardableResult
+    func complete(_ id: UUID, completedAt: Date? = nil) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
         guard !task.isClosed else { return .failure(.alreadyCompleted) }
-        let now = clock()
+        let now = completedAt ?? clock()
+        let recordedAt = clock()
         var snapshot = store.tasks.map { original -> Task in
             var value = original
             if (value.id == id || value.parentID == id), value.deletedAt == nil,
@@ -106,7 +191,7 @@ final class TaskActions {
                         actualSchedule: value.occurrenceOverride?.actualSchedule, outcome: .completed)
                 }
                 value.completedAt = now
-                value.updatedAt = now
+                value.updatedAt = recordedAt
             }
             return value
         }
@@ -513,17 +598,27 @@ final class TaskActions {
     func undo() { store.undo() }
     func redo() { store.redo() }
 
-    /// A Calendar edit is a single task command, including materialization.
+    /// External reminder edits are one undoable command. Completion still uses
+    /// the domain action so child completion and recurrence advancement agree.
     @discardableResult
-    func applyCalendarEdit(_ occurrence: TaskOccurrence, title: String, schedule: TaskSchedule) -> TaskActionResult {
+    func applyRemindersEdit(_ occurrence: TaskOccurrence, fields: ReminderTaskFields) -> TaskActionResult {
         var result: TaskActionResult = .failure(.missingTask)
         store.transaction {
             result = occurrence.isVirtual ? materializeOccurrence(occurrence) : .success(occurrence.task.id)
-            guard let id = result.taskID else { return }
-            _ = setSchedule(id, schedule)
-            // A Calendar occurrence edit must not rewrite the series template
-            // or rebase editor text through earlier task undo frames.
-            result = edit(id) { $0.title = title.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard let id = result.taskID, let task = store.task(id) else { return }
+            let schedule = ReminderTaskMapping.schedule(fields, original: task.schedule, calendar: calendar)
+            let reminder = ReminderTaskMapping.reminderValues(fields, calendar: calendar)
+            result = edit(id) { value in
+                value.title = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                value.schedule = schedule; value.priority = fields.priority
+                value.reminderAt = reminder.absolute; value.reminderOffsets = reminder.offsets
+                if let key = value.occurrenceKey, schedule != task.schedule {
+                    value.occurrenceOverride = .init(occurrence: key, actualSchedule: schedule,
+                        outcome: value.occurrenceOverride?.outcome ?? .active)
+                }
+            }
+            if fields.completed, task.status != .completed { result = complete(id, completedAt: fields.completedAt) }
+            else if !fields.completed, task.status == .completed { result = restore(id) }
         }
         return result
     }

@@ -107,4 +107,47 @@ final class SummaryStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.entry(for: "2026-01-15")?.content, "持久化的摘要")
         XCTAssertEqual(reloaded.entries.map(\.dayKey), ["2026-01-15"])
     }
+
+    // MARK: - 富文本正文（document）
+
+    func testSaveDocumentStoresRichTextAndSyncsPlainText() {
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = makeStore { now }
+        let document = NativeDocument(plainText: "10月19日至25日\n已完成\n写周报")
+
+        store.save(document: document, dayKey: "2026-10-25")
+
+        let entry = store.entry(for: "2026-10-25")
+        XCTAssertNotNil(entry?.document)
+        // 纯文本同步一份，供旧预览 / 搜索使用。
+        XCTAssertEqual(entry?.content, entry?.document?.plainText)
+        XCTAssertEqual(entry?.resolvedDocument, document)
+        XCTAssertEqual(entry?.updatedAt, now)
+
+        // 再次保存：富文本与纯文本一起更新，不新增条目。
+        now = now.addingTimeInterval(60)
+        let updated = NativeDocument(plainText: "改过的正文")
+        store.save(document: updated, dayKey: "2026-10-25")
+        XCTAssertEqual(store.entries.count, 1)
+        XCTAssertEqual(store.entry(for: "2026-10-25")?.content, "改过的正文")
+        XCTAssertEqual(store.entry(for: "2026-10-25")?.updatedAt, now)
+    }
+
+    func testSaveEmptyDocumentDeletesEntry() {
+        let store = makeStore { Date(timeIntervalSince1970: 1_800_000_000) }
+        store.save(document: NativeDocument(plainText: "有内容"), dayKey: "2026-10-25")
+        XCTAssertNotNil(store.entry(for: "2026-10-25"))
+
+        store.save(document: NativeDocument(plainText: "   \n  "), dayKey: "2026-10-25")
+        XCTAssertNil(store.entry(for: "2026-10-25"))
+    }
+
+    func testLegacyEntryWithoutDocumentResolvesFromContent() {
+        // 旧 summary.json 只有 content，document 为 nil 时用它兜底成单段文档。
+        let entry = DailySummary(dayKey: "2026-01-15", content: "旧格式摘要",
+                                 document: nil,
+                                 updatedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertNil(entry.document)
+        XCTAssertEqual(entry.resolvedDocument.plainText, "旧格式摘要")
+    }
 }

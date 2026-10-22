@@ -25,6 +25,7 @@ struct TaskQuickComposer: View {
 
     @State private var title = ""
     @State private var listName = TaskList.inbox.name
+    @State private var listQuery = ""
     @State private var tags: [String]
     @State private var schedule: TaskSchedule
     /// 用户是否对日期做过决定。原版用它区分"页面给的日期"和"用户清空了日期"：
@@ -112,7 +113,7 @@ struct TaskQuickComposer: View {
 
             Spacer(minLength: 0)
 
-            Menu {
+            BusinessMenu(width: PopupMetrics.taskMenuWidth, title: "优先级") {
                 priorityItems
             } label: {
                 Image(systemName: "flag")
@@ -121,8 +122,6 @@ struct TaskQuickComposer: View {
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("设置优先级")
             .accessibilityLabel("优先级：\(Self.priorityTitle(priority))")
@@ -157,17 +156,9 @@ struct TaskQuickComposer: View {
     /// 第三行：清单胶囊（左）与更多（右），高 42、左右内边距 10。
     private var listRow: some View {
         HStack(spacing: 0) {
-            Menu {
-                ForEach(workspace.availableListNames, id: \.self) { name in
-                    Button {
-                        listName = name
-                    } label: {
-                        if name == listName {
-                            Label(name, systemImage: "checkmark")
-                        } else {
-                            Text(name)
-                        }
-                    }
+            BusinessMenu(title: "清单", search: workspace.availableListNames.count > 10 ? $listQuery : nil) {
+                ForEach(workspace.availableListNames.filter { listQuery.isEmpty || $0.localizedStandardContains(listQuery) }, id: \.self) { name in
+                    BusinessMenuOption(name, selected: name == listName, symbol: "tray") { listName = name; titleFocused = true }
                 }
             } label: {
                 HStack(spacing: WFSpace.sm) {
@@ -182,8 +173,6 @@ struct TaskQuickComposer: View {
                 .padding(.vertical, WFSpace.inline)
                 .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("移动到清单")
             .accessibilityLabel("清单：\(listName)")
@@ -192,7 +181,7 @@ struct TaskQuickComposer: View {
 
             // 原版的「更多属性」只有提醒与重复两项，都是接着打开同一个日程面板的
             // 对应页（`_openMore` → `_pickReminder` / `_pickRepeat`）。
-            Menu {
+            BusinessMenu(title: "更多属性") {
                 Button("提醒") { datePage = .reminder }
                 Button("重复") { datePage = .recurrence }
             } label: {
@@ -202,8 +191,6 @@ struct TaskQuickComposer: View {
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("更多属性")
             .accessibilityLabel("更多属性")
@@ -221,14 +208,8 @@ struct TaskQuickComposer: View {
     @ViewBuilder
     private var priorityItems: some View {
         ForEach(TaskPriority.menuOrder, id: \.self) { value in
-            Button {
-                priority = value
-            } label: {
-                if value == priority {
-                    Label(Self.priorityTitle(value), systemImage: "checkmark")
-                } else {
-                    Text(Self.priorityTitle(value))
-                }
+            BusinessMenuOption(Self.priorityTitle(value), selected: value == priority, symbol: "flag", color: value.menuColor) {
+                priority = value; titleFocused = true
             }
         }
     }

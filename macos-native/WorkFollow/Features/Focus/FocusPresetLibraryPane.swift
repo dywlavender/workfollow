@@ -48,7 +48,7 @@ struct FocusPresetLibraryPane: View {
                     Image(systemName: "plus").font(.system(size: 17)).frame(width: 28, height: 28)
                 }.buttonStyle(.plain).help("添加常用专注")
                     .accessibilityIdentifier("focus-library-add-preset")
-                Menu {
+                BusinessMenu {
                     Button("概览") { store.showLibraryOverview() }
                     Button("专注记录") { store.showRecords() }
                     Button("专注统计") { store.showStatistics() }
@@ -57,7 +57,7 @@ struct FocusPresetLibraryPane: View {
                     Button("沉浸专注") { FocusPresentationWindows.showImmersive(store: store) }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28)
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                }.fixedSize()
                     .accessibilityIdentifier("focus-library-menu")
             }
             HStack(spacing: 2) {
@@ -104,7 +104,7 @@ struct FocusPresetLibraryPane: View {
         .padding(.horizontal, 10).frame(height: FocusLayoutMetrics.libraryRowHeight)
         .background(store.browsedPresetID == preset.id ? theme.chipBackground : .clear,
                     in: RoundedRectangle(cornerRadius: 13))
-        .contextMenu {
+        .businessContextMenu {
             if preset.archivedAt == nil {
                 Button("编辑") { editingPreset = preset }
                 Button("添加记录") { addRecord(for: preset) }

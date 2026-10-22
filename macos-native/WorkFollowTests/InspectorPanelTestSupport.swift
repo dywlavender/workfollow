@@ -59,6 +59,7 @@ enum InspectorPanelTestSupport {
         window.isReleasedWhenClosed = false
         window.appearance = NSAppearance(named: .aqua)
         window.contentView = host
+        // 弹层/输入框用例需要 key window 收键盘事件，这里显式要求前台。
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         settle(window)

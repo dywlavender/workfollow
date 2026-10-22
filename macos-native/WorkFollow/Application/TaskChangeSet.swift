@@ -36,6 +36,7 @@ struct TaskChangeSet: Equatable {
         case sectionID
         case focusEstimate
         case occurrence
+        case weeklyPlanning
     }
 
     struct Entry: Equatable {
@@ -136,6 +137,7 @@ struct TaskChangeSet: Equatable {
         if before.sourceNoteID != after.sourceNoteID { fields.insert(.sourceNoteID) }
         if before.sectionID != after.sectionID { fields.insert(.sectionID) }
         if before.focusEstimate != after.focusEstimate { fields.insert(.focusEstimate) }
+        if before.weeklyPlanning != after.weeklyPlanning { fields.insert(.weeklyPlanning) }
         if before.series != after.series || before.occurrenceKey != after.occurrenceKey || before.occurrenceOverride != after.occurrenceOverride {
             fields.insert(.occurrence)
         }

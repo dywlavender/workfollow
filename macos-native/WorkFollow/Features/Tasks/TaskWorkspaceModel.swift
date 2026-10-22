@@ -119,6 +119,9 @@ final class TaskWorkspaceModel: ObservableObject {
         store.clearUndo()
         // Install after hydration: consumers see committed edits, not a replay
         // of initial loading. The stream exists independently of Activity.
+        store.prepareTaskCommit = { before, after in
+            TaskWeeklyPlanning.recording(before: before, after: after, at: clock(), calendar: calendar)
+        }
         store.onTaskChanges = { [weak self] changes in self?.taskChanges.send(changes) }
         store.onListArchiveChange = { [weak self] names in self?.listArchiveChanges.send(names) }
         store.onOrganizationRename = { [weak self] change in
@@ -699,6 +702,29 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    @discardableResult
+    func createWeeklyTask(title: String, list: String, weekOf: Date) -> UUID? {
+        let result = actions.createWeeklyTask(title: title, list: list, weekOf: weekOf)
+        didMutate(result)
+        return result.taskID
+    }
+
+    /// Selective carry-over keeps identities and reminder bindings, and the
+    /// whole selection is one ordinary workspace undo step.
+    @discardableResult
+    func planTasks(_ ids: Set<UUID>, weekOf: Date) -> Int {
+        let count = actions.planTasks(ids, weekOf: weekOf)
+        guard count > 0 else { return 0 }
+        revision += 1
+        report(FeedbackEvent(kind: .undoable, message: "已安排 \(count) 项到\(SummaryReviewBuilder.weekTitle(for: SummaryReviewBuilder.weekStart(of: weekOf, calendar: calendar), calendar: calendar))",
+                             actionTitle: "撤销", action: undoStep()))
+        return count
+    }
+
+    func captureWeekPlan(weekOf: Date) {
+        if actions.captureWeekPlan(weekOf: weekOf) { revision += 1 }
+    }
+
     /// 创建通道的 plan 版：新建对话框等宿主直接把面板产出的计划交过来。
     @discardableResult
     func createDraft(title: String, list: String, plan: SchedulePlan, priority: TaskPriority,
@@ -1008,6 +1034,10 @@ final class TaskWorkspaceModel: ObservableObject {
     /// Sidebar badge count: intentionally ignores the saved filter (and the
     /// list/tag query) so destination badges stay stable while filtering.
     func count(for destination: NativeDestination) -> Int {
+        if destination == .weekPlan {
+            let projection = WeeklyPlanProjection(weekStart: SummaryReviewBuilder.weekStart(of: clock(), calendar: calendar), calendar: calendar)
+            return projection.tasks(from: tasksInActiveLists).filter { !$0.isClosed }.count
+        }
         if destination == .trash { return deletedTasks.count }
         guard let scope = Self.scope(for: destination) else { return 0 }
         prepareProjectionCache()
@@ -1337,8 +1367,8 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
-    func applyCalendarEdit(_ occurrence: TaskOccurrence, title: String, schedule: TaskSchedule) -> TaskActionResult {
-        let result = actions.applyCalendarEdit(occurrence, title: title, schedule: schedule)
+    func applyRemindersEdit(_ occurrence: TaskOccurrence, fields: ReminderTaskFields) -> TaskActionResult {
+        let result = actions.applyRemindersEdit(occurrence, fields: fields)
         didMutate(result)
         return result
     }

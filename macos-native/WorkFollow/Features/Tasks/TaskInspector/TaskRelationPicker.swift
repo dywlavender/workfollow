@@ -64,7 +64,7 @@ struct TaskRelationPicker: View {
             if failed {
                 Text("无法插入关联，请返回正文后重试").font(.caption).foregroundStyle(.red)
             }
-        }.padding(16).frame(width: 320, height: 300)
+        }.padding(16).frame(width: PopupMetrics.relationPickerWidth, height: 300)
             .coordinateSpace(name: "task-relation-picker")
             .relationPickerAnchor(.panel)
             .background(PopupEscapeRouter(depth: 2, onEscape: onCancel))

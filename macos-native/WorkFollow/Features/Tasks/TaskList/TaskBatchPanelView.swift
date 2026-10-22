@@ -99,7 +99,7 @@ struct TaskBatchPanelView: View {
                 showSchedule = false
             }
         }
-        .background(AnchoredPropertyPanel(isPresented: $showTagPicker, width: 264) {
+        .background(AnchoredPropertyPanel(isPresented: $showTagPicker, width: PopupMetrics.tagPickerWidth) {
             TaskTagPickerPopover(initialTags: [], workspace: workspace,
                                  onCancel: { showTagPicker = false },
                                  onApply: { tags in
@@ -109,7 +109,7 @@ struct TaskBatchPanelView: View {
                                      showTagPicker = false
                                  })
         })
-        .background(AnchoredPropertyPanel(isPresented: $showParentPicker, width: 280,
+        .background(AnchoredPropertyPanel(isPresented: $showParentPicker, width: PopupMetrics.parentPickerWidth,
                                           title: "批量关联主任务") {
             TaskParentPicker(taskIDs: workspace.bulkSelection,
                              workspace: workspace,
@@ -251,9 +251,9 @@ struct TaskBatchPanelView: View {
     }
 
     private var listValueRow: some View {
-        Menu {
+        BusinessMenu {
             ForEach(workspace.availableListNames, id: \.self) { name in
-                Button { workspace.applyBulk(.move(name)) } label: { Text(name) }
+                BusinessMenuOption(name, selected: commonListName == name, symbol: "tray") { workspace.applyBulk(.move(name)) }
             }
         } label: {
             HStack(spacing: 8) {
@@ -269,7 +269,6 @@ struct TaskBatchPanelView: View {
             .contentShape(Rectangle())
             .batchPanelTextProbe(commonListName ?? "移动到清单")
         }
-        .menuIndicator(.hidden)
         .help("批量移动到清单")
         .accessibilityLabel("批量移动到清单")
     }

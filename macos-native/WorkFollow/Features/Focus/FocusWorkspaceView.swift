@@ -163,12 +163,10 @@ struct FocusWorkspaceView: View {
                             .stroke(theme.hairline, lineWidth: 1.5))
                 }
                 if let workspace {
-                    Picker("关联任务", selection: $addTimerTaskID) {
-                        Text("不关联").tag(Optional<UUID>.none)
-                        ForEach(workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }) { task in
-                            Text(task.title.isEmpty ? "未命名任务" : task.title).tag(Optional(task.id))
-                        }
-                    }
+                    BusinessPicker("关联任务", selection: $addTimerTaskID, options:
+                        [BusinessChoice(nil, "不关联")] + workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }.map { task in
+                            BusinessChoice(Optional(task.id), task.title.isEmpty ? "未命名任务" : task.title, symbol: "checklist")
+                        }, width: PopupMetrics.relationPickerWidth)
                 }
                 if showEmojiPicker {
                     ScrollView(.horizontal, showsIndicators: false) {

@@ -39,7 +39,7 @@ struct TaskFocusEstimateEditor: View {
             }
         }
         .font(WFType.control)
-        .padding(16).frame(width: 280)
+        .padding(16).frame(width: PopupMetrics.focusEstimateWidth)
     }
 }
 
@@ -84,7 +84,7 @@ struct TaskFocusEstimateControl: View {
             Image(systemName: "timer").foregroundStyle(WFColors.tertiaryText)
             Button(label) { showEstimate = true }
                 .buttonStyle(.plain)
-                .background(AnchoredPropertyPanel(isPresented: $showEstimate, width: 280) {
+                .background(AnchoredPropertyPanel(isPresented: $showEstimate, width: PopupMetrics.focusEstimateWidth) {
                     TaskFocusEstimateEditor(estimate: task.focusEstimate, onSave: { value in
                         _ = workspace.setFocusEstimate(task.id, value)
                         showEstimate = false

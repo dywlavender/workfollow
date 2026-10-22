@@ -49,7 +49,8 @@ final class TaskSchedulePanelRenderTests: XCTestCase {
             XCTAssertNotNil(values[.shortcut("下周")])
             XCTAssertNotNil(values[.shortcut("周末")])
             XCTAssertEqual(values[.row(.time)]?.label, timed ? "20:30" : "时间")
-            XCTAssertEqual(values[.row(.reminder)]?.label, timed ? "准时" : "提醒")
+            // 提醒行现在会带上具体时刻（准时 → 「准时 · 20:30」）。
+            XCTAssertEqual(values[.row(.reminder)]?.label, timed ? "准时 · 20:30" : "提醒")
             XCTAssertEqual(values[.row(.repeat)]?.label, repeating ? "每月 (22日)" : "重复")
             XCTAssertEqual(values[.row(.repeatEnd)] != nil, repeating)
             if repeating {
@@ -77,7 +78,8 @@ final class TaskSchedulePanelRenderTests: XCTestCase {
     func testAllDayZeroOffsetRemainsSameDayAndDraftEditsDoNotMutateTask() throws {
         let (workspace, task) = fixture(timed: false, allDayReminder: true)
         let values = try render(task, workspace: workspace, name: "all-day")
-        XCTAssertEqual(values[.row(.reminder)]?.label, "当天")
+        // 全天提醒的默认时刻是 09:00，标签会把它带出来。
+        XCTAssertEqual(values[.row(.reminder)]?.label, "当天 · 09:00")
         let revision = workspace.revision
         let draft = TaskDateDraftModel(task: task, calendar: calendar, now: { self.now }, deadline: false)
         draft.quick(1)

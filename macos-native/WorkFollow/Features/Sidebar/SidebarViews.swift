@@ -5,6 +5,9 @@ struct IconRailView: View {
     @ObservedObject var navigation: AppNavigation
     let onNavigate: (NativeDestination) -> Void
     let onOpenQuickOpen: () -> Void
+    var sync: RemindersSyncCoordinator? = nil
+    var onRetrySync: () -> Void = {}
+    var onOpenSyncSettings: () -> Void = {}
     @Environment(\.openSettings) private var openSettings
     @Environment(\.mainWindowRailInset) private var mainWindowRailInset
     @FocusState private var focusedDestination: NativeDestination?
@@ -43,11 +46,13 @@ struct IconRailView: View {
                        selected: navigation.destination == .countdown)
             railButton(.focus, symbol: "timer.circle.fill", title: "专注",
                        selected: navigation.destination == .focus)
-railButton(.summary, symbol: "list.bullet.clipboard.fill", title: "摘要",
-                       selected: navigation.destination == .summary)
             railButton(.meetings, symbol: "mic.fill", title: "会议纪要",
                        selected: navigation.destination == .meetings)
             Spacer()
+            if let sync {
+                AppleSyncStatusButton(integration: sync, onRetry: onRetrySync,
+                    onOpenSettings: { onOpenSyncSettings(); openSettings() })
+            }
             Button(action: onOpenQuickOpen) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: RailMetrics.iconSize))
@@ -181,7 +186,7 @@ struct NavigationColumnView: View {
     var onNavigate: () -> Void = {}
 
     /// 智能清单顺序对齐滴答：所有 → 最近 7 天 → 今天 → 明天 → 收集箱。
-    private let smartLists: [NativeDestination] = [.allTasks, .nextSevenDays, .today, .tomorrow, .inbox]
+    private let smartLists: [NativeDestination] = [.weekPlan, .today, .tomorrow, .inbox, .allTasks, .nextSevenDays, .summary]
     private let bottomLists: [NativeDestination] = [.completed, .abandoned, .trash]
 
     private var destinations: [NativeDestination] {
@@ -200,7 +205,7 @@ struct NavigationColumnView: View {
                 ForEach(visibleSmartLists) { destination in
                     if SmartListVisibility.isConfigurable(destination) {
                         destinationRow(destination)
-                            .contextMenu { visibilityMenu(for: destination) }
+                            .businessContextMenu { visibilityMenu(for: destination) }
                     } else {
                         destinationRow(destination)
                     }
@@ -244,14 +249,10 @@ struct NavigationColumnView: View {
     /// 智能清单行的右键：显示 / 隐藏 / 有内容时显示（收集箱除外，滴答不允许隐藏它）。
     @ViewBuilder
     private func visibilityMenu(for destination: NativeDestination) -> some View {
-        Picker("显示状态", selection: Binding(
+        BusinessMenuChoices(selection: Binding(
             get: { environment.viewPreferences.visibility(for: destination) },
-            set: { environment.viewPreferences.setVisibility($0, for: destination) })) {
-            ForEach(SmartListVisibility.allCases) { state in
-                Text(state.title).tag(state)
-            }
-        }
-        .pickerStyle(.inline)
+            set: { environment.viewPreferences.setVisibility($0, for: destination) }),
+            options: SmartListVisibility.allCases.map { BusinessChoice($0, $0.title) })
     }
 
     private func destinationRow(_ destination: NativeDestination) -> some View {
@@ -317,7 +318,7 @@ private struct NotesNavigationSection: View {
                 VStack(spacing: 0) {
                     ForEach(notes.folders, id: \.self) { folder in
                         row(folder, symbol: "folder", folder: folder)
-                            .contextMenu {
+                            .businessContextMenu {
                                 Button("重命名文件夹…") {
                                     if let name = TaskNamePrompt.ask("重命名文件夹", value: folder), name != folder,
                                        !notes.renameFolder(folder, to: name) { TaskNamePrompt.invalidName() }
@@ -441,7 +442,7 @@ private struct TaskFiltersSectionView: View {
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
         }
-        .contextMenu {
+        .businessContextMenu {
             Button("编辑") {
                 editorRequest = FilterEditorRequest(filter: filter)
             }

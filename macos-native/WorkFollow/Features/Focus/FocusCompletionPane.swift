@@ -65,7 +65,7 @@ struct FocusCompletionPane: View {
             .accessibilityIdentifier("focus-completion-navigation")
             .focusRenderAnchor(.timerBackToLibrary)
             Spacer()
-            Menu {
+            BusinessMenu {
                 if let record = store.completedRecord {
                     Button("编辑记录") { recordDraft = FocusRecordDraft(record: record) }
                 }
@@ -74,7 +74,7 @@ struct FocusCompletionPane: View {
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28)
             }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .fixedSize()
             .accessibilityIdentifier("focus-completion-menu")
         }.foregroundStyle(theme.text2)
     }
@@ -201,9 +201,8 @@ struct FocusCompletionPane: View {
             HStack {
                 Text("专注时长").font(.system(size: 13))
                 Spacer()
-                Picker("分钟", selection: durationMinutesBinding) {
-                    ForEach(Array(durationMinuteRange), id: \.self) { Text("\($0) 分钟").tag($0) }
-                }.labelsHidden().pickerStyle(.menu).frame(width: 96)
+                BusinessPicker("分钟", selection: durationMinutesBinding, options:
+                    durationMinuteRange.map { BusinessChoice($0, "\($0) 分钟") }).labelsHidden().frame(width: 96)
                     .accessibilityIdentifier("focus-completed-duration-minutes")
             }
             Text(durationPreview(record)).font(.system(size: 12)).foregroundStyle(theme.text2)

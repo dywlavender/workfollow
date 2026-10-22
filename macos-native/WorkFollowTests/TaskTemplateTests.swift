@@ -331,4 +331,58 @@ final class TaskTemplateTests: XCTestCase {
         }
         preconditionFailure("Among the next 2...6 days there is always a non-Monday")
     }
+
+    // MARK: - 摘要模板（kind）
+
+    func testTemplateDecodingWithoutKindIsNotSummaryTemplate() throws {
+        // 旧档案没有 kind 字段，必须解码成 nil 且不冒充摘要模板。
+        let legacy = """
+        {"id":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","name":"站会","title":"站会",
+        "document":{"blocks":[]},"tags":[],"childTitles":[],
+        "createdAt":0}
+        """
+        let template = try JSONDecoder().decode(TaskTemplate.self,
+                                               from: Data(legacy.utf8))
+        XCTAssertNil(template.kind)
+        XCTAssertFalse(template.isSummaryTemplate)
+    }
+
+    func testSummaryTemplateKindSurvivesRoundTrip() throws {
+        let template = TaskTemplate(name: "摘要模板 本周", title: "摘要模板 本周",
+                                    document: NativeDocument(plainText: "本周总结"),
+                                    createdAt: now, kind: "summary")
+        XCTAssertTrue(template.isSummaryTemplate)
+
+        let data = try JSONEncoder().encode(template)
+        let decoded = try JSONDecoder().decode(TaskTemplate.self, from: data)
+        XCTAssertEqual(decoded.kind, "summary")
+        XCTAssertTrue(decoded.isSummaryTemplate)
+        XCTAssertEqual(decoded.document.plainText, "本周总结")
+    }
+
+    func testSaveDocumentTemplateMarksKindAndStaysOutOfTaskTemplates() async throws {
+        let directory = Self.makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await MainActor.run {
+            let store = TemplateStore(clock: { self.now }, directory: directory)
+            XCTAssertTrue(store.save(name: "站会", from: Self.makeTask(title: "任务模板")))
+            XCTAssertTrue(store.saveDocumentTemplate(
+                name: "摘要模板 本周",
+                document: NativeDocument(plainText: "10月19日至25日这一周")))
+
+            XCTAssertEqual(store.templates.count, 2)
+            let summary = store.template(named: "摘要模板 本周")
+            XCTAssertTrue(summary?.isSummaryTemplate == true)
+            // 任务侧只看非摘要模板，两个仓库互不污染。
+            XCTAssertEqual(store.templates.filter { !$0.isSummaryTemplate }.map(\.name), ["站会"])
+
+            // 空名字直接拒绝；同名不带 forceReplace 不覆盖。
+            XCTAssertFalse(store.saveDocumentTemplate(name: "  ", document: .empty))
+            XCTAssertFalse(store.saveDocumentTemplate(
+                name: "摘要模板 本周",
+                document: NativeDocument(plainText: "别的正文")))
+            XCTAssertEqual(store.template(named: "摘要模板 本周")?.document.plainText,
+                           "10月19日至25日这一周")
+        }
+    }
 }

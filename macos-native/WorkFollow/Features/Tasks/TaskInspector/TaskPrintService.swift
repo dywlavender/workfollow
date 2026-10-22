@@ -6,6 +6,33 @@ import AppKit
 /// `NSPrintOperation`。打印内容 = 标题 / 属性行 / 正文（按块给字号与标记）/ 子任务清单。
 enum TaskPrintService {
 
+    /// 摘要等通用文档的打印：标题 + 纯文本正文（同一套页边距与分页）。
+    @MainActor
+    static func printDocument(title: String, body: String) {
+        let text = NSMutableAttributedString()
+        text.append(NSAttributedString(string: title + "\n\n", attributes: [
+            .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
+        ]))
+        text.append(NSAttributedString(string: body, attributes: [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor.labelColor,
+        ]))
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 468, height: 648))
+        view.isRichText = true
+        view.textStorage?.setAttributedString(text)
+        view.textContainer?.widthTracksTextView = true
+        view.sizeToFit()
+        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo.shared
+        info.topMargin = 48
+        info.bottomMargin = 48
+        info.leftMargin = 48
+        info.rightMargin = 48
+        info.horizontalPagination = .fit
+        info.verticalPagination = .automatic
+        NSPrintOperation(view: view, printInfo: info).run()
+    }
+
     @MainActor
     static func printTask(_ task: Task, subtasks: [Task], calendar: Calendar, now: Date = Date()) {
         let text = document(for: task, subtasks: subtasks, calendar: calendar, now: now)

@@ -593,6 +593,13 @@ final class FocusStore: ObservableObject, ModuleStoreFlushable {
     func recordsForTask(_ taskID: UUID) -> [PomodoroRecord] {
         read(fallback: []) { try persistence.history(taskID: taskID, limit: Int.max) }
     }
+    /// The summary only hydrates records in its date range. An aggregate query
+    /// supplies lifetime activity for status without reading the whole history.
+    func summarySnapshot(in range: SummaryDateRange) -> (records: [PomodoroRecord], startedTaskIDs: Set<UUID>) {
+        let totals: [(UUID?, Int)] = read(fallback: []) { try persistence.taskTotals(from: .distantPast, limit: Int.max) }
+        return (filteredRecords(FocusRecordFilter(from: range.start, to: range.end)),
+                Set(totals.filter { $0.1 > 0 }.compactMap { $0.0 }))
+    }
     func taskTotalActiveSeconds(taskID: UUID) -> Int {
         read(fallback: SQLiteRecordStore<PomodoroRecord, Archive>.Totals()) { try persistence.totals(taskID: taskID) }.value
     }

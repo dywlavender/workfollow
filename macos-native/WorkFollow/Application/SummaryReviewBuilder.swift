@@ -7,6 +7,11 @@ struct ReviewItem: Equatable {
     let datePrefix: String
     let title: String
     let listName: String
+    /// 「按优先级 / 按标签」分组时需要，缺省不影响「按完成状态」。
+    var priority: TaskPriority = .none
+    var tagNames: [String] = []
+    var completedDay: String?
+    var taskDay: String?
 }
 
 /// Auto-generated review of one calendar week, mirroring TickTick's 摘要
@@ -94,27 +99,115 @@ struct SummaryReviewBuilder {
     // MARK: Review generation
 
     /// Builds the weekly review for the week containing `date`.
-    func review(for tasks: [Task], weekOf date: Date) -> WeeklyReview {
+    /// `filter` 只缩小取样范围（清单 / 状态），不改三段的归类口径。
+    func review(for tasks: [Task], weekOf date: Date,
+                filter: SummaryFilter = .all) -> WeeklyReview {
         let start = Self.weekStart(of: date, calendar: calendar)
         let end = Self.weekEnd(of: start, calendar: calendar)
-        let participants = tasks.filter { $0.deletedAt == nil && $0.skippedAt == nil }
 
-        let completed = Self.reviewItems(
-            from: participants.filter { $0.status == .completed },
-            reference: \.completedAt, in: start..<end,
-            calendar: calendar, showsDatePrefix: true)
-        let abandoned = Self.reviewItems(
-            from: participants.filter { $0.status != .completed && $0.isAbandoned },
-            reference: \.abandonedAt, in: start..<end,
-            calendar: calendar, showsDatePrefix: true)
-        let uncompleted = Self.reviewItems(
-            from: participants.filter { !$0.isClosed },
-            reference: \.schedule.dueAt, in: start..<end,
-            calendar: calendar, showsDatePrefix: false)
+        var participants = tasks.filter { $0.deletedAt == nil && $0.skippedAt == nil }
+        if let listName = filter.listName, !listName.isEmpty {
+            participants = participants.filter { $0.list.name == listName }
+        }
+        if let tagName = filter.tagName, !tagName.isEmpty {
+            participants = participants.filter { $0.tags.contains(tagName) }
+        }
+        if let priority = filter.priority { participants = participants.filter { $0.priority == priority } }
+        let facts = SummaryTaskFacts.index(tasks: tasks.filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isConverted },
+            focusRecords: [], range: .week(containing: date, calendar: calendar))
+        participants = participants.filter { filter.status == .all || facts[$0.id]?.status == filter.status }
+
+        let showsCompleted = filter.status == .all || filter.status == .completed
+        let showsUncompleted = filter.status == .all || filter.status == .uncompleted || filter.status == .inProgress
+
+        let completed = showsCompleted
+            ? Self.reviewItems(from: participants.filter { $0.status == .completed },
+                               reference: \.completedAt, in: start..<end,
+                               calendar: calendar, showsDatePrefix: true)
+            : []
+        let abandoned = (filter.status == .all || filter.status == .abandoned)
+            ? Self.reviewItems(from: participants.filter { $0.status != .completed && $0.isAbandoned },
+                               reference: \.abandonedAt, in: start..<end,
+                               calendar: calendar, showsDatePrefix: true)
+            : []
+        let uncompleted = showsUncompleted
+            ? Self.reviewItems(from: participants.filter { !$0.isClosed },
+                               reference: \.schedule.dueAt, in: start..<end,
+                               calendar: calendar, showsDatePrefix: false)
+            : []
 
         return WeeklyReview(weekStart: start, weekEnd: end,
                             weekTitle: Self.weekTitle(for: start, calendar: calendar),
                             completed: completed, abandoned: abandoned, uncompleted: uncompleted)
+    }
+
+    /// 单条任务的文本：按「显示内容」决定带不带日期 / 清单 / 标签。
+    static func itemText(_ item: ReviewItem, filter: SummaryFilter) -> String {
+        var parts: [String] = []
+        if filter.showsDate, !item.datePrefix.isEmpty { parts.append(item.datePrefix) }
+        parts.append(item.title)
+        if filter.showsList { parts.append("（\(item.listName)）") }
+        if filter.showsTags, !item.tagNames.isEmpty {
+            parts.append(item.tagNames.map { "#\($0)" }.joined(separator: " "))
+        }
+        return parts.joined(separator: "  ")
+    }
+
+    /// 把周回顾按分组切成若干段（对齐滴答「显示设置 → 分组」）。
+    static func sections(from week: WeeklyReview, grouping: SummaryGrouping) -> [SummarySection] {
+        let all = week.completed + week.abandoned + week.uncompleted
+        switch grouping {
+        case .completion:
+            return [("已完成", week.completed), ("已放弃", week.abandoned), ("未完成", week.uncompleted)]
+                .filter { !$0.1.isEmpty }
+                .map { SummarySection(title: $0.0, items: $0.1) }
+        case .list:
+            return Dictionary(grouping: all, by: \.listName)
+                .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
+                .map { SummarySection(title: $0.key, items: $0.value) }
+        case .priority:
+            return Dictionary(grouping: all, by: \.priority)
+                .sorted { $0.key.rawValue > $1.key.rawValue }
+                .map { SummarySection(title: $0.key.title, items: $0.value) }
+        case .tag:
+            // 一个任务可能有多个标签：在每个标签段里都出现一次（滴答也是按标签各自归组）。
+            var buckets: [String: [ReviewItem]] = [:]
+            for item in all {
+                let keys = item.tagNames.isEmpty ? ["无标签"] : item.tagNames
+                for key in keys { buckets[key, default: []].append(item) }
+            }
+            return buckets
+                .sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
+                .map { SummarySection(title: $0.key, items: $0.value) }
+        case .completedTime, .taskTime:
+            return Dictionary(grouping: all, by: { item in
+                grouping == .completedTime ? item.completedDay ?? "无完成时间" : item.taskDay ?? "无任务时间"
+            }).sorted { $0.key.localizedStandardCompare($1.key) == .orderedAscending }
+                .map { SummarySection(title: $0.key, items: $0.value) }
+        case .assignee:
+            return all.isEmpty ? [] : [SummarySection(title: "未指派", items: all)]
+        }
+    }
+
+    /// 把周回顾渲染成富文本文档（对齐滴答摘要：正文是一篇可编辑文档）。
+    /// 结构：一级标题（周范围）→ 各分组二级标题 → 列表项；无内容时给一句占位。
+    func document(for week: WeeklyReview, grouping: SummaryGrouping = .completion,
+                  filter: SummaryFilter = .all) -> NativeDocument {
+        var blocks: [DocumentBlock] = [
+            DocumentBlock(kind: .heading(1), runs: [DocumentRun(text: week.weekTitle)])
+        ]
+        for section in Self.sections(from: week, grouping: grouping) {
+            blocks.append(DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: section.title)]))
+            for item in section.items {
+                blocks.append(DocumentBlock(kind: .bullet,
+                                            runs: [DocumentRun(text: Self.itemText(item, filter: filter))]))
+            }
+        }
+        if blocks.count == 1 {
+            blocks.append(DocumentBlock(kind: .paragraph,
+                                        runs: [DocumentRun(text: "本周还没有任务记录")]))
+        }
+        return NativeDocument(blocks: blocks)
     }
 
     /// Buckets dated tasks into weeks and returns the picker rows: the current
@@ -201,7 +294,10 @@ struct SummaryReviewBuilder {
         .map { task in
             let prefix = reference(task).map { datePrefix($0, calendar: calendar) } ?? ""
             return ReviewItem(datePrefix: showsDatePrefix ? prefix : "",
-                              title: task.title, listName: task.list.name)
+                              title: task.title, listName: task.list.name,
+                              priority: task.priority, tagNames: task.tags,
+                              completedDay: task.completedAt.map { datePrefix($0, calendar: calendar) },
+                              taskDay: task.schedule.dueAt.map { datePrefix($0, calendar: calendar) })
         }
     }
 }

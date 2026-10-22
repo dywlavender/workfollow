@@ -106,10 +106,9 @@ struct TaskParentPicker: View {
             if failed {
                 Text("任务状态已变化，请重新选择").font(WFType.supporting).foregroundStyle(.red).padding(8)
             }
-            Divider()
-            HStack {
-                Button("取消", action: onClose).frame(maxWidth: .infinity)
-                Button("确定") {
+            PopupActionBar {
+                PopupActionButton(title: "取消", action: onClose)
+                PopupActionButton(title: "确定", primary: true) {
                     guard let selectedID else { return }
                     let result: TaskActionResult
                     if isBulkAssignment {
@@ -119,11 +118,10 @@ struct TaskParentPicker: View {
                     } else { return }
                     if result.taskID != nil { onClose() }
                     else { failed = true; self.selectedID = nil }
-                }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
-                    .disabled(!candidates.contains { $0.id == selectedID })
+                }.disabled(!candidates.contains { $0.id == selectedID })
                     .parentPickerAnchor(.confirm)
-            }.padding(12)
-        }.frame(width: 280, height: 340)
+            }
+        }.frame(width: PopupMetrics.parentPickerWidth, height: 340)
             .coordinateSpace(name: "parent-picker")
             .onAppear {
                 searchFocused = true

@@ -104,7 +104,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         XCTAssertEqual(host.fittingSize.height, 180, accuracy: 0.5)
         let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         XCTAssertEqual(panel.frame.minX, row.minX, accuracy: 0.5)
-        XCTAssertEqual(panel.frame.maxY, row.minY, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.maxY, row.minY - 4, accuracy: 0.5)
         XCTAssertEqual(panel.frame.height, host.fittingSize.height, accuracy: 0.5)
         XCTAssertEqual(owner.frame, baseline)
 
@@ -174,7 +174,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         let anchor = try XCTUnwrap(coordinator.anchor)
         let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let panel = try XCTUnwrap(coordinator.panel)
-        XCTAssertEqual(panel.frame.minY, row.maxY, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.minY, row.maxY + 4, accuracy: 0.5)
         XCTAssertGreaterThanOrEqual(panel.frame.minY, screen.minY + 8)
         XCTAssertLessThanOrEqual(panel.frame.maxY, screen.maxY - 8)
         XCTAssertEqual(owner.frame, baseline)
@@ -190,7 +190,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         settle(coordinator.host)
         let anchor = try XCTUnwrap(coordinator.anchor)
         let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        XCTAssertEqual(try XCTUnwrap(coordinator.panel).frame.minY, row.maxY, accuracy: 0.5)
+        XCTAssertEqual(try XCTUnwrap(coordinator.panel).frame.minY, row.maxY + 4, accuracy: 0.5)
         XCTAssertEqual(owner.frame, baseline)
     }
 
@@ -204,7 +204,7 @@ final class AnchoredPropertyPanelTests: XCTestCase {
         let anchor = try XCTUnwrap(coordinator.anchor)
         let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let child = try XCTUnwrap(coordinator.panel)
-        XCTAssertEqual(child.frame.maxY, row.minY, accuracy: 0.5)
+        XCTAssertEqual(child.frame.maxY, row.minY - 4, accuracy: 0.5)
         XCTAssertLessThan(child.frame.minY, baseline.minY)
         XCTAssertEqual(child.frame.height, 180, accuracy: 0.5)
         XCTAssertTrue(child.parent === owner)

@@ -124,7 +124,7 @@ struct CountdownWorkspaceView: View {
             Spacer(minLength: WFSpace.sm)
             // 原版的 `+` 不是直接开面板，而是先弹一个「纪念日 / 倒数日 / 生日 / 节日」
             // 菜单，选中哪个就开哪个类型的面板（参考图 4 的四张面板正是这么来的）。
-            Menu {
+            BusinessMenu {
                 ForEach(CountdownKind.allCases) { kind in
                     Button(kind.title) { sheet = .create(kind) }
                 }
@@ -133,22 +133,18 @@ struct CountdownWorkspaceView: View {
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("新建")
             .accessibilityLabel("新建")
             // 参考图的「更多」菜单内容不可见，这里只放本页真正需要的入口：
             // 归档记录得有个地方能进得去。
-            Menu {
+            BusinessMenu {
                 Button("已归档…") { sheet = .archived }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 15))
                     .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("更多")
             .accessibilityLabel("更多")
@@ -287,6 +283,7 @@ struct CountdownCardView: View {
     let canMoveDown: Bool
 
     @State private var hovering = false
+    @State private var menuPresented = false
 
     var body: some View {
         Button(action: onCycleUnit) {
@@ -324,13 +321,13 @@ struct CountdownCardView: View {
         }
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
-            if hovering {
+            if hovering || menuPresented {
                 hoverActions.padding(WFSpace.sm)
             }
         }
         .onHover { hovering = $0 }
         .help(projection.sentence(with: magnitude))
-        .contextMenu {
+        .businessContextMenu {
             menuItems
         }
     }
@@ -354,7 +351,7 @@ struct CountdownCardView: View {
             .help(event.pinned ? "取消置顶" : "置顶")
             .accessibilityLabel(event.pinned ? "取消置顶" : "置顶")
 
-            Menu {
+            BusinessMenu(isPresented: $menuPresented) {
                 menuItems
             } label: {
                 Image(systemName: "ellipsis")
@@ -365,8 +362,6 @@ struct CountdownCardView: View {
                                 in: RoundedRectangle(cornerRadius: 7))
                     .contentShape(RoundedRectangle(cornerRadius: 7))
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
             .help("更多")
             .accessibilityLabel("更多")

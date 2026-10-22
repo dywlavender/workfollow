@@ -90,6 +90,9 @@ struct DocumentFormatToolbarView: View {
     /// 原版 `DocumentEditorMetrics.toolbarPopoverWidth` = 444。
     var maxWidth: CGFloat = 444
     var attachmentTitle = "上传附件"
+    /// Summary embeds this row inside its document card; task/note popovers
+    /// retain the existing floating surface.
+    var embedded = false
 
     /// 悬停提示与按钮矩形（见 `DocumentToolbarTooltip`）：提示和两个小面板都由工具条
     /// 这一层统一画在**上方**（`ScrollView` 会裁掉越界内容，按钮自己画不出来），
@@ -106,7 +109,7 @@ struct DocumentFormatToolbarView: View {
     /// 「更多」溢出菜单（TI2-16b，滴答 `md_more` / `moreButtonClicked:`）：
     /// 窄列里横向滚动之外，再给一条能到达全部格式命令的出口。
     private var overflowMenu: some View {
-        Menu {
+        BusinessMenu {
             ForEach(DocumentToolbarOverflow.paragraphIDs, id: \.self) { id in
                 overflowButton(id)
             }
@@ -127,8 +130,6 @@ struct DocumentFormatToolbarView: View {
                 .frame(width: 28, height: DocumentFormatToolbarMetrics.height)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
         .help("更多格式")
         .accessibilityLabel("更多格式")
@@ -188,29 +189,36 @@ struct DocumentFormatToolbarView: View {
                 }
                 formatButton("format.inlineCode")
                 formatButton("format.quote")
-                toolbarDivider
-                ToolbarButton(title: attachmentTitle, active: false, state: overlay,
-                              action: { handle.insertAttachment() }) {
-                    Image(systemName: "paperclip")
-                }
             }
             .buttonStyle(.plain)
             // Optical glyph size is separate from the unchanged hit target.
             .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
             .padding(.horizontal, DocumentFormatToolbarMetrics.horizontalInset)
         }
+        // 附件固定在工具条最右：放在横向 ScrollView 之外，窄宽度下不会被裁掉、
+        // 也不会被「更多」菜单盖住（原来是 ScrollView 里的最后一项）。
+        toolbarDivider
+        ToolbarButton(title: attachmentTitle, active: false, state: overlay,
+                      action: { handle.insertAttachment() }) {
+            Image(systemName: "paperclip")
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
         overflowMenu
         }
         .frame(maxWidth: maxWidth)
         .frame(height: DocumentFormatToolbarMetrics.height)
         // 工具条本身在原版里就是一个浮层（`showTaskEditorPopover` 的卡面），所以取浮层
         // 底色/描边/阴影，而不是画布色。
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius))
+        .background(embedded ? WFColors.content : WFColors.overlay,
+                    in: RoundedRectangle(cornerRadius: embedded ? 0 : DocumentFormatToolbarMetrics.cornerRadius))
         .overlay {
-            RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius)
-                .stroke(WFColors.overlayBorder, lineWidth: DocumentFormatToolbarMetrics.borderWidth)
+            if !embedded {
+                RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius)
+                    .stroke(WFColors.overlayBorder, lineWidth: DocumentFormatToolbarMetrics.borderWidth)
+            }
         }
-        .shadow(color: WFColors.overlayShadow,
+        .shadow(color: embedded ? .clear : WFColors.overlayShadow,
                 radius: DocumentFormatToolbarMetrics.shadowRadius,
                 y: DocumentFormatToolbarMetrics.shadowOffset)
         .onHover { inside in

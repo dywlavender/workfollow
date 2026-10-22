@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum ScheduleTrigger: Hashable { case date, recurrence }
+enum ScheduleTrigger: Hashable { case date, reminder, recurrence }
 
 private struct ScheduleTriggerAnchors: PreferenceKey {
     static var defaultValue: [ScheduleTrigger: Anchor<CGRect>] { [:] }

@@ -87,6 +87,7 @@ final class WorkspaceStore {
     var onTasksChanged: (([Task], [Task]) -> Void)?
     /// Emits the task-level diff once per commit, undo, or outer transaction.
     var onTaskChanges: ((TaskChangeSet) -> Void)?
+    var prepareTaskCommit: ((Task?, Task) -> Task)?
     var onOrganizationRename: ((TaskOrganizationRename) -> Void)?
 
     private func prepareReadIndex() {
@@ -130,13 +131,21 @@ final class WorkspaceStore {
     func tag(named name: String) -> TaskTag? { tags.first { $0.name == name } }
 
     // Only application commands commit snapshots; readers receive value copies.
-    func commit(_ snapshot: [Task], undoPolicy: UndoPolicy = .record,
+    func commit(_ incomingSnapshot: [Task], undoPolicy: UndoPolicy = .record,
                 lists: [String]? = nil, listMetas: [TaskListMeta]? = nil,
                 listFolders: [TaskListFolder]? = nil,
                 listSections: [TaskListSection]? = nil,
                 tags: [TaskTag]? = nil,
                 undoCompensation: (() -> Void)? = nil,
                 redoCompensation: (() -> Void)? = nil) {
+        let snapshot: [Task]
+        if let prepareTaskCommit {
+            let old = Dictionary(tasks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            snapshot = incomingSnapshot.map { task in
+                guard old[task.id] != task else { return task }
+                return prepareTaskCommit(old[task.id], task)
+            }
+        } else { snapshot = incomingSnapshot }
         let survivingIDs = Set(snapshot.map(\.id))
         for task in tasks where !survivingIDs.contains(task.id) {
             // A cascade delete must not invalidate document references in undo.

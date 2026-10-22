@@ -188,10 +188,7 @@ struct CountdownEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(isNew ? "添加" : "编辑")
-                .font(.system(size: 14, weight: .semibold))
-                .padding(.top, 30)
-                .padding(.bottom, 16)
+            DialogHeader(title: (isNew ? "添加" : "编辑") + kind.title)
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: Self.rowGap) {
@@ -210,7 +207,6 @@ struct CountdownEditorView: View {
             // 410 是「提醒」「重复」都能挂在行下方的最小高度（「显示」在最底下，
             // 无论如何都要翻到上面）。
             .frame(maxHeight: 410)
-            Divider()
             footer
         }
         .frame(width: Self.panelWidth)
@@ -475,7 +471,7 @@ struct CountdownEditorView: View {
     /// 连带 `.lunarEve`（除夕）也没有任何构造路径——域模型、投影、编辑器三处都在
     /// 认真支持它，却没有一条路能造出来。
     private var festivalPicker: some View {
-        Menu {
+        BusinessMenu {
             ForEach(CountdownFestival.all) { option in
                 Button(option.name) { applyFestival(option) }
             }
@@ -486,8 +482,6 @@ struct CountdownEditorView: View {
                 .frame(width: 26, height: 26)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
         .help("从节日目录选择")
         .accessibilityLabel("选择节日")
@@ -621,12 +615,10 @@ struct CountdownEditorView: View {
     /// 浮层里的一个月/日/年下拉。
     ///
     /// 参考图里它是**中性灰底、无描边、文字左对齐、右端一个细箭头**的字段。
-    /// 不用 `Picker(.menu)`：原生那颗会被全局 `.tint(WFColors.accent)`（见
-    /// `WorkFollowApp`）染成强调色底 + 居中文字，与参考图差得远。所以用 `Menu`
-    /// 自绘 label，候选项交给内嵌的 `Picker(.inline)`——勾选态由它负责。
+    /// 复用业务菜单的窗口和选项行，字段保留日期卡内部的紧凑布局。
     private func dateMenu<Options: View>(_ label: String, accessibility: String,
-                                         @ViewBuilder options: () -> Options) -> some View {
-        Menu {
+                                         @ViewBuilder options: @escaping () -> Options) -> some View {
+        BusinessMenu {
             options()
         } label: {
             HStack(spacing: WFSpace.xs) {
@@ -645,12 +637,9 @@ struct CountdownEditorView: View {
             .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(RoundedRectangle(cornerRadius: 8))
         }
-        .menuStyle(.button)
         .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        // `Menu` 自己那颗内部按钮不接 `.accessibilityLabel`（实测读到的 desc 是空的）。
-        // 用 `.combine` 而不是 `.ignore`：`.ignore` 会把元素降成 `AXUnknown`，
-        // 标签是出来了，但 `AXPress` 变成静默 no-op——VoiceOver 也就打不开它了。
+
+        // 保留字段名称，并让辅助功能操作到真实按钮。
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibility)
     }
@@ -658,39 +647,24 @@ struct CountdownEditorView: View {
     private var monthMenu: some View {
         dateMenu(Self.monthLabel(editing.month, lunar: editing.isLunar),
                  accessibility: "月：\(Self.monthLabel(editing.month, lunar: editing.isLunar))") {
-            Picker("", selection: $editing.month) {
-                ForEach(1...12, id: \.self) { month in
-                    Text(Self.monthLabel(month, lunar: editing.isLunar)).tag(month)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
+            BusinessMenuChoices(selection: $editing.month, options:
+                (1...12).map { BusinessChoice($0, Self.monthLabel($0, lunar: editing.isLunar)) })
         }
     }
 
     private var dayMenu: some View {
         dateMenu(Self.dayLabel(editing.day, lunar: editing.isLunar),
                  accessibility: "日：\(Self.dayLabel(editing.day, lunar: editing.isLunar))") {
-            Picker("", selection: $editing.day) {
-                ForEach(1...Self.daysInDraftMonth(editing), id: \.self) { day in
-                    Text(Self.dayLabel(day, lunar: editing.isLunar)).tag(day)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
+            BusinessMenuChoices(selection: $editing.day, options:
+                (1...Self.daysInDraftMonth(editing)).map { BusinessChoice($0, Self.dayLabel($0, lunar: editing.isLunar)) })
         }
     }
 
     /// 「忽略年份」没勾时才出现。往前 120 年够放生日，往后 50 年够放远期倒数日。
     private var yearMenu: some View {
         dateMenu("\(editing.year)年", accessibility: "年：\(editing.year)年") {
-            Picker("", selection: $editing.year) {
-                ForEach(Self.yearChoices, id: \.self) { year in
-                    Text("\(year)年").tag(year)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
+            BusinessMenuChoices(selection: $editing.year, options:
+                Self.yearChoices.map { BusinessChoice($0, "\($0)年") })
         }
     }
 
@@ -978,26 +952,10 @@ struct CountdownEditorView: View {
     // MARK: 底部
 
     private var footer: some View {
-        HStack(spacing: Self.rowGap) {
-            Spacer()
-            // 宽度得给到 label 上：`.frame(minWidth:)` 加在 Button 外面只撑布局框，
-            // 撑不开 `.bordered` 自己画的那颗胶囊（实测仍是 54 宽）。
-            Button { dismiss() } label: {
-                Text("取消").frame(width: Self.buttonWidth - 24, height: 20)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            Button { submit() } label: {
-                // 参考图：新建面板的确认按钮是「添加」，编辑面板是「确定」。
-                Text(isNew ? "添加" : "确定").frame(width: Self.buttonWidth - 24, height: 20)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(!canSubmit)
-            .keyboardShortcut(.defaultAction)
+        DialogFooter(primaryTitle: isNew ? "添加" : "保存", canSubmit: canSubmit,
+                     buttonWidth: Self.buttonWidth, onCancel: { dismiss() }, onSubmit: submit) {
+            EmptyView()
         }
-        .padding(.horizontal, Self.inset)
-        .padding(.vertical, 32)
     }
 
     // MARK: 派生

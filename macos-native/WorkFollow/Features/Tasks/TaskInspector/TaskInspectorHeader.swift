@@ -1,5 +1,7 @@
 import SwiftUI
 
+enum TaskInspectorHeaderPanel: Hashable { case kind, info }
+
 struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     let task: Task
     let showBack: Bool
@@ -77,6 +79,7 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                                  action: onKind)
                     .frame(width: 24, height: WFMetrics.controlHeight)
                     .help("任务类型")
+                    .propertyPanelTrigger(TaskInspectorHeaderPanel.kind)
                     .inspectorRenderAnchor(.kind)
             }
             if let onInfo {
@@ -85,6 +88,7 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                                  action: onInfo)
                     .frame(width: 24, height: WFMetrics.controlHeight)
                     .help("笔记信息")
+                    .propertyPanelTrigger(TaskInspectorHeaderPanel.info)
                     .inspectorRenderAnchor(.noteInfo)
             }
             if let onDetach {

@@ -54,7 +54,7 @@ struct FocusPresetDetailPane: View {
             Button("关闭") { store.closePresetDetails() }.buttonStyle(.plain).foregroundStyle(theme.accent)
                 .accessibilityIdentifier("focus-preset-detail-close")
             Spacer()
-            Menu {
+            BusinessMenu {
                 if preset.archivedAt == nil {
                     Button("编辑") { editingPreset = preset }
                     Button("添加记录") { addRecord(preset) }
@@ -65,7 +65,7 @@ struct FocusPresetDetailPane: View {
                 Button("删除", role: .destructive) { store.deleteTimer(preset.id) }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28)
-            }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(theme.text2)
+            }.fixedSize().foregroundStyle(theme.text2)
                 .accessibilityIdentifier("focus-preset-detail-menu")
         }.font(.system(size: 13)).frame(height: 28)
     }
@@ -112,9 +112,8 @@ struct FocusPresetDetailPane: View {
                     Text("m").font(.system(size: 13))
                 }.foregroundStyle(theme.text)
                 Spacer()
-                Picker("统计周期", selection: $period) {
-                    ForEach(FocusPresetStatisticsPeriod.allCases, id: \.self) { Text($0.title).tag($0) }
-                }.labelsHidden().pickerStyle(.menu).frame(width: 52)
+                BusinessPicker("统计周期", selection: $period, options:
+                    FocusPresetStatisticsPeriod.allCases.map { BusinessChoice($0, $0.title) }).labelsHidden().frame(width: 52)
                     .accessibilityIdentifier("focus-preset-detail-period")
             }.frame(height: 29)
             HStack(spacing: 6) {
@@ -170,7 +169,7 @@ struct FocusPresetDetailPane: View {
         }
         .padding(.bottom, 20).contentShape(Rectangle()).onTapGesture { selectedRecord = record }
         .accessibilityIdentifier("focus-preset-record-\(record.id.uuidString)")
-        .contextMenu {
+        .businessContextMenu {
             Button("查看详情") { selectedRecord = record }
             Button("编辑") { recordDraft = FocusRecordDraft(record: record) }
             Button("删除记录", role: .destructive) { store.deleteRecord(record.id) }

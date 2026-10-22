@@ -29,9 +29,9 @@ struct TemplateManagementView: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(templateStore.templates) { template in
+                    ForEach(templateStore.templates.filter { !$0.isSummaryTemplate }) { template in
                         templateRow(template)
-                        if template.id != templateStore.templates.last?.id {
+                        if template.id != templateStore.templates.filter({ !$0.isSummaryTemplate }).last?.id {
                             Divider().padding(.leading, 22)
                         }
                     }

@@ -270,7 +270,9 @@ UI 放开嵌套：`TaskInspectorShell` 更多菜单/子任务区/添加行、`Ta
 - **月历网格** `AppKitMonthGridView`（自绘 `MonthGridCanvas`）：标题栏（年月 + 上/下月/回到今天）、星期行、6×7 日期格；选中实心圆、今天描边环、区间高亮、节日小字；点击格选日期、点击箭头翻月。主面板与「重复结束 → 按日期结束」两处都替换。
 - **日期 / 时间段分段** `AppKitScheduleSegmented`（自绘灰底 + 白色选中胶囊），点击切换页签。
 - **属性行** `AppKitSchedulePropertyRow`（自绘图标 / 标题或值 / 尾控件 / 展开灰底，时间行嵌 `NSHostingView` 输入框）：图标、值、尾控件、`row` / `expandedRow` 五个渲染锚点与点击命中全部保留在 SwiftUI 层（透明按钮 + `.onHover`），画布只做绘制。**关键教训**：`NSViewRepresentable` 的 host frame 在 `NSHostingController` / 子窗口宿主下会滞后一拍，条件插入「重复结束」行时与上一行重叠且点击落空；把交互与锚点交回 SwiftUI 后，真机与测试都稳定（真机 5 行清晰、展开灰底与 `chevron.down` 正确）。
-- 颜色坑（已写入注释）：`NSColor(WFColors.text)` 这类动态 `Color` 转 `NSColor` 会固定成某个外观值（亮色下文字变白），自绘统一改用 `NSColor.labelColor` 系 + 手写动态 accent；SwiftUI 版 `LunarMonthGridView` 仍保留给未替换的宿主。
+- 颜色坑（已写入注释）：`NSColor(WFColors.text)` 这类动态 `Color` 转 `NSColor` 会固定成某个外观值（亮色下文字变白），自绘统一改用 `NSColor.labelColor` 系 + 手写动态 accent；SwiftUI 版 `LunarMonthGridView` 在所有宿主替换完成后已删除（2026-10-21，无剩余调用方）。
+- **快捷行 / Footer** `AppKitScheduleShortcutRow` / `AppKitScheduleFooter`：自绘四个快捷 chip 与「清除 / 确定」，均已接入主面板。
+- **非本月日期灰**（2026-10-21）：原来用 `tertiaryLabelColor` 偏暗，改为显式浅灰 `#C0C4CB`（暗色 `#6B7078`），实测截图采样 `#C0C4CA`，与本月 `#262626` 形成清晰两级。
 
 **滴答实测纠偏（2026-10-18，直接操作滴答 8.0.80）**：
 - 「日期」页签 = 分段 + 快捷行 + 月历 + **时间 / 提醒 / 重复** + 清除/确定，**没有「截止日期」行**。
@@ -288,6 +290,11 @@ UI 放开嵌套：`TaskInspectorShell` 更多菜单/子任务区/添加行、`Ta
 - 任务列表行内编辑的底色（同日，`TaskRowTitleField`）：field editor（`NSTextView`）默认白底会在选中行上挖出一块白，改为 `drawsBackground = false` + 清空 `textContainerInset`，编辑时底色与选中行一致。
 - 任务列表的标签行（2026-10-19，对齐滴答）：`TaskRowView` 在标题/预览下方补一排**只读胶囊**（最多 `TaskListMetrics.maxVisibleTags` 个，其余折成「+N」），色值取 `workspace.tag(named:)?.colorARGB` → `WFListPalette.swatch`，底 10% 透明 + 同色文字。`NativeTaskOutline` 通过 `heightOfRowByItem` 按标题、预览、标签内容动态计算行高，并保留最小行高。
 - 弹层契约与测试环境（同日）：`TaskTagManagementView`（颜色选择）与 `AdvancedFilterRuleEditor`（清单/标签取值）的 `.popover(` 改为 `AnchoredPropertyPanel`，业务弹层统一无箭头；`TaskKindTests` / `TaskNoteInfoTests` / `TaskInspectorProgressBarTests` 的渲染宿主补 `.environmentObject(AppEnvironment())`（`TaskInspectorShell` 声明了该 `@EnvironmentObject`，缺失会在渲染期直接 fatal）。
+- 悬停展开（2026-10-20）：顶栏「重复 / 任务类型 / 笔记信息 / 优先级」与底栏「标签 / 更多」从"点击展开"改为"移上去展开、移开延迟收起"。
+  - 触发器：`AppKitIconButton` 新增 `onHover`，内部改用 `HoverButton`（`NSTrackingArea`；SwiftUI 的 `.onHover` 套在 representable 上会被 AppKit tracking 抢走）。
+  - 时序：`hoverOpenPanel` 120ms 后打开（防鼠标扫过顶栏就弹面板），`hoverClosePanel` 250ms 后关闭（留出从图标走过空隙的时间）；`hoverKeepOpen` 给面板内容包一层 `.onHover`，鼠标进面板就 `cancel` 待执行的关闭。
+  - 点击仍可用：图标 tap 走原来的 `toggle()`，等价"钉住"，不会被移开自动关掉。
+  - 仍是点击展开（有意保留）：日期面板（260×506 主面板，hover 打开会误触）、日期面板内的属性行（表单型）、快速添加属性、筛选器、批量面板、任务列表的导航/显示设置。
 
 收尾状态：
 - 快捷行与清除/确定按钮已完成 AppKit 绘制；透明 SwiftUI 按钮保留渲染锚点、辅助功能和回车确认。2026-10-19 的 80 项定向验证见 [日期面板收尾记录](ticktick-date-panel-finish-2026-10-19.md)。
@@ -295,6 +302,86 @@ UI 放开嵌套：`TaskInspectorShell` 更多菜单/子任务区/添加行、`Ta
 - 2026-10-20 修正过滤器取值弹层的宿主宽度，使其与 264pt 内容一致；新增原生列表测试，验证添加标签后实际行高增长、一次撤销恢复。弹层、过滤器、详情渲染及标签相关共执行 **58 项，1 项跳过，0 失败**；跳过项为临时 XCTest 宿主不能激活前台的键盘焦点测试。随后用户在已安装日用版中确认标签搜索自动聚焦、直接输入与筛选正常，实机补验通过，详见 [日用版验收记录](native-daily-build-2026-10-20.md)。
 
 历史全量回归：**1479 项（6 跳过）0 失败**（2026-10-18；顺带修正标题扩到六级后 `SlashSessionTests` 的遗留断言 3→6）。此数值不是 2026-10-20 的验证结果。
+
+### 14.5 摘要测试用例按最新代码补齐（2026-10-22）
+
+按最终形态（`SummaryFilter` / `SummaryDocumentOptions` / `SummaryContentField` / `TaskTemplate.kind`）重排测试，新增 **14 项**：
+
+| 文件 | 数量 | 覆盖 |
+|---|---|---|
+| `SummaryFilterTests`（新建） | 4 | 默认值（只带日期）、`contentOptionCount`、**旧 JSON 缺 `tagName`/`shows*` 时的解码兼容**、往返编解码 |
+| `SummaryDocumentOptionsTests`（新建） | 4 | `standard` 配方、**旧档案 filter→content 迁移**（`showsDate`→完成/任务时间、`showsList`→清单、`showsTags`→标签）、空 payload 回落、往返 |
+| `SummaryReviewBuilderTests` | +3 | 按标签筛选、`itemText` 四档显示内容、`document` 条目受 filter 影响 |
+| `SummaryStoreTests` | +3 | `save(document:)` 落富文本并同步纯文本、空文档删除条目、旧 `content` 经 `resolvedDocument` 兜底 |
+| `TaskTemplateTests` | +3 | 无 `kind` 的旧档案不算摘要模板、`kind="summary"` 往返、`saveDocumentTemplate` 与任务模板互不污染 |
+
+**顺带修掉一个真 bug**：`SummaryFilter` 用合成 `Codable`，新增字段（`tagName` / `showsDate` / `showsList` / `showsTags`）在旧 JSON 里缺失时直接 `keyNotFound` 崩溃。改为显式 `CodingKeys` + 逐字段 `decodeIfPresent` 回落默认，并补回 memberwise `init`（自定义 init 后不再自动合成，`SummaryDocumentOptions` 里 `SummaryFilter(showsDate:showsList:showsTags:)` 依赖它）。
+
+**同步过期的导航断言**：`NativeSmokeTests` 的 `taskDestinations` 补 `.weekPlan` / `.summary`；`CommandPaletteTests` 补「打开本周计划」（10→11 项）。这两处是 `weekPlan` 与摘要并入任务导航后测试没跟上的滞后，不是新 bug。
+
+**同时把一批滞后断言修绿**（全量 failures 23 → 10，case 10 → 5）：
+
+- `TaskKanbanReorderTests`：不是丢数据。`TaskWeeklyPlanning.recording` 首次对带 `dueAt` 的任务提交时会补一条周计划基线（`history` 从空到一条），期望值改走同一条规则后再完整相等。
+- `ArrowlessTaskPopupContractTests`（2 条）：`AppleSyncStatusButton` 违规用 `.popover(isPresented:arrowEdge:)`，改成 `AnchoredPropertyPanel`（宽 340、`placement: .vertical`、`focusPolicy: .preservePresenter`），内容抽成 `panelContent`。
+- `NativeSmokeTests` / `CommandPaletteTests`：`taskDestinations` 补 `.weekPlan` / `.summary`，命令面板补「打开本周计划」（10→11）。
+- `TaskSchedulePanelRenderTests`（2 条）：提醒行标签新增时刻后缀（`准时` → `准时 · 20:30`、`当天` → `当天 · 09:00`）。
+
+剩余 5 个用例（均与摘要无关）：
+
+| 用例 | 根因 |
+|---|---|
+| `ScheduleExpandedSectionTests` ×2、`SchedulePanelWindowFlowTests` ×2 | `ScheduleDisplay.reminderOptionText` 的选项文案从 `标题 (时刻)` 改成 `标题 · 时刻`，测试仍在按括号查找锚点。跨天项（`提前1天`）走 `dateText(.compact)`，需按其真实格式逐个对齐 |
+| `DeferredDocumentTests` ×1 | 1000 条预览里仍有 2 处水合了 `document` |
+
+### 14.4 摘要改造成可编辑文档（2026-10-21，P0）
+
+对齐滴答「摘要」：正文是一篇可编辑富文本，自动生成只是起点。按 **A 方案**落地——摘要是任务模块里的同级目的地（侧栏入口 + 主内容区），不新开窗口，复用任务正文的 `DocumentEditor`。
+
+- **数据**：`DailySummary` 增加 `document: NativeDocument?`（旧 `summary.json` 缺字段解码为 nil，不批量迁移）；`resolvedDocument` 兜底把 `content` 转成单段文档；`SummaryStore.save(document:dayKey:)` 落富文本并同步一份纯文本 `content`。
+- **生成**：`SummaryReviewBuilder.document(for:)` 把周回顾渲染成 `h1(周范围) + h2(已完成/已放弃/未完成) + bullet 列表`；无内容时给一句占位。
+- **视图**：`SummaryWorkspaceView.weeklyPane` 换成 `DocumentEditor`（`DocumentProfile()`，与任务正文同一个组件、同一套格式与撤销）；顶栏不再重复周标题；「复制」改为复制 `plainText`；新增「重新生成」显式覆盖。
+- **时序**：首次进入某周生成默认内容但**不落库**，用户动手才保存；换周换 `weeklyEditorID` 强制按新文档重建编辑器。
+- **清理**：删除旧渲染 `reviewSection` / `weeklyNoteSection` / `weeklyTitle`（79 行）。
+- 手记（journal）本轮未动，仍是 `TextEditor`。
+
+真机：周回顾显示为「10月19日-10月25日（h1）→ 未完成（h2）→ 项目符号」，可直接编辑。`SummaryReviewBuilderTests` + `SummaryStoreTests` 17 项通过。
+
+**P1 筛选（同日）**：
+- `SummaryFilter`（`Domain/Summary/SummaryFilter.swift`）：**清单（单选，nil=全部）+ 状态（所有/已完成/未完成）**。
+- **日期不放筛选里**：本地左侧已有周列表，再叠一层「本周/上周」会有两套互相覆盖的日期语义；滴答没有左侧列表，所以它的日期筛选由右侧承担。
+- `SummaryReviewBuilder.review(for:weekOf:filter:)`：清单过滤参与任务；状态决定生成哪几段（`.completed` 只出已完成段，`.uncompleted` 出已放弃 + 未完成段）。
+- UI：正文上方一行 `filterBar`（清单 `Menu` + 状态 `SegmentedPicker`）；筛选只影响下次「重新生成」，不擅自覆盖已保存正文。
+- 测试：新增 3 个用例（按状态保留段、按状态丢弃段、按清单排除），`SummaryReviewBuilderTests` 14 项通过。
+
+**P1 分组（同日）**：
+- `SummaryGrouping`（`Domain/Summary/SummaryGrouping.swift`）：**按完成状态 / 按清单 / 按优先级 / 按标签**；`SummarySection` 为通用「二级标题 + 条目」。
+- `SummaryReviewBuilder.sections(from:grouping:)`：完成状态走原三段；清单按 `listName` 拼音序；优先级按 `rawValue` 降序（高→无）；标签按名称拼音序、一个任务多标签会在每个标签段里各出现一次，无标签归「无标签」段。
+- `ReviewItem` 增加 `priority` / `tagNames`（默认值，不影响原三段）；`document(for:grouping:)` 按分组渲染二级标题。
+- UI：筛选条追加分组 `Menu`（当前项打勾）；改分组后按「重新生成」生效。
+- 测试：新增 3 个用例（按清单分桶、按优先级排序、按标签含「无标签」），`SummaryReviewBuilderTests` 17 项通过。
+
+**P2 AI / 打印 / 模板 / 插入（2026-10-21）**：
+- **AI 优化** `SummaryPiOptimizer`（`Infrastructure/AI/`）：直接调本机 `/opt/homebrew/bin/pi`，与会议纪要同一条通道——`--print --no-session --no-tools --no-extensions --no-skills --no-prompt-templates --no-context-files --offline`，prompt 拼「长度 / 语言风格 / 职业 / 额外要求 + 原文」，只取 stdout 正文；90s 超时。摘要页「AI 优化」按钮执行，成功覆盖正文并落库，失败在正文上方显示错误。参数模型 `SummaryAIOptions`（brief/normal/detailed × plain/warm/formal + profession + hint）。测试默认跳过真实调用（`SUMMARY_AI_INTEGRATION=1` 才跑）。
+- **打印** `TaskPrintService.printDocument(title:body:)`：标题 18 半粗 + 正文 13，复用任务的页边距/分页设置。摘要页「打印」按钮。
+- **模板**：`TaskTemplate` 增加 `kind`（nil/"task" = 任务模板，"summary" = 摘要模板，手写 Codable 用 `decodeIfPresent` 兼容旧档案）；`TemplateStore.saveDocumentTemplate`；摘要页「模板」Menu（保存为模板 / 套用已有摘要模板）；任务的 `TaskTemplateGalleryView` 与 `TemplateManagementView` 过滤掉摘要模板，两个仓库互不污染。
+- **插入摘要**：任务详情「更多」新增「插入本周摘要」，把当周摘要文档（标题 + 分组段 + 列表）追加到任务正文末尾，非空正文前加一条分割线。注：插入的是**本周摘要**，不是任务自身的属性快照；如果语义要改成后者，只需换 `insertWeeklySummary` 的数据源。
+- **三栏布局（同日，对齐滴答）**：`SummaryWorkspaceView.body` 改为「左 周列表 280 / 中 正文 / 右 配置面板 248」（窗口 ≥900 才出右栏，窄屏退回两栏）。右栏分区：模板（+ 菜单：保存为模板 / 套用）→ 筛选（清单、状态）→ 显示设置（分组）→ AI 优化（长度、语言风格、职业、额外要求 + 主按钮），与滴答的面板结构和顺序一致。原先横在正文上方的筛选条已移除。
+- **去掉左列（同日，按用户反馈）**：周列表那一栏整块删除，改为「正文 + 右栏」两栏；周/日切换收进正文顶栏——周回顾是「‹ 本周（10月19日-10月25日）▾ ›」（中间下拉列出所有周），手记是「‹ 10月21日 ▾ ›」（下拉列出当天有内容的日期 + 今天）。`leftColumn` / `weekList` / `weekRow` / `dayList` / `dayRow` 与 `narrowShowsList` 全部删除。
+- **视觉复刻滴答（同日，按滴答截图）**：右栏每个分组改成**浅灰卡片**（`WFColors.hover` 底 + 圆角 8，行高 38、左右 12），AI 优化按钮改成**铺满的蓝色主按钮**（accent 底白字、高 36、圆角 8），模板「+」改浅灰圆角按钮；正文改成**带边框的卡片**（`RoundedRectangle` 描边 + 圆角 8，工具栏与文档都在框内），卡片下方补「保存为 / 复制」动作条。
+- **右栏比例校正（同日，按滴答截图的纵向节奏）**：分组间距 16→24、分组标题到卡片 8→10、右栏内边距 16→20、宽度 248→240；模板区补「暂无模板 / 模板列表」块（空态占 26×2 垂直内边距），使「模板 → 筛选」的间距与滴答（约 85px）一致。
+- **结构再对齐（同日，逐项比对滴答截图）**：① 模板区改成「标题一行 + 下面单独一行左对齐的灰色 `+`」（滴答不是标题右侧放加号）；② 正文上方那行「复制 / 重新生成 / 打印」整行移除，动作全部收到**卡片下方的动作条**（保存为 / 复制 / 重新生成 / 打印），正文卡片直接顶到顶栏，与滴答一致。
+- **细节补齐（同日）**：① 顶部加「☰ 摘要 + 右侧导出按钮」标题栏（`pageTitleBar`，高 44）；②「内容优化（公测）」后加蓝色 `AI` 小徽标；③ AI 的四个参数行装进灰卡片，蓝色按钮移到卡片下方（与滴答一致）。
+- **标题栏收拢（同日）**：「周回顾 / 手记」分段与周期导航并入标题栏一行——`☰ 摘要 … ‹ 本周（10月19日-10月25日）▾ › ⋯ ⤴`，切换视角的「⋯」菜单在右侧；独立的那一行 `reviewHeader` 删除。摘要在窄屏也不再需要额外的分段占位。
+- **右栏宽度与下拉全部接通（同日）**：右栏 240→**272**（对齐滴答）；六个下拉都有实际作用——「日期」选周（与标题栏同源）、「清单」「状态」「更多（标签）」改 `SummaryFilter`、**「分组」「显示内容」改动后立即重写自动生成段**（`.onChange(of: grouping / filter)` → `regenerateWeekly()`）。`SummaryFilter` 新增 `tagName` / `showsDate` / `showsList` / `showsTags`，`SummaryReviewBuilder.document(for:grouping:filter:)` 按显示内容拼条目文本；「显示内容」显示已开项数（`N 项`）。模板的「＋」改成纯按钮（点击即保存为模板，不带下拉箭头）。行标签加 `lineLimit(1).fixedSize()`，避免「日期」被挤成两行。
+- **动作最终收拢（同日）**：底部动作条只留「保存为 / 复制」（与滴答一致）；「重新生成 / 打印」与「周回顾 / 手记」一起收进标题栏右侧的 `⋯` 菜单。
+- **标题栏最简（同日）**：中间的 `‹ 本周 ▾ ›` 周期导航也移除，标题栏只剩「☰ 摘要 + ⋯ + ⤴」。周/日切换全部进 `⋯`：周回顾是「上一周 / 下一周 / 选择周（子菜单）」，手记是「前一天 / 后一天 / 今天」。当前周期从正文的一级标题（`10月19日至10月25日`）读取。
+- **☰ 接上真实功能（同日）**：标题栏的 `☰` 从装饰图标改成按钮，调用 `AppEnvironment.toggleSidebar()`（与 ⌘\ 同一条路径），折叠/展开左侧导航列；`SummaryWorkspaceView` 因此注入 `@EnvironmentObject AppEnvironment`（`RootShellView` 已提供）。
+- **右栏宽度 / 底色 / 下拉配色对齐（同日，按滴答截图逐项量）**：宽度 272→**370**（窗口门槛 900→1000）；卡片底色从 `WFColors.hover`（4% 黑）换成新增的 `WFColors.panelFill`（亮 `#F7F8FA` / 暗 `#2A2A2C`）；行高 38→36。**下拉值的颜色**：`.menuStyle(.borderlessButton)` 会把 label 染成 accent 蓝，`.foregroundStyle` / `.tint` 都不生效，改用 `.foregroundColor(WFColors.secondaryText)` 才压住；箭头用 `.tint(WFColors.secondaryText)` 一起转灰。AI 的「长度 / 语言风格」原来是 `Picker`（蓝色 stepper），换成 `Menu` + 自绘 label。
+- **标题栏图标对齐（同日）**：`☰` 从 `line.3.horizontal` 换成滴答那种带框列表图标 `list.bullet.rectangle`；右侧 `⋯` 与导出的蓝色（Menu 的 accent）一并改成灰色（`foregroundColor` + `tint`）。
+- **右上角改成「历史文档」（同日）**：换成 `clock.arrow.circlepath`，点击弹 `AnchoredPropertyPanel`（300 宽），内容是空的「没有历史文档」态（文档 + 铅笔图标）。**注意**：`SummaryStore` 目前每次保存都覆盖同一份 `document`，没有版本历史，所以这里只有空态；要真历史需要给 `DailySummary` 加版本数组。
+- 顺带修一个 bug：模板区的「＋」保存时用的是 `weeklyDocument.blocks.first?.plainText` 当模板名——AI 改写后整篇正文就是一块纯文本，导致模板名变成一整段、把右栏撑开。改为用 `currentWeekLabel`（"摘要模板 本周（10月19日-10月25日）"），列表项补 `lineLimit(1)`；已产生的错误模板已从 `modules/templates.json` 清除。
+- **二次对齐（同日，照滴答截图补齐）**：正文上方加**常驻格式工具栏**（`DocumentFormatToolbarView` + `DocumentEditorHandle`，与任务正文同一套）；右栏补「日期」（回显当前周范围）、「更多」（无）、「显示内容」（日期、标题）、**下一周期任务开关**（在文档末尾追加下一周的未完成清单）、**内容优化（公测）AI 总开关**（关闭时选项与按钮变灰禁用）。
+- **仍与滴答不同的一处**：左列。滴答的左列是**全局导航**（所有 / 今天 / 收集箱 / 摘要 + 清单 / 过滤器 / 标签 / 已完成 / 垃圾桶），本地摘要页的左列是**摘要专属**（周回顾/手记 + 周列表）。因为本地侧栏已有独立导航列（任务模块），摘要不再重复一份；若要完全照搬，需要把摘要的左列换成全局导航，等于和侧栏职责重叠，暂不做。
 
 ## 证据索引
 

@@ -574,7 +574,7 @@ private struct CalendarTimeBlock: View {
         .onExitCommand { gestureSession.cancel(); translation = .zero; resizeDraft.cancel() }
         .onHover { hovering = $0 }
         .background(PlanningAnchorProbe(ref: anchor))
-        .contextMenu { Button("打开任务", action: onOpen) }
+        .businessContextMenu { Button("打开任务", action: onOpen) }
         .accessibilityValue(timeLabel)
         .accessibilityIdentifier("calendar.time-block.\(task.id.uuidString)")
     }

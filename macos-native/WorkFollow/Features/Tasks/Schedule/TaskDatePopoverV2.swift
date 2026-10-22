@@ -656,6 +656,8 @@ struct TaskDatePopoverV2: View {
                            checked: reminderDraft.offsets.contains(minutes)) {
                     reminderDraft.toggle(minutes)
                 }
+                .scheduleRenderAnchor(.reminderOffset(minutes), label: reminderOptionLabel(minutes),
+                                      active: reminderDraft.offsets.contains(minutes))
             }
             Divider()
             optionsRow("自定义") {
@@ -689,23 +691,16 @@ struct TaskDatePopoverV2: View {
             .sorted(by: >)
     }
 
-    /// 选项文案：`当天 (09:00)` / `提前1天 (09:00)` / 自定义量用分钟标题；
-    /// 括号里是提醒时刻（全天任务默认 09:00，定时任务取定时钟点）。
+    /// 与实际排期使用同一锚点；分钟偏移和跨日偏移都显示真正的触发时刻。
     private func reminderOptionLabel(_ minutes: Int) -> String {
-        "\(reminderOffsetTitle(minutes)) (\(reminderClockText))"
+        ScheduleDisplay.reminderOptionText(minutes: minutes, anchor: model.dueAnchor,
+            hasTime: model.hasTime, now: workspace.clock(), calendar: workspace.calendar)
     }
 
     /// 提前量标题（滴答口径）：当天 / 提前1周 / 提前N天 / 分钟级自定义量。
     /// 实现只有一处：`ScheduleDisplay.reminderOffsetText(minutes:style: .panel)`。
     private func reminderOffsetTitle(_ minutes: Int) -> String {
         ScheduleDisplay.reminderOffsetText(minutes: minutes, style: .panel)
-    }
-
-    private var reminderClockText: String {
-        if model.hasTime, let anchor = model.startTimeAnchor {
-            return Self.clockText(anchor, calendar: workspace.calendar)
-        }
-        return Self.defaultClockText
     }
 
     /// 自定义提前量：提前 [数量] [分钟/小时/天]（确定时并入所选）。
@@ -719,13 +714,9 @@ struct TaskDatePopoverV2: View {
                 .frame(width: 36)
                 .padding(.vertical, 2)
                 .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 5))
-            Picker("", selection: $customOffsetUnit) {
-                Text("分钟").tag(1)
-                Text("小时").tag(60)
-                Text("天").tag(1440)
-            }
+            BusinessPicker("提醒单位", selection: $customOffsetUnit, options:
+                [BusinessChoice(1, "分钟"), BusinessChoice(60, "小时"), BusinessChoice(1440, "天")])
             .labelsHidden()
-            .pickerStyle(.menu)
             .frame(width: 64)
             Spacer(minLength: 0)
         }
@@ -924,9 +915,8 @@ struct TaskDatePopoverV2: View {
     /// 自定义区间：`每 [−] N [天/周/月/年] [+]`，直接写草稿的 interval。
     private var customRecurrenceEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("起算方式", selection: Binding(get: { model.recurrenceBase }, set: model.chooseBase)) {
-                ForEach(RecurrenceBase.allCases, id: \.self) { value in Text(value.title).tag(value) }
-            }
+            BusinessPicker("起算方式", selection: Binding(get: { model.recurrenceBase }, set: model.chooseBase), options:
+                RecurrenceBase.allCases.map { BusinessChoice($0, $0.title) })
             if model.recurrenceBase == .selectedDates {
                 HStack {
                     DatePicker("日期", selection: $selectedRepeatDraftDate, displayedComponents: .date).labelsHidden()
@@ -956,18 +946,14 @@ struct TaskDatePopoverV2: View {
                     }
                 }
                 if model.frequency == .monthly {
-                    Picker("每月", selection: Binding(get: { model.monthlyOrdinal }, set: model.chooseMonthlyOrdinal)) {
-                        Text("指定日").tag(0)
-                        Text("第一个").tag(1); Text("第二个").tag(2); Text("第三个").tag(3); Text("第四个").tag(4); Text("最后一个").tag(-1)
-                    }
+                    BusinessPicker("每月", selection: Binding(get: { model.monthlyOrdinal }, set: model.chooseMonthlyOrdinal), options:
+                        [BusinessChoice(0, "指定日"), BusinessChoice(1, "第一个"), BusinessChoice(2, "第二个"),
+                         BusinessChoice(3, "第三个"), BusinessChoice(4, "第四个"), BusinessChoice(-1, "最后一个")])
                     if model.monthlyOrdinal == 0 {
                         Stepper("每月\(model.monthDay)日", value: Binding(get: { model.monthDay }, set: model.chooseMonthDay), in: 1...31)
                     } else {
-                        Picker("星期", selection: Binding(get: { model.weekday }, set: model.chooseWeekday)) {
-                            ForEach([(2,"一"),(3,"二"),(4,"三"),(5,"四"),(6,"五"),(7,"六"),(1,"日")], id: \.0) { value, label in
-                                Text("星期" + label).tag(value)
-                            }
-                        }
+                        BusinessPicker("星期", selection: Binding(get: { model.weekday }, set: model.chooseWeekday), options:
+                            [(2,"一"),(3,"二"),(4,"三"),(5,"四"),(6,"五"),(7,"六"),(1,"日")].map { BusinessChoice($0.0, "星期" + $0.1) })
                     }
                 }
             }
@@ -1177,7 +1163,7 @@ struct TaskDatePopoverV2: View {
     private var reminderRowLabel: String {
         let offsets = model.reminderOffsetsDraft
         if !offsets.isEmpty {
-            return offsets.map { $0 == 0 && model.hasTime ? "准时" : reminderOffsetTitle($0) }.joined(separator: ", ")
+            return offsets.map { reminderOptionLabel($0) }.joined(separator: "、")
         }
         guard model.reminderOption != .none else { return "提醒" }
         return reminderChipTitle
@@ -1381,8 +1367,8 @@ struct TaskDatePopoverV2: View {
 
 }
 
-/// Pixel-aligned marks over LunarMonthGridView: the overlay replicates the
-/// grid's exact VStack/header/weekday structure with empty placeholders, so
+/// Pixel-aligned marks over `AppKitMonthGridView`: the overlay replicates the
+/// grid's exact header/weekday/row geometry with empty placeholders, so
 /// occurrence discs, 班/休 badges and statutory festival names land on the
 /// right cells without touching the grid itself.
 private struct CalendarAnnotationOverlay: View {

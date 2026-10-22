@@ -21,11 +21,13 @@ struct MatrixRuleEditor: View {
             ScrollView {
                 Form {
                     TextField("名称", text: $value.title)
-                    Picker("颜色", selection: $value.colorIndex) {
-                        Text("红色").tag(0); Text("黄色").tag(1); Text("蓝色").tag(2); Text("绿色").tag(3)
-                    }
-                    Picker("排序", selection: $value.sort) { ForEach(MatrixSort.allCases, id: \.self) { Text($0.title).tag($0) } }
-                    Picker("分组", selection: $value.grouping) { ForEach(MatrixGrouping.allCases, id: \.self) { Text($0.title).tag($0) } }
+                    BusinessPicker("颜色", selection: $value.colorIndex, options:
+                        [BusinessChoice(0, "红色", symbol: "circle.fill", color: WFColors.danger),
+                         BusinessChoice(1, "黄色", symbol: "circle.fill", color: WFColors.warning),
+                         BusinessChoice(2, "蓝色", symbol: "circle.fill", color: WFColors.accent),
+                         BusinessChoice(3, "绿色", symbol: "circle.fill", color: .green)])
+                    BusinessPicker("排序", selection: $value.sort, options: MatrixSort.allCases.map { BusinessChoice($0, $0.title) })
+                    BusinessPicker("分组", selection: $value.grouping, options: MatrixGrouping.allCases.map { BusinessChoice($0, $0.title) })
                     Section("优先级 · 未选择时不限") {
                         HStack {
                             ForEach(TaskPriority.menuOrder, id: \.self) { priority in
@@ -35,12 +37,10 @@ struct MatrixRuleEditor: View {
                         }
                     }
                     Section("日期条件") {
-                        Picker("判断依据", selection: $value.rule.date.basis) {
-                            ForEach(MatrixDateBasis.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
-                        Picker("范围", selection: $value.rule.date.kind) {
-                            ForEach(MatrixDateKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
+                        BusinessPicker("判断依据", selection: $value.rule.date.basis, options:
+                            MatrixDateBasis.allCases.map { BusinessChoice($0, $0.title) })
+                        BusinessPicker("范围", selection: $value.rule.date.kind, options:
+                            MatrixDateKind.allCases.map { BusinessChoice($0, $0.title) })
                         if value.rule.date.kind == .nextDays || value.rule.date.kind == .afterDays {
                             Stepper("\(value.rule.date.days) 天", value: $value.rule.date.days, in: 0...365)
                         }
@@ -110,16 +110,13 @@ struct MatrixDropConfirmation: View {
             Text("移入“\(targetTitle)”").font(.title3.weight(.semibold))
             ForEach(proposal.changes, id: \.self) { Text($0) }
             if proposal.listChoices.count > 1 {
-                Picker("清单", selection: Binding(get: { proposal.list?.name ?? "" }, set: { onChoose($0, proposal.tags?.last) })) {
-                    ForEach(proposal.listChoices, id: \.self) { Text($0).tag($0) }
-                }
+                BusinessPicker("清单", selection: Binding(get: { proposal.list?.name ?? "" }, set: { onChoose($0, proposal.tags?.last) }),
+                    options: proposal.listChoices.map { BusinessChoice($0, $0, symbol: "tray") })
             }
             if proposal.tagChoices.count > 1 {
-                Picker("添加标签", selection: Binding(get: {
+                BusinessPicker("添加标签", selection: Binding(get: {
                     proposal.tagChoices.first { proposal.tags?.contains($0) == true } ?? proposal.tagChoices[0]
-                }, set: { onChoose(proposal.list?.name, $0) })) {
-                    ForEach(proposal.tagChoices, id: \.self) { Text($0).tag($0) }
-                }
+                }, set: { onChoose(proposal.list?.name, $0) }), options: proposal.tagChoices.map { BusinessChoice($0, $0, symbol: "tag") })
             }
             if let conflict = proposal.conflict { Text(conflict).foregroundStyle(WFColors.danger) }
             HStack {

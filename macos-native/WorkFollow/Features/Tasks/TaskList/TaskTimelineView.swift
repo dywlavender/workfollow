@@ -124,12 +124,10 @@ struct TaskTimelineView: View {
             }
             .pickerStyle(.segmented).frame(width: 132).controlSize(.small)
             .accessibilityIdentifier("tasks.timeline.scale")
-            Menu {
-                Picker("任务颜色", selection: $colorSource) {
-                    ForEach(TaskTimelineColorSource.allCases) { source in Text(source.title).tag(source) }
-                }
+            BusinessMenu {
+                BusinessMenuChoices(selection: $colorSource, options: TaskTimelineColorSource.allCases.map { BusinessChoice($0, $0.title) })
             } label: { Image(systemName: "paintpalette").frame(width: 22, height: 24) }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .fixedSize()
             .help("按\(colorSource.title)显示任务颜色")
             Button { showsPool.toggle() } label: {
                 HStack(spacing: 4) {
@@ -148,8 +146,11 @@ struct TaskTimelineView: View {
     private func timeline(range: TaskTimelineRange, labelWidth: CGFloat,
                           availableHeight: CGFloat) -> some View {
         let rows = partition.scheduled
+        // 保留原生滚动条的完整高度；叠加模式下这部分留在网格底部。
+        let scrollerHeight = NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
         let contentHeight = max(CGFloat(rows.count) * TaskTimelineLayout.rowHeight,
-                                availableHeight - TaskTimelineLayout.headerHeight)
+                                availableHeight - TaskTimelineLayout.headerHeight - scrollerHeight)
+        let scrollHeight = contentHeight + TaskTimelineLayout.headerHeight + scrollerHeight
         return ScrollView(.vertical, showsIndicators: true) {
             HStack(alignment: .top, spacing: 0) {
                 VStack(spacing: 0) {
@@ -176,12 +177,13 @@ struct TaskTimelineView: View {
                         dateCanvas(range: range, rows: rows, height: contentHeight)
                     }
                     .frame(width: range.contentWidth)
+                    .frame(maxHeight: .infinity, alignment: .top)
                 }
                 .id(TaskTimelineScrollIdentity(start: range.start, scale: viewport.scale, revision: scrollRevision))
-                .frame(height: contentHeight + TaskTimelineLayout.headerHeight)
+                .frame(height: scrollHeight)
                 .accessibilityIdentifier("tasks.timeline.date-scroll")
             }
-            .frame(height: contentHeight + TaskTimelineLayout.headerHeight)
+            .frame(height: scrollHeight)
         }
     }
 
@@ -210,7 +212,7 @@ struct TaskTimelineView: View {
                 ForEach(TaskTimelineLayout.headerSegments(in: range, scale: viewport.scale, calendar: workspace.calendar)) { segment in
                     Text(headerContext(segment.date)).font(WFType.supporting).lineLimit(1)
                         .foregroundStyle(WFColors.tertiaryText)
-                        .frame(width: CGFloat(segment.dayCount) * range.dayWidth, height: 24,
+                        .frame(width: CGFloat(segment.dayCount) * range.dayWidth, height: TaskTimelineLayout.headerRowHeight,
                                alignment: viewport.scale == .day ? .center : .leading)
                         .overlay(alignment: .leading) { Rectangle().fill(WFColors.border.opacity(0.55)).frame(width: 1) }
                 }
@@ -221,12 +223,14 @@ struct TaskTimelineView: View {
                     let today = workspace.calendar.isDate(day, inSameDayAs: workspace.clock())
                     Text(day, format: .dateTime.day().locale(.appDate))
                         .font(WFType.supporting).foregroundStyle(today ? WFColors.accent : WFColors.secondaryText)
-                        .frame(width: range.dayWidth, height: 24)
+                        .frame(width: range.dayWidth, height: TaskTimelineLayout.headerRowHeight)
                         .background(today ? WFColors.accent.opacity(0.08) : Color.clear)
                         .overlay(alignment: .leading) { Rectangle().fill(WFColors.border.opacity(0.55)).frame(width: 1) }
                 }
             }
         }
+        .padding(.vertical, TaskTimelineLayout.headerVerticalPadding)
+        .frame(height: TaskTimelineLayout.headerHeight)
         .overlay(alignment: .bottom) { Divider() }
         .taskTimelineFrame(.header)
     }

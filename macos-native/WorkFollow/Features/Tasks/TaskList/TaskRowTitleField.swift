@@ -34,7 +34,7 @@ struct TaskRowTitleField: NSViewRepresentable {
     func updateNSView(_ field: Field, context: Context) {
         context.coordinator.parent = self
         field.textColor = NSColor(color)
-        if !field.editingSession { field.stringValue = title }
+        if !field.editingSession, field.stringValue != title { field.stringValue = title }
     }
 
     final class Field: NSTextField {
@@ -74,6 +74,12 @@ struct TaskRowTitleField: NSViewRepresentable {
             guard editingSession, let window else { return }
             styleEditorBackground()
             if window.firstResponder === currentEditor(), currentEditor() != nil { return }
+            // A queued restore belongs only to a transient container refresh.
+            // Another native input already owning focus is an actual handoff.
+            if window.firstResponder is NSTextView || window.firstResponder is NSTextField {
+                onFinish?(false)
+                return
+            }
             selectText(nil)
             if let editor = currentEditor() as? NSTextView {
                 let count = (stringValue as NSString).length
@@ -124,7 +130,9 @@ struct TaskRowTitleField: NSViewRepresentable {
             field.stopObserving()
             if !cancel, field.stringValue != parent.title { parent.onCommit(field.stringValue) }
             parent.onEditingEnded()
-            field.window?.makeFirstResponder(nil)
+            if let editor = field.currentEditor(), field.window?.firstResponder === editor {
+                field.window?.makeFirstResponder(nil)
+            }
             if cancel { field.stringValue = parent.title }
         }
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {

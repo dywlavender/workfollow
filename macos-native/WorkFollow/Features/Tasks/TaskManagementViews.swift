@@ -9,9 +9,11 @@ enum TaskNamePrompt {
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
         field.stringValue = value
         alert.accessoryView = field
-        alert.addButton(withTitle: confirm); alert.addButton(withTitle: "取消")
+        let primary = alert.addButton(withTitle: confirm)
+        let cancel = alert.addButton(withTitle: "取消")
+        NativeDialogActions.configure(alert, primary: primary, cancel: cancel)
         alert.window.initialFirstResponder = field
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        guard NativeDialogActions.runModal(alert, cancel: cancel) == .alertFirstButtonReturn else { return nil }
         return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     /// 二次确认。`action` 是**确认按钮的文案**。
@@ -23,8 +25,10 @@ enum TaskNamePrompt {
     /// 缺陷重新长出来。没有默认值，漏写就编译不过。
     static func confirm(_ title: String, message: String, action: String) -> Bool {
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = message
-        alert.addButton(withTitle: action); alert.addButton(withTitle: "取消")
-        return alert.runModal() == .alertFirstButtonReturn
+        let primary = alert.addButton(withTitle: action)
+        let cancel = alert.addButton(withTitle: "取消")
+        NativeDialogActions.configure(alert, primary: primary, cancel: cancel, destructive: true)
+        return NativeDialogActions.runModal(alert, cancel: cancel) == .alertFirstButtonReturn
     }
     static func invalidName() {
         let alert = NSAlert(); alert.messageText = "名称为空或已存在"; alert.runModal()
@@ -112,7 +116,7 @@ struct TaskCollectionsView: View {
                     }
                     .padding(.leading, Self.folderIndent)
                     .accessibilityLabel("已归档清单：" + name)
-                    .contextMenu {
+                    .businessContextMenu {
                         Button("恢复清单") { _ = workspace.setListArchived(name, false) }
                     }
                 }
@@ -156,7 +160,7 @@ struct TaskCollectionsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .contextMenu {
+        .businessContextMenu {
             Button("重命名文件夹…") {
                 guard let value = TaskNamePrompt.ask("重命名文件夹", value: folder),
                       value != folder else { return }
@@ -190,7 +194,7 @@ struct TaskCollectionsView: View {
 
     /// 滴答桌面端是「光标覆盖"清单"区 → 点 +」：一个入口，两种新建（清单 / 文件夹）。
     private var newListBox: some View {
-        Menu {
+        BusinessMenu {
             Button("新建清单…") {
                 if let value = TaskNamePrompt.ask("新建清单") {
                     if workspace.saveList(value) { openList(value) } else { TaskNamePrompt.invalidName() }
@@ -206,8 +210,6 @@ struct TaskCollectionsView: View {
                 .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
         .help("新建清单 / 文件夹")
     }
@@ -226,6 +228,7 @@ private struct SidebarListRowView: View {
     let name: String
     let onOpen: () -> Void
     @State private var hovering = false
+    @State private var menuPresented = false
     @State private var dragTargeted = false
     @State private var showColorPicker = false
     @State private var showIconPicker = false
@@ -282,19 +285,17 @@ private struct SidebarListRowView: View {
             }
             .buttonStyle(.plain)
             // "⋯"常驻占位（对齐 Flutter 的 AnimatedOpacity）：行宽不因 hover 抖动。
-            Menu { menuItems } label: {
+            BusinessMenu(isPresented: $menuPresented) { menuItems } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(WFColors.secondaryText)
                     .frame(width: 18, height: 20)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .fixedSize()
-            .opacity(hovering ? 1 : 0)
-            .allowsHitTesting(hovering)
-            .disabled(!hovering)
+            .opacity(hovering || menuPresented ? 1 : 0)
+            .allowsHitTesting(hovering || menuPresented)
+            .disabled(!hovering && !menuPresented)
             .help("清单操作")
         }
         // 容器本身已有 8 的横向内边距；清单行的色点比智能清单图标再靠左 12pt，
@@ -308,7 +309,7 @@ private struct SidebarListRowView: View {
             .strokeBorder(dragTargeted ? WFColors.accent : Color.clear, lineWidth: 1))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .contextMenu { menuItems }
+        .businessContextMenu { menuItems }
         // 拖拽：任务拖进来 = 移入本清单（HUD 由 workspace 自动上报）；
         // 清单拖进来 = 建文件夹（滴答主手势：拖动一个清单到另一个清单上方）。
         .draggable(SidebarDragPayload.encode(.list(name)))
@@ -351,7 +352,7 @@ private struct SidebarListRowView: View {
         }
         // 移动到文件夹（滴答层级：文件夹 → 清单）：现有文件夹 + 新建 + 移出；收集箱不参与。
         if !isInbox {
-            Menu("移动到文件夹") {
+            BusinessMenu("移动到文件夹") {
                 ForEach(workspace.listFolderNames.filter { $0 != folder }, id: \.self) { target in
                     Button(target) { _ = workspace.setListFolder(name, target) }
                 }
@@ -592,15 +593,12 @@ struct TaskComposer: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("新建任务").font(WFType.detailTitle)
             TextField("准备做什么？", text: $title).focused($titleFocused)
-            Picker("清单", selection: $list) {
-                ForEach(workspace.availableListNames, id: \.self) { Text($0).tag($0) }
-            }
+            BusinessPicker("清单", selection: $list, options:
+                workspace.availableListNames.map { BusinessChoice($0, $0, symbol: "tray") })
             .onChange(of: list) { _, _ in listEdited = true }
             scheduleRow
-            Picker("优先级", selection: $priority) {
-                Text("无").tag(TaskPriority.none); Text("低").tag(TaskPriority.low)
-                Text("中").tag(TaskPriority.medium); Text("高").tag(TaskPriority.high)
-            }
+            BusinessPicker("优先级", selection: $priority, options:
+                TaskPriority.menuOrder.map { BusinessChoice($0, $0.title, symbol: "flag", color: $0.menuColor) })
             .onChange(of: priority) { _, _ in priorityEdited = true }
             TextField("标签（逗号分隔）", text: $tags)
                 .onChange(of: tags) { _, _ in tagsEdited = true }

@@ -62,7 +62,7 @@ private struct TaskReminderPanel: View {
             HStack {
                 Button(delivery.kind == .task ? "打开任务" : "查看提醒", action: onOpen)
                 Spacer()
-                Menu("稍后提醒") {
+                BusinessMenu("稍后提醒") {
                     ForEach(Array(Set([5, defaultMinutes, 10, 30])).sorted(), id: \.self) { minutes in
                         Button("\(minutes) 分钟后") { onSnooze(minutes) }
                     }

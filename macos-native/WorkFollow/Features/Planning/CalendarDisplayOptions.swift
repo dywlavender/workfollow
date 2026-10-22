@@ -13,12 +13,10 @@ struct CalendarDisplayOptions: View {
                 Toggle("显示未来重复周期", isOn: value(\.showFutureOccurrences))
                 Toggle("显示子任务", isOn: value(\.showSubtasks))
                 Toggle("显示安排任务面板", isOn: value(\.showArrangePane))
-                Picker("每周开始于", selection: value(\.firstWeekday)) {
-                    ForEach(1...7, id: \.self) { Text(CalendarWeekHeaderLabels.all[$0 - 1]).tag($0) }
-                }
-                Picker("任务颜色", selection: value(\.colorSource)) {
-                    ForEach(CalendarColorSource.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
+                BusinessPicker("每周开始于", selection: value(\.firstWeekday), options:
+                    (1...7).map { BusinessChoice($0, CalendarWeekHeaderLabels.all[$0 - 1]) })
+                BusinessPicker("任务颜色", selection: value(\.colorSource), options:
+                    CalendarColorSource.allCases.map { BusinessChoice($0, $0.label) })
                 Slider(value: value(\.hourHeight), in: CalendarDisplaySizing.hourHeightRange, step: 4) { Text("时间轴缩放") }
                 Slider(value: value(\.allDayHeight), in: CalendarDisplaySizing.allDayHeightRange, step: 20) { Text("全天区域高度") }
                 Section("清单范围 · 未选择时显示全部") {
@@ -124,7 +122,7 @@ struct CalendarArrangePane: View {
                         .contentShape(Rectangle())
                         .accessibilityIdentifier("calendar.arrange-card.\(task.id.uuidString)")
                         .help("拖入日历安排，单击打开任务")
-                        .contextMenu { Button("安排到选中日期") { onArrange(task.id) } }
+                        .businessContextMenu { Button("安排到选中日期") { onArrange(task.id) } }
                     }
                 }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)

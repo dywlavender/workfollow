@@ -4,28 +4,32 @@ struct FocusPresetEditor: View {
     @ObservedObject var store: FocusStore
     let workspace: TaskWorkspaceModel?
     @State var preset: FocusStore.TimerPreset
+    @State private var error: String?
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("编辑常用专注").font(.title3.weight(.semibold))
-            TextField("名称", text: $preset.name)
-            Picker("表情", selection: $preset.emoji) {
-                ForEach(FocusTheme.emojiChoices, id: \.self) { Text($0).tag($0) }
+        VStack(spacing: 0) {
+            DialogHeader(title: "编辑常用专注")
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    TextField("名称", text: $preset.name)
+                    BusinessPicker("表情", selection: $preset.emoji, options:
+                        FocusTheme.emojiChoices.map { BusinessChoice($0, $0) })
+                    Toggle("正计时", isOn: $preset.stopwatch)
+                    if !preset.stopwatch { Stepper("\(preset.minutes) 分钟", value: $preset.minutes, in: PomodoroSettings.focusRange) }
+                    BusinessPicker("关联任务", selection: $preset.taskID, options:
+                        [BusinessChoice(nil, "不关联")] + (workspace?.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned } ?? []).map {
+                            BusinessChoice(Optional($0.id), $0.title.isEmpty ? "未命名任务" : $0.title, symbol: "checklist")
+                        }, width: PopupMetrics.relationPickerWidth)
+                }.padding(PopupMetrics.formInset)
             }
-            Toggle("正计时", isOn: $preset.stopwatch)
-            if !preset.stopwatch { Stepper("\(preset.minutes) 分钟", value: $preset.minutes, in: PomodoroSettings.focusRange) }
-            Picker("关联任务", selection: $preset.taskID) {
-                Text("不关联").tag(Optional<UUID>.none)
-                ForEach(workspace?.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned } ?? []) {
-                    Text($0.title.isEmpty ? "未命名任务" : $0.title).tag(Optional($0.id))
-                }
+            DialogFooter(canSubmit: !preset.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                         onCancel: { dismiss() }, onSubmit: {
+                if store.updateTimer(preset) { dismiss() }
+                else { error = "无法保存，请检查名称和时长。" }
+            }) {
+                Text(error ?? "").foregroundStyle(WFColors.danger)
             }
-            HStack {
-                Spacer(); Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("保存") { if store.updateTimer(preset) { dismiss() } }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                    .disabled(preset.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }.padding(24).frame(width: 400)
+        }.frame(width: 400, height: 380).background(WFColors.content)
     }
 }

@@ -8,6 +8,14 @@ enum WFColors {
     static let text = Color(nsColor: .labelColor)
     static let secondaryText = Color(nsColor: .secondaryLabelColor)
     static let tertiaryText = Color(nsColor: .tertiaryLabelColor)
+    /// 非本月日期（日历工作区与日期面板月历共用）：比 `tertiaryText` 浅一档，
+    /// 亮色 ≈ #C0C4CB、暗色 ≈ #6B7078。自绘处（`AppKitMonthGridView`）手写了同样的值，
+    /// 改色时两处一起改。
+    static let outOfMonthText = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.42, green: 0.44, blue: 0.48, alpha: 1)
+            : NSColor(red: 0.753, green: 0.769, blue: 0.796, alpha: 1)
+    })
     static let border = Color(nsColor: .separatorColor).opacity(0.5)
     static let accent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -28,6 +36,14 @@ enum WFColors {
     /// 中性表面上的强调色，不是列表选中。深色未实测，取 `menuSelected` 同族的灰。
     static let listSelection = themed(rgb(0xF2F2F2), rgb(0x363A42))
     static let hover = Color.primary.opacity(0.04)
+    /// 右栏配置卡片的底色（滴答 ≈ #F7F8FA，暗色 ≈ #2A2A2C）。
+    static let panelFill = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.165, green: 0.165, blue: 0.173, alpha: 1)
+            : NSColor(red: 0.969, green: 0.973, blue: 0.980, alpha: 1)
+    })
+    /// Summary's primary action follows the blue action in the reference UI.
+    static let summaryAction = themed(rgb(0x476CFF), rgb(0x6B8CFF))
 
     /// Flutter `WorkFollowTheme` 的浅/深两套值，按当前外观取其一。日历与四象限
     /// 的过期红、节假日绿、控件描边都要和原版逐值一致，语义色（systemRed 之类）

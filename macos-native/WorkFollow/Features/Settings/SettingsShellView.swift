@@ -1,10 +1,12 @@
 import SwiftUI
 
+enum SettingsSection: Hashable { case general, data, appleSync, localNotifications }
+
 struct SettingsShellView: View {
     @EnvironmentObject private var environment: AppEnvironment
 
     var body: some View {
-        TabView {
+        TabView(selection: $environment.settingsSection) {
             Form {
                 Picker("外观", selection: $environment.appearance) {
                     ForEach(NativeAppearance.allCases) { appearance in
@@ -15,13 +17,19 @@ struct SettingsShellView: View {
             }
             .formStyle(.grouped)
             .tabItem { Label("通用", systemImage: "gearshape") }
+            .tag(SettingsSection.general)
 
             SettingsDataView()
                 .tabItem { Label("数据", systemImage: "externaldrive") }
+                .tag(SettingsSection.data)
 
-            SettingsCalendarReminderView(reminders: environment.reminders,
-                integration: environment.systemCalendar, workspace: environment.taskWorkspace)
-                .tabItem { Label("日历与提醒", systemImage: "calendar.badge.clock") }
+            SettingsAppleRemindersView(integration: environment.systemReminders, calendarIntegration: environment.systemCalendar)
+                .tabItem { Label("Apple 同步", systemImage: "checklist") }
+                .tag(SettingsSection.appleSync)
+
+            SettingsCalendarReminderView(reminders: environment.reminders, workspace: environment.taskWorkspace)
+                .tabItem { Label("本机通知", systemImage: "bell") }
+                .tag(SettingsSection.localNotifications)
         }
         .frame(width: 500, height: 660)
         .navigationTitle("设置")

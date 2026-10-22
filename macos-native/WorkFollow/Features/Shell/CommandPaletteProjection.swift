@@ -9,7 +9,7 @@ enum CommandPaletteAction: Equatable {
 }
 
 struct CommandPaletteEntry: Identifiable {
-    /// 区分首项"新建任务"（视图渲染高亮）与任务/笔记/命令结果。
+    /// 搜索结果优先；创建入口使用独立快捷键。
     enum Kind: Equatable { case createTask, task, note, command }
 
     let id: String
@@ -18,6 +18,8 @@ struct CommandPaletteEntry: Identifiable {
     let subtitle: String
     let symbol: String
     let action: CommandPaletteAction
+    var snippet: String? = nil
+    var relevance: Int = 0
 }
 
 enum CommandPaletteProjection {
@@ -31,9 +33,7 @@ enum CommandPaletteProjection {
         let commands = commandEntries()
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // 首项恒为"新建任务"：无论是否输入了 query，都提供把当前输入落到
-        // 当前上下文的入口（Flutter 对齐：有 query 显示「query」，空 query
-        // 显示"新建任务"，命令面板从不发明"未命名任务"去追赶用户）。
+        // 没有搜索词时保留快速新建；有搜索词时先打开已有内容，避免回车误建。
         let create = CommandPaletteEntry(
             id: "create-task",
             kind: .createTask,
@@ -45,13 +45,19 @@ enum CommandPaletteProjection {
         guard !query.isEmpty else { return [create] + commands }
 
         let loweredQuery = query.lowercased()
-        let taskResults = tasks.lazy
+        let taskResults = tasks
             .filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted }
             .filter {
                 $0.document.matches(loweredQuery, prefix: $0.title + " " + $0.list.name + " ",
                                     suffix: " " + $0.tags.joined(separator: " "), lowercase: true)
             }
-            .prefix(7)
+            .enumerated().sorted { left, right in
+                let lhs = relevance(query: loweredQuery, title: left.element.title,
+                    metadata: left.element.list.name + " " + left.element.tags.joined(separator: " "))
+                let rhs = relevance(query: loweredQuery, title: right.element.title,
+                    metadata: right.element.list.name + " " + right.element.tags.joined(separator: " "))
+                return lhs == rhs ? left.offset < right.offset : lhs < rhs
+            }.prefix(7).map(\.element)
             .map { task in
                 let time = taskTimeLabel(for: task, now: now, calendar: calendar) ?? "未安排"
                 return CommandPaletteEntry(
@@ -60,15 +66,22 @@ enum CommandPaletteProjection {
                     title: task.title.isEmpty ? "无标题" : task.title,
                     subtitle: "\(task.list.name) · \(time)",
                     symbol: task.isClosed ? "checkmark.square.fill" : "square",
-                    action: .openTask(task.id))
+                    action: .openTask(task.id),
+                    snippet: matchingSnippet(in: task.document, query: query),
+                    relevance: relevance(query: loweredQuery, title: task.title,
+                        metadata: task.list.name + " " + task.tags.joined(separator: " ")))
             }
 
-        let noteResults = notes.lazy
+        let noteResults = notes
             .filter { $0.deletedAt == nil }
             .filter {
                 $0.document.matches(loweredQuery, prefix: $0.title + " ", suffix: " " + $0.folder, lowercase: true)
             }
-            .prefix(5)
+            .enumerated().sorted { left, right in
+                let lhs = relevance(query: loweredQuery, title: left.element.title, metadata: left.element.folder)
+                let rhs = relevance(query: loweredQuery, title: right.element.title, metadata: right.element.folder)
+                return lhs == rhs ? left.offset < right.offset : lhs < rhs
+            }.prefix(5).map(\.element)
             .map { note in
                 CommandPaletteEntry(
                     id: "note-\(note.id.uuidString)",
@@ -76,13 +89,38 @@ enum CommandPaletteProjection {
                     title: note.title.isEmpty ? "未命名笔记" : note.title,
                     subtitle: "笔记 · \(note.folder)",
                     symbol: "text.alignleft",
-                    action: .openNote(note.id))
+                    action: .openNote(note.id),
+                    snippet: matchingSnippet(in: note.document, query: query),
+                    relevance: relevance(query: loweredQuery, title: note.title, metadata: note.folder))
             }
 
         let matchingCommands = commands.filter {
             ($0.title + " " + $0.subtitle).localizedLowercase.contains(loweredQuery)
         }
-        return [create] + taskResults + noteResults + matchingCommands
+        let results = (taskResults + noteResults).enumerated().sorted { left, right in
+            left.element.relevance == right.element.relevance
+                ? left.offset < right.offset : left.element.relevance < right.element.relevance
+        }.map(\.element)
+        return results + matchingCommands + [create]
+    }
+
+    private static func relevance(query: String, title: String, metadata: String) -> Int {
+        let title = title.localizedLowercase
+        if title == query { return 0 }
+        if title.hasPrefix(query) { return 1 }
+        if title.contains(query) { return 2 }
+        return metadata.localizedLowercase.contains(query) ? 3 : 4
+    }
+
+    /// 只为截取后的结果读取正文，避免搜索时展开全部文档。
+    private static func matchingSnippet(in document: NativeDocument, query: String) -> String? {
+        let text = document.plainText
+        guard let match = text.range(of: query, options: .caseInsensitive) else { return nil }
+        let start = text.index(match.lowerBound, offsetBy: -24, limitedBy: text.startIndex) ?? text.startIndex
+        let end = text.index(match.upperBound, offsetBy: 70, limitedBy: text.endIndex) ?? text.endIndex
+        return (start > text.startIndex ? "…" : "")
+            + text[start..<end].replacingOccurrences(of: "\n", with: " ")
+            + (end < text.endIndex ? "…" : "")
     }
 
     /// "切换外观"命令的轮换顺序：跟随系统 → 浅色 → 深色 → 跟随系统。
@@ -156,6 +194,7 @@ enum CommandPaletteProjection {
 
     private static func commandEntries() -> [CommandPaletteEntry] {
         [
+            command("打开本周计划", "按周一到周日安排和回顾任务", "calendar.badge.checkmark", .navigate(.weekPlan)),
             command("打开最近 7 天", "查看逾期与未来七天", "calendar.badge.clock", .navigate(.nextSevenDays)),
             command("打开今天", "查看现在最重要的事", "sun.max", .navigate(.today)),
             command("打开收集箱", "稍后再安排", "tray", .navigate(.inbox)),

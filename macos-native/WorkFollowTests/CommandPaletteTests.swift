@@ -14,14 +14,14 @@ final class CommandPaletteTests: XCTestCase {
             query: "  ", tasks: [], notes: [], creationList: "收集箱",
             schedulesForToday: false, now: now, calendar: calendar)
 
-        // 首项恒为"新建任务"，其后是完整命令区（Flutter 命令全集）。
-        XCTAssertEqual(entries.count, 10)
+        // 未输入搜索词时保留快速创建入口。
+        XCTAssertEqual(entries.count, 11)
         XCTAssertEqual(entries.first?.kind, .createTask)
         XCTAssertEqual(entries.first?.title, "新建任务")
         XCTAssertEqual(entries.first?.subtitle, "保存到收集箱")
         XCTAssertEqual(entries.first?.action, .createTask(""))
         XCTAssertEqual(entries.dropFirst().map(\.title),
-                       ["打开最近 7 天", "打开今天", "打开收集箱", "打开所有任务",
+                       ["打开本周计划", "打开最近 7 天", "打开今天", "打开收集箱", "打开所有任务",
                         "打开日历", "打开笔记", "打开任务垃圾桶", "打开笔记垃圾桶", "切换外观"])
         XCTAssertFalse(entries.contains { $0.title == "已完成" || $0.title == "四象限" })
     }
@@ -34,7 +34,7 @@ final class CommandPaletteTests: XCTestCase {
         XCTAssertEqual(entries.first?.subtitle, "保存到收集箱 · 安排到今天")
     }
 
-    func testSearchOffersCreateTaskThenMatchingTasksNotesAndCommands() async {
+    func testSearchOpensExistingResultsBeforeOfferingCreation() async {
         await MainActor.run {
             let tasks = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
             let matchingTask = tasks.createTask(title: "search title", in: .inbox).taskID!
@@ -59,9 +59,11 @@ final class CommandPaletteTests: XCTestCase {
                 creationList: "收集箱", schedulesForToday: false,
                 now: self.now, calendar: self.calendar)
 
-            XCTAssertEqual(entries.first?.title, "新建任务「search」")
-            XCTAssertEqual(entries.first?.kind, .createTask)
-            XCTAssertEqual(entries.first?.action, .createTask("search"))
+            XCTAssertEqual(entries.first?.action, .openTask(matchingTask))
+            XCTAssertEqual(entries.last?.title, "新建任务「search」")
+            XCTAssertEqual(entries.last?.kind, .createTask)
+            XCTAssertEqual(entries.last?.action, .createTask("search"))
+            XCTAssertEqual(entries.first(where: { $0.action == .openTask(bodyMatch) })?.snippet, "search body")
             XCTAssertTrue(entries.contains { $0.id == "task-\(matchingTask.uuidString)" })
             XCTAssertTrue(entries.contains { $0.id == "task-\(bodyMatch.uuidString)" })
             XCTAssertTrue(entries.contains { $0.id == "note-\(matchingNote.uuidString)" })
@@ -71,6 +73,22 @@ final class CommandPaletteTests: XCTestCase {
                 creationList: "收集箱", schedulesForToday: false,
                 now: self.now, calendar: self.calendar)
             XCTAssertTrue(commands.contains { $0.title == "打开任务垃圾桶" })
+        }
+    }
+
+    func testExactTitleRanksBeforeBodyMatchesAndCreationRemainsAvailableWithoutMatches() async {
+        await MainActor.run {
+            let workspace = TaskWorkspaceModel(seedDemoData: false)
+            let body = workspace.createTask(title: "季度事项", in: .inbox).taskID!
+            _ = workspace.setDocument(body, NativeDocument(plainText: "项目 预算 讨论"))
+            let exact = workspace.createTask(title: "预算", in: .inbox).taskID!
+            let entries = CommandPaletteProjection.entries(query: "预算", tasks: workspace.allTasks,
+                notes: [], creationList: "收集箱", schedulesForToday: false)
+            XCTAssertEqual(entries.first?.action, .openTask(exact))
+            XCTAssertEqual(entries[1].snippet, "项目 预算 讨论")
+            let empty = CommandPaletteProjection.entries(query: "新想法", tasks: [], notes: [],
+                creationList: "收集箱", schedulesForToday: false)
+            XCTAssertEqual(empty.first?.action, .createTask("新想法"))
         }
     }
 

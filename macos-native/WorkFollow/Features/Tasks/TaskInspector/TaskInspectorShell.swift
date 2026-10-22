@@ -8,6 +8,7 @@ struct TaskInspectorShell: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.taskFocusStore) private var taskFocusStore
     let showBack: Bool
+    var allowsClosing = false
     /// 评论条数角标的观察源。由宿主显式传入（测试/预览可以不传）——
     /// 避免在 body 里直接读 `@EnvironmentObject`（没有 environment 的宿主会崩）。
     var commentStore: TaskCommentStore? = nil
@@ -19,6 +20,7 @@ struct TaskInspectorShell: View {
     @State private var titleEditing = false
     @State private var presentation = TaskInspectorPresentationState()
     @State private var newListName = ""
+    @State private var listMenuQuery = ""
     /// 正在行内编辑的子任务（NSOutlineView 消费，"添加子任务"后自动聚焦新行）。
     @State private var inlineChildEditorID: UUID?
     @State private var showNewList = false
@@ -28,6 +30,8 @@ struct TaskInspectorShell: View {
     @State private var showPriorityMenu = false
     /// 「更多」菜单里的"设置预计专注"浮层（专注摘要行改为有数据才显示后保留入口）。
     @State private var showFocusEstimate = false
+    @State private var focusSubmenuWork: DispatchWorkItem?
+    @State private var focusSubmenuIntentID: UUID?
     @State private var focusStartFailed = false
     /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
     @State private var hoveringAddChild = false
@@ -46,6 +50,7 @@ struct TaskInspectorShell: View {
             if let task = workspace.selectedTask {
                 headerBar(task)
                 Divider()
+                reminderSummaryRow(task)
                 GeometryReader { viewport in
                     ScrollView {
                         inspectorContent(task)
@@ -79,13 +84,11 @@ struct TaskInspectorShell: View {
                                           title: workspace.selectedTask?.title ?? "")
             titleEditing = false
             presentation.editingTarget = .none
-            presentation.activePopover = nil
-            actionPresentation.dismiss()
+            dismissTransientPanels()
             showFormattingToolbar = false
             showComments = false
-            showNoteInfo = false
-            showKindMenu = false
         }
+        .onDisappear { dismissTransientPanels() }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
         .onExitCommand {
             _ = handleEscape()
@@ -115,7 +118,7 @@ struct TaskInspectorShell: View {
     // MARK: - 顶部：状态框 + 日期 + 优先级
 
     private func headerBar(_ task: Task) -> some View {
-        TaskInspectorHeader(task: task, showBack: showBack,
+        TaskInspectorHeader(task: task, showBack: showBack || allowsClosing,
                             onBack: { workspace.select(nil) },
                             onComplete: { _ = workspace.changeStatus(task) },
                             onRepeat: { openSchedulePanel(.recurrence) },
@@ -123,8 +126,8 @@ struct TaskInspectorShell: View {
                                 TaskDetailWindowController.shared.show(workspace: workspace,
                                                                        environment: environment)
                             },
-                            onInfo: task.document.isEmpty ? nil : { showNoteInfo.toggle() },
-                            onKind: { showKindMenu.toggle() },
+                            onInfo: task.document.isEmpty ? nil : { togglePanel($showNoteInfo) },
+                            onKind: { togglePanel($showKindMenu) },
                             kindSymbol: task.kind.symbol,
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
@@ -135,19 +138,13 @@ struct TaskInspectorShell: View {
                     .inspectorRenderAnchor(.progressBar)
             }
         }
-        .background {
-            AnchoredPropertyPanel(isPresented: $showKindMenu, width: 176,
-                                  placement: .verticalInOwner,
-                                  focusPolicy: .preservePresenter, title: "任务类型") {
-                kindPopover(task)
-            }
+        .anchoredPropertyPanel(isPresented: $showKindMenu, trigger: TaskInspectorHeaderPanel.kind,
+                               width: PopupMetrics.taskMenuWidth, title: "任务类型") {
+            kindPopover(task)
         }
-        .background {
-            AnchoredPropertyPanel(isPresented: $showNoteInfo, width: 220,
-                                  placement: .verticalInOwner,
-                                  focusPolicy: .preservePresenter, title: "笔记信息") {
-                TaskNoteInfoPanel(info: TaskNoteInfo(task: task), calendar: workspace.calendar)
-            }
+        .anchoredPropertyPanel(isPresented: $showNoteInfo, trigger: TaskInspectorHeaderPanel.info,
+                               width: PopupMetrics.noteInfoWidth, title: "笔记信息") {
+            TaskNoteInfoPanel(info: TaskNoteInfo(task: task), calendar: workspace.calendar)
         }
         .schedulePopover(isPresented: popoverBinding(.recurrence), trigger: .recurrence) {
             TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .recurrence) {
@@ -158,8 +155,9 @@ struct TaskInspectorShell: View {
 
     private func moreMenu(_ task: Task) -> some View {
         Button {
-            if actionPresentation.panel == .more { actionPresentation.dismiss() }
-            else { actionPresentation.open(.more) }
+            let opening = actionPresentation.panel != .more
+            dismissTransientPanels()
+            if opening { openActionPanel(.more) }
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
@@ -185,7 +183,7 @@ struct TaskInspectorShell: View {
             AnchoredPropertyPanel(
                 isPresented: Binding(get: { showFocusEstimate },
                                      set: { if !$0 { showFocusEstimate = false } }),
-                width: 280, prefersAbove: true, placement: .verticalInOwner,
+                width: PopupMetrics.focusEstimateWidth, prefersAbove: true, placement: .verticalInOwner,
                 focusPolicy: .preservePresenter, title: "预计专注") {
                     TaskFocusEstimateEditor(
                         estimate: task.focusEstimate,
@@ -200,10 +198,10 @@ struct TaskInspectorShell: View {
 
     private var footerPanelWidth: CGFloat {
         switch actionPresentation.panel {
-        case .more: 208
-        case .tags: 264
-        case .parent: 280
-        default: 320
+        case .more: PopupMetrics.taskActionsWidth
+        case .tags: PopupMetrics.tagPickerWidth
+        case .parent: PopupMetrics.parentPickerWidth
+        default: PopupMetrics.relationPickerWidth
         }
     }
 
@@ -237,22 +235,46 @@ struct TaskInspectorShell: View {
                 .inspectorRenderAnchor(.parentPicker)
             }
         }
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(WFColors.border))
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) {
             if !actionPresentation.handleEscape() { dismissFooterPopover() }
         })
     }
 
     private func dismissFooterPopover() {
+        cancelFocusSubmenuIntent()
         actionPresentation.dismiss()
     }
 
     /// Opening a date entry also works through accessibility/keyboard actions,
     /// which do not necessarily generate an outside mouse-down for the footer.
     private func openSchedulePanel(_ popover: InspectorPopover) {
-        actionPresentation.dismiss()
+        dismissTransientPanels()
         presentation.activePopover = popover
+    }
+
+    /// Root panels open on click. Switching the target or host cannot leave a
+    /// stale draft or a delayed hover callback attached to the previous task.
+    private func dismissTransientPanels() {
+        cancelFocusSubmenuIntent()
+        presentation.activePopover = nil
+        actionPresentation.dismiss()
+        showPriorityMenu = false
+        showNoteInfo = false
+        showKindMenu = false
+        showFocusEstimate = false
+    }
+
+    private func openActionPanel(_ panel: TaskInspectorActionPanel) {
+        dismissTransientPanels()
+        actionPresentation.open(panel)
+    }
+
+    private func togglePanel(_ binding: Binding<Bool>) {
+        let opening = !binding.wrappedValue
+        dismissTransientPanels()
+        binding.wrappedValue = opening
     }
 
     private func moreActionsPopover(_ task: Task) -> some View {
@@ -262,7 +284,7 @@ struct TaskInspectorShell: View {
                     workspace.requestChildTitleEditor(for: task.id)
                 }
                 moreAction("关联主任务", symbol: "rectangle.3.group") {
-                    actionPresentation.open(.parent)
+                    openActionPanel(.parent)
                 }
                 .disabled(task.isClosed || task.skippedAt != nil || task.convertedNoteID != nil ||
                           workspace.allTasks.contains { $0.parentID == task.id })
@@ -275,14 +297,14 @@ struct TaskInspectorShell: View {
                     else { _ = workspace.abandon(task.id) }
                 }
                 .disabled(task.status == .completed)
-                moreAction("标签", symbol: "tag") { actionPresentation.open(.tags) }
+                moreAction("标签", symbol: "tag") { openActionPanel(.tags) }
                     .inspectorRenderAnchor(.tagsMenuRow)
                 moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
                 focusSubmenuRow(task)
                 // 预计专注入口随专注动作进子菜单（TI2-10）：滴答的 focus 动作
                 // （番茄 / 正计时 / 预计）同属一个出口，顶层菜单保持滴答的 15 项顺序。
                 Divider().padding(.horizontal, 8).padding(.vertical, 4)
-                moreAction("任务动态", symbol: "list.bullet.rectangle") { actionPresentation.open(.activity) }
+                moreAction("任务动态", symbol: "list.bullet.rectangle") { openActionPanel(.activity) }
                     .inspectorRenderAnchor(.activityMenuRow)
                 moreAction("保存为模板", symbol: "doc.badge.plus") { saveAsTemplate() }
                 moreAction("创建副本", symbol: "square.on.square") { workspace.duplicate(task.id) }
@@ -298,18 +320,20 @@ struct TaskInspectorShell: View {
                 }
                 moreAction("转换为笔记", symbol: "doc.text") { _ = environment.convertTaskToNote(task.id) }
                 // 滴答「…」菜单第 14 项（`bottomActionViewDidClickPrint:`）。
+                moreAction("插入本周摘要", symbol: "text.append") { insertWeeklySummary(into: task.id) }
                 moreAction("打印", symbol: "printer") { printTask(task) }
                 moreAction("删除", symbol: "trash") { _ = workspace.delete(task.id) }
             }
             .padding(8)
         }
-        .frame(width: 208, height: 490)
+        .frame(width: PopupMetrics.taskActionsWidth, height: 490)
         .inspectorRenderAnchor(.moreMenu)
     }
 
     private func focusSubmenuRow(_ task: Task) -> some View {
         Button {
             // A click after hover must keep the already-open submenu visible.
+            cancelFocusSubmenuIntent()
             actionPresentation.openSubmenu(.focus)
         } label: {
             HStack {
@@ -325,11 +349,11 @@ struct TaskInspectorShell: View {
         .inspectorRenderAnchor(.focusMenuRow)
         // Leaving this row does NOT dismiss: the pointer can cross the gap.
         // Entering another actionable row dismisses the submenu instead.
-        .onHover { if $0 { actionPresentation.openSubmenu(.focus) } }
+        .onHover { focusSubmenuHover($0, taskID: task.id) }
         .background(AnchoredPropertyPanel(
             isPresented: Binding(get: { actionPresentation.submenu == .focus },
                                  set: { if !$0 { actionPresentation.dismissSubmenu() } }),
-            width: 176, placement: .submenu) {
+            width: PopupMetrics.taskMenuWidth, placement: .submenu) {
                 TaskFocusSubmenu(onStart: { stopwatch in
                     guard let taskID = workspace.resolveTaskForAction(task.id) else { return }
                     if !TaskInspectorFocusAction.start(taskID: taskID, stopwatch: stopwatch,
@@ -345,6 +369,32 @@ struct TaskInspectorShell: View {
                     showFocusEstimate = true
                 })
             })
+    }
+
+    private func cancelFocusSubmenuIntent() {
+        focusSubmenuWork?.cancel()
+        focusSubmenuWork = nil
+        focusSubmenuIntentID = nil
+    }
+
+    private func focusSubmenuHover(_ inside: Bool, taskID: UUID) {
+        cancelFocusSubmenuIntent()
+        guard inside, actionPresentation.panel == .more else { return }
+        guard actionPresentation.submenu == nil else {
+            actionPresentation.openSubmenu(.focus)
+            return
+        }
+        let intentID = UUID()
+        focusSubmenuIntentID = intentID
+        let work = DispatchWorkItem {
+            guard focusSubmenuIntentID == intentID, workspace.selectedTaskID == taskID,
+                  actionPresentation.panel == .more else { return }
+            focusSubmenuIntentID = nil
+            focusSubmenuWork = nil
+            actionPresentation.openSubmenu(.focus)
+        }
+        focusSubmenuWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + PopupMetrics.submenuIntent, execute: work)
     }
 
     private func moreAction(
@@ -364,10 +414,41 @@ struct TaskInspectorShell: View {
         .buttonStyle(.plain)
         .foregroundStyle(WFColors.text)
         .padding(.horizontal, 8)
-        .onHover { if $0 { actionPresentation.dismissSubmenu() } }
+        .onHover {
+            if $0 {
+                cancelFocusSubmenuIntent()
+                actionPresentation.dismissSubmenu()
+            }
+        }
     }
 
     // MARK: - 主体：标题 → 正文 → 一级子任务
+
+    private func reminderSummaryRow(_ task: Task) -> some View {
+        let dates = ReminderSchedule.fireDates(for: task, calendar: workspace.calendar)
+        let value = ScheduleDisplay.reminderSummary(fireDates: dates,
+            now: workspace.clock(), calendar: workspace.calendar)
+        let summary = dates.isEmpty ? value : (task.isClosed ? "原提醒：" : "提醒：") + value
+        return Button { openSchedulePanel(.reminder) } label: {
+            Label(summary, systemImage: dates.isEmpty ? "bell.slash" : "bell")
+                .font(WFType.supporting)
+                .foregroundStyle(WFColors.secondaryText)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+        .padding(.top, 4)
+        .help(summary + "，点击修改提醒")
+        .inspectorRenderAnchor(.reminder)
+        .scheduleTrigger(.reminder)
+        .schedulePopover(isPresented: popoverBinding(.reminder), trigger: .reminder) {
+            TaskDatePopoverV2(task: task, workspace: workspace, initialPage: .reminder) {
+                presentation.activePopover = nil
+            }
+        }
+    }
 
     private func inspectorContent(_ task: Task) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -392,9 +473,6 @@ struct TaskInspectorShell: View {
             documentEditor(task)
                 .inspectorRenderAnchor(.document)
                 .padding(.top, TaskInspectorMetrics.titleDocumentGap)
-            TaskSystemCalendarRow(task: task, integration: environment.systemCalendar,
-                reminders: environment.reminders, tasks: workspace.tasksInActiveLists)
-                .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
             // 附件行（TI2-03）：此前「上传附件」只写库、详情里看不见；这里复用笔记面的
             // 同一个 `AttachmentListView`（打开 / Finder / 移除 / 再加）。
             if !task.attachments.isEmpty {
@@ -411,7 +489,7 @@ struct TaskInspectorShell: View {
                              colors: Dictionary(uniqueKeysWithValues: workspace.taskTags.compactMap { tag in
                                  tag.colorARGB.map { (tag.name, $0) }
                              }),
-                             onEdit: { actionPresentation.open(.tags) },
+                             onEdit: { openActionPanel(.tags) },
                              onRemove: { tag in
                                  workspace.setTags(task.id, task.tags.filter { $0 != tag })
                              })
@@ -653,7 +731,11 @@ struct TaskInspectorShell: View {
             Spacer(minLength: 0)
             // 标签出口（tagButton）：有标签才显示。
             if !task.tags.isEmpty {
-                footerIconButton("tag", label: "标签") { actionPresentation.open(.tags) }
+                footerIconButton("tag", label: "标签") {
+                    let opening = actionPresentation.panel != .tags
+                    dismissTransientPanels()
+                    if opening { openActionPanel(.tags) }
+                }
                     .inspectorRenderAnchor(.footerTag)
             }
             // 合并出口（mergeButton）：有子任务才显示，子任务标题并入正文后软删。
@@ -768,6 +850,21 @@ struct TaskInspectorShell: View {
     }
 
     @MainActor
+    /// 把本周摘要（滴答摘要的正文）追加到当前任务正文末尾。
+    /// 语义提示：插入的是「本周摘要」，不是任务自身的标题/属性快照。
+    private func insertWeeklySummary(into taskID: UUID) {
+        guard let task = workspace.task(for: taskID) else { return }
+        let builder = SummaryReviewBuilder(clock: workspace.clock, calendar: workspace.calendar)
+        let review = builder.review(for: workspace.allTasks, weekOf: workspace.clock())
+        let summary = builder.document(for: review)
+        var document = task.document
+        if !document.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            document.blocks.append(DocumentBlock(kind: .divider))
+        }
+        document.blocks.append(contentsOf: summary.blocks)
+        _ = workspace.setDocument(taskID, document)
+    }
+
     private func saveAsTemplate() {
         guard let task = workspace.selectedTask else { return }
         guard let name = TaskNamePrompt.ask("保存为模板", value: task.title, confirm: "保存"),
@@ -805,7 +902,7 @@ struct TaskInspectorShell: View {
             return .dismissPopover
         }
         let previousTarget = presentation.editingTarget
-        let effect = presentation.handleEscape(isNarrow: showBack)
+        let effect = presentation.handleEscape(isNarrow: showBack || allowsClosing)
         switch effect {
         case .dismissPopover:
             break
@@ -837,9 +934,9 @@ struct TaskInspectorShell: View {
                     createChild: {
                         workspace.requestChildTitleEditor(for: task.id)
                     },
-                    openTags: { actionPresentation.open(.tags) },
+                    openTags: { openActionPanel(.tags) },
                     openRelation: {
-                        actionPresentation.open(.relation)
+                        openActionPanel(.relation)
                     }, openLink: openDocumentLink,
                     availableTags: { workspace.tagNames },
                     addTag: { tag in
@@ -882,16 +979,14 @@ struct TaskInspectorShell: View {
                          pointSize: 14,
                          tint: NSColor(priorityColor(task.priority)),
                          accessibilityLabel: "优先级：\(task.priority.shortTitle)",
-                         action: { showPriorityMenu.toggle() })
+                         action: { togglePanel($showPriorityMenu) })
             .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
         .background {
-            AnchoredPropertyPanel(
-                isPresented: Binding(get: { showPriorityMenu },
-                                     set: { if !$0 { showPriorityMenu = false } }),
-                width: 176, placement: .verticalInOwner,
-                focusPolicy: .preservePresenter, title: "优先级") {
-                    priorityPopover(task)
-                }
+            AnchoredPropertyPanel(isPresented: $showPriorityMenu, width: PopupMetrics.taskMenuWidth,
+                                  placement: .dropdown,
+                                  focusPolicy: .preservePresenter, title: "优先级") {
+                priorityPopover(task)
+            }
         }
         .onChange(of: task.id) { _, _ in showPriorityMenu = false }
     }
@@ -927,9 +1022,9 @@ struct TaskInspectorShell: View {
             }
         }
         .padding(8)
-        .frame(width: 176)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(WFColors.border))
+        .frame(width: PopupMetrics.taskMenuWidth)
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showKindMenu = false })
     }
 
@@ -957,9 +1052,9 @@ struct TaskInspectorShell: View {
             }
         }
         .padding(8)
-        .frame(width: 176)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(WFColors.border))
+        .frame(width: PopupMetrics.taskMenuWidth)
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showPriorityMenu = false })
     }
 
@@ -971,17 +1066,11 @@ struct TaskInspectorShell: View {
                 .help("子任务跟随父任务清单")
                 .accessibilityLabel("清单：\(task.list.name)，子任务跟随父任务")
         } else {
-        Menu {
-            ForEach(workspace.availableListNames, id: \.self) { name in
+        BusinessMenu(title: "移动到清单", search: workspace.availableListNames.count > 10 ? $listMenuQuery : nil) {
+            ForEach(workspace.availableListNames.filter { listMenuQuery.isEmpty || $0.localizedStandardContains(listMenuQuery) }, id: \.self) { name in
                 let list = TaskList(name: name)
-                Button {
+                BusinessMenuOption(list.name, selected: task.list == list, symbol: "tray") {
                     _ = workspace.moveToList(task.id, list)
-                } label: {
-                    if task.list == list {
-                        Label(list.name, systemImage: "checkmark")
-                    } else {
-                        Text(list.name)
-                    }
                 }
             }
             Divider()
@@ -991,9 +1080,9 @@ struct TaskInspectorShell: View {
                 .font(WFType.control)
                 .foregroundStyle(WFColors.secondaryText)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden).fixedSize()
+        .fixedSize()
         .disabled(!workspace.canMoveToList(task.id))
+        .id(task.id)
         .help("移动到清单")
         .accessibilityLabel("清单：\(task.list.name)")
         }

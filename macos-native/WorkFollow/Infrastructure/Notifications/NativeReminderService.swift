@@ -105,6 +105,7 @@ final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
     private var pendingWork: _Concurrency.Task<Void, Never>?
     private var generation = 0
     private var tasks: [Task] = []
+    private var externallyRemindedTaskIDs: Set<UUID> = []
     private(set) var deliveries: [ReminderDelivery] = []
     private var timer: Timer?
     private var presentedIDs: Set<String> = []
@@ -178,9 +179,15 @@ final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
 
     func waitForReconciliation() async { await pendingWork?.value }
 
+    func setExternallyRemindedTasks(_ ids: Set<UUID>) {
+        guard ids != externallyRemindedTaskIDs else { return }
+        externallyRemindedTaskIDs = ids
+        reconcile(tasks, force: true)
+    }
+
     private func synchronize() async {
         let now = clock()
-        deliveries = TaskReminderPlanner.deliveries(tasks: tasks, countdowns: countdownStore?.events ?? [],
+        deliveries = TaskReminderPlanner.deliveries(tasks: tasks.filter { !externallyRemindedTaskIDs.contains($0.id) }, countdowns: countdownStore?.events ?? [],
             now: now, calendar: calendar, decisions: state.snapshot.decisions)
         missed = deliveries.filter { $0.fireDate <= now && $0.fireDate > now.addingTimeInterval(-86400) }
         if let active = presenter.activeID, !deliveries.contains(where: { $0.id == active }) { presenter.stop() }

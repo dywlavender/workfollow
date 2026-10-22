@@ -32,7 +32,8 @@ final class FocusEndConfirmationPresenter {
         alert.informativeText = "当前番茄尚未结束，确定要提前结束并保存专注记录吗？"
         let save = alert.addButton(withTitle: "结束并保存")
         save.setAccessibilityIdentifier("focus-end-confirm-save")
-        let discard = alert.addButton(withTitle: "放弃")
+        let discard = alert.addButton(withTitle: "放弃本次专注")
+        discard.hasDestructiveAction = true
         discard.setAccessibilityIdentifier("focus-end-confirm-discard")
         let cancel = alert.addButton(withTitle: "取消")
         cancel.keyEquivalent = "\u{1b}"

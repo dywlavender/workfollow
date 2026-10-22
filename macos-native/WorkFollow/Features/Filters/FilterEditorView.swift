@@ -33,7 +33,7 @@ struct FilterEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: WFSpace.lg) {
-                Text(initial == nil ? "新建过滤器" : "编辑过滤器").font(.title2.bold())
+                DialogTitle(text: initial == nil ? "新建过滤器" : "编辑过滤器")
                 TextField("过滤器名称", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityIdentifier("filter.editor.name")
@@ -120,28 +120,20 @@ struct FilterEditorView: View {
                 .padding(WFSpace.xxl)
             }
 
-            Divider()
-            HStack {
+            DialogFooter(canSubmit: !draft.trimmedName.isEmpty,
+                         cancelIdentifier: "filter.editor.cancel", primaryIdentifier: "filter.editor.save",
+                         onCancel: onDismiss, onSubmit: save) {
                 if conflict {
-                    Text("名称为空或已存在")
-                        .font(WFType.supporting)
-                        .foregroundStyle(.red)
+                    Text("名称为空或已存在").foregroundStyle(WFColors.danger)
                 } else {
                     Text("匹配 \(preview.matchingCount) 个未完成任务")
-                        .font(WFType.supporting)
                         .foregroundStyle(WFColors.secondaryText)
                         .accessibilityIdentifier("filter.editor.preview.count")
                 }
-                Spacer()
-                Button("取消", action: onDismiss).keyboardShortcut(.cancelAction)
-                Button("保存", action: save)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(draft.trimmedName.isEmpty)
             }
-            .padding(.horizontal, WFSpace.xxl)
-            .padding(.vertical, WFSpace.lg)
         }
         .frame(width: 520, height: 600)
+        .background(WFColors.content)
     }
 
     private func save() {
@@ -168,12 +160,12 @@ struct FilterEditorView: View {
                         listOptions: listOptions, tagOptions: tagOptions,
                         onRemove: { draft.removeRule(id: rule.id) })
                 }
-                Menu {
+                BusinessMenu {
                     ForEach([FilterEditorRuleKind.lists, .tags, .priorities, .date, .keywords], id: \.self) { kind in
                         Button(kind.title) { draft.addRule(kind: kind) }
                     }
                 } label: { Label("添加条件", systemImage: "plus") }
-                    .menuStyle(.borderlessButton).fixedSize()
+                    .fixedSize()
                     .accessibilityIdentifier("filter.editor.addRule")
             }
             VStack(alignment: .leading, spacing: WFSpace.xs) {

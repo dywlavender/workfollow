@@ -22,14 +22,16 @@ final class SummaryReviewBuilderTests: XCTestCase {
     }
 
     private func makeTask(_ title: String, list: String = "工作",
+                          priority: TaskPriority = .none, tags: [String] = [],
                           dueAt: Date? = nil, completedAt: Date? = nil,
                           abandonedAt: Date? = nil, skippedAt: Date? = nil,
                           deletedAt: Date? = nil,
                           status: TaskStatus = .active) -> Task {
         let stamp = Date(timeIntervalSince1970: 0)
-        var task = Task(id: UUID(), title: title, list: TaskList(name: list), priority: .none,
+        var task = Task(id: UUID(), title: title, list: TaskList(name: list), priority: priority,
                         schedule: TaskSchedule(dueAt: dueAt), status: status, parentID: nil,
                         childOrder: 0, createdAt: stamp, updatedAt: stamp)
+        task.tags = tags
         task.completedAt = completedAt
         task.abandonedAt = abandonedAt
         task.skippedAt = skippedAt
@@ -190,5 +192,143 @@ final class SummaryReviewBuilderTests: XCTestCase {
         XCTAssertTrue(text.contains("已完成\n[9月22日] 写周报（工作）"))
         XCTAssertTrue(text.contains("已放弃\n[9月23日] 换方案（个人）"))
         XCTAssertTrue(text.contains("未完成\n准备评审（学习）"))
+    }
+
+    // MARK: - Filter (清单 / 状态)
+
+    func testFilterByStatusKeepsOnlyCompletedSection() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("完成A", completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("未完成B", dueAt: day(2026, 9, 23)),
+        ]
+        var filter = SummaryFilter.all
+        filter.status = .completed
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday, filter: filter)
+        XCTAssertEqual(review.completed.map(\.title), ["完成A"])
+        XCTAssertTrue(review.abandoned.isEmpty)
+        XCTAssertTrue(review.uncompleted.isEmpty)
+    }
+
+    func testFilterByUncompletedDropsCompletedSection() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("完成A", completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("未完成B", dueAt: day(2026, 9, 23)),
+        ]
+        var filter = SummaryFilter.all
+        filter.status = .uncompleted
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday, filter: filter)
+        XCTAssertTrue(review.completed.isEmpty)
+        XCTAssertEqual(review.uncompleted.map(\.title), ["未完成B"])
+    }
+
+    func testFilterByListExcludesOtherLists() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("工作A", list: "工作", completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("学习B", list: "学习", completedAt: day(2026, 9, 23), status: .completed),
+        ]
+        var filter = SummaryFilter.all
+        filter.listName = "工作"
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday, filter: filter)
+        XCTAssertEqual(review.completed.map(\.title), ["工作A"])
+    }
+
+    // MARK: - Grouping (完成状态 / 清单 / 优先级 / 标签)
+
+    func testGroupingByListBucketsTasks() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("工作A", list: "工作", completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("学习B", list: "学习", completedAt: day(2026, 9, 23), status: .completed),
+        ]
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday)
+        let sections = SummaryReviewBuilder.sections(from: review, grouping: .list)
+        // localizedStandardCompare：拼音序「工作(gongzuo)」在「学习(xuexi)」前。
+        XCTAssertEqual(sections.map(\.title), ["工作", "学习"])
+        XCTAssertEqual(sections.first(where: { $0.title == "工作" })?.items.map(\.title), ["工作A"])
+    }
+
+    func testGroupingByPriorityOrdersHighFirst() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("低", priority: .low, completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("高", priority: .high, completedAt: day(2026, 9, 23), status: .completed),
+        ]
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday)
+        let sections = SummaryReviewBuilder.sections(from: review, grouping: .priority)
+        XCTAssertEqual(sections.map(\.title), ["高优先级", "低优先级"])
+    }
+
+    func testGroupingByTagIncludesUntaggedBucket() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("带标签", tags: ["紧急"], completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("没标签", completedAt: day(2026, 9, 23), status: .completed),
+        ]
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday)
+        let sections = SummaryReviewBuilder.sections(from: review, grouping: .tag)
+        XCTAssertEqual(Set(sections.map(\.title)), ["紧急", "无标签"])
+    }
+
+    // MARK: - Filter by tag (右栏「更多」)
+
+    func testFilterByTagExcludesTasksWithoutThatTag() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("带标签", tags: ["紧急"], completedAt: day(2026, 9, 22), status: .completed),
+            makeTask("另一个标签", tags: ["稍后"], completedAt: day(2026, 9, 23), status: .completed),
+            makeTask("没标签", completedAt: day(2026, 9, 24), status: .completed),
+        ]
+        var filter = SummaryFilter.all
+        filter.tagName = "紧急"
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday, filter: filter)
+        XCTAssertEqual(review.completed.map(\.title), ["带标签"])
+    }
+
+    // MARK: - 显示内容（日期 / 清单 / 标签）
+
+    func testItemTextFollowsContentSwitches() {
+        let item = ReviewItem(datePrefix: "10月20日", title: "写周报",
+                              listName: "工作", tagNames: ["紧急"])
+
+        var filter = SummaryFilter.all
+        filter.showsDate = false
+        XCTAssertEqual(SummaryReviewBuilder.itemText(item, filter: filter), "写周报")
+
+        filter.showsDate = true
+        XCTAssertEqual(SummaryReviewBuilder.itemText(item, filter: filter), "10月20日  写周报")
+
+        filter.showsList = true
+        XCTAssertEqual(SummaryReviewBuilder.itemText(item, filter: filter),
+                       "10月20日  写周报  （工作）")
+
+        filter.showsTags = true
+        XCTAssertEqual(SummaryReviewBuilder.itemText(item, filter: filter),
+                       "10月20日  写周报  （工作）  #紧急")
+    }
+
+    func testDocumentBulletsRespectFilterSwitches() {
+        let builder = makeBuilder(now: day(2026, 9, 26))
+        let tasks = [
+            makeTask("写周报", list: "工作", tags: ["紧急"],
+                     completedAt: day(2026, 9, 22), status: .completed),
+        ]
+        let review = builder.review(for: tasks, weekOf: weekOfSaturday)
+
+        var filter = SummaryFilter.all   // 默认只带日期
+        let withDate = builder.document(for: review, grouping: .completion, filter: filter)
+            .plainText
+        XCTAssertTrue(withDate.contains("[9月22日]  写周报"))
+
+        filter.showsDate = false
+        filter.showsList = true
+        filter.showsTags = true
+        let bare = builder.document(for: review, grouping: .completion, filter: filter)
+            .plainText
+        XCTAssertTrue(bare.contains("写周报  （工作）  #紧急"))
+        // 关掉日期后，条目行不应再出现日期前缀（标题行 h1 仍带日期，不算）。
+        XCTAssertFalse(bare.contains("[9月22日]"))
     }
 }

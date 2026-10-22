@@ -13,11 +13,13 @@ struct AppKitIconButton: NSViewRepresentable {
     let tint: NSColor
     let accessibilityLabel: String
     let action: () -> Void
+    /// Optional pointer callback for controls that explicitly need hover behavior.
+    var onHover: ((Bool) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
 
     func makeNSView(context: Context) -> NSButton {
-        let button = NSButton()
+        let button = HoverButton()
         button.isBordered = false
         button.bezelStyle = .regularSquare
         button.imagePosition = .imageOnly
@@ -25,11 +27,18 @@ struct AppKitIconButton: NSViewRepresentable {
         button.focusRingType = .none
         button.target = context.coordinator
         button.action = #selector(Coordinator.fire)
+        button.onHover = { [weak coordinator = context.coordinator] inside in
+            coordinator?.onHover?(inside)
+        }
         return button
     }
 
     func updateNSView(_ button: NSButton, context: Context) {
         context.coordinator.action = action
+        context.coordinator.onHover = onHover
+        (button as? HoverButton)?.onHover = { [weak coordinator = context.coordinator] inside in
+            coordinator?.onHover?(inside)
+        }
         let configuration = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration)
@@ -41,8 +50,50 @@ struct AppKitIconButton: NSViewRepresentable {
 
     final class Coordinator: NSObject {
         var action: () -> Void
+        var onHover: ((Bool) -> Void)?
         init(action: @escaping () -> Void) { self.action = action }
         @objc func fire() { action() }
+    }
+}
+
+/// 带悬停回调的 `NSButton`（SwiftUI 的 `.onHover` 套在 NSViewRepresentable 上
+/// 会被 AppKit 的 tracking 抢走，直接在这里判定）。
+final class HoverButton: NSButton {
+    var onHover: ((Bool) -> Void)?
+    private var hoverTracking: NSTrackingArea?
+    private var pointerInside = false
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTracking { removeTrackingArea(hoverTracking) }
+        let area = NSTrackingArea(rect: bounds,
+                                  options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverTracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        pointerInside = true
+        needsDisplay = true
+        onHover?(true)
+    }
+    override func mouseExited(with event: NSEvent) {
+        pointerInside = false
+        needsDisplay = true
+        onHover?(false)
+    }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { pointerInside = false }
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        if pointerInside && isEnabled {
+            NSColor(WFColors.hover).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: PopupMetrics.buttonCornerRadius,
+                         yRadius: PopupMetrics.buttonCornerRadius).fill()
+        }
+        super.draw(dirtyRect)
     }
 }
 

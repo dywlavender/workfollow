@@ -26,6 +26,11 @@ final class PopupInteractionRegistry {
         let dismiss: () -> Void
     }
     private var entries: [UUID: Entry] = [:]
+    private struct ContextEntry {
+        weak var view: NSView?
+        let show: (CGPoint) -> Void
+    }
+    private var contextEntries: [UUID: ContextEntry] = [:]
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var observers: [NSObjectProtocol] = []
@@ -34,9 +39,28 @@ final class PopupInteractionRegistry {
                   dismiss: @escaping () -> Void) -> UUID {
         let id = UUID()
         entries[id] = Entry(window: window, contains: contains, dismiss: dismiss)
+        startObservingIfNeeded()
+        return id
+    }
+
+    func registerContext(view: NSView, show: @escaping (CGPoint) -> Void) -> UUID {
+        let id = UUID()
+        contextEntries[id] = ContextEntry(view: view, show: show)
+        startObservingIfNeeded()
+        return id
+    }
+
+    func unregisterContext(_ id: UUID) {
+        contextEntries.removeValue(forKey: id)
+        stopObservingIfUnused()
+    }
+
+    private func startObservingIfNeeded() {
         if localMonitor == nil {
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
-                self?.routeMouseDown(event) ?? event
+                guard let self else { return event }
+                _ = self.routeMouseDown(event)
+                return self.showContextMenu(for: event) ? nil : event
             }
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
                 self?.dismissAll()
@@ -58,17 +82,54 @@ final class PopupInteractionRegistry {
                 DispatchQueue.main.async { self?.dismissOutsideFamily(of: NSApp.keyWindow) }
             })
         }
-        return id
     }
 
     func unregister(_ id: UUID) {
         entries.removeValue(forKey: id)
-        guard entries.isEmpty else { return }
+        stopObservingIfUnused()
+    }
+
+    private func stopObservingIfUnused() {
+        guard entries.isEmpty, contextEntries.isEmpty else { return }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         localMonitor = nil; globalMonitor = nil
         observers.forEach(NotificationCenter.default.removeObserver)
         observers.removeAll()
+    }
+
+    /// Keep ancestors of a nested picker; close sibling branches, including
+    /// programmatic/keyboard openings which have no outside mouse-down event.
+    func dismissOtherBranches(presentingFrom source: NSWindow?) {
+        let outside = entries.values.filter { entry in
+            guard let candidate = entry.window else { return false }
+            var ancestor = source
+            while let window = ancestor {
+                if candidate === window { return false }
+                ancestor = window.parent
+            }
+            return true
+        }
+        outside.forEach { $0.dismiss() }
+    }
+
+    @discardableResult
+    func showContextMenu(for event: NSEvent) -> Bool {
+        guard event.type == .rightMouseDown else { return false }
+        let targets = contextEntries.values.filter { entry in
+            guard let view = entry.view, view.window === event.window,
+                  !view.isHiddenOrHasHiddenAncestor, view.window?.isVisible == true else { return false }
+            return view.visibleRect.contains(view.convert(event.locationInWindow, from: nil))
+        }
+        // Nested rows win over their containing group; only one menu opens.
+        let target = targets.min {
+            let lhs = $0.view?.visibleRect.size ?? .zero, rhs = $1.view?.visibleRect.size ?? .zero
+            return lhs.width * lhs.height < rhs.width * rhs.height
+        }
+        guard let target, let view = target.view else { return false }
+        dismissOtherBranches(presentingFrom: view.window)
+        target.show(view.convert(event.locationInWindow, from: nil))
+        return true
     }
 
     func routeMouseDown(_ event: NSEvent) -> NSEvent {

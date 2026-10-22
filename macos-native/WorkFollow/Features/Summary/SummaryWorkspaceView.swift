@@ -1,502 +1,509 @@
 import AppKit
 import SwiftUI
 
-/// 摘要工作区（对齐滴答“摘要”概念）：默认进入“周回顾”——从任务数据自动
-/// 生成本周 已完成 / 已放弃 / 未完成 清单，并保留一段可编辑的“本周小结”
-/// （防抖保存进 SummaryStore，dayKey 用本周一日期，与手记复用同一存储）。
-/// 原有的每日手记模式原样保留，可在左栏分段控件中切换。
-///
-/// `init(store:)` 保持原签名供壳层使用；此时没有任务数据，周回顾主栏显示
-/// 接入提示。`init(store:workspace:)` 供主线注入任务数据。
+/// Week planning and reviewing share one selection. Saved reports are snapshots;
+/// changing tasks or filters never silently replaces an edited document.
 struct SummaryWorkspaceView: View {
     @ObservedObject var store: SummaryStore
-    let workspace: TaskWorkspaceModel?
-
-    private enum Mode: Hashable { case weekly, journal }
-
-    @State private var mode: Mode = .weekly
-    // 周回顾
-    @State private var selectedWeekStart = SummaryReviewBuilder.weekStart(of: Date(), calendar: .current)
-    @State private var weeklyDraft = ""
-    @State private var weeklySaveTask: _Concurrency.Task<Void, Never>?
+    @ObservedObject var workspace: TaskWorkspaceModel
+    @ObservedObject var context: WeeklyPlanningContext
+    @EnvironmentObject private var environment: AppEnvironment
+    @ObservedObject private var templateStore = TemplateStore.shared
+    @State private var rangeOverride: SummaryDateRange?
+    @State private var listOverride: Set<String>?
+    @State private var focusRecords: [PomodoroRecord] = []
+    @State private var focusedTaskIDs: Set<UUID> = []
+    @State private var options = SummaryDocumentOptions.standard
+    @State private var appliedOptions = SummaryDocumentOptions.standard
+    @State private var aiEnabled = true
+    @State private var showsConfiguration = false
+    @State private var configurationDismissAction: (() -> Void)?
+    @State private var showsSaveTemplate = false
+    @State private var templateName = ""
+    @StateObject private var editorHandle = DocumentEditorHandle()
+    @State private var document = NativeDocument.empty
+    @State private var editorID = UUID()
+    @State private var loadedSelection: Selection?
+    @State private var preview: DraftPreview?
+    @State private var showsHistory = false
+    @State private var showsSources = false
+    @State private var selectedCarry: Set<UUID> = []
+    @State private var aiRunning = false
+    @State private var aiError: String?
     @State private var copied = false
-    @State private var copyResetTask: _Concurrency.Task<Void, Never>?
-    // 手记（每日一篇）
-    @State private var monthAnchor = Date()
-    @State private var selectedDayKey = SummaryStore.dayKey(Date(), calendar: .current)
-    @State private var draft = ""
-    @State private var saveTask: _Concurrency.Task<Void, Never>?
-    @State private var saveError: String?
-    @State private var narrowShowsList = false
+    @State private var journalMode = false
+    @State private var journalDay: Date
+    @State private var journalText = ""
+    @State private var loadedJournalKey: String?
 
-    private static let prompts = [
-        "今天最有成就感的一件事",
-        "明天最重要的一件事",
-        "今天学到的最重要的一点",
-        "今天遇到的挑战与解决思路",
-        "值得记住的一个瞬间",
-        "明天想做出的一个改变",
-    ]
-    private static let weekdayNames = ["日", "一", "二", "三", "四", "五", "六"]
-    private var calendar: Calendar { workspace?.calendar ?? .current }
-
-    init(store: SummaryStore) {
-        self.init(store: store, workspace: nil)
+    private struct Selection: Equatable {
+        let weekKey: String
+        let scopeID: String
+        let listName: String?
+        let listNames: Set<String>
+        let range: SummaryDateRange
+    }
+    private struct DraftPreview: Identifiable {
+        let id = UUID()
+        let title: String
+        let selection: Selection
+        let document: NativeDocument
+        let options: SummaryDocumentOptions
     }
 
-    init(store: SummaryStore, workspace: TaskWorkspaceModel?) {
+    init(store: SummaryStore, workspace: TaskWorkspaceModel? = nil, context: WeeklyPlanningContext? = nil) {
+        let model = workspace ?? TaskWorkspaceModel(seedDemoData: false)
         self.store = store
-        self.workspace = workspace
+        self.workspace = model
+        self.context = context ?? WeeklyPlanningContext(clock: model.clock, calendar: model.calendar)
+        _journalDay = State(initialValue: model.clock())
     }
 
-    /// Review builder wired to the injected task workspace when available.
-    private var reviewBuilder: SummaryReviewBuilder {
-        SummaryReviewBuilder(clock: workspace?.clock ?? Date.init, calendar: calendar)
+    private var range: SummaryDateRange { rangeOverride ?? .week(containing: context.weekStart, calendar: workspace.calendar) }
+    private var selectedLists: Set<String> { listOverride ?? context.listName.map { Set([$0]) } ?? [] }
+    private var selection: Selection {
+        let lists = selectedLists
+        let scope: String
+        if lists.isEmpty { scope = "all" }
+        else if lists.count == 1 { scope = workspace.listReferenceID(for: lists.first!).uuidString }
+        else { scope = "lists:" + lists.map { workspace.listReferenceID(for: $0).uuidString }.sorted().joined(separator: ",") }
+        return Selection(weekKey: range.storageKey(calendar: workspace.calendar), scopeID: scope,
+            listName: lists.count == 1 ? lists.first : nil, listNames: lists, range: range)
     }
-
-    private func weeklyDayKey(_ weekStart: Date) -> String {
-        SummaryStore.dayKey(weekStart, calendar: calendar)
+    private func selectRange(_ value: SummaryDateRange) {
+        if value.kind == .week { rangeOverride = nil; context.weekStart = value.start }
+        else { rangeOverride = value }
+    }
+    private func selectLists(_ names: Set<String>) {
+        if names.count <= 1 { listOverride = nil; context.listName = names.first }
+        else { listOverride = names }
+    }
+    private func openPlan(at date: Date) {
+        saveWeekly()
+        context.weekStart = SummaryReviewBuilder.weekStart(of: date, calendar: workspace.calendar)
+        context.listName = selectedLists.count == 1 ? selectedLists.first : nil
+        rangeOverride = nil; listOverride = nil
+        showsSources = false
+        environment.navigation.destination = .weekPlan
+    }
+    private var builder: WeeklyReportBuilder { WeeklyReportBuilder(calendar: workspace.calendar) }
+    private var report: WeeklyReport {
+        return builder.report(tasks: workspace.tasksInActiveLists, weekOf: range.start,
+            filter: options.filter, tagDirectory: workspace.taskTags, focusRecords: focusRecords,
+            range: range, listNames: selectedLists, startedTaskIDs: focusedTaskIDs)
+    }
+    private var linkProfile: DocumentProfile {
+        DocumentProfile(onOpenLink: { target in
+            guard let url = URL(string: target), let resource = NativeResourceLink(url: url) else { return false }
+            return NativeResourceLinkRouter.open(resource, tasks: workspace,
+                notes: environment.notesWorkspace, navigation: environment.navigation)
+        })
     }
 
     var body: some View {
         GeometryReader { geometry in
-            let narrow = geometry.size.width < 640
-            let showList = !narrow || narrowShowsList
-            let showEditor = !narrow || !narrowShowsList
+            let inspectorWidth = min(440, max(300, geometry.size.width * 0.355))
+            let showsInspector = !journalMode && geometry.size.width >= 900
             HStack(spacing: 0) {
-                if showList {
-                    leftColumn(narrow: narrow)
-                        .frame(width: 280)
-                    if showEditor { Divider() }
+                VStack(spacing: 0) {
+                    pageHeader(showsInspector: showsInspector)
+                    if journalMode { journalPane }
+                    else { weeklyEditor(compact: geometry.size.width - (showsInspector ? inspectorWidth : 0) < 600) }
                 }
-                if showEditor {
-                    mainColumn(narrow: narrow)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if showsInspector {
+                    Divider()
+                    configuration.frame(width: inspectorWidth)
                 }
             }
         }
         .background(WFColors.content)
-        .onAppear { loadDraft(); loadWeeklyDraft() }
-        .onDisappear {
-            finishPendingSave()
-            finishWeeklySave()
-            copyResetTask?.cancel()
+        .onAppear { loadWeekly(); loadJournal() }
+        .onDisappear { saveWeekly(); saveJournal() }
+        .onChange(of: selection) { _, _ in
+            guard environment.navigation.destination == .summary else { return }
+            editorHandle.prepareForDocumentChange()
+            saveWeekly()
+            selectedCarry = []
+            aiError = nil
+            loadWeekly()
         }
-        .onChange(of: mode) { _, _ in
-            finishPendingSave()
-            finishWeeklySave()
-            saveError = nil
+        .onChange(of: context.weekStart) { _, _ in
+            if environment.navigation.destination != .summary { rangeOverride = nil }
         }
-        .onChange(of: selectedDayKey) { oldKey, _ in
-            // Keep the outgoing day's pending edit before switching.
-            finishPendingSave(dayKey: oldKey)
-            saveError = nil
-            loadDraft()
+        .onChange(of: context.listName) { _, _ in
+            if environment.navigation.destination != .summary { listOverride = nil }
         }
-        .onChange(of: draft) { _, _ in scheduleSave() }
-        .onChange(of: selectedWeekStart) { oldStart, _ in
-            finishWeeklySave(weekStart: oldStart)
-            saveError = nil
-            loadWeeklyDraft()
+        .onReceive(environment.focusStore.$historyRevision.dropFirst()) { _ in
+            DispatchQueue.main.async { refreshFocus() }
         }
-        .onChange(of: weeklyDraft) { _, _ in scheduleWeeklySave() }
-    }
-
-    // MARK: Left column
-
-    private func leftColumn(narrow: Bool) -> some View {
-        VStack(alignment: .leading, spacing: WFSpace.md) {
-            Text("摘要").font(WFType.pageTitle)
-            Picker("视角", selection: $mode) {
-                Text("周回顾").tag(Mode.weekly)
-                Text("手记").tag(Mode.journal)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            if mode == .weekly {
-                weekList(dismissList: narrow)
-            } else {
-                dayList(dismissList: narrow)
-            }
+        .onChange(of: journalMode) { _, _ in saveWeekly(); saveJournal() }
+        .onChange(of: journalDay) { _, _ in saveJournal(); loadJournal() }
+        .onChange(of: journalText) { _, _ in saveJournal() }
+        .onChange(of: document) { _, _ in copied = false }
+        .sheet(item: $preview) { draft in previewSheet(draft) }
+        .sheet(isPresented: $showsHistory) { historySheet }
+        .sheet(isPresented: $showsSources) {
+            VStack(spacing: 0) {
+                DialogHeader(title: "任务与结转")
+                Divider()
+                sources(report: report)
+                DialogCloseFooter { showsSources = false }
+            }.frame(width: 380, height: 560)
         }
-        .padding(WFSpace.xl)
-    }
-
-    // MARK: Weekly review list
-
-    private func weekList(dismissList: Bool) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: WFSpace.xs) {
-                let weeks = reviewBuilder.availableWeeks(for: workspace?.allTasks ?? [])
-                ForEach(weeks, id: \.weekStart) { week in
-                    weekRow(week, dismissList: dismissList)
+        .sheet(isPresented: $showsConfiguration, onDismiss: {
+            let action = configurationDismissAction
+            configurationDismissAction = nil
+            action?()
+        }) {
+            VStack(spacing: 0) {
+                DialogHeader(title: "摘要设置")
+                Divider()
+                configuration
+                if options != appliedOptions {
+                    DialogFooter(cancelTitle: "完成", primaryTitle: "预览更新",
+                                 onCancel: { showsConfiguration = false },
+                                 onSubmit: { afterConfiguration { showLatestDraft() } }) { EmptyView() }
+                } else {
+                    DialogCloseFooter { showsConfiguration = false }
                 }
-            }
+            }.frame(width: 400, height: 690)
+        }
+        .alert("保存为摘要模板", isPresented: $showsSaveTemplate) {
+            TextField("模板名称", text: $templateName)
+            Button("取消", role: .cancel) {}
+            Button(templateStore.contains(name: templateName) ? "替换同名模板" : "保存") {
+                templateStore.saveDocumentTemplate(name: templateName, document: document, forceReplace: true)
+            }.disabled(templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
-    private func weekRow(_ week: WeeklyReviewSummary, dismissList: Bool) -> some View {
-        Button {
-            selectedWeekStart = week.weekStart
-            if dismissList { narrowShowsList = false }
-        } label: {
-            VStack(alignment: .leading, spacing: WFSpace.xs) {
-                Text(week.isCurrent ? "本周（\(week.weekTitle)）" : week.weekTitle)
-                    .font(WFType.listTitle)
-                    .foregroundStyle(WFColors.text)
-                Text(week.isCurrent && week.completedCount == 0 ? "暂无内容" : "已完成 \(week.completedCount) 条")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.secondaryText)
-                    .lineLimit(1)
-            }
-            .padding(WFSpace.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                selectedWeekStart == week.weekStart ? WFColors.selection : .clear,
-                in: RoundedRectangle(cornerRadius: WFMetrics.corner)
-            )
-        }
-        .buttonStyle(.plain)
+    private var configuration: some View {
+        SummaryConfigurationView(options: $options, aiEnabled: $aiEnabled,
+            range: range, selectedLists: selectedLists, calendar: workspace.calendar, now: workspace.clock(),
+            lists: [TaskList.inbox.name] + workspace.orderedListNames, listMetas: workspace.listMetas, folders: workspace.listFolders,
+            tags: workspace.orderedTags.map(\.name),
+            onSelectRange: selectRange, onSelectLists: selectLists,
+            templates: templateStore.templates.filter(\.isSummaryTemplate),
+            aiRunning: aiRunning, canGenerate: !document.isEmpty, aiError: aiError,
+            onTemplate: { template in
+                afterConfiguration {
+                    if let template {
+                        preview = DraftPreview(title: "模板预览 · " + template.name, selection: selection,
+                            document: template.document, options: appliedOptions)
+                    } else { options = .standard; showLatestDraft() }
+                }
+            }, onSaveTemplate: { afterConfiguration { beginSaveTemplate() } },
+            onGenerateAI: { afterConfiguration { _Concurrency.Task { await generateAI() } } })
     }
 
-    // MARK: Weekly review pane
-
-    private func weeklyPane(narrow: Bool) -> some View {
-        let review = reviewBuilder.review(for: workspace?.allTasks ?? [], weekOf: selectedWeekStart)
-        return VStack(alignment: .leading, spacing: WFSpace.md) {
-            HStack(spacing: WFSpace.sm) {
-                if narrow {
-                    Button { narrowShowsList = true } label: { Image(systemName: "sidebar.left") }
-                        .help("查看周列表")
+    private func pageHeader(showsInspector: Bool) -> some View {
+        HStack(spacing: 12) {
+            Button { environment.toggleSidebar() } label: { Image(systemName: "sidebar.left") }
+                .help("显示或隐藏侧栏").accessibilityLabel("显示或隐藏侧栏")
+            Text(journalMode ? "每日手记" : "摘要").font(WFType.detailTitle).foregroundStyle(WFColors.text)
+            Spacer()
+            if !journalMode {
+                if !showsInspector {
+                    Button { showsConfiguration = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .help("筛选与显示设置").accessibilityLabel("筛选与显示设置")
                 }
-                Text(review.weekTitle).font(WFType.detailTitle)
-                Spacer()
-                if workspace != nil {
-                    Button {
-                        copyReview(review)
-                    } label: {
-                        Label(copied ? "已复制" : "复制",
-                              systemImage: copied ? "checkmark" : "doc.on.doc")
-                    }
-                }
+                Button { showsHistory = true } label: { Image(systemName: "doc.text") }
+                    .help("已保存的摘要").accessibilityLabel("已保存的摘要")
             }
-            .buttonStyle(.borderless)
-            ScrollView {
-                VStack(alignment: .leading, spacing: WFSpace.xl) {
-                    if workspace != nil {
-                        reviewSection("已完成", items: review.completed, showsDatePrefix: true)
-                        reviewSection("已放弃", items: review.abandoned, showsDatePrefix: true)
-                        reviewSection("未完成", items: review.uncompleted, showsDatePrefix: false)
-                        if review.isEmpty {
-                            Text("本周还没有任务记录")
-                                .font(WFType.supporting)
-                                .foregroundStyle(WFColors.tertiaryText)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: WFSpace.sm) {
-                            Text("接入任务数据后可自动生成周回顾")
-                                .font(WFType.body)
-                                .foregroundStyle(WFColors.secondaryText)
-                            Text("届时这里会按周汇总已完成、已放弃与未完成的任务；本周小结仍会照常保存。")
-                                .font(WFType.supporting)
-                                .foregroundStyle(WFColors.tertiaryText)
-                        }
-                    }
+            BusinessMenu {
+                Button(journalMode ? "周回顾" : "每日手记") { journalMode.toggle() }
+                if !journalMode {
                     Divider()
-                    weeklyNoteSection
+                    Button("打印") { TaskPrintService.printDocument(title: "摘要 " + range.title(calendar: workspace.calendar), body: document.plainText) }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            } label: { Image(systemName: "ellipsis.circle") }
+                .fixedSize()
+                .accessibilityLabel("摘要更多操作")
         }
-        .padding(WFSpace.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .buttonStyle(.borderless).foregroundStyle(WFColors.secondaryText)
+        .padding(.horizontal, 22).frame(height: 52)
     }
 
-    /// TickTick-style plain rows: gray date prefix + title, list name on the
-    /// right. No cards — the pane stays a single white page.
-    private func reviewSection(_ title: String, items: [ReviewItem], showsDatePrefix: Bool) -> some View {
-        VStack(alignment: .leading, spacing: WFSpace.sm) {
-            Text(title)
-                .font(WFType.section)
-                .foregroundStyle(WFColors.secondaryText)
-            if items.isEmpty {
-                Text("暂无")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.tertiaryText)
-            } else {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(spacing: WFSpace.sm) {
-                        if showsDatePrefix && !item.datePrefix.isEmpty {
-                            Text(item.datePrefix)
-                                .font(WFType.supporting)
-                                .foregroundStyle(WFColors.secondaryText)
+    private func weeklyEditor(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(spacing: 0) {
+                DocumentFormatToolbarView(handle: editorHandle, maxWidth: .infinity, embedded: true)
+                    .padding(.horizontal, 10)
+                Divider().overlay(WFColors.border)
+                if options != appliedOptions {
+                    HStack(spacing: 10) {
+                        Text("筛选或显示设置已更改").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                        Spacer(minLength: 4)
+                        Button("还原") { options = appliedOptions }
+                        Button("预览更新") { showLatestDraft() }
+                    }
+                    .buttonStyle(.borderless).font(WFType.supporting)
+                    .padding(.horizontal, 16).padding(.vertical, 9)
+                    .background(WFColors.panelFill)
+                }
+                DocumentEditor(documentID: editorID, document: document,
+                    onDocumentChange: { updated in document = updated; saveWeekly(updated) }, onEscape: { .keepInspector },
+                    onEditingChanged: { _ in }, profile: linkProfile, handle: editorHandle)
+                    .padding(.horizontal, 12).padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(WFColors.border, lineWidth: 1) }
+            if let error = store.lastError { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
+            HStack(spacing: 16) {
+                footerAction("周计划", symbol: "calendar", compact: compact) { openPlan(at: range.start) }
+                footerAction("任务与结转", symbol: "checklist", compact: compact) { showsSources = true }
+                footerAction("更新摘要", symbol: "arrow.clockwise", compact: compact) { showLatestDraft() }
+                Spacer(minLength: 0)
+                footerAction("保存为", symbol: "square.and.arrow.down", compact: compact, action: beginSaveTemplate)
+                footerAction(copied ? "已复制" : "复制", symbol: copied ? "checkmark" : "doc.on.clipboard", compact: compact) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(document.plainText, forType: .string)
+                    copied = true
+                }
+            }
+            .buttonStyle(.borderless).foregroundStyle(WFColors.secondaryText).frame(height: 30)
+        }
+        .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func footerAction(_ title: String, symbol: String, compact: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if compact { Image(systemName: symbol).frame(width: 22, height: 24) }
+            else { Label(title, systemImage: symbol).font(WFType.supporting) }
+        }.help(title).accessibilityLabel(title)
+    }
+
+    private func beginSaveTemplate() {
+        showsConfiguration = false
+        editorHandle.prepareForDocumentChange()
+        templateName = (selection.listName.map { $0 + " · " } ?? "") + "摘要 " + range.title(calendar: workspace.calendar)
+        showsSaveTemplate = true
+    }
+
+    private func afterConfiguration(_ action: @escaping () -> Void) {
+        if showsConfiguration {
+            configurationDismissAction = action
+            showsConfiguration = false
+        } else { action() }
+    }
+
+    private func sources(report: WeeklyReport) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text(range.kind == .week ? "本周成果" : "本期成果").font(WFType.section)
+                    if report.completed.isEmpty && report.progress.isEmpty {
+                        Text("暂无完成记录").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                    }
+                    ForEach(report.completed) { task in sourceRow(task) }
+                    ForEach(report.progress) { progress in
+                        VStack(alignment: .leading, spacing: 4) {
+                            sourceRow(progress.task)
+                            Text("本期推进 \(progress.completedChildren.count) 个子任务")
+                                .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
                         }
-                        Text(item.title)
-                            .font(WFType.body)
-                            .foregroundStyle(WFColors.text)
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text(item.listName)
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.secondaryText)
-                            .lineLimit(1)
                     }
                 }
-            }
-        }
-    }
-
-    /// 手写小结：与每日手记共用 SummaryStore，dayKey 为本周一日期。
-    private var weeklyNoteSection: some View {
-        let dayKey = weeklyDayKey(selectedWeekStart)
-        return VStack(alignment: .leading, spacing: WFSpace.sm) {
-            Text("本周小结")
-                .font(WFType.section)
-                .foregroundStyle(WFColors.secondaryText)
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $weeklyDraft)
-                    .font(WFType.body)
-                    .frame(minHeight: 120)
-                if store.entry(for: dayKey) == nil && weeklyDraft.isEmpty {
-                    Text("写几句本周的回顾与想法吧")
-                        .font(WFType.body)
-                        .foregroundStyle(WFColors.tertiaryText)
-                        .padding(.top, WFSpace.sm)
-                        .padding(.leading, WFSpace.xs)
-                        .allowsHitTesting(false)
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack {
+                        Text("待推进").font(WFType.section)
+                        Spacer()
+                        if !report.pending.isEmpty {
+                            Button(selectedCarry.count == report.pending.count ? "取消全选" : "全选") {
+                                selectedCarry = selectedCarry.count == report.pending.count ? [] : Set(report.pending.map(\.id))
+                            }.font(WFType.supporting)
+                        }
+                    }
+                    if report.pending.isEmpty { Text("没有待结转任务").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText) }
+                    ForEach(report.pending) { task in
+                        HStack(alignment: .top, spacing: 8) {
+                            Toggle("选择 \(task.title)", isOn: Binding(get: { selectedCarry.contains(task.id) }, set: { selected in
+                                if selected { selectedCarry.insert(task.id) } else { selectedCarry.remove(task.id) }
+                            })).labelsHidden().toggleStyle(.checkbox)
+                            sourceRow(task)
+                        }
+                    }
+                    if range.kind == .week && !report.pending.isEmpty {
+                        Button("结转所选到下周") {
+                            _ = workspace.planTasks(selectedCarry.intersection(Set(report.pending.map(\.id))), weekOf: context.nextWeek)
+                            selectedCarry = []
+                        }.disabled(selectedCarry.isEmpty).buttonStyle(.bordered)
+                        Text("保留原任务和提醒，支持撤销。")
+                            .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                    }
                 }
+                if !report.carried.isEmpty {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("已结转 \(report.carried.count)").font(WFType.section)
+                        ForEach(report.carried) { move in sourceRow(move.task) }
+                    }
+                }
+                if !report.abandoned.isEmpty || !report.rescheduled.isEmpty {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Text("其他调整").font(WFType.section)
+                        ForEach(report.abandoned) { task in
+                            VStack(alignment: .leading, spacing: 3) {
+                                sourceRow(task)
+                                Text("已放弃").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                            }
+                        }
+                        ForEach(report.rescheduled) { task in sourceRow(task) }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("下一周期任务").font(WFType.section)
+                    ForEach(report.nextWeek) { task in sourceRow(task) }
+                    Button("打开下一周期计划") { openPlan(at: range.next(calendar: workspace.calendar).start) }
+                        .font(WFType.supporting)
+                }
+                DisclosureGroup("专注投入") {
+                    Text("本期记录 \(report.focusSeconds / 60) 分钟，仅作为投入参考。")
+                        .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).padding(.top, 8)
+                }.font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
             }
-            .frame(height: 150)
-            if let saveError {
-                Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                    .font(WFType.supporting)
-                    .foregroundStyle(.red)
-            } else if let entry = store.entry(for: dayKey) {
-                Text("已于 \(entry.updatedAt.formatted(date: .omitted, time: .shortened)) 保存")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.secondaryText)
-            }
+            .buttonStyle(.borderless).frame(maxWidth: .infinity, alignment: .leading).padding(20)
         }
     }
 
-    private func copyReview(_ review: WeeklyReview) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(reviewBuilder.plainText(for: review), forType: .string)
-        copied = true
-        copyResetTask?.cancel()
-        copyResetTask = _Concurrency.Task {
-            try? await _Concurrency.Task.sleep(for: .seconds(1.5))
-            guard !_Concurrency.Task.isCancelled else { return }
-            copied = false
-        }
+    private func sourceRow(_ task: Task) -> some View {
+        Button { showsSources = false; environment.openTask(task.id) } label: {
+            Text(task.title).font(WFType.supporting).foregroundStyle(WFColors.text)
+                .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+        }.help("打开原任务")
     }
 
-    // MARK: Journal (每日手记, 原样保留)
+    private var journalPane: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            DatePicker("日期", selection: $journalDay, displayedComponents: .date).datePickerStyle(.field)
+            TextEditor(text: $journalText).font(WFType.body)
+        }.padding(24)
+    }
 
-    private func dayList(dismissList: Bool) -> some View {
-        VStack(alignment: .leading, spacing: WFSpace.md) {
-            HStack(spacing: WFSpace.sm) {
-                Button {
-                    moveMonth(-1)
-                } label: { Image(systemName: "chevron.left") }
-                    .help("上一个月")
-                Text(monthTitle).font(WFType.section)
-                Button {
-                    moveMonth(1)
-                } label: { Image(systemName: "chevron.right") }
-                    .help("下一个月")
-                Spacer()
-                Button("回到今天") { goToday() }
-            }
-            .buttonStyle(.borderless)
+    private var historySheet: some View {
+        VStack(spacing: 0) {
+            DialogHeader(title: "已保存的摘要")
+            Divider()
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: WFSpace.xs) {
-                    let days = store.entries(inMonth: monthAnchor, calendar: calendar)
-                    if days.isEmpty {
-                        Text("本月暂无摘要")
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.secondaryText)
-                            .padding(.vertical, WFSpace.lg)
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(store.weeklyEntries) { entry in
+                        Button {
+                            saveWeekly()
+                            selectLists(Set(entry.listNames ?? entry.listName.map { [$0] } ?? []))
+                            if let savedRange = entry.range { selectRange(savedRange) }
+                            else if let start = SummaryStore.date(fromDayKey: entry.weekKey, calendar: workspace.calendar) {
+                                selectRange(.week(containing: start, calendar: workspace.calendar))
+                            }
+                            showsHistory = false
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text((entry.range?.title(calendar: workspace.calendar) ?? entry.weekKey) + " · " +
+                                    (entry.listNames?.isEmpty == false ? entry.listNames!.joined(separator: "、") : entry.listName ?? "所有清单"))
+                                Text(entry.document.plainText.replacingOccurrences(of: "\n", with: " "))
+                                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).lineLimit(2)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                    ForEach(days) { day in
-                        dayRow(day, dismissList: dismissList)
-                    }
+                }.padding(PopupMetrics.formInset)
+            }
+            DialogCloseFooter { showsHistory = false }
+        }.buttonStyle(.borderless).frame(width: 540, height: 460)
+    }
+
+    private func previewSheet(_ draft: DraftPreview) -> some View {
+        VStack(spacing: 0) {
+            DialogHeader(title: draft.title)
+            Divider()
+            VStack(alignment: .leading, spacing: 16) {
+                Text("采用后替换当前正文；取消会保留现有总结。更新任务摘要会保留手写复盘。")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                ScrollView {
+                    Text(draft.document.plainText).textSelection(.enabled).font(WFType.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }.padding(PopupMetrics.formInset)
+            DialogFooter(primaryTitle: "采用草稿", canSubmit: draft.selection == selection,
+                         onCancel: { preview = nil }, onSubmit: {
+                guard draft.selection == selection else { preview = nil; return }
+                editorHandle.prepareForDocumentChange()
+                document = draft.document
+                options = draft.options
+                appliedOptions = draft.options
+                editorID = UUID()
+                saveWeekly()
+                preview = nil
+            }) { EmptyView() }
+        }.frame(width: 640, height: 570)
+    }
+
+    private func showLatestDraft() {
+        editorHandle.prepareForDocumentChange()
+        preview = DraftPreview(title: "最新任务摘要预览", selection: selection,
+                               document: builder.document(for: report, options: options, preserving: document), options: options)
+    }
+
+    private func generateAI() async {
+        guard !aiRunning else { return }
+        editorHandle.prepareForDocumentChange()
+        let target = selection
+        let requestedOptions = options
+        let source = builder.document(for: report, options: requestedOptions, preserving: document)
+        let title = range.title(calendar: workspace.calendar)
+        var aiOptions = SummaryAIOptions.weeklyReview
+        aiOptions.isWeeklyPeriod = range.kind == .week
+        aiRunning = true; aiError = nil
+        defer { aiRunning = false }
+        do {
+            let text = try await SummaryPiOptimizer().optimize(text: source.plainText, options: aiOptions)
+            guard target == selection, !journalMode, environment.navigation.destination == .summary else { return }
+            guard requestedOptions == options else {
+                aiError = "筛选或显示设置已更改，请按当前条件重新生成。"
+                return
             }
+            preview = DraftPreview(title: "AI 草稿预览", selection: target,
+                document: WeeklyReportBuilder.aiDocument(text: text, title: title), options: requestedOptions)
+        } catch { if target == selection { aiError = error.localizedDescription } }
+    }
+
+    private func loadWeekly() {
+        refreshFocus()
+        if range.kind == .week {
+            workspace.captureWeekPlan(weekOf: range.start)
+            if selectedLists.isEmpty { store.migrateLegacyWeekly(weekStart: range.start, calendar: workspace.calendar) }
         }
+        let target = selection
+        loadedSelection = target
+        let saved = store.weeklyEntry(weekKey: target.weekKey, scopeID: target.scopeID)
+        // Keep combined conditions when opening a new scope; an existing
+        // archive restores the recipe actually applied to that document.
+        options = saved?.options ?? (saved == nil ? options : .standard)
+        appliedOptions = options
+        document = saved?.document ?? builder.document(for: report, options: options)
+        editorID = UUID(); copied = false
+        saveWeekly()
     }
 
-    private func dayRow(_ day: DailySummary, dismissList: Bool) -> some View {
-        Button {
-            selectedDayKey = day.dayKey
-            if dismissList { narrowShowsList = false }
-        } label: {
-            VStack(alignment: .leading, spacing: WFSpace.xs) {
-                Text(dayTitle(day.dayKey))
-                    .font(WFType.listTitle)
-                    .foregroundStyle(WFColors.text)
-                Text(firstLine(of: day.content))
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.secondaryText)
-                    .lineLimit(1)
-            }
-            .padding(WFSpace.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                selectedDayKey == day.dayKey ? WFColors.selection : .clear,
-                in: RoundedRectangle(cornerRadius: WFMetrics.corner)
-            )
-        }
-        .buttonStyle(.plain)
+    private func refreshFocus() {
+        let snapshot = environment.focusStore.summarySnapshot(in: range)
+        focusRecords = snapshot.records
+        focusedTaskIDs = snapshot.startedTaskIDs
     }
 
-    private func editor(showsListButton: Bool) -> some View {
-        VStack(alignment: .leading, spacing: WFSpace.md) {
-            HStack(spacing: WFSpace.sm) {
-                if showsListButton {
-                    Button { narrowShowsList = true } label: { Image(systemName: "sidebar.left") }
-                        .help("查看日期列表")
-                }
-                Text(dayTitle(selectedDayKey)).font(WFType.detailTitle)
-            }
-            .buttonStyle(.borderless)
-            Text(prompt(for: selectedDayKey))
-                .font(WFType.supporting)
-                .foregroundStyle(WFColors.tertiaryText)
-            ZStack(alignment: .topLeading) {
-                TextEditor(text: $draft).font(WFType.body)
-                if store.entry(for: selectedDayKey) == nil && draft.isEmpty {
-                    Text("还没有摘要，写下这一天的记录吧")
-                        .font(WFType.body)
-                        .foregroundStyle(WFColors.tertiaryText)
-                        .padding(.top, WFSpace.sm)
-                        .padding(.leading, WFSpace.xs)
-                        .allowsHitTesting(false)
-                }
-            }
-            if let saveError {
-                Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                    .font(WFType.supporting)
-                    .foregroundStyle(.red)
-            } else if let entry = store.entry(for: selectedDayKey) {
-                Text("已于 \(entry.updatedAt.formatted(date: .omitted, time: .shortened)) 保存")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.secondaryText)
-            }
-        }
-        .padding(WFSpace.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    private func saveWeekly(_ updated: NativeDocument? = nil) {
+        guard let target = loadedSelection else { return }
+        store.saveWeekly(document: updated ?? document, weekKey: target.weekKey, scopeID: target.scopeID, listName: target.listName, options: appliedOptions,
+            range: target.range, listNames: target.listNames.sorted())
     }
 
-    // MARK: Main column switch
-
-    @ViewBuilder
-    private func mainColumn(narrow: Bool) -> some View {
-        if mode == .weekly {
-            weeklyPane(narrow: narrow)
-        } else {
-            editor(showsListButton: narrow)
-        }
+    private func loadJournal() {
+        let key = SummaryStore.dayKey(journalDay, calendar: workspace.calendar)
+        loadedJournalKey = key
+        journalText = store.entry(for: key)?.content ?? ""
     }
-
-    // MARK: Display helpers
-
-    private var monthTitle: String {
-        let parts = calendar.dateComponents([.year, .month], from: monthAnchor)
-        return "\(parts.year ?? 0)年\(parts.month ?? 0)月"
-    }
-
-    private func dayTitle(_ dayKey: String) -> String {
-        guard let date = SummaryStore.date(fromDayKey: dayKey, calendar: calendar) else { return dayKey }
-        let parts = calendar.dateComponents([.month, .day, .weekday], from: date)
-        let weekday = Self.weekdayNames[(parts.weekday ?? 1) - 1]
-        return "\(parts.month ?? 0)月\(parts.day ?? 0)日 周\(weekday)"
-    }
-
-    private func firstLine(of content: String) -> String {
-        content.components(separatedBy: .newlines).first ?? content
-    }
-
-    /// Fixed prompt pool rotated by the day of the selected date.
-    private func prompt(for dayKey: String) -> String {
-        guard let date = SummaryStore.date(fromDayKey: dayKey, calendar: calendar) else {
-            return Self.prompts[0]
-        }
-        let index = (calendar.ordinality(of: .day, in: .year, for: date) ?? 0) % Self.prompts.count
-        return Self.prompts[index]
-    }
-
-    // MARK: Navigation
-
-    private func moveMonth(_ offset: Int) {
-        monthAnchor = calendar.date(byAdding: .month, value: offset, to: monthAnchor) ?? monthAnchor
-    }
-
-    private func goToday() {
-        monthAnchor = Date()
-        selectedDayKey = SummaryStore.dayKey(Date(), calendar: calendar)
-    }
-
-    // MARK: Autosave (view-driven debounce; the store keeps no timers)
-
-    private func loadDraft() {
-        draft = store.entry(for: selectedDayKey)?.content ?? ""
-    }
-
-    private func loadWeeklyDraft() {
-        weeklyDraft = store.entry(for: weeklyDayKey(selectedWeekStart))?.content ?? ""
-    }
-
-    private func scheduleSave() {
-        let dayKey = selectedDayKey
-        let content = draft
-        saveTask?.cancel()
-        saveTask = _Concurrency.Task {
-            try? await _Concurrency.Task.sleep(for: .seconds(0.5))
-            guard !_Concurrency.Task.isCancelled else { return }
-            performSave(content: content, dayKey: dayKey)
-        }
-    }
-
-    private func scheduleWeeklySave() {
-        let dayKey = weeklyDayKey(selectedWeekStart)
-        let content = weeklyDraft
-        weeklySaveTask?.cancel()
-        weeklySaveTask = _Concurrency.Task {
-            try? await _Concurrency.Task.sleep(for: .seconds(0.5))
-            guard !_Concurrency.Task.isCancelled else { return }
-            performSave(content: content, dayKey: dayKey)
-        }
-    }
-
-    /// Saves any pending edit immediately (day switch or view disappearing).
-    private func finishPendingSave(dayKey: String? = nil) {
-        let target = dayKey ?? selectedDayKey
-        saveTask?.cancel()
-        saveTask = nil
-        performSave(content: draft, dayKey: target)
-    }
-
-    /// Saves any pending weekly note immediately (week switch, mode switch or
-    /// view disappearing).
-    private func finishWeeklySave(weekStart: Date? = nil) {
-        let target = weeklyDayKey(weekStart ?? selectedWeekStart)
-        weeklySaveTask?.cancel()
-        weeklySaveTask = nil
-        performSave(content: weeklyDraft, dayKey: target)
-    }
-
-    private func performSave(content: String, dayKey: String) {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            guard store.entry(for: dayKey) != nil else { return }
-        } else if let existing = store.entry(for: dayKey), existing.content == trimmed {
-            return  // Nothing changed; skip the redundant write and status refresh.
-        }
-        store.save(content: content, dayKey: dayKey)
-        store.flush { error in
-            _Concurrency.Task { @MainActor in
-                saveError = error.map { "摘要保存失败：\($0.localizedDescription)" }
-            }
-        }
+    private func saveJournal() {
+        guard let key = loadedJournalKey else { return }
+        if store.entry(for: key)?.content != journalText { store.save(content: journalText, dayKey: key) }
     }
 }

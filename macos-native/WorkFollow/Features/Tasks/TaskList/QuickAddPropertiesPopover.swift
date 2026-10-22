@@ -90,7 +90,7 @@ struct QuickAddPropertiesPopover: View {
             }
             .buttonStyle(.plain)
             .quickAddRenderAnchor(.tags)
-            .background(AnchoredPropertyPanel(isPresented: presented(.tags), width: 264,
+            .background(AnchoredPropertyPanel(isPresented: presented(.tags), width: PopupMetrics.tagPickerWidth,
                                               placement: .submenu, focusPolicy: .panel) {
                 TaskTagPickerPopover(initialTags: selectedTags, workspace: workspace,
                     onCancel: { activeChild = nil },
@@ -135,7 +135,7 @@ struct QuickAddPropertiesPopover: View {
             })
         }
         .padding(WFSpace.md)
-        .frame(width: 270)
+        .frame(width: PopupMetrics.quickAddPropertiesWidth)
         .quickAddRenderAnchor(.properties)
         .background(PopupEscapeRouter(depth: 1) {
             if activeChild != nil { activeChild = nil }

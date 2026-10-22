@@ -40,6 +40,7 @@ struct AppCommands: Commands {
         // 清单菜单：智能清单导航（对齐 Flutter 清单菜单；快捷键集中在视图菜单，
         // 避免与 ⌘1…9 的键位在两个菜单间竞争）。
         CommandMenu("清单") {
+            Button("本周计划") { environment.navigate(to: .weekPlan) }
             Button("最近 7 天") { environment.navigate(to: .nextSevenDays) }
             Button("今天") { environment.navigate(to: .today) }
             Button("收集箱") { environment.navigate(to: .inbox) }

@@ -47,6 +47,7 @@ enum TaskContextMenuPresenter {
             rowView.addSubview(anchor)
             coordinator.anchor = anchor
             coordinator.width = TaskContextMenuPopover.menuWidth
+            coordinator.placement = .cursor
             coordinator.escapeDepth = 1
             coordinator.title = "任务右键菜单"
             coordinator.presented = true
@@ -63,7 +64,7 @@ enum TaskContextMenuPresenter {
             guard coordinator.presented else { return }
             // 换成独立选择面板，保留原鼠标锚点和同一个关闭生命周期。
             coordinator.close()
-            coordinator.width = 280
+            coordinator.width = PopupMetrics.parentPickerWidth
             coordinator.title = "关联主任务"
             coordinator.focusPolicy = .panel
             coordinator.root = AnyView(TaskParentPicker(taskID: taskID, workspace: workspace) { [weak self] in

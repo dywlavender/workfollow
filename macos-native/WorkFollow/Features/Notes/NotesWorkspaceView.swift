@@ -111,11 +111,11 @@ struct NotesWorkspaceView: View {
             if !trash { HStack(spacing: 4) {
                 TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
                 if !trash {
-                    Menu {
+                    BusinessMenu {
                         Button("按标题排序") { notes.sort(.title) }
                         Button("按最近编辑排序") { notes.sort(.recentlyEdited) }
                     } label: { Image(systemName: "arrow.up.arrow.down") }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("笔记排序")
+                    .fixedSize().help("笔记排序")
                 }
             }.frame(height: 34) }
             ScrollView {
@@ -136,15 +136,28 @@ struct NotesWorkspaceView: View {
                                 }
                                 Text(note.document.isEmpty ? "还没有内容" : note.document.previewText.replacingOccurrences(of: "\n", with: " "))
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    // 标题用正文字号、预览用 caption，小字号的字形左侧留白更少，
+                                    // 视觉上会比标题靠左。补一点内缩，和任务列表的「标题 / 正文」对齐。
+                                    .padding(.leading, 4)
+                                    // 与任务列表的正文同口径：占满左侧列，右侧留给元数据，
+                                    // 超出按可用宽度截断，而不是按文字固有宽度。
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }.frame(maxWidth: .infinity, alignment: .leading)
+                            // 内容列优先吃宽度：预览要尽量铺到日期前，而不是被右列按上限挤窄。
+                            .layoutPriority(1)
                             VStack(alignment: .trailing, spacing: 4) {
                                 Text(note.folder)
                                 Text((note.deletedAt ?? note.updatedAt).formatted(.dateTime.month().day().locale(.appDate)) + (trash ? "删除" : ""))
-                            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1).frame(maxWidth: 96, alignment: .trailing)
+                            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                // 右列按内容固定宽度，避免被左侧的 layoutPriority 压没。
+                                .fixedSize(horizontal: true, vertical: false)
+                                .frame(minWidth: 56, maxWidth: 96, alignment: .trailing)
                             // 行几何与任务列表共用同一套常量（原来这里写死 10 / 61）：
                             // 上下内边距 11、最小行高 50，内容超出时按内容长高。
                             }.padding(.horizontal, 12).padding(.vertical, WFMetrics.rowVerticalPadding)
                                 .frame(minHeight: WFMetrics.rowHeight)
+                                // 行本身要撑满列表宽度，否则内部的 maxWidth: .infinity 拿不到额外空间。
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(visibleNote?.id == note.id ? WFColors.listSelection : .clear,
                                             in: RoundedRectangle(cornerRadius: 8))
                                 .contentShape(Rectangle())
@@ -183,7 +196,7 @@ struct NotesWorkspaceView: View {
                     if trash {
                         Label("已删除的笔记", systemImage: "trash").foregroundStyle(.secondary)
                     } else {
-                        Menu {
+                        BusinessMenu {
                             ForEach(["未归档"] + notes.folders, id: \.self) { value in
                             Button(value) { notes.moveNoteToFolder(note.id, named: value) }
                         }
@@ -195,7 +208,7 @@ struct NotesWorkspaceView: View {
                             }
                         }
                     } label: { Label(note.folder, systemImage: "folder") }
-                    .menuStyle(.borderlessButton).menuIndicator(.hidden).lineLimit(1)
+                    .lineLimit(1)
                     }
                     Spacer()
                     if trash {
@@ -250,8 +263,17 @@ struct NotesWorkspaceView: View {
                                    contentSized: true, handle: editorHandle).id(note.id)
                         .overlay(alignment: .topLeading) {
                             if note.document.isEmpty {
+                                // 位置要和插入点一致：`NativeTextView` 用
+                                // `textContainerInset = (0, 4)`，文本实际从
+                                // `lineFragmentPadding`（5）处起排，空文档的光标就落在 (5, 4)。
+                                // 原来只加了 top 8，于是占了上下都不对。
                                 Text("写下你的想法、会议记录或下一步行动…")
-                                    .foregroundStyle(WFColors.tertiaryText).padding(.top, 8)
+                                    // 字号也要跟 `NativeTextView.font`（15）一致，
+                                    // 否则基线高度不同，视觉上仍会错位。
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(WFColors.tertiaryText)
+                                    .padding(.leading, 5)
+                                    .padding(.top, 4)
                                     .allowsHitTesting(false)
                             }
                         }
@@ -279,7 +301,7 @@ struct NotesWorkspaceView: View {
     // MARK: - 笔记操作菜单（Round B2：复制正文 / 创建纯文本副本；移到垃圾桶沿用删除按钮）
 
     private func noteActionsMenu(_ note: Note) -> some View {
-        Menu {
+        BusinessMenu {
             Button("复制笔记正文") { copyPlainText(note) }
             if note.hasPreservedRichContent {
                 Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
@@ -288,7 +310,7 @@ struct NotesWorkspaceView: View {
             Button("移到垃圾桶", role: .destructive) { notes.delete(note.id) }
         } label: {
             Image(systemName: "ellipsis")
-        }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        }.fixedSize()
         .help("笔记操作").accessibilityLabel("笔记操作")
     }
 

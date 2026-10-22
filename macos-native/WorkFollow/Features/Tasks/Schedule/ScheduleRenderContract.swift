@@ -9,6 +9,7 @@ enum ScheduleRenderAnchor: Hashable {
     /// 详情编辑栏专属：安排日期面板里的「截止日期」入口行。
     case deadlineRow
     case mainFooter, editorFooter(TaskDatePopoverV2.InlineSheet), option(String)
+    case reminderOffset(Int)
 }
 struct ScheduleRenderValue: Equatable {
     var frame: CGRect

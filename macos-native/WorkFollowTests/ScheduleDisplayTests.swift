@@ -58,6 +58,26 @@ final class ScheduleDisplayTests: XCTestCase {
 
     // MARK: - 日期
 
+    func testReminderPreviewUsesTheActualOffsetClockAndCrossDayDate() {
+        let now = date(2026, 10, 21)
+        XCTAssertEqual(ScheduleDisplay.reminderOptionText(minutes: -10,
+            anchor: date(2026, 10, 21, 9), hasTime: true, now: now, calendar: calendar),
+            "提前10分钟 · 08:50")
+        XCTAssertEqual(ScheduleDisplay.reminderOptionText(minutes: -30,
+            anchor: date(2026, 10, 22, 0, 10), hasTime: true, now: now, calendar: calendar),
+            "提前30分钟 · 今天 23:40")
+        XCTAssertEqual(ScheduleDisplay.reminderOptionText(minutes: -1_440,
+            anchor: date(2026, 10, 22, 9), hasTime: false, now: now, calendar: calendar),
+            "提前1天 · 今天 09:00")
+    }
+
+    func testReminderSummaryDistinguishesAnUnscheduledAlertFromNoReminder() {
+        let now = date(2026, 10, 21)
+        XCTAssertEqual(ScheduleDisplay.reminderSummary(fireDates: [], now: now, calendar: calendar), "未设提醒")
+        XCTAssertEqual(ScheduleDisplay.reminderSummary(fireDates: [date(2026, 10, 22, 9)],
+            now: now, calendar: calendar), "明天 09:00")
+    }
+
     func testCompactStyleForRows() {
         let now = date(2026, 10, 3, 9, 0)
         XCTAssertEqual(ScheduleDisplay.dateText(date(2026, 10, 3), hasTime: false, now: now,

@@ -222,7 +222,7 @@ struct FocusOverviewPane: View {
             }
         }
         .accessibilityIdentifier("focus-record-\(record.id.uuidString)")
-        .contextMenu {
+        .businessContextMenu {
             Button("查看详情") { selectedRecord = record }
             Button("编辑") { recordDraft = FocusRecordDraft(record: record) }
             if let taskID = record.taskID { Button("打开任务") { onSelectRecordTask?(taskID) } }

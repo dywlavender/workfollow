@@ -156,7 +156,7 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         try clickMain(.icon(.reminder), in: parent, fixture: fixture)
         var child = try XCTUnwrap(childPanel(in: parent))
         captureChildFrames(in: child, fixture: fixture)
-        let reminderOption = ScheduleRenderAnchor.option("提前1天 (09:00)")
+        let reminderOption = ScheduleRenderAnchor.reminderOffset(-1440)
         try clickChild(reminderOption, in: child, fixture: fixture)
         captureChildFrames(in: child, fixture: fixture)
         XCTAssertTrue(fixture.layout.childFrames[reminderOption]?.active == true)
@@ -221,7 +221,7 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         try clickMain(.icon(.reminder), in: parent, fixture: fixture)
         child = try XCTUnwrap(childPanel(in: parent))
         captureChildFrames(in: child, fixture: fixture)
-        try clickChild(.option("当天 (12:30)"), in: child, fixture: fixture)
+        try clickChild(.reminderOffset(0), in: child, fixture: fixture)
         let reminderFooter = try XCTUnwrap(fixture.layout.childFrames[.editorFooter(.reminder)]?.frame)
         try sendClick(in: try XCTUnwrap(child.contentView),
                       frame: CGRect(x: reminderFooter.maxX - 38, y: reminderFooter.midY - 10,
@@ -239,8 +239,19 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         XCTAssertFalse(child.isVisible)
 
         XCTAssertEqual(parent.frame.height, baseHeight + ScheduleMetrics.rowHeight, accuracy: 0.5)
-        XCTAssertEqual(parent.frame.maxY, baseWindowFrame.maxY, accuracy: 0.5,
-                       "The top edge must remain anchored while the repeat-end row is added")
+        let trigger = try XCTUnwrap(fixture.layout.triggerView)
+        let triggerFrame = fixture.owner.convertToScreen(trigger.convert(trigger.bounds, to: nil))
+        let bounds = try XCTUnwrap(fixture.owner.screen).visibleFrame
+        let expected = AnchoredPropertyPanelGeometry.scheduleFrame(anchor: triggerFrame,
+            size: parent.frame.size, bounds: bounds)
+        XCTAssertEqual(parent.frame, expected, "新增重复行后仍应锚定真实按钮并避让屏幕边缘")
+        if baseWindowFrame.minY >= triggerFrame.maxY {
+            XCTAssertEqual(parent.frame.minY, baseWindowFrame.minY, accuracy: 0.5,
+                           "面板在按钮上方展开时，靠按钮的下边缘保持不动")
+        } else {
+            XCTAssertEqual(parent.frame.maxY, baseWindowFrame.maxY, accuracy: 0.5,
+                           "面板在按钮下方展开时，靠按钮的上边缘保持不动")
+        }
         let panelContent = try XCTUnwrap(fixture.layout.frames[.panel]?.frame)
         let footer = try XCTUnwrap(fixture.layout.frames[.mainFooter]?.frame)
         XCTAssertEqual(panelContent.height, baseHeight + ScheduleMetrics.rowHeight, accuracy: 0.5)
@@ -441,6 +452,13 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         let layout = LayoutState()
         let root = Harness(task: isolatedTask, workspace: workspace, layout: layout)
             .frame(width: 560, height: 520)
+            .environment(\.popupContentObservation, { content in
+                AnyView(content.coordinateSpace(name: "schedule-render")
+                    .onPreferenceChange(ScheduleFramesKey.self) { values in
+                        if values[.panel] != nil { layout.frames = values }
+                        else if !values.isEmpty { layout.childFrames = values }
+                    })
+            })
         let host = NSHostingView(rootView: AnyView(root))
         let owner = NSWindow(contentRect: NSRect(x: 120, y: 100, width: 560, height: 520),
                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -484,11 +502,6 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
                        "Panel must anchor to the trailing date button, not the whole row")
         XCTAssertEqual(parent.frame.minY, expected.minY, accuracy: 1,
                        "Panel must stay adjacent to the trigger, except for boundary avoidance")
-        let host = try XCTUnwrap(parent.contentView as? NSHostingView<AnyView>)
-        let layout = fixture.layout
-        host.rootView = AnyView(host.rootView
-            .coordinateSpace(name: "schedule-render")
-            .onPreferenceChange(ScheduleFramesKey.self) { layout.frames = $0 })
         settle(fixture)
 
         return parent
@@ -503,13 +516,8 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
     }
 
     private func captureChildFrames(in child: NSPanel, fixture: Fixture) {
-        guard let host = child.contentView as? NSHostingView<AnyView> else { return }
-        let layout = fixture.layout
-        // The presenter replaces the child hosting root when its draft changes.
-        // Reinstall measurement on that current root to observe the latest value.
-        host.rootView = AnyView(host.rootView
-            .coordinateSpace(name: "schedule-render")
-            .onPreferenceChange(ScheduleFramesKey.self) { layout.childFrames = $0 })
+        // The debug environment observes every real child host across updates.
+        // Mutating host.rootView here would be overwritten by the presenter.
         settle(fixture)
     }
 

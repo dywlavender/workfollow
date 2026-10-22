@@ -10,71 +10,65 @@ struct FocusRecordEditor: View {
     private var theme: FocusTheme { FocusTheme(scheme) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(draft.isNew ? "补记专注" : "编辑专注记录")
-                .font(.system(size: 18, weight: .semibold)).padding(.bottom, 6)
-            fieldRow("专注任务") {
-                Picker("关联任务", selection: $draft.taskID) {
-                    Text("不关联").tag(Optional<UUID>.none)
-                    ForEach(candidates) { task in
-                        Text(task.title.isEmpty ? "未命名任务" : task.title).tag(Optional(task.id))
+        VStack(spacing: 0) {
+            DialogHeader(title: draft.isNew ? "补记专注" : "编辑专注记录")
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    fieldRow("专注任务") {
+                        BusinessPicker("关联任务", selection: $draft.taskID, options:
+                            [BusinessChoice(nil, "不关联")] + candidates.map { task in
+                                BusinessChoice(Optional(task.id), task.title.isEmpty ? "未命名任务" : task.title, symbol: "checklist")
+                            }, width: PopupMetrics.relationPickerWidth).labelsHidden().accessibilityIdentifier("focus-record-task")
                     }
-                }.labelsHidden().accessibilityIdentifier("focus-record-task")
-            }
-            fieldRow("开始时间") {
-                DatePicker("开始", selection: $draft.startedAt, displayedComponents: [.date, .hourAndMinute])
-                    .labelsHidden().datePickerStyle(.field)
-                    .accessibilityIdentifier("focus-record-start")
-            }
-            fieldRow("结束时间") {
-                if draft.preservesLegacyTiming {
-                    Text("未记录").foregroundStyle(theme.text3)
-                } else {
-                    DatePicker("结束", selection: $draft.endedAt, in: ...store.currentTime,
-                        displayedComponents: [.date, .hourAndMinute])
-                        .labelsHidden().datePickerStyle(.field).accessibilityIdentifier("focus-record-end")
-                }
-            }
-            fieldRow("类型") {
-                HStack(spacing: 6) {
-                    Picker("类型", selection: $draft.mode) {
-                        Text("番茄计时").tag(FocusMode.pomodoro)
-                        Text("正计时").tag(FocusMode.stopwatch)
-                        if draft.preservesLegacyTiming { Text("历史专注").tag(FocusMode.legacy) }
-                    }.labelsHidden().disabled(draft.preservesLegacyTiming)
-                        .accessibilityIdentifier("focus-record-mode")
-                    if draft.mode == .pomodoro {
-                        TextField("0", value: $draft.creditedPomodoros, format: .number)
-                            .frame(width: 38).multilineTextAlignment(.center)
-                            .accessibilityIdentifier("focus-record-pomodoros")
-                        Text("个番茄").font(.caption).foregroundStyle(theme.text2)
+                    fieldRow("开始时间") {
+                        DatePicker("开始", selection: $draft.startedAt, displayedComponents: [.date, .hourAndMinute])
+                            .labelsHidden().datePickerStyle(.field)
+                            .accessibilityIdentifier("focus-record-start")
                     }
-                }
+                    fieldRow("结束时间") {
+                        if draft.preservesLegacyTiming {
+                            Text("未记录").foregroundStyle(theme.text3)
+                        } else {
+                            DatePicker("结束", selection: $draft.endedAt, in: ...store.currentTime,
+                                displayedComponents: [.date, .hourAndMinute])
+                                .labelsHidden().datePickerStyle(.field).accessibilityIdentifier("focus-record-end")
+                        }
+                    }
+                    fieldRow("类型") {
+                        HStack(spacing: 6) {
+                            BusinessPicker("类型", selection: $draft.mode, options:
+                                [BusinessChoice(FocusMode.pomodoro, "番茄计时"), BusinessChoice(.stopwatch, "正计时")]
+                                + (draft.preservesLegacyTiming ? [BusinessChoice(.legacy, "历史专注")] : [])).labelsHidden().disabled(draft.preservesLegacyTiming)
+                                .accessibilityIdentifier("focus-record-mode")
+                            if draft.mode == .pomodoro {
+                                TextField("0", value: $draft.creditedPomodoros, format: .number)
+                                    .frame(width: 38).multilineTextAlignment(.center)
+                                    .accessibilityIdentifier("focus-record-pomodoros")
+                                Text("个番茄").font(.caption).foregroundStyle(theme.text2)
+                            }
+                        }
+                    }
+                    if draft.preservesLegacyTiming {
+                        Stepper("时长 \(draft.durationMinutes) 分钟", value: $draft.durationMinutes, in: 1...1440)
+                            .font(.caption).accessibilityIdentifier("focus-record-legacy-duration")
+                    }
+                    Text("专注笔记").font(.system(size: 13)).foregroundStyle(theme.text2)
+                    TextEditor(text: $draft.note)
+                        .font(.system(size: 13)).scrollContentBackground(.hidden).padding(6)
+                        .frame(maxWidth: .infinity, minHeight: 68)
+                        .background(theme.chipBackground, in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.hairline, lineWidth: 1))
+                        .accessibilityIdentifier("focus-record-note")
+                }.padding(PopupMetrics.formInset)
             }
-            if draft.preservesLegacyTiming {
-                Stepper("时长 \(draft.durationMinutes) 分钟", value: $draft.durationMinutes, in: 1...1440)
-                    .font(.caption).accessibilityIdentifier("focus-record-legacy-duration")
-            }
-            Text("专注笔记").font(.system(size: 13)).foregroundStyle(theme.text2)
-            TextEditor(text: $draft.note)
-                .font(.system(size: 13)).scrollContentBackground(.hidden).padding(6)
-                .frame(maxWidth: .infinity, minHeight: 68, maxHeight: .infinity)
-                .background(theme.chipBackground, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(theme.hairline, lineWidth: 1))
-                .accessibilityIdentifier("focus-record-note")
-            if let error { Text(error).font(.caption).foregroundStyle(theme.warn) }
-            HStack(spacing: 12) {
-                Spacer()
-                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                    .accessibilityIdentifier("focus-record-cancel")
-                Button("保存") {
-                    if store.saveRecordDraft(draft) { dismiss() }
-                    else { error = "开始应早于结束，结束应在此刻之前，番茄数不能为负。" }
-                }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("focus-record-save")
-            }.padding(.top, 4)
+            DialogFooter(cancelIdentifier: "focus-record-cancel", primaryIdentifier: "focus-record-save",
+                         onCancel: { dismiss() }, onSubmit: {
+                if store.saveRecordDraft(draft) { dismiss() }
+                else { error = "开始应早于结束，结束应在此刻之前，番茄数不能为负。" }
+            }) { Text(error ?? "").foregroundStyle(theme.warn) }
         }
-        .padding(24).frame(width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)
+        .frame(width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)
         .background(theme.canvas).focusRenderAnchor(.recordEditor)
         .environment(\.calendar, store.presentationCalendar)
         .environment(\.timeZone, store.presentationCalendar.timeZone)

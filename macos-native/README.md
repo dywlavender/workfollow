@@ -35,8 +35,44 @@ python3 macos-native/scripts/local-app.py rollback
 
 ```sh
 xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -configuration Debug -destination 'platform=macOS' -derivedDataPath /private/tmp/workfollow-native-build CODE_SIGNING_ALLOWED=NO build
+codesign --force --deep --sign - --identifier com.workfollow.native.preview /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
+codesign --verify --deep --strict /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 ```
+
+命令行关闭自动签名后，应先对完整应用包签名并校验，再独立启动。否则日历权限请求可能被系统归给启动它的开发工具，导致授权弹窗被阻止。日历授权成功后，设置页会显示“已允许完整访问”。
+
+## 任务日常操作
+
+- 提醒选项显示实际触发时刻，跨天时标明日期；任务详情显示提醒摘要，没有提醒时显示“未设提醒”。点击摘要可直接修改。
+- 搜索优先显示已有任务和笔记，正文命中显示匹配片段。回车打开选中结果，`⌘Enter` 新建任务。
+- 左侧云朵入口显示 Apple 任务同步状态，有异常时显示待处理数量，可重试、处理冲突或直达同步设置。“已写入”只确认 Mac 本地写入成功。
+- 全局快速添加在本次应用运行期间保留未提交草稿，收起再打开可继续输入；成功提交或点击“清空草稿”后清除。
+- 未选择任务时收起空详情区，列表使用更宽的阅读区域；选择任务后恢复分栏，返回列表时保留滚动位置。
+
+## Apple 同步与 iPhone
+
+在「设置 → Apple 同步」开启「同步任务到 Apple 提醒事项」，首次按系统提示允许访问；这项权限独立于日历。固定使用 iCloud 的 WorkFollow 清单，没有时自动创建。开启后自动同步所有未完成任务，包含未安排日期的任务以及以后新增的清单；已同步任务完成后保留完成记录，已归档或删除的任务不再同步。
+
+任务同步只保留一个总开关和状态，不再选择账户、填写清单名称、选择来源清单或调整双向同步及通知方式。任务编辑栏和更多菜单不提供独立的 Apple 同步设置。旧版选择性同步在升级后先暂停，用户开启新总开关后才扩展至全部任务；关闭开关只暂停同步，已写入系统的任务仍保留。
+
+任务不再额外写成日历日程。在 Apple 日历的日历列表勾选「计划的提醒事项」即可看到有日期的任务。无日期的任务只显示在提醒事项列表中。
+
+独立提醒时间与安排日期不同时，Apple 的排期显示可能不同：本机实测安排在 10 月 29 日、独立提醒为 28 日的任务，Apple 提醒事项和日历显示在 28 日；项目仍保留原安排日期及提醒时间。
+
+同一设置页的「在 WorkFollow 显示系统日程」仅用于读取系统日历中的会议、预约等日程。旧版任务日历关联保留供一次性清理：仅清理仍关联且未单独修改的副本，清理前保存可恢复内容，设置页支持「撤销副本清理」；独立修改或已取消关联的日程会保留。正常读取及任务编辑均不写入系统日历。本机声音、稍后提醒等设置单列在「本机通知」。
+
+Mac 与 iPhone 使用同一 Apple 账户，并在两端的 iCloud 中开启「提醒事项」；手机需允许提醒事项通知。标题、安排日期、优先级和完成状态双向同步；WorkFollow 的时间提醒写入系统。Apple 提醒事项自身的“提前提醒”在本机实测无法从 EventKit 回读，不承诺回写。手机修改到达 Mac 后由运行中的 WorkFollow 回写，下次启动或返回前台也会核对。同一字段的双方修改在设置页处理冲突。
+
+默认由 Apple 提醒事项负责已成功关联任务的到点提醒，WorkFollow 不重复响铃。手机已收到的提醒由系统执行，不依赖 WorkFollow 持续运行。「已写入提醒事项」只确认 Mac 本地写入，不能确认手机接收。
+
+子任务平铺显示，富文本、附件、标签保留在 WorkFollow。按日期重复的任务预先同步未来 30 天的独立期次；按完成日期重复的下一期需 WorkFollow 收到完成状态后生成。独立截止日期放入说明，安排日期对应提醒事项的日期。提醒事项的全天通知时间和声音遵循系统设置。方案与验收范围见 [提醒事项同步](../docs/apple-reminders-integration-2026-10-20.md)。
+
+## 弹框规范
+
+根属性入口点击打开，子菜单使用悬停意图；面板锚定实际控件，按用途共用尺寸、操作栏、焦点和关闭规则。接入要求及本批验证范围见 [弹框规范实施计划](../docs/popup-standardization-plan-2026-10-22.md)。
+
+业务下拉和业务右键菜单统一使用 `BusinessMenu` / `BusinessPicker`，包括选中标记、悬停、搜索、滚动和键盘操作；系统菜单栏、系统对话框、文本编辑系统菜单及分段控件保留原生。最新范围和验收结果见[业务菜单视觉统一](../docs/business-popup-visual-unification-2026-10-22.md)。
 
 ## 早期实验范围记录
 

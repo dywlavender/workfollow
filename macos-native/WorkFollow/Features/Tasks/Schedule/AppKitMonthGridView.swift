@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// 自绘标题栏（年月 + 上/下月/回到今天）+ 星期行 + 6×7 日期格：
 /// 选中实心圆、今天描边环、区间高亮、节日小字；点击格选日期、点击箭头翻月。
-/// 与 `LunarMonthGridView` 保持同一输入接口，便于逐宿主替换。
+/// 日期面板所有宿主的月历都走这一个实现（原 SwiftUI 版已删除）。
 struct AppKitMonthGridView: View {
     let calendar: Calendar
     @Binding var displayedMonth: Date
@@ -188,6 +188,16 @@ final class MonthGridCanvas: NSView {
 
     private var selectionColor: NSColor { accentColor.withAlphaComponent(0.10) }
 
+    /// 非本月日期：参考滴答的浅灰（≈ #C0C4CB），比 `tertiaryLabelColor` 更浅一档，
+    /// 避免上/下月的日期抢走本月的视觉重点。
+    private var outOfMonthColor: NSColor {
+        NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ? NSColor(red: 0.42, green: 0.44, blue: 0.48, alpha: 1)
+                : NSColor(red: 0.753, green: 0.769, blue: 0.796, alpha: 1)
+        }
+    }
+
     // MARK: 绘制
 
     override func draw(_ dirtyRect: NSRect) {
@@ -302,7 +312,7 @@ final class MonthGridCanvas: NSView {
         if filled {
             numberColor = .white
         } else if !cell.inMonth {
-            numberColor = NSColor.tertiaryLabelColor
+            numberColor = outOfMonthColor
         } else {
             numberColor = NSColor.labelColor
         }

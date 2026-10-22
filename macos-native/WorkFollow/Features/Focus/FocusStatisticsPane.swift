@@ -31,31 +31,22 @@ struct FocusStatisticsPane: View {
                     Button("返回概览") { store.showOverview() }.buttonStyle(.plain)
                 }
                 HStack {
-                    Picker("日期", selection: $period) {
-                        Text("最近 7 天").tag(7); Text("最近 30 天").tag(30); Text("全部").tag(0)
-                    }
-                    Picker("类型", selection: $mode) {
-                        Text("全部类型").tag(Optional<FocusMode>.none)
-                        ForEach(FocusMode.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
-                    }
+                    BusinessPicker("日期", selection: $period, options:
+                        [BusinessChoice(7, "最近 7 天"), BusinessChoice(30, "最近 30 天"), BusinessChoice(0, "全部")])
+                    BusinessPicker("类型", selection: $mode, options:
+                        [BusinessChoice(nil, "全部类型")] + FocusMode.allCases.map { BusinessChoice(Optional($0), $0.title) })
                 }
                 HStack {
-                    Picker("来源", selection: $source) {
-                        Text("全部来源").tag(Optional<FocusRecordSource>.none)
-                        Text("计时").tag(Optional(FocusRecordSource.timer))
-                        Text("补记").tag(Optional(FocusRecordSource.manual))
-                        Text("历史记录").tag(Optional(FocusRecordSource.legacy))
-                    }
-                    Picker("任务", selection: $taskID) {
-                        Text("全部任务").tag(Optional<UUID>.none)
-                        ForEach(workspace?.allTasks.filter { $0.deletedAt == nil } ?? []) { task in
-                            Text(task.title.isEmpty ? "未命名任务" : task.title).tag(Optional(task.id))
-                        }
-                    }
+                    BusinessPicker("来源", selection: $source, options:
+                        [BusinessChoice(nil, "全部来源"), BusinessChoice(FocusRecordSource.timer, "计时"),
+                         BusinessChoice(.manual, "补记"), BusinessChoice(.legacy, "历史记录")])
+                    BusinessPicker("任务", selection: $taskID, options:
+                        [BusinessChoice(nil, "全部任务")] + (workspace?.allTasks.filter { $0.deletedAt == nil } ?? []).map { task in
+                            BusinessChoice(Optional(task.id), task.title.isEmpty ? "未命名任务" : task.title, symbol: "checklist")
+                        }, width: PopupMetrics.relationPickerWidth)
                 }
-                Picker("关联", selection: $associated) {
-                    Text("全部关联状态").tag(0); Text("已关联任务").tag(1); Text("未关联任务").tag(2)
-                }.frame(maxWidth: 220)
+                BusinessPicker("关联", selection: $associated, options:
+                    [BusinessChoice(0, "全部关联状态"), BusinessChoice(1, "已关联任务"), BusinessChoice(2, "未关联任务")]).frame(maxWidth: 220)
                 HStack(spacing: 36) {
                     statistic("专注时长", value: "\(totalSeconds / 60) 分")
                     statistic("番茄", value: "\(totalPomodoros)")

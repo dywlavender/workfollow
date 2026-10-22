@@ -63,6 +63,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
 
     @Published private(set) var isEnabled: Bool
     let composer: GlobalQuickAddComposer
+    let draft = GlobalQuickAddDraft()
 
     private let defaults: UserDefaults
     private var panel: NSPanel?
@@ -137,7 +138,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
 
     func showPanel() {
         guard isEnabled else { return }
-        hidePanel() // 重建面板，保证每次弹出输入框状态干净
+        hidePanel() // 重建焦点与弹层状态，输入草稿由控制器保留。
         let panel = makePanel()
         self.panel = panel
         if let screen = NSScreen.main {
@@ -153,6 +154,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
 
     func hidePanel() {
         panel?.orderOut(nil)
+        panel?.contentView = nil
         panel = nil
     }
 
@@ -164,7 +166,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
                 dismissedTokenIDs: Set<String> = []) {
         let created = composer.submit(text: text, description: description,
                                       dismissedTokenIDs: dismissedTokenIDs)
-        if created != nil { hidePanel() }
+        if created != nil { draft.clear(); hidePanel() }
     }
 
     func submit(_ session: QuickCaptureSession, attachments: [NativeAttachment] = []) {
@@ -174,6 +176,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         if !attachments.isEmpty, let task = composer.workspace.task(for: first) {
             composer.workspace.setAttachments(first, task.attachments + attachments)
         }
+        draft.clear()
         hidePanel()
     }
 
@@ -203,14 +206,18 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         let hosting = FirstResponderHostingView(rootView: GlobalQuickAddPanelView(
+            draft: draft,
             composer: composer,
             submit: { [weak self] session, attachments in
                 self?.submit(session, attachments: attachments)
             },
             close: { [weak self] in self?.hidePanel() },
-            onHeightChange: { [weak self] height in
+            onHeightChange: { [weak self, weak panel] height in
                 // 偏好回调发生在布局过程中，改窗口尺寸要等这一帧排完。
-                DispatchQueue.main.async { self?.resizePanel(toHeight: height) }
+                DispatchQueue.main.async { [weak self, weak panel] in
+                    guard let self, let panel, self.panel === panel else { return }
+                    self.resizePanel(toHeight: height)
+                }
             }))
         panel.contentView = hosting
         panel.initialFirstResponder = hosting
@@ -240,26 +247,51 @@ private struct GlobalPanelHeightKey: PreferenceKey {
 
 @MainActor
 private struct GlobalQuickAddPanelView: View {
+    @ObservedObject var draft: GlobalQuickAddDraft
     let composer: GlobalQuickAddComposer
     let submit: (QuickCaptureSession, [NativeAttachment]) -> Void
     let close: () -> Void
     let onHeightChange: (CGFloat) -> Void
 
-    @State private var text = ""
+    private var text: String {
+        get { draft.text }
+        nonmutating set { draft.text = newValue }
+    }
     /// Tab 拉出来的任务描述。只跟随单条创建；批量时每一行各自成任务，不带描述。
-    @State private var descriptionDraft = ""
+    private var descriptionDraft: String {
+        get { draft.description }
+        nonmutating set { draft.description = newValue }
+    }
     /// 与列表快速添加条共用同一套候选/描述状态机：同一串按键在两个入口必须同解。
     @State private var candidate = QuickAddCandidateState()
     @State private var inputSelection: NSRange?
     @State private var requestedInputSelection: NSRange?
     /// 被点掉的识别 chip。与列表条同源：点掉后重解析要忽略那一段。
-    @State private var dismissedTokens: Set<String> = []
-    @State private var scheduleOverride: QuickAddScheduleDraft?
-    @State private var priorityOverride: TaskPriority?
-    @State private var listOverride: String?
-    @State private var tagsOverride: [String]?
+    private var dismissedTokens: Set<String> {
+        get { draft.dismissedTokens }
+        nonmutating set { draft.dismissedTokens = newValue }
+    }
+    private var scheduleOverride: QuickAddScheduleDraft? {
+        get { draft.schedule }
+        nonmutating set { draft.schedule = newValue }
+    }
+    private var priorityOverride: TaskPriority? {
+        get { draft.priority }
+        nonmutating set { draft.priority = newValue }
+    }
+    private var listOverride: String? {
+        get { draft.list }
+        nonmutating set { draft.list = newValue }
+    }
+    private var tagsOverride: [String]? {
+        get { draft.tags }
+        nonmutating set { draft.tags = newValue }
+    }
     /// 属性菜单里选好的附件（创建成功后挂到新任务）。
-    @State private var attachmentsOverride: [NativeAttachment] = []
+    private var attachmentsOverride: [NativeAttachment] {
+        get { draft.attachments }
+        nonmutating set { draft.attachments = newValue }
+    }
     /// 输入框显示模式：与列表条共用同一持久化键（「输入框设置」在两端同值）。
     @AppStorage(QuickAddDisplayMode.defaultsKey) private var displayModeRaw = QuickAddDisplayMode.compact.rawValue
     @State private var showSchedule = false
@@ -329,6 +361,19 @@ private struct GlobalQuickAddPanelView: View {
                 Text(manualSummary).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                     .padding(.leading, 24)
             }
+            if draft.hasContent {
+                HStack {
+                    Text("收起后保留草稿")
+                        .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    Spacer()
+                    Button("清空草稿") {
+                        draft.clear()
+                        candidate = QuickAddCandidateState()
+                        inputFocused = true
+                    }.buttonStyle(.plain).font(WFType.supporting)
+                        .accessibilityLabel("清空草稿")
+                }.padding(.leading, 24)
+            }
         }
         .padding(WFSpace.lg)
         .frame(width: GlobalQuickAddController.panelWidth, alignment: .topLeading)
@@ -355,7 +400,7 @@ private struct GlobalQuickAddPanelView: View {
         .onExitCommand(perform: handleEscape)
         .sheet(isPresented: $showTemplates) {
             TaskTemplateGalleryView(workspace: composer.workspace, templateStore: TemplateStore.shared,
-                onDismiss: { showTemplates = false }, onApplied: { _ in close() })
+                onDismiss: { showTemplates = false }, onApplied: { _ in draft.clear(); close() })
         }
     }
 
@@ -369,7 +414,7 @@ private struct GlobalQuickAddPanelView: View {
             // 与列表快速添加条同一个 AppKit 桥：智能识别着色、Tab/上下键、粘贴保换行
             // 全部复用，面板只换字号（14 vs 13）。
             QuickAddTextField(
-                text: $text,
+                    text: $draft.text,
                 placeholder: "新建任务：明天下午3点 开会 @工作 !! #周报",
                 tokens: parsed.tokens,
                 focused: $inputFocused,
@@ -404,7 +449,7 @@ private struct GlobalQuickAddPanelView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain).help("更多任务属性").accessibilityLabel("更多任务属性")
-            .background(AnchoredPropertyPanel(isPresented: $showProperties, width: 270) {
+            .background(AnchoredPropertyPanel(isPresented: $showProperties, width: PopupMetrics.quickAddPropertiesWidth) {
                 QuickAddPropertiesPopover(workspace: composer.workspace,
                     selectedPriority: priorityOverride ?? parsed.priority,
                     selectedList: listOverride ?? parsed.listName ?? composer.workspace.activeList ?? TaskList.inbox.name,
@@ -427,7 +472,7 @@ private struct GlobalQuickAddPanelView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(WFColors.secondaryText)
                 .frame(width: 12)
-            TextField("添加描述", text: $descriptionDraft)
+            TextField("添加描述", text: $draft.description)
                 .textFieldStyle(.plain)
                 .font(WFType.control)
                 .foregroundStyle(WFColors.text)

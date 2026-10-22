@@ -104,6 +104,7 @@ struct MigrationTaskRecord: Equatable {
     /// 原生模型没有对应字段的键（bucket/timeLabel/contentJson）。`dueEndAt` 已迁入
     /// `TaskSchedule.dueEndAt`，不再计入。
     let ignoredKeys: Set<String>
+    var weeklyPlanning: TaskWeeklyPlanning? = nil
 }
 
 struct MigrationNoteRecord: Equatable {
@@ -288,7 +289,8 @@ enum MigrationSnapshot {
             isPinned: tolerantBool(json["isPinned"]),
             abandonedAt: nullableString(json["abandonedAt"]),
             convertedNoteId: nullableString(json["convertedNoteId"]),
-            ignoredKeys: ignored
+            ignoredKeys: ignored,
+            weeklyPlanning: try weeklyPlanning(json["weeklyPlanning"])
         )
     }
 
@@ -301,6 +303,14 @@ enum MigrationSnapshot {
         config.weekday = optionalInt(json["weekday"])
         config.month = optionalInt(json["month"])
         return config
+    }
+
+    private static func weeklyPlanning(_ value: Any?) throws -> TaskWeeklyPlanning? {
+        guard let value, !(value is NSNull) else { return nil }
+        do {
+            return try JSONDecoder().decode(TaskWeeklyPlanning.self,
+                from: JSONSerialization.data(withJSONObject: value))
+        } catch { throw MigrationFormatError.malformedRecord }
     }
 
     private static func noteRecord(_ json: [String: Any]) throws -> MigrationNoteRecord {
@@ -816,7 +826,7 @@ enum MigrationSnapshot {
             abandonedAt: abandonedAt,
             skippedAt: skippedAt,
             convertedNoteID: record.convertedNoteId.map(uuid(forRawID:)),
-            sourceNoteID: record.sourceNoteId.map(uuid(forRawID:)))
+            sourceNoteID: record.sourceNoteId.map(uuid(forRawID:)), weeklyPlanning: record.weeklyPlanning)
     }
 
     /// v1/v2 subtasks 数组展开为真实任务（确定性 id、childOrder = 下标、保留完成标记）。
@@ -1038,7 +1048,7 @@ enum MigrationSnapshot {
                  "sortOrder": tag.sortOrder,
                  "parentID": tag.parentID.map { $0.uuidString as Any } ?? NSNull()] as [String: Any]
             },
-            "tasks": snapshot.tasks.map(taskRecord),
+            "tasks": try snapshot.tasks.map(taskRecord),
             "notes": snapshot.notes.map { noteRecord($0, folderIDsByName: folderIDsByName) },
         ]
 
@@ -1057,7 +1067,7 @@ enum MigrationSnapshot {
         return try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     }
 
-    private static func taskRecord(_ task: Task) -> [String: Any] {
+    private static func taskRecord(_ task: Task) throws -> [String: Any] {
         let description = task.document.plainText
         let status: String
         if task.skippedAt != nil {
@@ -1097,6 +1107,9 @@ enum MigrationSnapshot {
             "convertedNoteId": task.convertedNoteID?.uuidString ?? NSNull(),
         ]
         if let parentID = task.parentID { record["parentTaskId"] = parentID.uuidString }
+        if let planning = task.weeklyPlanning {
+            record["weeklyPlanning"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(planning))
+        }
         if task.childOrder > 0 { record["childOrder"] = task.childOrder }
         if let reminderOffsets = flutterReminderOffsets(fromNative: task.reminderOffsets) {
             record["reminderOffsets"] = reminderOffsets

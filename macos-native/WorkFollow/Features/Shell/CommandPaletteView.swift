@@ -26,6 +26,11 @@ struct CommandPaletteView: View {
                 TextField("搜索任务、笔记或命令…", text: $query)
                     .textFieldStyle(.plain)
                     .focused($focused)
+                    .onKeyPress(keys: [.return], phases: .down) { key in
+                        guard key.modifiers.contains(.command) else { return .ignored }
+                        createFromQuery()
+                        return .handled
+                    }
                     .onSubmit(runSelected)
                     .onKeyPress(.downArrow) { moveSelection(1) }
                     .onKeyPress(.upArrow) { moveSelection(-1) }
@@ -40,47 +45,63 @@ struct CommandPaletteView: View {
 
             Divider()
 
-            ScrollView {
-                LazyVStack(spacing: WFSpace.xs) {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                        Button { run(entry) } label: {
-                            HStack(spacing: WFSpace.md) {
-                                Image(systemName: entry.symbol)
-                                    .frame(width: WFMetrics.icon)
-                                    .foregroundStyle(entry.kind == .createTask
-                                                     ? WFColors.accent : WFColors.secondaryText)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(entry.title)
-                                        .fontWeight(entry.kind == .createTask ? .semibold : .regular)
-                                        .lineLimit(1)
-                                    Text(entry.subtitle).font(WFType.supporting)
-                                        .foregroundStyle(WFColors.secondaryText).lineLimit(1)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: WFSpace.xs) {
+                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                            Button { run(entry) } label: {
+                                HStack(spacing: WFSpace.md) {
+                                    Image(systemName: entry.symbol)
+                                        .frame(width: WFMetrics.icon)
+                                        .foregroundStyle(entry.kind == .createTask
+                                                         ? WFColors.accent : WFColors.secondaryText)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        highlighted(entry.title)
+                                            .fontWeight(entry.kind == .createTask ? .semibold : .regular)
+                                            .lineLimit(1)
+                                        Text(entry.subtitle).font(WFType.supporting)
+                                            .foregroundStyle(WFColors.secondaryText).lineLimit(1)
+                                        if let snippet = entry.snippet {
+                                            highlighted(snippet).font(WFType.supporting)
+                                                .foregroundStyle(WFColors.secondaryText).lineLimit(2)
+                                        }
+                                    }
+                                    Spacer(minLength: 0)
+                                    if entry.kind == .createTask {
+                                        Text("⌘↵").font(WFType.supporting)
+                                            .foregroundStyle(WFColors.secondaryText)
+                                    }
                                 }
-                                Spacer(minLength: 0)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, WFSpace.md)
+                                .padding(.vertical, WFSpace.sm)
+                                .background(index == selectedIndex ? WFColors.selection : .clear,
+                                            in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                                .contentShape(Rectangle())
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, WFSpace.md)
-                            .padding(.vertical, WFSpace.sm)
-                            .background(index == selectedIndex ? WFColors.selection : .clear,
-                                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, WFSpace.sm)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, WFSpace.sm)
                     }
+                    .padding(.vertical, WFSpace.sm)
                 }
-                .padding(.vertical, WFSpace.sm)
+                .onChange(of: selectedIndex) { _, index in
+                    if entries.indices.contains(index) { proxy.scrollTo(entries[index].id) }
+                }
+                .onChange(of: query) { _, _ in
+                    if let first = entries.first { proxy.scrollTo(first.id, anchor: .top) }
+                }
             }
 
             Divider()
 
             // 底部快捷键提示条（Flutter 命令面板对齐）。
             HStack(spacing: WFSpace.sm) {
-                Text("↑↓ 选择 · ↵ 执行 · esc 关闭")
+                Text("↑↓ 选择 · ↵ 打开 · ⌘↵ 新建 · esc 关闭")
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
                 Spacer(minLength: 0)
-                Text("打勾命令面板")
+                Text("WorkFollow")
                     .font(WFType.supporting)
                     .fontWeight(.semibold)
                     .foregroundStyle(WFColors.secondaryText)
@@ -104,6 +125,24 @@ struct CommandPaletteView: View {
     private func runSelected() {
         guard entries.indices.contains(selectedIndex) else { return }
         run(entries[selectedIndex])
+    }
+
+    private func createFromQuery() {
+        guard let entry = entries.first(where: { $0.kind == .createTask }) else { return }
+        run(entry)
+    }
+
+    private func highlighted(_ value: String) -> Text {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return Text(value) }
+        var text = Text("")
+        var start = value.startIndex
+        while let range = value.range(of: query, options: .caseInsensitive, range: start..<value.endIndex) {
+            text = text + Text(String(value[start..<range.lowerBound]))
+                + Text(String(value[range])).bold().foregroundColor(WFColors.accent)
+            start = range.upperBound
+        }
+        return text + Text(String(value[start...]))
     }
 
     private func run(_ entry: CommandPaletteEntry) {

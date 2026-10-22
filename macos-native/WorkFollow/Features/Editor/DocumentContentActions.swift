@@ -16,10 +16,11 @@ extension NativeTextView {
             if range.length == 0 { range = linkRange }
         }
         alert.accessoryView = input
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "取消")
+        let save = alert.addButton(withTitle: "保存链接")
+        let cancel = alert.addButton(withTitle: "取消")
+        NativeDialogActions.configure(alert, primary: save, cancel: cancel)
         alert.window.initialFirstResponder = input
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard NativeDialogActions.runModal(alert, cancel: cancel) == .alertFirstButtonReturn else { return }
         let value = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: value), ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "") else {
             let warning = NSAlert()

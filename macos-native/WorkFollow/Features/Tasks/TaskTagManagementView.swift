@@ -114,7 +114,7 @@ struct TaskTagsSectionView: View {
                     return workspace.reorderTag(id, before: tag.id)
                 } isTargeted: { active in targeted = active ? tag.id : nil }
         }
-        .contextMenu { tagMenu(tag) }
+        .businessContextMenu { tagMenu(tag) }
         // 业务弹层统一走无箭头呈现（和任务详情、日期面板同一套壳）。
         .background {
             AnchoredPropertyPanel(
@@ -130,7 +130,7 @@ struct TaskTagsSectionView: View {
         Button("添加子标签…") { create(parentID: tag.id) }
         Button("编辑标签…") { editor = TaskTagEditorRequest(tagID: tag.id, parentID: tag.parentID) }
         Button("颜色…") { colorTag = tag.id }
-        Menu("移动到") {
+        BusinessMenu("移动到") {
             Button("顶层") { workspace.reparentTag(tag.id, parentID: nil) }
             ForEach(workspace.orderedTags.filter { $0.id != tag.id && !workspace.tagAncestors($0.id).contains(tag.id) }) { parent in
                 Button(parent.name) { workspace.reparentTag(tag.id, parentID: parent.id) }

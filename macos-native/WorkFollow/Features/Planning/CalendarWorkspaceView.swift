@@ -93,7 +93,6 @@ struct CalendarWorkspaceView: View {
         .sheet(item: $systemEventDetails) { SystemCalendarEventDetails(event: $0) }
         .onAppear { integration.showEvents(in: occurrenceWindow) }
         .onChange(of: occurrenceWindow) { _, range in integration.showEvents(in: range) }
-        .onChange(of: integration.store.snapshot.visibleCalendarIDs) { _, _ in integration.showEvents(in: occurrenceWindow) }
         .confirmationDialog("修改重复任务", isPresented: Binding(get: { pendingOccurrenceSchedule != nil },
             set: { if !$0 { pendingOccurrenceSchedule = nil } }), titleVisibility: .visible) {
             if let request = pendingOccurrenceSchedule {
@@ -163,14 +162,12 @@ struct CalendarWorkspaceView: View {
                 anchorSink.rect = addAnchor.rect; presentComposer(on: selectedDay)
             } label: { Image(systemName: "plus").frame(width: 32, height: 32) }
             .buttonStyle(.plain).background(PlanningAnchorProbe(ref: addAnchor)).help("新建任务")
-            Menu {
+            BusinessMenu {
                 ForEach(CalendarViewMode.allCases, id: \.self) { value in
-                    Button { settings.updateCalendar { $0.mode = value } } label: {
-                        if value == mode { Label(value.label, systemImage: "checkmark") } else { Text(value.label) }
-                    }
+                    BusinessMenuOption(value.label, selected: value == mode) { settings.updateCalendar { $0.mode = value } }
                 }
             } label: { Text(mode.label).font(WFType.control).frame(minWidth: 38, minHeight: 30) }
-            .menuStyle(.borderlessButton).fixedSize().help("日历视图")
+            .fixedSize().help("日历视图")
             ToolbarPill {
                 HStack(spacing: 0) {
                     rangeButton("chevron.left", help: mode.previousLabel) { step(-1) }
@@ -182,14 +179,14 @@ struct CalendarWorkspaceView: View {
                 Image(systemName: "sidebar.right").frame(width: 30, height: 30)
                     .foregroundStyle(settings.calendar.showArrangePane ? WFColors.accent : WFColors.secondaryText)
             }.buttonStyle(.plain).help("安排任务")
-            Menu {
+            BusinessMenu {
                 Toggle("显示已完成任务", isOn: preference(\.showCompleted))
                 Toggle("显示未来重复周期", isOn: preference(\.showFutureOccurrences))
                 Toggle("显示子任务", isOn: preference(\.showSubtasks))
                 Divider()
                 Button("显示设置…") { showDisplayOptions = true }
             } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("日历设置")
+            .fixedSize().help("日历设置")
         }
         .padding(.horizontal, WFSpace.pageHorizontal)
         .frame(height: WFCalendarMetrics.toolbarHeight)
@@ -685,7 +682,7 @@ struct MonthWeekRow: View, Equatable {
         GeometryReader { geometry in
             let columnWidth = geometry.size.width / 7
             ZStack(alignment: .topLeading) {
-                backgroundLayer(columnWidth: columnWidth, height: geometry.size.height)
+                // 邻月不再铺灰底：对齐滴答（白底 + 只有日号退成浅灰）。
                 HStack(spacing: 0) {
                     ForEach(Array(days.enumerated()), id: \.offset) { column, day in
                         dayCell(day, column: column, height: geometry.size.height)
@@ -709,23 +706,6 @@ struct MonthWeekRow: View, Equatable {
         // macOS 的"禁止"占位图（2026-10-07 截图实锤）。图层合并与不透明化
         // （backgroundLayer / hairlines 单 Path / gridHairline 预混合色）已
         // 把每行图层从 ~15 降到 ~6，滚动合成成本大幅下降，足够。
-    }
-
-    /// 邻月灰底：一笔 Path 画齐（原在每格 ZStack 里各画一层）。
-    private func backgroundLayer(columnWidth: CGFloat, height: CGFloat) -> some View {
-        Path { path in
-            for (column, day) in days.enumerated() {
-                let inMonth = calendar.component(.month, from: day) == calendar.component(.month, from: month)
-                    && calendar.component(.year, from: day) == calendar.component(.year, from: month)
-                if !inMonth {
-                    path.addRect(CGRect(x: CGFloat(column) * columnWidth, y: 0,
-                                        width: columnWidth, height: height))
-                }
-            }
-        }
-        .fill(WFColors.calendarCanvas)
-        .frame(width: columnWidth * 7, height: height)
-        .allowsHitTesting(false)
     }
 
     private func visibleSpans(height: CGFloat) -> [CalendarSpan] {
@@ -952,7 +932,8 @@ struct CalendarDayCellView: View {
 
     private var dayNumberColor: Color {
         if isToday { return WFColors.content }
-        if !inMonth { return WFColors.tertiaryText }
+        // 非本月：用与日期面板月历同一个浅灰，别用 tertiaryText（偏暗）。
+        if !inMonth { return WFColors.outOfMonthText }
         return selected ? WFColors.accent : WFColors.text
     }
 

@@ -24,7 +24,9 @@ struct RootShellView: View {
             return AnyView(FocusWorkspaceView(store: environment.focusStore, workspace: workspace,
                 onSelectRecordTask: { id in environment.openTask(id) }))
         case .trash: return AnyView(TaskTrashView(workspace: workspace))
-        case .summary: return AnyView(SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace))
+        case .summary: return AnyView(SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace,
+                                                          context: environment.weeklyPlanning))
+        case .weekPlan: return AnyView(WeeklyPlanningWorkspaceView(workspace: workspace, context: environment.weeklyPlanning))
         case .countdown: return AnyView(CountdownWorkspaceView(store: environment.countdownStore))
         case .meetings: return AnyView(MeetingWorkspaceView(store: environment.meetingStore))
         case .notes, .notesTrash:
@@ -59,8 +61,12 @@ struct RootShellView: View {
             HStack(spacing: 0) {
                 IconRailView(workspace: workspace, navigation: navigation,
                              onNavigate: environment.navigate,
-                             onOpenQuickOpen: { environment.commandPalettePresented = true })
+                             onOpenQuickOpen: { environment.commandPalettePresented = true },
+                             sync: environment.systemReminders,
+                             onRetrySync: environment.retryRemindersSync,
+                             onOpenSyncSettings: { environment.settingsSection = .appleSync })
                     .overlay(alignment: .trailing) { ShellColumnSeparator() }
+                // 这些模块自己带页面内导航（或只有一个入口），不再给二级导航列。
                 if navigationVisible, environment.sidebarVisible,
                    navigation.destination != .calendar, navigation.destination != .matrix,
                    navigation.destination != .countdown, navigation.destination != .meetings,
@@ -173,21 +179,18 @@ private struct TaskWorkspaceView: View {
                 activeList: workspace.activeList, activeTag: workspace.activeTag,
                 activeFilterID: workspace.activeFilter?.id)
             let wideView = environment.viewPreferences.viewMode(for: preferenceKey, availableModes: modes) != .list
-            // 宽视图下详情面板**按需出现**：没选中任务时（本来只显示空态插画）
-            // 整块让给时间线/看板。
-            let showsInspector = !wideView || workspace.selectedTaskID != nil || !workspace.bulkSelection.isEmpty
-            let reserved = showsInspector ? WFMetrics.inspectorMinimum + WFMetrics.divider : 0
-            let maximum = max(WFMetrics.listMinimum,
-                              min(wideView ? geometry.size.width : WFMetrics.listMaximum,
-                                  geometry.size.width - reserved))
-            let boundedWidth = min(max(workspace.taskListPaneWidth, WFMetrics.listMinimum), maximum)
+            let layout = TaskWorkspaceLayout(availableWidth: geometry.size.width,
+                preferredListWidth: workspace.taskListPaneWidth, wideView: wideView,
+                hasSelection: workspace.selectedTaskID != nil, hasBulkSelection: !workspace.bulkSelection.isEmpty)
+            let maximum = layout.maximumListWidth
+            let boundedWidth = layout.listWidth
             if wide {
                 HStack(spacing: 0) {
                     TaskListView(workspace: workspace, navigation: navigation,
                                  navigationVisible: navigationVisible)
-                        // 宽视图吃满剩余宽度；列表模式沿用用户拖拽的宽度。
-                        .frame(width: wideView ? maximum : boundedWidth)
-                    if showsInspector {
+                        // 保持同一个列表宿主，只改宽度，保留输入草稿与滚动位置。
+                        .frame(width: boundedWidth)
+                    if layout.showsInspector {
                         Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
                             .overlay {
                                 Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
@@ -205,7 +208,7 @@ private struct TaskWorkspaceView: View {
                             }
                         // 右栏是选中状态的纯投影：批量选中非空 → 批量面板；否则详情。
                         if workspace.bulkSelection.isEmpty {
-                            TaskInspectorShell(workspace: workspace, showBack: false,
+                            TaskInspectorShell(workspace: workspace, showBack: false, allowsClosing: true,
                                                commentStore: environment.taskCommentStore)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {

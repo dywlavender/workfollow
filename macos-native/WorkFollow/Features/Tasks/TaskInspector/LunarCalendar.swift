@@ -40,7 +40,7 @@ enum LunarCalendarService {
     /// **只**返回公历/农历节日表里没有的那几个——如「清明节」（它是节气，不在农历
     /// 节日表里，只有法定表有）。
     ///
-    /// 给叠在 `LunarMonthGridView` 上的 `CalendarAnnotationOverlay` 用：那个网格
+    /// 给叠在 `AppKitMonthGridView` 上的 `CalendarAnnotationOverlay` 用：那个网格
     /// 自己已经画了公历/农历节日，浮层只补它画不出的，两层合起来才是完整答案。
     ///
     /// ⚠️ 这里**不要**图省事换成 `festivalLabelIncludingStatutory`：两层各画一遍，

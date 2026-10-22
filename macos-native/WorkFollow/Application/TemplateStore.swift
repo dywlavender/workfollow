@@ -61,6 +61,25 @@ final class TemplateStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
+    /// 摘要模板：只存正文骨架（`kind = "summary"`），不会出现在任务的模板选择器里。
+    @discardableResult
+    func saveDocumentTemplate(name: String, document: NativeDocument,
+                              forceReplace: Bool = false) -> Bool {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        let template = TaskTemplate(name: cleaned, title: cleaned, document: document,
+                                    createdAt: clock(), kind: "summary")
+        if let index = templates.firstIndex(where: { Self.isSameName($0.name, cleaned) }) {
+            guard forceReplace else { return false }
+            templates[index] = template
+        } else {
+            templates.append(template)
+        }
+        templates = Self.sorted(templates)
+        persist()
+        return true
+    }
+
     /// Returns a user blueprint, or nil when missing. Actual task creation is
     /// owned by TaskWorkspaceModel.createFromTemplate / TaskActions.
     func apply(name: String) -> TaskTemplate? {

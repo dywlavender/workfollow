@@ -95,7 +95,9 @@ struct TaskTimelineHeaderSegment: Identifiable, Equatable {
 
 enum TaskTimelineLayout {
     static let rowHeight: CGFloat = 38
-    static let headerHeight: CGFloat = 48
+    static let headerRowHeight: CGFloat = 24
+    static let headerVerticalPadding: CGFloat = 6
+    static let headerHeight = headerRowHeight * 2 + headerVerticalPadding * 2
     static let minimumBarWidth: CGFloat = 24
 
     /// Inputs have already passed scope/filter/completion rules. Keep their order.

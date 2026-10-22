@@ -51,7 +51,7 @@ struct TaskContextMenuPopover: View {
     static let menuWidth: CGFloat = 220
 
     /// 悬浮多久后展开子菜单，对齐 Flutter WorkFollowMotion.submenuIntent（220ms）。
-    private static let submenuIntent: TimeInterval = 0.22
+    private static let submenuIntent = PopupMetrics.submenuIntent
 
     /// 菜单行的悬浮语义（对齐系统菜单，而不是"开一次就卡住"）：
     ///
@@ -320,7 +320,7 @@ struct TaskContextMenuPopover: View {
                 // 「父 220 → 子 264」变宽的一跳，与「移动到分组/清单」的 196 不同步。
                 .background(AnchoredPropertyPanel(
                     isPresented: submenuBinding(for: .tags),
-                    width: 264, placement: .submenu
+                    width: PopupMetrics.tagPickerWidth, placement: .submenu
                 ) {
                     TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
                         onCancel: { activeSubmenu = nil },

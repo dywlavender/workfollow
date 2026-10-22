@@ -15,7 +15,12 @@ extension EnvironmentValues {
 }
 #endif
 
-enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu, schedule }
+enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu, schedule, dropdown, cursor }
+
+private struct PropertyPanelContentSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+}
 enum AnchoredPropertyPanelFocusPolicy {
     case preservePresenter
     case panel
@@ -49,6 +54,13 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             }
         }
     }
+    final class ContentHost: NSHostingView<AnyView> {
+        var sizeInvalidated: (() -> Void)?
+        override func invalidateIntrinsicContentSize() {
+            super.invalidateIntrinsicContentSize()
+            sizeInvalidated?()
+        }
+    }
     final class Coordinator {
         weak var anchor: AnchorView?
         var panel: NSPanel?
@@ -69,6 +81,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var escapeDepth = 3
         var presentingWindow: PopupPresentingWindow?
         var title: String?
+        private var lastContentSize: CGSize = .zero
+        private var contentResizeQueued = false
 
         func update() {
             guard presented, let anchor, let owner = anchor.window, owner.isVisible else {
@@ -77,11 +91,24 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             let card = root
                 .frame(width: width)
                 .fixedSize(horizontal: false, vertical: true)
-                .background(WFColors.content, in: RoundedRectangle(cornerRadius: 12))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: PropertyPanelContentSizeKey.self, value: geometry.size)
+                })
+                .onPreferenceChange(PropertyPanelContentSizeKey.self) { [weak self] size in
+                    self?.contentSizeChanged(size)
+                }
+                .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+                .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
                 .background(PopupEscapeRouter(depth: escapeDepth) { [weak self] in self?.dismiss() })
                 .environment(\.popupPresentingWindow, presentingWindow)
-            if host == nil { host = NSHostingView(rootView: AnyView(card)) }
+            if host == nil {
+                let contentHost = ContentHost(rootView: AnyView(card))
+                contentHost.sizeInvalidated = { [weak self] in self?.queueContentResize() }
+                host = contentHost
+                // The coordinator owns window geometry. Do not let SwiftUI's
+                // min/max constraints resize NSPanel again after setFrame.
+                host?.sizingOptions = [.intrinsicContentSize]
+            }
             else { host?.rootView = AnyView(card) }
             guard let host else { return }
             let isOpening = panel == nil
@@ -155,8 +182,36 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                     return false
                 }, dismiss: { [weak self] in self?.dismiss() }) }
             }
+            positionPanel(isOpening: isOpening)
+        }
+
+        private func contentSizeChanged(_ size: CGSize) {
+            guard presented, size.height > 0, abs(size.height - lastContentSize.height) > 0.5 else { return }
+            lastContentSize = size
+            queueContentResize()
+        }
+
+        private func queueContentResize() {
+            guard presented else { return }
+            guard !contentResizeQueued else { return }
+            contentResizeQueued = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.contentResizeQueued = false
+                guard self.presented else { return }
+                self.positionPanel(isOpening: false)
+            }
+        }
+
+        private func positionPanel(isOpening: Bool) {
+            guard let anchor, let owner = anchor.window, let host, panel != nil else { return }
             let screen = owner.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? owner.frame
-            let size = CGSize(width: width, height: min(host.fittingSize.height, screen.height - 16))
+            // Preferences describe the rendered content. AppKit's fittingSize
+            // can still contain the previous intrinsic height during this turn.
+            let intrinsicHeight = host.intrinsicContentSize.height
+            let contentHeight = intrinsicHeight > 0 ? intrinsicHeight
+                : lastContentSize.height > 0 ? lastContentSize.height : host.fittingSize.height
+            let size = CGSize(width: width, height: min(contentHeight, screen.height - 2 * PopupMetrics.screenInset))
             let row = owner.convertToScreen(anchor.convert(anchor.bounds, to: nil))
                 .insetBy(dx: -horizontalOutset, dy: 0)
             var rootOwner = owner
@@ -167,6 +222,10 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 frame = AnchoredPropertyPanelGeometry.submenuFrame(row: row, size: size, bounds: rootOwner.frame.intersection(screen))
             case .schedule:
                 frame = AnchoredPropertyPanelGeometry.scheduleFrame(anchor: row, size: size, bounds: screen)
+            case .dropdown:
+                frame = AnchoredPropertyPanelGeometry.dropdownFrame(anchor: row, size: size, bounds: screen)
+            case .cursor:
+                frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, gap: 0)
             case .vertical:
                 frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, prefersAbove: prefersAbove)
             case .verticalInOwner:
@@ -203,6 +262,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         }
 
         func close() {
+            lastContentSize = .zero
+            contentResizeQueued = false
             geometryObservers.forEach(NotificationCenter.default.removeObserver)
             geometryObservers.removeAll()
             if let ownerCloseObserver { NotificationCenter.default.removeObserver(ownerCloseObserver) }
@@ -270,8 +331,20 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
 }
 
 enum AnchoredPropertyPanelGeometry {
-    static func scheduleFrame(anchor: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = 6) -> CGRect {
-        let safe = bounds.insetBy(dx: 8, dy: 8)
+    /// Menu-like placement: align right edges and open below the value button.
+    static func dropdownFrame(anchor: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = PopupMetrics.controlGap) -> CGRect {
+        let safe = bounds.insetBy(dx: PopupMetrics.screenInset, dy: PopupMetrics.screenInset)
+        let width = min(size.width, safe.width), height = min(size.height, safe.height)
+        let below = anchor.minY - gap - height
+        let above = anchor.maxY + gap
+        let proposedY = below >= safe.minY ? below
+            : above + height <= safe.maxY ? above
+            : max(safe.minY, min(below, safe.maxY - height))
+        return CGRect(x: min(max(anchor.maxX - width, safe.minX), safe.maxX - width),
+                      y: proposedY, width: width, height: height)
+    }
+    static func scheduleFrame(anchor: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = PopupMetrics.scheduleGap) -> CGRect {
+        let safe = bounds.insetBy(dx: PopupMetrics.screenInset, dy: PopupMetrics.screenInset)
         let width = min(size.width, safe.width)
         let height = min(size.height, safe.height)
         let below = anchor.minY - gap - height
@@ -288,8 +361,8 @@ enum AnchoredPropertyPanelGeometry {
                       y: min(max(proposedY, safe.minY), safe.maxY - height),
                       width: width, height: height)
     }
-    static func submenuFrame(row: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = 6) -> CGRect {
-        let safe = bounds.insetBy(dx: 8, dy: 8)
+    static func submenuFrame(row: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = PopupMetrics.submenuGap) -> CGRect {
+        let safe = bounds.insetBy(dx: PopupMetrics.screenInset, dy: PopupMetrics.screenInset)
         let width = min(size.width, safe.width)
         let height = min(size.height, safe.height)
         let right = row.maxX + gap
@@ -298,12 +371,15 @@ enum AnchoredPropertyPanelGeometry {
                       y: min(max(row.maxY - height, safe.minY), safe.maxY - height),
                       width: width, height: height)
     }
-    static func frame(row: CGRect, size: CGSize, screen: CGRect, prefersAbove: Bool = false) -> CGRect {
-        let x = min(max(row.minX, screen.minX + 8), screen.maxX - size.width - 8)
-        let below = row.minY - size.height
-        let above = row.maxY
-        let y = prefersAbove && above + size.height <= screen.maxY - 8 ? above
-            : below >= screen.minY + 8 ? below : min(above, screen.maxY - size.height - 8)
-        return CGRect(x: x, y: max(y, screen.minY + 8), width: size.width, height: size.height)
+    static func frame(row: CGRect, size: CGSize, screen: CGRect, prefersAbove: Bool = false,
+                      gap: CGFloat = PopupMetrics.controlGap) -> CGRect {
+        let safe = screen.insetBy(dx: PopupMetrics.screenInset, dy: PopupMetrics.screenInset)
+        let width = min(size.width, safe.width), height = min(size.height, safe.height)
+        let below = row.minY - gap - height
+        let above = row.maxY + gap
+        let y = prefersAbove && above + height <= safe.maxY ? above
+            : below >= safe.minY ? below : min(above, safe.maxY - height)
+        return CGRect(x: min(max(row.minX, safe.minX), safe.maxX - width),
+                      y: max(y, safe.minY), width: width, height: height)
     }
 }

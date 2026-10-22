@@ -44,13 +44,11 @@ struct TaskTagEditorView: View {
             }
             HStack {
                 fieldLabel("父标签")
-                Picker("父标签", selection: $parentID) {
-                    Text("无").tag(Optional<UUID>.none)
-                    ForEach(parents) { tag in
-                        Text(String(repeating: "  ", count: workspace.tagDepth(tag.name)) + tag.name)
-                            .tag(Optional(tag.id))
-                    }
-                }
+                BusinessPicker("父标签", selection: $parentID, options:
+                    [BusinessChoice(nil, "无")] + parents.map { tag in
+                        BusinessChoice(Optional(tag.id), String(repeating: "  ", count: workspace.tagDepth(tag.name)) + tag.name,
+                                       symbol: "tag", color: workspace.tagColor(tag.name))
+                    })
                 .labelsHidden().accessibilityIdentifier("tag.editor.parent")
             }
             if invalid {

@@ -21,14 +21,10 @@ struct AdvancedFilterRuleEditor: View {
             }
             VStack(alignment: .leading, spacing: WFSpace.sm) {
                 HStack {
-                    Picker("条件属性", selection: Binding(get: { rule.kind }, set: { kind in
+                    BusinessPicker("条件属性", selection: Binding(get: { rule.kind }, set: { kind in
                         guard kind != rule.kind else { return }
                         rule = FilterEditorRule(id: rule.id, connector: rule.connector, kind: kind)
-                    })) {
-                        ForEach([FilterEditorRuleKind.lists, .tags, .priorities, .date, .keywords], id: \.self) { kind in
-                            Text(kind.title).tag(kind)
-                        }
-                    }
+                    }), options: [FilterEditorRuleKind.lists, .tags, .priorities, .date, .keywords].map { BusinessChoice($0, $0.title) })
                     .labelsHidden().frame(width: 116)
                     Spacer(minLength: 0)
                     Button(action: onRemove) {
@@ -90,9 +86,8 @@ struct AdvancedFilterRuleEditor: View {
                 }
             }
         case .date:
-            Picker("日期范围", selection: $rule.dateRange) {
-                ForEach(SavedFilterDateRange.allCases, id: \.self) { range in Text(range.title).tag(range) }
-            }.labelsHidden()
+            BusinessPicker("日期范围", selection: $rule.dateRange, options:
+                SavedFilterDateRange.allCases.map { BusinessChoice($0, $0.title) }).labelsHidden()
         case .keywords:
             TextField("在标题与正文中匹配，空格或逗号分隔", text: $rule.keywordText)
                 .textFieldStyle(.roundedBorder)

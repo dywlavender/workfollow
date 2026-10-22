@@ -60,12 +60,17 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
     var schedule: TaskTemplateScheduleOffset?
     var childTitles: [String]
     var createdAt: Date
+    /// 模板种类标记。`nil` / `"task"` = 任务模板（旧数据都落在这里）；
+    /// `"summary"` = 摘要模板，只出现在摘要页的模板菜单里。
+    var kind: String? = nil
+
+    var isSummaryTemplate: Bool { kind == "summary" }
 
     init(id: UUID = UUID(), name: String, title: String,
          document: NativeDocument = .empty, tags: [String] = [],
          listName: String? = nil, priority: TaskPriority? = nil,
          schedule: TaskTemplateScheduleOffset? = nil,
-         childTitles: [String] = [], createdAt: Date) {
+         childTitles: [String] = [], createdAt: Date, kind: String? = nil) {
         self.id = id
         self.name = name
         self.title = title
@@ -76,6 +81,7 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
         self.schedule = schedule
         self.childTitles = childTitles
         self.createdAt = createdAt
+        self.kind = kind
     }
 }
 
@@ -83,7 +89,7 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
 // changes, so every aspect except the name decodes to its neutral default.
 extension TaskTemplate {
     private enum CodingKeys: String, CodingKey {
-        case id, name, title, document, tags, listName, priority, schedule, childTitles, createdAt
+        case id, name, title, document, tags, listName, priority, schedule, childTitles, createdAt, kind
     }
 
     init(from decoder: Decoder) throws {
@@ -98,6 +104,7 @@ extension TaskTemplate {
         schedule = try values.decodeIfPresent(TaskTemplateScheduleOffset.self, forKey: .schedule)
         childTitles = try values.decodeIfPresent([String].self, forKey: .childTitles) ?? []
         createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
+        kind = try values.decodeIfPresent(String.self, forKey: .kind)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -112,5 +119,6 @@ extension TaskTemplate {
         try values.encodeIfPresent(schedule, forKey: .schedule)
         try values.encode(childTitles, forKey: .childTitles)
         try values.encode(createdAt, forKey: .createdAt)
+        try values.encodeIfPresent(kind, forKey: .kind)
     }
 }

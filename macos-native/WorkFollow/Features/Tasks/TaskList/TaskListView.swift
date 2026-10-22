@@ -30,6 +30,7 @@ private struct TaskOutlineHeaderState: Equatable {
     let count: Int
     let collapsed: Bool
     let hovered: Bool
+    let menuOpen: Bool
     let moveTarget: String?
 }
 
@@ -60,6 +61,7 @@ struct TaskListView: View {
     /// 光标落在哪个分组标题上（滴答的 `+` / `⋯` 是 hover 才出现的，未悬停时标题行
     /// 只有箭头 + 标题 + 计数——这是对着本机滴答实测出来的）。
     @State private var hoveredSectionID: String?
+    @State private var activeSectionMenuID: String?
     /// 正在为哪个分组挑目标清单（非 nil 时弹出自绘卡片 MoveTargetPickerCard）。
     @State private var moveTargetSectionID: String?
     @State private var pendingTemplatePicker = false
@@ -307,32 +309,20 @@ struct TaskListView: View {
             ?? workspace.activeTag.map { "#" + $0 } ?? navigation.destination.title
     }
 
-    /// 分组 + 排序合一菜单（对齐滴答证实的三段式）。用 Picker(.inline) 桥接成
-    /// 原生单选菜单项——选中勾标由 NSMenu 渲染。不能用 Label(systemImage:)
-    /// 手画勾标：实测在该菜单样式下 image 会被桥接丢掉，勾选态就不可见了。
+    /// 分组、排序与方向共用业务菜单行，选中状态由显式选项渲染。
     private var viewMenu: some View {
-        Menu {
+        BusinessMenu(title: "分组与排序") {
             if !availableGroupings.isEmpty {
-                Picker("分组", selection: groupingBinding) {
-                    ForEach(availableGroupings) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .pickerStyle(.inline)
+                BusinessMenuSection(title: "分组")
+                BusinessMenuChoices(selection: groupingBinding, options: availableGroupings.map { BusinessChoice($0, $0.title) })
                 Divider()
             }
-            Picker("排序", selection: sortModeBinding) {
-                ForEach(TaskListSortMode.allCases, id: \.self) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.inline)
+            BusinessMenuSection(title: "排序")
+            BusinessMenuChoices(selection: sortModeBinding, options: TaskListSortMode.allCases.map { BusinessChoice($0, $0.title) })
             if sortMode != .manual {
-                Picker("方向", selection: sortDescendingBinding) {
-                    Text("升序").tag(false)
-                    Text("降序").tag(true)
-                }
-                .pickerStyle(.inline)
+                BusinessMenuSection(title: "方向")
+                BusinessMenuChoices(selection: sortDescendingBinding, options:
+                    [BusinessChoice(false, "升序"), BusinessChoice(true, "降序")])
                 Button("恢复默认排序", systemImage: "arrow.counterclockwise") { resetSort() }
             }
         } label: {
@@ -340,10 +330,9 @@ struct TaskListView: View {
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
         .help("分组与排序")
+        .id(preferenceKey)
     }
 
 
@@ -414,7 +403,7 @@ struct TaskListView: View {
 
     /// 模板、撤销等低频操作收进"更多"，保持顶栏只剩排序/更多两个小图标。
     private var moreMenu: some View {
-        Menu {
+        BusinessMenu(title: "列表操作") {
             // 菜单按滴答（本机截图）精简：滴答这张菜单里只有
             // 视图 / 隐藏已完成 / 隐藏详细 / 显示设置 / 添加分组 / 共享 / 清单动态 / 打印。
             // 我们多塞了 5 项（从模板添加、撤销、分组排序 7 行、管理分组、展开/收起已完成），
@@ -427,15 +416,11 @@ struct TaskListView: View {
             // 降噪时删掉它等于全应用无法撤销——已放回。
             Button("撤销", systemImage: "arrow.uturn.backward") { workspace.undo() }
                 .disabled(!workspace.canUndo)
-            Picker("视图", selection: viewModeBinding) {
-                ForEach(availableViewModes) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .pickerStyle(.inline)
+            BusinessMenuSection(title: "视图")
+            BusinessMenuChoices(selection: viewModeBinding, options: availableViewModes.map { BusinessChoice($0, $0.title) })
             Toggle("隐藏已完成", systemImage: "checkmark.circle", isOn: hidesCompletedBinding)
             Toggle("隐藏详细", systemImage: "text.alignleft", isOn: hidesDetailsBinding)
-            Menu("显示设置", systemImage: "slider.horizontal.3") {
+            BusinessMenu("显示设置", systemImage: "slider.horizontal.3") {
                 ForEach(TaskRowDetailField.allCases) { field in
                     Toggle(field.title, isOn: detailFieldBinding(field))
                 }
@@ -457,10 +442,9 @@ struct TaskListView: View {
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                 .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
         .fixedSize()
         .help("列表操作")
+        .id(preferenceKey)
     }
 
     // MARK: - 快速添加：浅灰圆角条，聚焦后展开解析预览
@@ -549,7 +533,7 @@ struct TaskListView: View {
                     }
                     .buttonStyle(.plain)
                     .help("更多任务属性")
-                    .background(AnchoredPropertyPanel(isPresented: $showQuickAddProperties, width: 270) {
+                    .background(AnchoredPropertyPanel(isPresented: $showQuickAddProperties, width: PopupMetrics.quickAddPropertiesWidth) {
                         QuickAddPropertiesPopover(
                             workspace: workspace,
                             selectedPriority: quickAddPriorityOverride ?? quickAddResult.priority,
@@ -913,7 +897,7 @@ struct TaskListView: View {
             // 分组标题本身就是交互点（滴答词表里同时有 `分组标题` 与 `删除分组`）：
             // 就地重命名/删除，不用绕到顶栏菜单。其它分组（按日期/优先级…）没有归属可改，
             // 不给菜单，避免"看着能改其实不能"。
-            headerContent(group).contextMenu { sectionMenu(group) }
+            headerContent(group).businessContextMenu { sectionMenu(group) }
         } else {
             headerContent(group)
         }
@@ -1001,16 +985,18 @@ struct TaskListView: View {
             }
             // 分组标题上的可见 ⋯（滴答是 hover 显示）：右键之外再给一个看得见的入口，
             // 否则"就地能改分组"只有知道要右键的人才用得上。
-            if let sectionID = group.sectionID, hoveredSectionID == sectionID {
-                Menu { sectionMenu(group) } label: {
+            if let sectionID = group.sectionID, hoveredSectionID == sectionID || activeSectionMenuID == sectionID {
+                BusinessMenu(isPresented: Binding(get: { activeSectionMenuID == sectionID },
+                    set: { visible in
+                        if visible { activeSectionMenuID = sectionID }
+                        else if activeSectionMenuID == sectionID { activeSectionMenuID = nil }
+                    })) { sectionMenu(group) } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
                         .frame(width: 18, height: 18)
                         .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
                 .fixedSize()
                 .help("分组操作")
             }
@@ -1130,7 +1116,9 @@ struct TaskListView: View {
             if group.kind != .plain || group.label != nil {
                 let header = TaskOutlineHeaderState(revision: workspace.revision, title: groupTitle(group),
                     count: group.tasks.count, collapsed: groupExpansion.isCollapsed(group),
-                    hovered: hoveredSectionID == group.sectionID, moveTarget: moveTargetSectionID)
+                    hovered: hoveredSectionID == group.sectionID,
+                    menuOpen: activeSectionMenuID != nil && activeSectionMenuID == group.sectionID,
+                    moveTarget: moveTargetSectionID)
                 rows.append(.init(id: "header:" + group.id, state: header, layout: "header") {
                     VStack(spacing: 0) {
                         Color.clear.frame(height: TaskListMetrics.groupTopGap)
@@ -1357,8 +1345,7 @@ struct TaskRowView: View {
     let onComplete: () -> Void
     let onRestore: () -> Void
     let onToggleExpanded: () -> Void
-    @State private var hovering = false
-    @State private var hoveringReorderHandle = false
+    @State private var pointer = TaskRowPointerState()
     @State private var showDatePopover = false
     @State private var contextDateAnchor: CGRect?
 
@@ -1426,30 +1413,16 @@ struct TaskRowView: View {
         // 选中底色用中性灰（`listSelection`，滴答实测 #F2F2F2），不用强调色。
         // 原来这里还叠一圈蓝色焦点环（`accent` 35%）：底色变灰之后它是最显眼的
         // 一块蓝，用户选择直接去掉——滴答的选中行也没有任何描边。
-        .background(selected ? WFColors.listSelection : hovering ? WFColors.hover : .clear,
-                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        .background(TaskRowHoverBackground(selected: selected, pointer: pointer))
         // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
         // 空隙、元数据区点下去也能选中打开编辑栏；行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())
         .gesture(selectionGesture)
         .modifier(TaskRowActivationPolicy())
         .taskTreeRenderAnchor(task.id, .row)
-        .onHover { hovering = $0 }
         .overlay(alignment: .topLeading) {
             if allowsReordering {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 10, weight: .regular))
-                    .foregroundStyle(WFColors.secondaryText)
-                    .frame(width: 16, height: 18)
-                    .contentShape(Rectangle())
-                    .opacity(hovering || hoveringReorderHandle ? 1 : 0)
-                    .onHover { hoveringReorderHandle = $0 }
-                    .help("拖动调整任务顺序")
-                    .accessibilityLabel("拖动调整任务顺序")
-                    .draggable(task.id.uuidString) {
-                        TaskDragPreview(title: task.title)
-                    }
-                    .modifier(TaskReorderDragPolicy())
+                TaskRowReorderHandle(taskID: task.id, title: task.title, pointer: pointer)
                     .offset(x: -14 + CGFloat(depth) * TaskListMetrics.hierarchyIndent,
                             y: WFMetrics.rowVerticalPadding)
             }

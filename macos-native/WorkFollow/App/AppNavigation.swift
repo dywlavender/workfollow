@@ -3,13 +3,14 @@ import Foundation
 
 enum NativeDestination: String, CaseIterable, Identifiable {
     case today, tomorrow, inbox, allTasks, nextSevenDays, completed, abandoned, trash, notes, notesTrash, calendar, matrix
-    case focus, summary, countdown, meetings
+    case focus, summary, countdown, meetings, weekPlan
     static let taskDestinations: [NativeDestination] = [
-        .nextSevenDays, .today, .tomorrow, .inbox, .allTasks, .completed, .abandoned, .trash
+        .weekPlan, .nextSevenDays, .today, .tomorrow, .inbox, .summary, .allTasks, .completed, .abandoned, .trash
     ]
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .weekPlan: return "本周计划"
         case .today: return "今天"
         case .tomorrow: return "明天"
         case .inbox: return "收集箱"
@@ -29,6 +30,7 @@ enum NativeDestination: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .weekPlan: return "calendar.badge.checkmark"
         case .today: return "sun.max"
         case .tomorrow: return "sunrise"
         case .inbox: return "tray"

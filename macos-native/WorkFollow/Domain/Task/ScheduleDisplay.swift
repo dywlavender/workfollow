@@ -93,6 +93,24 @@ enum ScheduleDisplay {
         }
     }
 
+    static func reminderOptionText(minutes: Int, anchor: Date?, hasTime: Bool,
+                                   now: Date, calendar: Calendar) -> String {
+        let title = minutes == 0 && hasTime ? "准时" : reminderOffsetText(minutes: minutes, style: .panel)
+        guard let anchor else { return title }
+        let fireDate = anchor.addingTimeInterval(TimeInterval(minutes) * 60)
+        let time = calendar.isDate(fireDate, inSameDayAs: anchor)
+            ? clockText(fireDate, calendar: calendar)
+            : dateText(fireDate, hasTime: true, now: now, calendar: calendar, style: .compact)
+        return title + " · " + time
+    }
+
+    static func reminderSummary(fireDates: [Date], now: Date, calendar: Calendar) -> String {
+        guard !fireDates.isEmpty else { return "未设提醒" }
+        return fireDates.sorted().map {
+            dateText($0, hasTime: true, now: now, calendar: calendar, style: .compact)
+        }.joined(separator: "、")
+    }
+
     private static func presetOffsetText(_ minutes: Int) -> String {
         guard minutes != 0 else { return "准时" }
         let value = abs(minutes)

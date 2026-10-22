@@ -35,12 +35,13 @@ struct TaskTemplateGalleryView: View {
     }
 
     private var templates: [TaskTemplateCatalogItem] {
-        TaskTemplateCatalog.items(userTemplates: templateStore.templates, query: searchText)
+        TaskTemplateCatalog.items(userTemplates: templateStore.templates.filter { !$0.isSummaryTemplate },
+                                   query: searchText)
     }
 
     var body: some View {
         ZStack {
-            if showingManagement && !templateStore.templates.isEmpty {
+            if showingManagement && templateStore.templates.contains(where: { !$0.isSummaryTemplate }) {
                 TemplateManagementView(templateStore: templateStore) {
                     showingManagement = false
                 }

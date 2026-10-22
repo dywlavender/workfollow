@@ -1,9 +1,90 @@
+import AppKit
 import XCTest
 @testable import WorkFollow
 
-/// 全局快速添加的"解析 → 建任务"管线测试：只测 GlobalQuickAddComposer，
-/// 不触碰真实热键注册与面板。
+/// 覆盖解析、草稿在窗口关闭后的保留，以及实际输入框的回车提交。
 final class GlobalQuickAddTests: XCTestCase {
+    @MainActor
+    func testCaptureWindowReopensWithItsDraftAndReturnCommitsTheRetainedProperties() throws {
+        _ = NSApplication.shared
+        let suite = "WorkFollow.CaptureWindowTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: GlobalQuickAddController.enabledDefaultsKey)
+        let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: calendar, seedDemoData: false)
+        let controller = GlobalQuickAddController(workspace: workspace, defaults: defaults)
+        defer { controller.setEnabled(false) }
+        func field(in view: NSView) -> QuickAddFocusReportingField? {
+            if let input = view as? QuickAddFocusReportingField { return input }
+            return view.subviews.lazy.compactMap { field(in: $0) }.first
+        }
+        func open() throws -> NSPanel {
+            controller.showPanel()
+            let panel = try XCTUnwrap(NSApp.windows.first { $0 is NSPanel && $0.isVisible } as? NSPanel)
+            InspectorPanelTestSupport.settle(panel)
+            return panel
+        }
+        let first = try open()
+        let input = try XCTUnwrap(field(in: try XCTUnwrap(first.contentView)))
+        input.stringValue = "复盘会议"
+        input.delegate?.controlTextDidChange?(Notification(name: NSControl.textDidChangeNotification, object: input))
+        controller.draft.description = "整理结论"
+        controller.draft.priority = .high
+        controller.draft.tags = ["工作"]
+        let timing = QuickAddScheduleDraft(parsed: controller.composer.parse("明天9点复盘"), defaultDueAt: nil)
+        controller.draft.schedule = timing
+        controller.hidePanel()
+        let reopened = try open()
+        let restored = try XCTUnwrap(field(in: try XCTUnwrap(reopened.contentView)))
+        XCTAssertEqual(restored.stringValue, "复盘会议")
+        reopened.makeFirstResponder(restored)
+        try InspectorPanelTestSupport.sendReturn(to: reopened)
+        let created = try XCTUnwrap(workspace.allTasks.first)
+        XCTAssertEqual(created.title, "复盘会议")
+        XCTAssertEqual(created.document.plainText, "整理结论")
+        XCTAssertEqual(created.priority, .high)
+        XCTAssertEqual(created.tags, ["工作"])
+        XCTAssertEqual(created.schedule.dueAt, timing.dueAt)
+        XCTAssertFalse(controller.draft.hasContent)
+        let next = try open()
+        XCTAssertEqual(field(in: try XCTUnwrap(next.contentView))?.stringValue, "")
+    }
+    @MainActor
+    func testClosingCaptureKeepsDraftAndSuccessfulSubmissionClearsIt() throws {
+        let suite = "WorkFollow.QuickAddDraftTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let controller = GlobalQuickAddController(workspace: workspace, defaults: defaults)
+        controller.draft.text = "准备评审"
+        controller.draft.description = "整理附件和结论"
+        controller.draft.priority = .high
+        controller.draft.tags = ["工作"]
+        controller.hidePanel()
+        XCTAssertEqual(controller.draft.text, "准备评审")
+        XCTAssertEqual(controller.draft.description, "整理附件和结论")
+        XCTAssertEqual(controller.draft.priority, .high)
+        XCTAssertEqual(controller.draft.tags, ["工作"])
+        controller.submit(QuickCaptureSession(text: controller.draft.text,
+            description: controller.draft.description, priorityOverride: controller.draft.priority,
+            tagsOverride: controller.draft.tags))
+        XCTAssertEqual(workspace.allTasks.first?.title, "准备评审")
+        XCTAssertEqual(workspace.allTasks.first?.priority, .high)
+        XCTAssertFalse(controller.draft.hasContent)
+    }
+
+    @MainActor
+    func testRejectedCaptureKeepsDraftUntilExplicitlyCleared() throws {
+        let suite = "WorkFollow.QuickAddDraftTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let controller = GlobalQuickAddController(workspace: TaskWorkspaceModel(seedDemoData: false), defaults: defaults)
+        controller.draft.text = "明天"
+        controller.submit(QuickCaptureSession(text: controller.draft.text))
+        XCTAssertEqual(controller.draft.text, "明天")
+        controller.draft.clear()
+        XCTAssertFalse(controller.draft.hasContent)
+    }
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private var calendar: Calendar {
         var value = Calendar(identifier: .gregorian)

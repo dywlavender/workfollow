@@ -97,9 +97,9 @@ struct FocusTimerPane: View {
 
     private var headerIcons: some View {
         HStack(spacing: FocusLayoutMetrics.headerButtonSpacing) {
-            Menu {
+            BusinessMenu {
                 ForEach(FocusBell.allCases, id: \.self) { bell in
-                    Button(bell.rawValue) { store.setBell(bell.rawValue) }
+                    BusinessMenuOption(bell.rawValue, selected: store.preferences.bell == bell) { store.setBell(bell.rawValue) }
                 }
             } label: {
                 Image(systemName: bellIcon)
@@ -108,8 +108,8 @@ struct FocusTimerPane: View {
                            height: FocusLayoutMetrics.headerButtonSize)
                     .contentShape(Rectangle())
             }
-            .menuStyle(.button)
-            .menuIndicator(.hidden)
+
+
             .foregroundStyle(theme.text2)
             .help("结束铃声：\(currentBellLabel)")
 

@@ -73,17 +73,14 @@ struct TaskTagPickerPopover: View {
                 }
                 .padding(.vertical, WFSpace.xs)
             }
-            Divider()
-            HStack(spacing: WFSpace.sm) {
-                Button("取消", action: onCancel).frame(maxWidth: .infinity)
+            PopupActionBar {
+                PopupActionButton(title: "取消", action: onCancel)
                     .tagPickerRenderAnchor(.cancel)
-                Button("确定") { onApply(session.orderedSelection) }
-                    .buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
+                PopupActionButton(title: "确定", primary: true) { onApply(session.orderedSelection) }
                     .tagPickerRenderAnchor(.confirm)
             }
-            .padding(WFSpace.md)
         }
-        .frame(width: 264, height: 320)
+        .frame(width: PopupMetrics.tagPickerWidth, height: 320)
         .coordinateSpace(name: "task-tag-picker")
         .onAppear {
             session = TaskTagPickerSession(initialTags: initialTags)

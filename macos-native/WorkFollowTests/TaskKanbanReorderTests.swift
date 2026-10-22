@@ -124,8 +124,16 @@ final class TaskKanbanReorderTests: XCTestCase {
         for target in targets {
             let workspace = workspace([parent, first, last])
             let original = workspace.allTasks
-            var expected = try XCTUnwrap(workspace.task(for: last.id))
-            expected.childOrder = 0
+            let originalLast = try XCTUnwrap(workspace.task(for: last.id))
+            // 首次对带 dueAt 的任务提交时，`TaskWeeklyPlanning.recording` 会补一条
+            // 周计划基线（`history` 从空变一条、`currentWeek` 落到本周），这不是丢数据，
+            // 而是「首次观察补历史」的既定行为。期望值按同一规则走一遍，
+            // 断言才能继续用完整相等。
+            var expected = TaskWeeklyPlanning.recording(before: originalLast,
+                                                        after: { var value = originalLast
+                                                                value.childOrder = 0
+                                                                return value }(),
+                                                        at: now, calendar: calendar)
             XCTAssertTrue(workspace.canAcceptKanbanDrop(last.id, to: target,
                                                        columnTaskIDs: [parent.id, first.id, last.id]))
             XCTAssertTrue(workspace.applyKanbanDrop(last.id, to: target, insertion: .before(first.id),
