@@ -184,7 +184,124 @@ enum DocumentTextCodec {
                     kind: separatorKind, marks: [])))
             }
         }
+        applyCodeHighlighting(to: result, document: document)
         return result
+    }
+
+    /// 富文本粘贴：把剪贴板里的 RTF/HTML 压回**基础标记**（粗/斜/下划线/删除线/
+    /// 行内代码），其余排版（字号、颜色、背景、缩进、字体族）一律丢弃。
+    ///
+    /// 返回 nil 表示"没有任何可保留的标记"——调用方应退回纯文本粘贴，避免
+    /// 把一整段普通文字也换成带属性的串（那会让撤销/提交路径多一轮无谓差异）。
+    /// 段落类型用 `baseKind`（粘贴处所在段的类型），多行也保持同一类型：
+    /// 富文本粘贴是"把内容放进来"，不该顺手把当前段落改成标题或列表。
+    static func richText(_ attributed: NSAttributedString,
+                         baseKind: DocumentBlockKind) -> NSAttributedString? {
+        guard attributed.length > 0 else { return nil }
+        let plain = attributed.string as NSString
+
+        /// 一段文字的标记（段落内相对范围）。
+        func marks(in attrs: [NSAttributedString.Key: Any]) -> Set<DocumentMark> {
+            var result: Set<DocumentMark> = []
+            if let font = attrs[.font] as? NSFont {
+                let traits = NSFontManager.shared.traits(of: font)
+                if traits.contains(.boldFontMask) { result.insert(.bold) }
+                if traits.contains(.italicFontMask) { result.insert(.italic) }
+                if font.isFixedPitch { result.insert(.code) }
+            }
+            if let value = attrs[.underlineStyle] as? Int, value != 0 { result.insert(.underline) }
+            if let value = attrs[.strikethroughStyle] as? Int, value != 0 { result.insert(.strikethrough) }
+            if let link = attrs[.link] { result.insert(.link(linkTarget(link))) }
+            return result
+        }
+
+        // 按换行切段（段落 = 一行，与文档模型一致）。
+        var paragraphRanges: [NSRange] = []
+        var cursor = 0
+        while cursor < plain.length {
+            let range = plain.paragraphRange(for: NSRange(location: cursor, length: 0))
+            paragraphRanges.append(range)
+            cursor = NSMaxRange(range)
+        }
+        guard !paragraphRanges.isEmpty else { return nil }
+
+        var hasMarks = false
+        var lines: [(text: String, segments: [(NSRange, Set<DocumentMark>)])] = []
+        for paragraph in paragraphRanges {
+            let line = attributed.attributedSubstring(from: paragraph)
+            let text = line.string
+            var segments: [(NSRange, Set<DocumentMark>)] = []
+            line.enumerateAttributes(in: NSRange(location: 0, length: line.length)) { attrs, range, _ in
+                let resolved = marks(in: attrs)
+                if !resolved.isEmpty { hasMarks = true }
+                if let last = segments.last, NSMaxRange(last.0) == range.location, last.1 == resolved {
+                    segments[segments.count - 1].0.length += range.length
+                } else {
+                    segments.append((range, resolved))
+                }
+            }
+            lines.append((text, segments))
+        }
+        guard hasMarks else { return nil }
+
+        let result = NSMutableAttributedString(string: "")
+        for (index, line) in lines.enumerated() {
+            // 段落尾的换行不进入内容（它由下面的分隔符承担）。
+            let text = line.text.hasSuffix("\n") ? String(line.text.dropLast()) : line.text
+            let ns = text as NSString
+            var emitted = 0
+            for (range, marks) in line.segments {
+                let start = max(0, min(range.location, ns.length))
+                let end = max(start, min(NSMaxRange(range), ns.length))
+                guard end > start else { continue }
+                if start > emitted {
+                    result.append(NSAttributedString(string: ns.substring(with: NSRange(location: emitted,
+                                                                                        length: start - emitted)),
+                                                     attributes: attributes(kind: baseKind, marks: [])))
+                }
+                result.append(NSAttributedString(string: ns.substring(with: NSRange(location: start,
+                                                                                     length: end - start)),
+                                                 attributes: attributes(kind: baseKind, marks: marks)))
+                emitted = end
+            }
+            if emitted < ns.length {
+                result.append(NSAttributedString(string: ns.substring(from: emitted),
+                                                 attributes: attributes(kind: baseKind, marks: [])))
+            }
+            if index < lines.count - 1 {
+                result.append(NSAttributedString(string: "\n", attributes: attributes(kind: baseKind, marks: [])))
+            }
+        }
+        return result
+    }
+
+    private static func linkTarget(_ value: Any) -> String {
+        if let url = value as? URL { return url.absoluteString }
+        return String(describing: value)
+    }
+
+    /// 代码块着色在**渲染期**做一次（加载 / 切换文档），编辑期由
+    /// `NativeTextView.restyleCodeBlocks` 只重排光标所在段。
+    private static func applyCodeHighlighting(to result: NSMutableAttributedString,
+                                              document: NativeDocument) {
+        guard result.length > 0 else { return }
+        // `NSApp` 在单元测试里可能没有，回落到 aqua（着色差异只在颜色，不影响断言）。
+        let appearance: NSAppearance = NSApp?.effectiveAppearance
+            ?? NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing()
+        let base = attributes(kind: .code, marks: [])[.foregroundColor] as? NSColor ?? .labelColor
+        let source = result.string as NSString
+        var offset = 0
+        for (index, block) in document.blocks.enumerated() {
+            let length = (block.plainText as NSString).length
+            if block.kind == .code, length > 0 {
+                let range = NSRange(location: offset, length: min(length, result.length - offset))
+                let language = CodeSyntaxHighlighter.Language.detect(in: source.substring(with: range))
+                CodeSyntaxHighlighter.apply(to: result, range: range, language: language,
+                                            baseColor: base, appearance: appearance)
+            }
+            offset += length
+            if index < document.blocks.count - 1 { offset += 1 }
+        }
     }
 
     static func decode(_ text: NSAttributedString, preserving previous: NativeDocument,

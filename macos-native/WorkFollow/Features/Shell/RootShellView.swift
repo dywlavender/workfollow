@@ -106,7 +106,14 @@ struct RootShellView: View {
             VStack(spacing: 0) {
                 FeedbackHostView(center: environment.feedback)
                 if let error = environment.storageError {
-                    Text(error).font(.caption).foregroundStyle(.red).padding(8)
+                    // 保存失败不是"看一眼就好"：重试成功后提示自己消失。
+                    HStack(spacing: 8) {
+                        Text(error).font(.caption).foregroundStyle(.red)
+                        Button("重试") { environment.retryStorage() }
+                            .buttonStyle(.link)
+                            .font(.caption)
+                    }
+                    .padding(8)
                 }
                 if environment.storageNeedsReload {
                     Text("数据已更新，请重新打开应用以加载。")

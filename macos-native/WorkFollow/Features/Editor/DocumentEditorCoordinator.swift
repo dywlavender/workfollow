@@ -94,8 +94,14 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         }
         guard let storage = textView.textStorage, charIndex < storage.length,
               let data = storage.attribute(DocumentTextCodec.attachmentKey, at: charIndex, effectiveRange: nil) as? Data,
-              let attachment = try? JSONDecoder().decode(NativeAttachment.self, from: data),
-              let url = NativeAttachmentFiles.url(for: attachment) else { return }
+              let attachment = try? JSONDecoder().decode(NativeAttachment.self, from: data) else { return }
+        // 粘贴图片是 data URL 附件（不是磁盘文件）：双击开预览窗，而不是
+        // 交给 NSWorkspace 静默失败（`url(for:)` 对 data URL 返回 nil）。
+        if let image = DocumentTextCodec.pastedImage(from: attachment) {
+            ImagePreviewWindowController.present(image: image, name: attachment.name)
+            return
+        }
+        guard let url = NativeAttachmentFiles.url(for: attachment) else { return }
         NSWorkspace.shared.open(url)
     }
 

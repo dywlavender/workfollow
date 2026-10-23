@@ -153,6 +153,7 @@ final class NativeTextView: NSTextView {
 
     override func didChangeText() {
         normalizeCompletedChecklistPresentation()
+        restyleCodeBlocks()
         // 先同步文末空段的待定级别，delegate 的 commit 解码才能带上正确类型
         // （标题行回车后新行延续级别靠这一步）。
         syncPendingTrailingBlock()
@@ -167,6 +168,86 @@ final class NativeTextView: NSTextView {
         // clip view has nothing to scroll; reveal the caret in the host after
         // SwiftUI has applied the new document height.
         needsHostCaretReveal = true
+    }
+
+    /// 代码块语法着色（`CodeSyntaxHighlighter`）。只重排**光标所在代码段**，
+    /// 并且只在颜色确实需要变时才写 storage——否则每次按键都会多一轮
+    /// `didProcessEditing`，把提交节流和撤销粒度都搅乱。
+    /// 全文档着色由 `DocumentTextCodec.render` 在加载时做。
+    func restyleCodeBlocks() {
+        guard !isRestylingCode, let storage = textStorage else { return }
+        let source = storage.string as NSString
+        guard source.length > 0 else { return }
+        let caret = min(max(selectedRange().location, 0), source.length - 1)
+        let paragraph = source.paragraphRange(for: NSRange(location: caret, length: 0))
+        guard paragraph.length > 0,
+              DocumentTextCodec.kind(storage.attribute(DocumentTextCodec.blockKey,
+                  at: paragraph.location, effectiveRange: nil) as? String ?? "paragraph") == .code else { return }
+        // 段尾换行不参与着色（它属于下一段的段落样式）。
+        var range = paragraph
+        if source.character(at: NSMaxRange(paragraph) - 1) == 0x0A { range.length -= 1 }
+        guard range.length > 0 else { return }
+        let language = CodeSyntaxHighlighter.Language.detect(in: source.substring(with: range))
+        let appearance = effectiveAppearance
+        let tokens = CodeSyntaxHighlighter.tokenize(source.substring(with: range), language: language)
+        guard tokens.count == range.length else { return }
+        var needsUpdate = false
+        for (offset, token) in tokens.enumerated() where token != .plain {
+            let expected = CodeSyntaxHighlighter.color(for: token, appearance: appearance)
+            let current = storage.attribute(.foregroundColor, at: range.location + offset, effectiveRange: nil) as? NSColor
+            if expected != nil, !Self.sameColor(current, expected) { needsUpdate = true; break }
+        }
+        guard needsUpdate else { return }
+        isRestylingCode = true
+        defer { isRestylingCode = false }
+        CodeSyntaxHighlighter.apply(to: storage, range: range, language: language,
+                                    baseColor: DocumentTextCodec.attributes(kind: .code, marks: [])[.foregroundColor]
+                                        as? NSColor ?? .labelColor,
+                                    appearance: appearance)
+    }
+
+    /// 主题色是按外观解析的 `NSColor`，直接 `==` 比不准（dynamic color 包装不同）。
+    private static func sameColor(_ lhs: NSColor?, _ rhs: NSColor?) -> Bool {
+        guard let lhs, let rhs else { return lhs == nil && rhs == nil }
+        let left = lhs.usingColorSpace(.sRGB)
+        let right = rhs.usingColorSpace(.sRGB)
+        guard let left, let right else { return lhs == rhs }
+        return abs(left.redComponent - right.redComponent) < 0.004
+            && abs(left.greenComponent - right.greenComponent) < 0.004
+            && abs(left.blueComponent - right.blueComponent) < 0.004
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        restyleAllCodeBlocks()
+    }
+
+    /// 整篇重新着色（外观切换 / 加载完成时用）。
+    func restyleAllCodeBlocks() {
+        guard !isRestylingCode, let storage = textStorage, storage.length > 0 else { return }
+        let source = storage.string as NSString
+        let appearance = effectiveAppearance
+        let base = DocumentTextCodec.attributes(kind: .code, marks: [])[.foregroundColor] as? NSColor ?? .labelColor
+        var start = 0
+        var ranges: [(NSRange, CodeSyntaxHighlighter.Language)] = []
+        while start < source.length {
+            let paragraph = source.paragraphRange(for: NSRange(location: start, length: 0))
+            var range = paragraph
+            if range.length > 0, source.character(at: NSMaxRange(range) - 1) == 0x0A { range.length -= 1 }
+            if range.length > 0,
+               DocumentTextCodec.kind(storage.attribute(DocumentTextCodec.blockKey,
+                   at: range.location, effectiveRange: nil) as? String ?? "paragraph") == .code {
+                ranges.append((range, CodeSyntaxHighlighter.Language.detect(in: source.substring(with: range))))
+            }
+            start = NSMaxRange(paragraph)
+        }
+        guard !ranges.isEmpty else { return }
+        isRestylingCode = true
+        defer { isRestylingCode = false }
+        for (range, language) in ranges {
+            CodeSyntaxHighlighter.apply(to: storage, range: range, language: language,
+                                        baseColor: base, appearance: appearance)
+        }
     }
 
     private func normalizeCompletedChecklistPresentation() {
@@ -743,9 +824,18 @@ final class NativeTextView: NSTextView {
             }
         }
         if insertPastedImage() { return }
+        // 富文本粘贴：保留粗/斜/下划线/删除线/行内代码/链接这些**基础标记**，
+        // 丢字号、颜色、背景、缩进与字体族（这些不是文档模型的一部分，带进来
+        // 只会在 decode 时变成脏属性）。没有可保留标记时退回纯文本。
+        if let rich = Self.richPasteboardContent(), !rich.string.isEmpty,
+           let baseKind = currentParagraphKind(),
+           let converted = DocumentTextCodec.richText(rich, baseKind: baseKind) {
+            insertText(converted, replacementRange: selectedRange())
+            return
+        }
         // NSTextView 默认 `paste` 不经过 `insertText`，输入期 Markdown 转换与 Slash
         // 触发都会绕过；纯文本粘贴改走 `insertText`，与逐键输入同一条路径
-        // （整串写入口径：以标记字符结尾时转最近一处闭合）。富文本按纯文本粘贴。
+        // （整串写入口径：以标记字符结尾时转最近一处闭合）。
         if let text = NSPasteboard.general.string(forType: .string), !text.isEmpty {
             insertText(text, replacementRange: selectedRange())
             return
@@ -753,6 +843,39 @@ final class NativeTextView: NSTextView {
         super.paste(sender)
     }
 
+
+    /// 剪贴板里的富文本（RTF 优先，其次 HTML）。两者都没有时返回 nil。
+    private static func richPasteboardContent() -> NSAttributedString? {
+        let board = NSPasteboard.general
+        if let data = board.data(forType: .rtf),
+           let attributed = NSAttributedString(rtf: data, documentAttributes: nil),
+           !attributed.string.isEmpty {
+            return attributed
+        }
+        if let html = board.string(forType: .html), let data = html.data(using: .utf8),
+           let attributed = try? NSAttributedString(
+               data: data,
+               options: [.documentType: NSAttributedString.DocumentType.html,
+                         .characterEncoding: String.Encoding.utf8.rawValue],
+               documentAttributes: nil),
+           !attributed.string.isEmpty {
+            return attributed
+        }
+        return nil
+    }
+
+    /// 光标所在段落的块类型（富文本粘贴沿用，不把粘贴处改成标题/列表）。
+    private func currentParagraphKind() -> DocumentBlockKind? {
+        guard let storage = textStorage else { return nil }
+        let source = storage.string as NSString
+        let anchor = source.length == 0 ? 0 : min(max(selectedRange().location, 0), source.length - 1)
+        guard source.length > 0,
+              let token = storage.attribute(DocumentTextCodec.blockKey, at: anchor,
+                                            effectiveRange: nil) as? String else {
+            return pendingTrailingBlock ?? displayedTrailingBlock ?? .paragraph
+        }
+        return DocumentTextCodec.kind(token)
+    }
 
     /// 剪贴板带位图（且不是 Finder 文件）时转 data URL 附件块插入；返回是否已处理。
     /// NativeDocument 没有独立图片块类型，按迁移决策用附件 run 承载 data URL
@@ -871,6 +994,8 @@ final class NativeTextView: NSTextView {
     private var decorationOverlay: BlockDecorationOverlay?
     private var decorationSelectionObserver: NSObjectProtocol?
     private var spellObserver: NSObjectProtocol?
+    /// 重入保护：着色写 storage 会再触发 `didChangeText`。
+    private var isRestylingCode = false
     private var decorationBoundsObserver: NSObjectProtocol?
 
     override func layout() {

@@ -394,6 +394,23 @@ final class AppEnvironment: ObservableObject {
         tone.play()
     }
 
+    /// 保存失败后的手动重试（底栏红色提示旁边的「重试」）。
+    ///
+    /// 失败时 `PersistenceCoordinator.writePending` 会把快照留在内存里等下一次
+    /// 写入，所以这里只要再 flush 一次就能补上；成功才清掉提示，失败继续留着
+    /// （并把新的错误文案换上去，用户能看到是不是同一个原因）。
+    func retryStorage() {
+        guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
+        flush { [weak self] error in
+            guard let self else { return }
+            if let error {
+                self.storageError = "数据保存失败：\(error.localizedDescription)"
+            } else {
+                self.storageError = nil
+            }
+        }
+    }
+
     func flush(completion: @escaping (Error?) -> Void) {
         meetingStore.stopRecording()
         flushMetadata()
