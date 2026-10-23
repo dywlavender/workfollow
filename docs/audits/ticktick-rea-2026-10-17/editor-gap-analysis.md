@@ -475,6 +475,23 @@
 - 回归：文档/编辑器/inspector 组 **132 项 2 失败**，两条失败（`DocumentDiagramTests.testRepeatedSave…`、`TaskInspectorHierarchyRenderTests.testFocusedChildInspectorKeepsPlus…`）在**未含本批改动的干净 HEAD 上同样失败**，属并行会话在途改动，与本批无关。
 - 本批新增 10 个测试方法。
 
+## 13. 优化批次二（2026-10-24）
+
+第一批之后按"能修的真 bug"排序，四项都带可见的故障现象（不是纯视觉对齐）。
+
+| # | 项 | 改动 | 测试 |
+|---|---|---|---|
+| 1 | 代码块语法着色 | 滴答用 `Highlightr`（内置 highlight.js **185 种语言** + `ticktick.light/dark.css`）。本地不引外部依赖，新增 `CodeSyntaxHighlighter`：轻量 tokenizer（注释 / 字符串 / 数字 / 关键字 / 类型名 / 函数名），配色取滴答 CSS 的同角色值——关键字 `#FF871D`/`#C4742E`、字符串与类型 `#14C257`/`#319A59`、数字 `#EF42B5`/`#B4317E`、注释 `#B8B8B8`/`#535353`。渲染期整篇着色一次，编辑期只重排光标所在段（颜色没变不写 storage，避免多一轮 `didProcessEditing` 搅乱提交节流与撤销粒度），外观切换整篇重排。语言按内容特征猜（`NativeDocument` 的代码块没有语言字段，加字段要动存储格式），认不出按 `generic` 只着色注释/字符串/数字。**只写 `.foregroundColor`，不参与 decode** | `CodeSyntaxHighlighterTests` 11 项（分词 6 / 配色 2 / 渲染接入 2 / 编辑期重排 1）；渲染样张 [15-code-highlight.png](walkthrough/15-code-highlight.png) |
+| 2 | 粘贴图片双击无反应 | **真 bug**：粘贴图片以 data URL 存在附件里（`storedName = "data:image/png;base64,…"` 含 `/`），而 `NativeAttachmentFiles.url(for:)` 要求 `storedName == lastPathComponent`，必然返回 nil；双击走 `NSWorkspace.open(nil)` 静默失败。新增 `ImagePreviewWindowController`（等比适应窗口、Esc 关闭、"存储副本…"另存 PNG、同图重复双击只前置），双击正文图片与附件行里的图片名都开预览；附件行对粘贴图片隐藏「在 Finder 中显示」并换成 photo 图标 | `PasteAndSaveRecoveryTests` 3 项（data URL 不当文件路径 / 预览窗开关 / 重复双击复用） |
+| 3 | 富文本粘贴丢格式 | 原先 `paste` 一律按纯文本走。新增 `DocumentTextCodec.richText`：RTF 优先、其次 HTML，压回**基础标记**（粗 / 斜 / 下划线 / 删除线 / 行内代码 / 链接），字号、颜色、背景、缩进、字体族一律丢弃；没有任何可保留标记时返回 nil，调用方退回纯文本（不制造无谓差异）。段落类型沿用粘贴处的块类型，不把当前段改成标题/列表 | `PasteAndSaveRecoveryTests` 4 项（基础标记 / 链接 / 纯字号不算富文本 / 段落类型不变） |
+| 4 | 保存失败没有出口 | `AppEnvironment.storageError` 只在底栏显示一行红字，用户只能看着。失败时 `PersistenceCoordinator.writePending` 本就把快照留在内存里等下次写入，所以补 `retryStorage()`（再 flush 一次，成功才清提示）与提示旁的「重试」按钮 | `PasteAndSaveRecoveryTests` 1 项（重试成功清提示） |
+
+口径：
+
+- 四项都不改存储格式：着色只写绘制属性，富文本压回既有 `DocumentMark`，预览窗只读。
+- 回归（分组）：编辑器/文档/笔记 **106 项 1 失败**，失败项 `NoteFeatureTests.testNoteSlashMatchesFlutterSharedDocumentCommands` 在干净 HEAD 上同样失败——checkpoint `310a966` 给笔记 Slash 加了「流程图（draw.io）」但没更新该断言，属并行会话在途改动；`InspectorWalkthroughTests` 走查通过。
+- 本批新增 19 个测试方法。
+
 ## 附录：证据索引
 
 - nib 结构 JSON：[ticktick-detail-nib-inventory.json](ticktick-detail-nib-inventory.json)（29 nib / 128 outlet / 30 action）+ 可读报告 [ticktick-detail-nib-inventory.md](ticktick-detail-nib-inventory.md)
