@@ -119,7 +119,7 @@ struct DocumentProfile {
 
     /// 块类型菜单（滴答 `md_vertical_*`）：正文 / H1–H6 / 无序 / 有序 / 检查项 / 引用 /
     /// 分割线 / 附件。分节决定细线位置：标题｜列表｜格式｜插入。
-    static var blockMenuCommands: [DocumentCommand] {
+    static var standardBlockMenuCommands: [DocumentCommand] {
         let formatIDs = ["format.paragraph",
                          "format.heading1", "format.heading2", "format.heading3",
                          "format.heading4", "format.heading5", "format.heading6",

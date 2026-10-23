@@ -453,6 +453,28 @@
 | TI2-18 多选面板 | 已有 `TaskBatchPanelView` 在早前批量轮对齐过（属性行 + 动作瓦片），逐项比对价值低于其余项 |
 | TI2-09 回复/编辑/评论附件 | 本地评论是单机单用户，回复语义缺失；附件/表情需要新的存储与渲染 |
 
+## 12. 优化批次一（2026-10-24）
+
+按第 10 节与后续差距分析的排序，先落四项"不碰存储格式、可同笔提交"的收尾。
+
+| # | 项 | 改动 | 测试 |
+|---|---|---|---|
+| 1 | 块菜单补 H4–H6 | 块菜单此前复用 Slash 命令集（标题只到 H3）。证据是 `Assets.car` 里的 `md_vertical_header1..6`——**竖排块菜单有六级标题**，而 Slash 菜单实测只有 12 项。新增 `DocumentProfile.blockMenuCommands`（宿主可覆盖）+ `standardBlockMenuCommands`（正文 / H1–H6 / 无序 / 有序 / 检查项 / 引用 / 分割线 / 附件 = 13 项，四节），`SlashSession` 加 `scope: .slash | .block`，`refreshSlash` / `executeSlash` 按 scope 取命令集，块菜单固定 compact 几何且不接受查询串。Slash 菜单保持原样 | `EditorPolishBatchTests` 4 项（六级标题 / 四节与高度公式 / 与 Slash 互相独立 / 沟槽点击进 `.block`）+ `DocumentBlockMenuTests` 5 项 + `DocumentProfileTests` |
+| 2 | 关闭智能替换 + 拼写检查开关 | 全新 `NSTextView` 实测 `quote=true, dash=true, textReplacement=true, spellCorrection=true`：代码块里的直引号会被换成弯引号、`--` 变破折号、`(c)` 变 ©、`---` 打不出分割线。`NativeTextView.init` 现在显式关闭四种替换与语法检查，拼写检查走新 `EditorPreferences`（UserDefaults + 变更通知），设置页「编辑」组加「拼写检查」开关（默认关，对齐滴答的 `isContinuousSpellCheckingEnabled` 偏好） | `EditorPolishBatchTests` 3 项（标志位 / 直引号与双连字符原样保留 / 偏好变更实时生效） |
+| 3 | 折叠计数提示 | 子任务折叠后树里少几行没有任何提示。`AppKitSubtaskOutlineView` 新增 `onCollapseChange`（只在当前树内统计，已删除 id 不计数），纯函数口径抽到 `SubtaskFoldSummary.hiddenCount`；详情在子任务区末尾显示「已折叠 N 项」（无折叠不占位），锚点 `InspectorRenderAnchor.collapsedCount` | `EditorPolishBatchTests` 1 项（嵌套折叠 / 叶子折叠不计数 / 子树根）+ 既有 `SubtaskOrderAndFoldTests` 10 项 |
+| 4 | 「更多」菜单高度自适应 | 菜单高度写死 490，加到 16 项后底部会被挤出可视区，短菜单又留大片空白。改为 `TaskInspectorMetrics.moreMenuHeight(rowCount:dividerCount:screenHeight:)`：行高 32 + 间距 2 + 细线 9 + 内边距 16，按屏幕可用高度夹紧 | `EditorPolishBatchTests` 2 项（行数映射 / 无硬编码 490） |
+
+顺带修的走查脚本问题：
+
+- `InspectorWalkthroughTests` 还在点日期面板里的「截止日期」行，但该行在 2026-10-19 已按滴答实测移除（面板没有这一行，入口是顶栏次要日期）。改为 setup 阶段先 `setDeadline`，再点顶栏的「截止日期」。
+- `testChecklistMarkerStaysVisibleUnderSelection` 的冷灰像素门槛从 20 降到 8：抗锯齿让边缘像素在 15~30 之间浮动，而"被选区盖住"时是 0，20 这个数会偶发误报。
+
+口径：
+
+- 四项都不改存储格式；`EditorPreferences` 只写 `UserDefaults`，不进快照。
+- 回归：文档/编辑器/inspector 组 **132 项 2 失败**，两条失败（`DocumentDiagramTests.testRepeatedSave…`、`TaskInspectorHierarchyRenderTests.testFocusedChildInspectorKeepsPlus…`）在**未含本批改动的干净 HEAD 上同样失败**，属并行会话在途改动，与本批无关。
+- 本批新增 10 个测试方法。
+
 ## 附录：证据索引
 
 - nib 结构 JSON：[ticktick-detail-nib-inventory.json](ticktick-detail-nib-inventory.json)（29 nib / 128 outlet / 30 action）+ 可读报告 [ticktick-detail-nib-inventory.md](ticktick-detail-nib-inventory.md)

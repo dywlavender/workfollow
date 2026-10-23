@@ -48,6 +48,8 @@ final class InspectorWalkthroughTests: XCTestCase {
         ]))
         workspace.setTags(id, ["工作", "重要"])
         _ = workspace.createChild(id, title: "子任务甲")
+        let deadline = workspace.calendar.date(byAdding: .day, value: 3, to: workspace.clock()) ?? workspace.clock()
+        workspace.setDeadline(id, deadline)
         workspace.select(id)
 
         let host = InspectorPanelTestSupport.inspectorHost(
@@ -61,7 +63,11 @@ final class InspectorWalkthroughTests: XCTestCase {
         let datePanel = try InspectorPanelTestSupport.panel(title: InspectorPanelTestSupport.datePanelTitle, below: window)
         try capture(datePanel, "02-date-panel")
 
-        try InspectorPanelTestSupport.clickButton(containing: "截止日期", in: datePanel)
+        // 截止日期面板只能从顶栏的次要日期进入（滴答的日期面板没有「截止日期」行，
+        // 2026-10-19 实测）；任务在 setup 阶段已带截止日期，这里点它。
+        try InspectorPanelTestSupport.sendEscape(to: window)
+        InspectorPanelTestSupport.settle(window)
+        try InspectorPanelTestSupport.clickButton(containing: "截止日期", in: window)
         let deadlinePanel = try InspectorPanelTestSupport.panel(title: InspectorPanelTestSupport.datePanelTitle, below: window)
         try capture(deadlinePanel, "03-deadline-panel")
         try InspectorPanelTestSupport.sendReturn(to: deadlinePanel)

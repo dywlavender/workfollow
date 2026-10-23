@@ -22,6 +22,7 @@ enum NoteDocumentProfile {
             DocumentSelectionAction(id: "note.createTask", title: "用所选文字创建任务",
                                     toolbarTitle: "创建任务", perform: host.createTaskFromSelection)
         ], noteSlash: true, selectionToolbarEnabled: true,
-           slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs))
+           slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs),
+           blockMenuCommands: DocumentProfile.standardBlockMenuCommands)
     }
 }

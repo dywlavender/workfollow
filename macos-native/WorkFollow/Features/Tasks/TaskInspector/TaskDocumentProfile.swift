@@ -25,7 +25,8 @@ enum TaskDocumentProfile {
         commands.append(DocumentCommand(id: "task.relation", title: "关联任务/笔记", group: "插入") { _ in host.openRelation() })
         var profile = DocumentProfile(commands: commands, taskSlash: true, onOpenLink: host.openLink,
                                       selectionToolbarEnabled: false,
-                                      slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs) + commands)
+                                      slashCommandOverride: DocumentProfile.compactDocumentCommands(formatIDs: slashFormatIDs) + commands,
+                                      blockMenuCommands: DocumentProfile.standardBlockMenuCommands)
         profile.tagCandidates = host.availableTags
         profile.onTagInserted = host.addTag
         profile.onPasteFiles = host.pasteFiles

@@ -53,7 +53,7 @@ extension NativeTextView {
     func commands(for session: SlashSession) -> [DocumentCommand] {
         switch session.scope {
         case .block:
-            return profile.blockMenuCommands ?? DocumentProfile.blockMenuCommands
+            return profile.blockMenuCommands ?? DocumentProfile.standardBlockMenuCommands
         case .slash:
             return profile.slashCommands
         }

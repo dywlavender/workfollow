@@ -365,7 +365,9 @@ final class DocumentDecorationRenderTests: XCTestCase {
                 if red < 0.95, blue - red >= 0.015, green > red { markerPixels += 1 }
             }
         }
-        XCTAssertGreaterThan(markerPixels, 20,
+        // 阈值只需区分"有标记"与"被选区整片盖住"：后者为 0。抗锯齿会让边缘像素
+        // 在 15~30 之间浮动，所以不设成"半行像素"那种高门槛。
+        XCTAssertGreaterThan(markerPixels, 8,
                              "选中整行后复选框不可见（被选区盖住）：冷灰像素 \(markerPixels)")
     }
 

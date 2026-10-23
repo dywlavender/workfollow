@@ -10,7 +10,7 @@ final class EditorPolishBatchTests: XCTestCase {
     // MARK: - 块菜单（TI2-21 收尾）
 
     func testBlockMenuOffersAllSixHeadingLevels() {
-        let commands = DocumentProfile.blockMenuCommands
+        let commands = DocumentProfile.standardBlockMenuCommands
         let headings = commands.compactMap { command -> Int? in
             guard case .heading(let level)? = EditorCommandCatalog.format(command.id)?.block else { return nil }
             return level
@@ -22,7 +22,7 @@ final class EditorPolishBatchTests: XCTestCase {
     }
 
     func testBlockMenuKeepsFourSections() {
-        let commands = DocumentProfile.blockMenuCommands
+        let commands = DocumentProfile.standardBlockMenuCommands
         let groups = commands.map(\.group)
         let sections = groups.reduce(into: [String]()) { if $0.last != $1 { $0.append($1) } }
         XCTAssertEqual(sections, ["标题", "列表", "格式", "插入"])
@@ -119,7 +119,8 @@ final class EditorPolishBatchTests: XCTestCase {
         XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: a, children: children, collapsed: []), 0)
         XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: a, children: children, collapsed: [b]), 1,
                        "折叠 b 只藏住 d")
-        XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: a, children: children, collapsed: [b, c]), 2)
+        XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: a, children: children, collapsed: [b, c]), 1,
+                       "c 是叶子，折叠它不藏行；b 藏住 d")
         XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: a, children: children, collapsed: [d]), 0,
                        "折叠叶子节点不藏任何行")
         XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: b, children: children, collapsed: [d]), 0)
