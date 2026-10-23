@@ -52,14 +52,15 @@ final class TaskTagPickerInteractionTests: XCTestCase {
         let host = NSHostingView(rootView: TaskTagPickerPopover(initialTags: ["尚未保存"], workspace: workspace,
             onCancel: {}, onApply: { applied = $0 })
             .onPreferenceChange(TaskTagPickerFrames.self) { frames = $0 })
-        let window = window(for: host, width: 264, height: 320)
+        let window = window(for: host, width: 264, height: host.fittingSize.height)
         defer { window.close() }
         let row = try XCTUnwrap(frames[.tag("尚未保存")])
         let confirm = try XCTUnwrap(frames[.confirm])
         try click(row, host: host, window: window)
-        XCTAssertEqual(frames[.tag("尚未保存")], row)
+        let deselectedRow = try XCTUnwrap(frames[.tag("尚未保存")])
+        XCTAssertLessThan(deselectedRow.minY, row.minY, "移除最后一个已选标签后，搜索区收回空位")
         XCTAssertEqual(frames[.confirm], confirm, "Selection cannot shift the footer")
-        try click(row, host: host, window: window)
+        try click(deselectedRow, host: host, window: window)
         try click(confirm, host: host, window: window)
         XCTAssertEqual(applied, ["尚未保存"])
         XCTAssertEqual(workspace.allTasks, before, "Quick Add picker cannot persist tasks or global tags")
@@ -84,7 +85,8 @@ final class TaskTagPickerInteractionTests: XCTestCase {
             XCTAssertFalse(more.isVisible)
             let picker = try InspectorPanelTestSupport.actionPanel(in: window)
             XCTAssertEqual(picker.frame.width, 264, accuracy: 1)
-            XCTAssertEqual(picker.frame.height, 320, accuracy: 1)
+            XCTAssertGreaterThanOrEqual(picker.frame.height, 180)
+            XCTAssertLessThanOrEqual(picker.frame.height, 320)
         }
         func pickerClick(_ label: String) throws {
             try InspectorPanelTestSupport.clickButton(containing: label,

@@ -155,14 +155,15 @@ enum MatrixProjection {
             let settings = configuration.configuration(for: quadrant)
             let groups = active[quadrant] ?? [:]
             var viewModels: [MatrixGroupViewModel] = []
-            let visibleOrder = settings.grouping == .list ? order : ["所有任务"]
-            for listName in visibleOrder {
-                let grouped = settings.grouping == .list ? groups[listName] ?? [] : order.flatMap { groups[$0] ?? [] }
-                let tasks = sorted(grouped, settings: settings)
+            // 分组维度由 `settings.grouping` 决定（清单 / 时间 / 创建时间 / 标签 / 优先级 / 无），
+            // 每桶内部再按 `settings.sort` + `settings.direction` 排。
+            for bucket in buckets(active[quadrant] ?? [:], grouping: settings.grouping,
+                                  listOrder: order, now: now, calendar: calendar) {
+                let tasks = sorted(bucket.tasks, settings: settings)
                 guard !tasks.isEmpty else { continue }
                 viewModels.append(MatrixGroupViewModel(
-                    id: listGroupID(quadrant, listName),
-                    title: listName,
+                    id: listGroupID(quadrant, bucket.title),
+                    title: bucket.title,
                     count: tasks.count,
                     completedGroup: false,
                     tasks: tasks.map { row($0, now: now, calendar: calendar, hasChildren: hasChildren) }))
@@ -180,9 +181,75 @@ enum MatrixProjection {
         }
     }
 
+    /// 按分组维度把象限内的任务切成有序的桶。
+    private static func buckets(_ byList: [String: [Task]], grouping: MatrixGrouping,
+                                listOrder: [String], now: Date,
+                                calendar: Calendar) -> [(title: String, tasks: [Task])] {
+        let all = listOrder.flatMap { byList[$0] ?? [] }
+        guard !all.isEmpty else { return [] }
+        if grouping == .none { return [("所有任务", all)] }
+        if grouping == .list {
+            return listOrder.compactMap { name in
+                guard let tasks = byList[name], !tasks.isEmpty else { return nil }
+                return (name, tasks)
+            }
+        }
+        var grouped: [String: [Task]] = [:]
+        for task in all {
+            grouped[groupKey(for: task, grouping: grouping, calendar: calendar), default: []].append(task)
+        }
+        let titles = grouped.keys.sorted { lhs, rhs in
+            bucketRank(lhs, grouping: grouping, calendar: calendar)
+                < bucketRank(rhs, grouping: grouping, calendar: calendar)
+        }
+        return titles.map { ($0, grouped[$0] ?? []) }
+    }
+
+    /// 单条任务落在哪个桶。
+    private static func groupKey(for task: Task, grouping: MatrixGrouping,
+                                 calendar: Calendar) -> String {
+        switch grouping {
+        case .list: return normalizedListName(task)
+        case .priority: return task.priority.title
+        case .tag: return task.tags.first ?? "无标签"
+        case .date:
+            guard let due = task.schedule.dueAt else { return "无日期" }
+            return ScheduleDisplay.dayText(due, calendar: calendar)
+        case .created:
+            return ScheduleDisplay.dayText(task.createdAt, calendar: calendar)
+        case .none:
+            return "所有任务"
+        }
+    }
+
+    /// 桶之间的先后：优先级按高→无，日期按升序且「无日期」压尾，其余按名称拼音。
+    private static func bucketRank(_ title: String, grouping: MatrixGrouping,
+                                   calendar: Calendar) -> String {
+        switch grouping {
+        case .priority:
+            let order: [TaskPriority] = [.high, .medium, .low, .none]
+            let index = order.firstIndex { $0.title == title } ?? order.count
+            return String(format: "%02d", index)
+        case .date, .created:
+            // 「无日期」不参与日期排序，固定排最后。
+            return title == "无日期" ? "9999-99-99" : dateSortKey(title)
+        default:
+            return title
+        }
+    }
+
+    /// `9月22日` → `2026-09-22`（同年补位，保证字符串序即日期序）。
+    private static func dateSortKey(_ title: String) -> String {
+        let digits = title.replacingOccurrences(of: "月", with: "-")
+            .replacingOccurrences(of: "日", with: "")
+        let parts = digits.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return "9999-99-99" }
+        return String(format: "%04d-%02d-%02d", 0, parts[0], parts[1])
+    }
+
     private static func sorted(_ tasks: [Task], settings: MatrixQuadrantConfiguration) -> [Task] {
         let positions = Dictionary(settings.manualOrder.enumerated().map { ($0.element, $0.offset) }, uniquingKeysWith: min)
-        return tasks.enumerated().sorted { left, right in
+        let result = tasks.enumerated().sorted { left, right in
             let lhs = left.element, rhs = right.element
             switch settings.sort {
             case .manual:
@@ -196,9 +263,15 @@ enum MatrixProjection {
                 if lhs.title != rhs.title { return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending }
             case .created:
                 if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+            case .modified:
+                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt < rhs.updatedAt }
+            case .tag:
+                let a = lhs.tags.first ?? "", b = rhs.tags.first ?? ""
+                if a != b { return a.localizedStandardCompare(b) == .orderedAscending }
             }
             return left.offset < right.offset
         }.map(\.element)
+        return settings.direction == .ascending ? result : result.reversed()
     }
 
     /// 空清单名落到收集箱，和列表页一致。

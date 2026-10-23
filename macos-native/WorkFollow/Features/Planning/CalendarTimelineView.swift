@@ -569,11 +569,12 @@ private struct CalendarTimeBlock: View {
             let start = CalendarGestureDraft.date(on: days[index], minute: minute, calendar: calendar)
             onMove(CalendarGestureDraft.moved(task.schedule, to: start, hasTime: true, calendar: calendar))
         })
+        .background(PlanningAnchorProbe(ref: anchor))
+        .planningTaskTarget(task.id)
         .offset(x: translation.width, y: CGFloat(geometry.startMinute) / 60 * hourHeight + translation.height)
         .focusable().focusEffectDisabled().focused($focused)
         .onExitCommand { gestureSession.cancel(); translation = .zero; resizeDraft.cancel() }
         .onHover { hovering = $0 }
-        .background(PlanningAnchorProbe(ref: anchor))
         .businessContextMenu { Button("打开任务", action: onOpen) }
         .accessibilityValue(timeLabel)
         .accessibilityIdentifier("calendar.time-block.\(task.id.uuidString)")

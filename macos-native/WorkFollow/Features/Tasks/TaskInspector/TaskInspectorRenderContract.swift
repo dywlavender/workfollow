@@ -10,6 +10,8 @@ enum InspectorRenderAnchor: Hashable {
     case progressBar
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
     case document, childSection, addChild
+    /// 子任务折叠提示「已折叠 N 项」（有折叠才渲染）。
+    case collapsedCount
     /// 正文后、子任务前的两行属性：附件列表 / 标签 chips（TI2-02/TI2-03）。
     case attachments, tagStrip
     case footerList, footerFormatting, footerMore, footerTag, footerMerge, footerComment
@@ -24,7 +26,7 @@ enum InspectorRenderAnchor: Hashable {
     /// 顶栏「任务类型」（TI2-05b）。
     case kind
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
-    case focusPomodoro, focusStopwatch, focusEstimate
+    case focusPomodoro, focusStopwatch, focusEstimate, focusEstimateClear
 }
 struct InspectorFramesKey: PreferenceKey {
     static let defaultValue: [InspectorRenderAnchor: CGRect] = [:]

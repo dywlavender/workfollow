@@ -49,14 +49,26 @@ extension NativeTextView {
         slashPanel = nil
     }
 
+    /// 当前会话对应的命令集：块菜单独立于 Slash 菜单（标题级别更全）。
+    func commands(for session: SlashSession) -> [DocumentCommand] {
+        switch session.scope {
+        case .block:
+            return profile.blockMenuCommands ?? DocumentProfile.blockMenuCommands
+        case .slash:
+            return profile.slashCommands
+        }
+    }
+
     func refreshSlash() {
         guard var session = slashSession else { return }
         // Do not replace candidates or consume keys while an input method owns them.
         guard !hasMarkedText() else { slashPanel?.orderOut(nil); return }
-        guard session.update(text: string, selection: selectedRange(), allowsQuery: !profile.compactSlash) else { dismissSlash(); return }
+        // 块菜单由点击打开，没有可输入的查询串；只接受光标停在原行。
+        let allowsQuery = session.scope == .slash && !profile.compactSlash
+        guard session.update(text: string, selection: selectedRange(), allowsQuery: allowsQuery) else { dismissSlash(); return }
         slashSession = session
         guard let window else { return }
-        let commands = session.results(in: profile.slashCommands)
+        let commands = session.results(in: commands(for: session))
         let isFirstPresentation = slashPanel == nil
         let panel: NSPanel
         if let existing = slashPanel { panel = existing }
@@ -71,8 +83,9 @@ extension NativeTextView {
             window.addChildWindow(panel, ordered: .above)
             slashPanel = panel
         }
+        let compact = session.scope == .block || profile.compactSlash
         let list = SlashCommandList(
-            commands: commands, selected: session.selectedIndex, compact: profile.compactSlash,
+            commands: commands, selected: session.selectedIndex, compact: compact,
             onSelect: { [weak self] index in self?.executeSlash(at: index) },
             onHover: { [weak self] index in self?.hoverSlash(index) })
         // 只换 rootView，不重建 hosting view：指针每移到一行都会走这里（悬停即选中），
@@ -85,8 +98,8 @@ extension NativeTextView {
         let caret = firstRect(forCharacterRange: selectedRange(), actualRange: nil)
         // 夹取范围取**窗口**（原版是窗口内的浮层，安全边距 12），不是屏幕可视区。
         let bounds = window.frame.insetBy(dx: SlashLayout.safeArea, dy: SlashLayout.safeArea)
-        let width = min(profile.compactSlash ? SlashMenuMetrics.width : 300, bounds.width)
-        let desiredHeight = profile.compactSlash
+        let width = min(compact ? SlashMenuMetrics.width : 300, bounds.width)
+        let desiredHeight = compact
             ? SlashMenuMetrics.height(for: commands)
             : CGFloat(min(max(commands.count, 1), 8) * 44 + 34)
         let height = min(desiredHeight, max(SlashLayout.minHeight, bounds.height))
@@ -159,7 +172,7 @@ extension NativeTextView {
 
     func executeSlash(at index: Int? = nil) {
         guard let session = slashSession, !hasMarkedText() else { return }
-        let commands = session.results(in: profile.slashCommands)
+        let commands = session.results(in: commands(for: session))
         let index = index ?? session.selectedIndex
         guard commands.indices.contains(index) else { return }
         let command = commands[index]

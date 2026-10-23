@@ -75,10 +75,15 @@ final class NativeResourceLinkReceiver {
     private var pending: [URL] = []
     private var route: ((URL) -> Bool)?
     private var activate: (() -> Void)?
+    private var pendingActivation = false
 
-    func configure(route: @escaping (URL) -> Bool, activate: @escaping () -> Void) {
+    func configure(route: @escaping (URL) -> Bool, activate: (() -> Void)? = nil) {
         self.route = route
         self.activate = activate
+        if pendingActivation, let activate {
+            pendingActivation = false
+            activate()
+        }
         let urls = pending
         pending.removeAll()
         receive(urls)
@@ -86,6 +91,9 @@ final class NativeResourceLinkReceiver {
 
     func receive(_ urls: [URL]) {
         guard let route else { pending += urls; return }
-        for url in urls where route(url) { activate?() }
+        for url in urls where route(url) {
+            guard TaskWidgetLink.destination(for: url) != .quickAdd else { continue }
+            if let activate { activate() } else { pendingActivation = true }
+        }
     }
 }

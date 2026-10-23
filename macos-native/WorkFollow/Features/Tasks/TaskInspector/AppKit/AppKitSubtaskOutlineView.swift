@@ -4,7 +4,7 @@ import SwiftUI
 /// 子任务区 AppKit 树形渲染（滴答 `AXOutline` 对应）。
 ///
 /// 用 `NSOutlineView` 承载多级子任务：支持折叠（disclosure triangle）、层级、
-/// 双击行内改名。完成框、标题、日期均为 AppKit 控件；命中与动作由外层
+/// 单击标题行内改名、点击行内留白打开详情。完成框、标题、日期均为 AppKit 控件；命中与动作由外层
 /// SwiftUI 通过回调接入，渲染锚点与契约不受影响。
 struct AppKitSubtaskOutlineView: NSViewRepresentable {
     /// 顶层子任务（当前任务的直接子任务），按 childOrder 升序。
@@ -23,6 +23,8 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
     let onReorder: (UUID, Int) -> Void
     /// 折叠状态持久化（按子任务 id）。
     var foldStore = SubtaskFoldStore()
+    /// 折叠集合变化（宿主据此显示「已折叠 N 项」）。空集合 = 全展开。
+    var onCollapseChange: (Set<UUID>) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(foldStore: foldStore)
@@ -45,6 +47,7 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         coordinator.onRename = onRename
         coordinator.onReorder = onReorder
         coordinator.foldStore = foldStore
+        coordinator.onCollapseChange = onCollapseChange
         coordinator.reload()
         // 仅在"添加子任务"触发的自动编辑 id 变化时聚焦一次，避免每次刷新重复打断输入。
         if let inlineEditingID, inlineEditingID != coordinator.autoEditingID {
@@ -62,8 +65,8 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
 
     // MARK: - Coordinator
 
-    final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTextFieldDelegate {
-        let outlineView = NSOutlineView()
+    final class Coordinator: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSTextFieldDelegate, NSGestureRecognizerDelegate {
+        let outlineView = SubtaskOutlineView()
         var rootTasks: [Task] = []
         var allTasks: [Task] = []
         var completionSize: CGFloat = 19
@@ -73,6 +76,7 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         var onOpen: (UUID) -> Void = { _ in }
         var onRename: (UUID, String) -> Void = { _, _ in }
         var onReorder: (UUID, Int) -> Void = { _, _ in }
+        var onCollapseChange: (Set<UUID>) -> Void = { _ in }
         var foldStore = SubtaskFoldStore()
 
         private var tasksByID: [UUID: Task] = [:]
@@ -95,10 +99,9 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
             outlineView.delegate = self
             outlineView.indentationPerLevel = 16
             outlineView.allowsMultipleSelection = false
-            outlineView.target = self
-            outlineView.doubleAction = #selector(doubleClicked(_:))
-            // 单击打开详情：手势挂在 NSOutlineView 上，不会被 cell 子视图拦截。
+            // 标题、完成框与折叠按钮各自处理点击；只有行内其它区域打开详情。
             let click = NSClickGestureRecognizer(target: self, action: #selector(outlineClicked(_:)))
+            click.delegate = self
             // 不延迟主键事件：行拖拽（TI2-04）要能立刻进入 NSOutlineView 自己的拖拽跟踪，
             // 否则首帧 mouseDown 被手势吃掉，拖拽会话起不来。
             click.delaysPrimaryMouseButtonEvents = false
@@ -118,6 +121,11 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         func reload() {
             // 数据未变就跳过 reloadData，避免行内编辑中的刷新重置 cell 编辑态。
             guard rootTasks != lastRootTasks || allTasks != lastAllTasks else { return }
+            // Saving the previous title can refresh the whole tree just after
+            // the next title took focus. Preserve that active editor across reuse.
+            let editing = (0..<outlineView.numberOfRows).lazy.compactMap { index in
+                (self.outlineView.view(atColumn: 0, row: index, makeIfNecessary: false) as? SubtaskRowView)?.editingSnapshot
+            }.first
             lastRootTasks = rootTasks
             lastAllTasks = allTasks
             tasksByID = Dictionary(uniqueKeysWithValues: allTasks.map { ($0.id, $0) })
@@ -131,6 +139,15 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
             outlineView.reloadData()
             // 默认展开；用户折叠过的节点按 `SubtaskFoldStore` 恢复（TI2-04）。
             applyFoldState(item: nil)
+            publishCollapsed()
+            if let editing {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, let window = self.outlineView.window,
+                          !(window.firstResponder is NSTextView),
+                          !(window.firstResponder is NSTextField) else { return }
+                    self.rowView(for: editing.id)?.restoreEditing(text: editing.text, selection: editing.selection)
+                }
+            }
         }
 
         private func applyFoldState(item: Any?) {
@@ -151,11 +168,31 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         @objc private func itemDidCollapse(_ notification: Notification) {
             guard let task = notification.userInfo?["NSObject"] as? Task else { return }
             foldStore.setCollapsed(true, for: task.id)
+            publishCollapsed()
         }
 
         @objc private func itemDidExpand(_ notification: Notification) {
             guard let task = notification.userInfo?["NSObject"] as? Task else { return }
             foldStore.setCollapsed(false, for: task.id)
+            publishCollapsed()
+        }
+
+        /// 把"当前实际折叠的节点"报给宿主：只算这棵树里的 id，用户折叠过但
+        /// 已经删除的 id 不参与计数。
+        private func publishCollapsed() {
+            var collapsed: Set<UUID> = []
+            func walk(_ item: Any?) {
+                let count = outlineView.numberOfChildren(ofItem: item)
+                for index in 0..<count {
+                    guard let task = outlineView.child(index, ofItem: item) as? Task else { continue }
+                    if outlineView.isExpandable(task), foldStore.isCollapsed(task.id) {
+                        collapsed.insert(task.id)
+                    }
+                    walk(task)
+                }
+            }
+            walk(nil)
+            onCollapseChange(collapsed)
         }
 
         // MARK: Data source
@@ -287,10 +324,17 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
             openTapped(task)
         }
 
-        @objc private func doubleClicked(_ sender: Any?) {
-            let row = outlineView.clickedRow
-            guard row >= 0, let task = outlineView.item(atRow: row) as? Task else { return }
-            openTapped(task)
+        func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
+                               shouldAttemptToRecognizeWith event: NSEvent) -> Bool {
+            // hitTest takes a point in the receiver's superview coordinates.
+            let point = outlineView.superview?.convert(event.locationInWindow, from: nil)
+                ?? event.locationInWindow
+            var target = outlineView.hitTest(point)
+            while let view = target, view !== outlineView {
+                if view is SubtaskTitleField || view is NSTextView || view is NSButton { return false }
+                target = view.superview
+            }
+            return true
         }
 
         // MARK: NSTextFieldDelegate
@@ -304,11 +348,28 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
     }
 }
 
-/// 标题字段：非编辑态不拦截点击（穿透到 outlineView，让单击手势打开详情）。
-final class SubtaskTitleField: NSTextField {
+/// View-based tables normally take the first click to select a row. Route title
+/// clicks to the native field so that the same click can place the text caret.
+final class SubtaskOutlineView: NSOutlineView {
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if isEditable { return super.hitTest(point) }
-        return nil
+        guard let target = super.hitTest(point) else { return nil }
+        if target is NSTextView { return target }
+        let local = convert(point, from: superview)
+        let index = row(at: local)
+        guard index >= 0,
+              let cell = view(atColumn: 0, row: index, makeIfNecessary: false) as? SubtaskRowView,
+              let title = cell.titleEditor(at: local, from: self) else { return target }
+        return title
+    }
+}
+
+/// 标题自己接收单击并进入原生编辑；行手势不能借此打开子任务详情。
+final class SubtaskTitleField: NSTextField {
+    var onBeginEditing: (() -> Void)?
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {
+        if currentEditor() == nil { onBeginEditing?() }
+        super.mouseDown(with: event)
     }
 }
 
@@ -352,15 +413,17 @@ final class SubtaskRowView: NSTableCellView {
         completionButton.target = self
         completionButton.action = #selector(completionClicked)
 
-        titleField.isEditable = false
-        titleField.isSelectable = false
+        titleField.isEditable = true
+        titleField.isSelectable = true
         titleField.isBordered = false
         titleField.drawsBackground = false
+        titleField.focusRingType = .none
         titleField.lineBreakMode = .byTruncatingTail
         titleField.font = .systemFont(ofSize: 14, weight: .medium)
         titleField.delegate = nil
         titleField.target = self
         titleField.action = #selector(titleCommitted)
+        titleField.onBeginEditing = { [weak self] in self?.prepareEditing() }
 
         dateField.font = .systemFont(ofSize: 12)
         dateField.textColor = .secondaryLabelColor
@@ -381,6 +444,23 @@ final class SubtaskRowView: NSTableCellView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func titleEditor(at point: NSPoint, from source: NSView) -> SubtaskTitleField? {
+        titleField.bounds.contains(titleField.convert(point, from: source)) ? titleField : nil
+    }
+
+    var editingSnapshot: (id: UUID, text: String, selection: NSRange)? {
+        guard let taskID, let editor = titleField.currentEditor() as? NSTextView,
+              window?.firstResponder === editor else { return nil }
+        return (taskID, editor.string, editor.selectedRange())
+    }
+
+    func restoreEditing(text: String, selection: NSRange) {
+        prepareEditing()
+        titleField.stringValue = text
+        titleField.selectText(nil)
+        (titleField.currentEditor() as? NSTextView)?.setSelectedRange(selection)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -424,10 +504,11 @@ final class SubtaskRowView: NSTableCellView {
         completionBox.needsDisplay = true
         titleField.stringValue = task.title.isEmpty ? "未命名子任务" : task.title
         titleField.textColor = task.isClosed ? .tertiaryLabelColor : .labelColor
-        // cell 复用时重置编辑态；编辑由 coordinator.beginEditing 单独触发。
-        titleField.isEditable = false
-        titleField.isSelectable = false
-        titleField.delegate = nil
+        // Keep a native editable field in the table so a single title click
+        // reaches its editor instead of the outline's row-selection handler.
+        titleField.isEditable = true
+        titleField.isSelectable = true
+        titleField.delegate = coordinator
         if let dateText, !dateText.isEmpty {
             dateField.stringValue = dateText
             dateField.isHidden = false
@@ -459,12 +540,16 @@ final class SubtaskRowView: NSTableCellView {
         indicatorStack.isHidden = symbols.isEmpty
     }
 
-    func beginEditing() {
+    private func prepareEditing() {
         guard let task else { return }
         titleField.isEditable = true
         titleField.isSelectable = true
         titleField.stringValue = task.title
         titleField.delegate = coordinator
+    }
+
+    func beginEditing() {
+        prepareEditing()
         // 等 cell 挂到窗口后再夺焦点，否则 makeFirstResponder 落到空 window。
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -479,10 +564,11 @@ final class SubtaskRowView: NSTableCellView {
     }
 
     @objc private func titleCommitted() {
-        guard let taskID, titleField.isEditable else { return }
-        titleField.isEditable = false
-        titleField.delegate = nil
-        coordinator?.commitEditing(taskID: taskID, text: titleField.stringValue)
+        // End native editing; the delegate owns the one rename submission for
+        // both Return and focus handoff. Keep the field editable for the next click.
+        if let editor = titleField.currentEditor(), window?.firstResponder === editor {
+            window?.makeFirstResponder(nil)
+        }
     }
 
     override func layout() {

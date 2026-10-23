@@ -30,7 +30,22 @@ struct PlanningAnchorProbe: View {
     }
 }
 
-/// 锚定浮层的叠层：一张定位卡片 + 一层透明遮罩，画在**页面自己的图层**里。
+/// 任务条的实际布局锚点；跨周色带可能为同一个任务提供多个可点击区域。
+struct PlanningTaskAnchorsKey: PreferenceKey {
+    static var defaultValue: [UUID: [Anchor<CGRect>]] { [:] }
+    static func reduce(value: inout [UUID: [Anchor<CGRect>]], nextValue: () -> [UUID: [Anchor<CGRect>]]) {
+        value.merge(nextValue(), uniquingKeysWith: +)
+    }
+}
+
+extension View {
+    func planningTaskTarget(_ id: UUID) -> some View {
+        anchorPreference(key: PlanningTaskAnchorsKey.self, value: .bounds) { [id: [$0]] }
+    }
+}
+
+/// 锚定浮层的叠层：一张定位卡片 + 一层透明遮罩，画在页面自己的图层里。
+/// 编辑任务时，遮罩为其它任务条留出命中区域，让一次点击直接切换详情。
 ///
 /// 这与原版同架构——Flutter 的 `showAnchoredPopover` 也是画在窗口叠层里的一张卡
 /// （`_AnchoredPopoverPage`），不是另一个窗口。曾经用无边框 `NSPanel` 子窗口实现，
@@ -46,6 +61,7 @@ struct PlanningOverlayLayer<Content: View>: View {
     let placement: WFOverlayPlacement
     let size: CGSize
     var radius: CGFloat = WFPlanningOverlayMetrics.radius
+    var taskHitRects: [CGRect] = []
     let onDismiss: () -> Void
     @ViewBuilder var content: Content
 
@@ -53,14 +69,16 @@ struct PlanningOverlayLayer<Content: View>: View {
         GeometryReader { proxy in
             let rect = resolvedRect(viewport: proxy.size)
             ZStack(alignment: .topLeading) {
-                // 原版的透明遮罩：卡以外任何一处按下都关掉浮层，并且吃掉这次点击，
-                // 不会顺手点到下面的格子或任务条。
+                // 空白处关闭并消费点击，避免顺带触发网格的新建；任务条直接收点击。
                 Color.clear
-                    .contentShape(Rectangle())
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .contentShape(PlanningOverlayDismissRegion(taskHitRects: taskHitRects), eoFill: true)
                     .onTapGesture(perform: onDismiss)
                 if let rect {
                     WFOverlayCard(radius: radius) { content }
                         .frame(width: rect.width, height: rect.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture { }
                         .offset(x: rect.minX, y: rect.minY)
                         // Esc：内层控件（正文编辑器、Slash、格式栏）先有机会处理，
                         // 没人处理才关浮层——与原版叠层内的 Shortcuts 同一顺序。
@@ -77,6 +95,18 @@ struct PlanningOverlayLayer<Content: View>: View {
                                              viewport: viewport,
                                              desired: size,
                                              placement: placement).rect
+    }
+}
+
+private struct PlanningOverlayDismissRegion: Shape {
+    let taskHitRects: [CGRect]
+    func path(in rect: CGRect) -> Path {
+        var path = Path(rect)
+        for target in taskHitRects {
+            let visible = target.intersection(rect)
+            if !visible.isNull, !visible.isEmpty { path.addRect(visible) }
+        }
+        return path
     }
 }
 

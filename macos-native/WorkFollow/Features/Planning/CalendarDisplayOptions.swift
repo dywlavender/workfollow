@@ -121,6 +121,7 @@ struct CalendarArrangePane: View {
                         .buttonStyle(.plain)
                         .contentShape(Rectangle())
                         .accessibilityIdentifier("calendar.arrange-card.\(task.id.uuidString)")
+                        .planningTaskTarget(task.id)
                         .help("拖入日历安排，单击打开任务")
                         .businessContextMenu { Button("安排到选中日期") { onArrange(task.id) } }
                     }

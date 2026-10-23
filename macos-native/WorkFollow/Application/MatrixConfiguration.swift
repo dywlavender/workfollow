@@ -8,15 +8,33 @@ enum MatrixPreset: String, CaseIterable, Codable {
     } }
 }
 enum MatrixSort: String, CaseIterable, Codable {
-    case manual, date, priority, title, created
+    /// `manual` 保留给「拖拽顺序」这一旧口径；菜单里只在需要时出现。
+    case date, created, modified, title, tag, priority, manual
     var title: String { switch self {
-    case .manual: "手动排序"; case .date: "按日期"; case .priority: "按优先级";
-    case .title: "按标题"; case .created: "按创建时间"
+    case .date: "时间"; case .created: "创建时间"; case .modified: "修改时间"
+    case .title: "标题"; case .tag: "标签"; case .priority: "优先级"
+    case .manual: "手动"
     } }
 }
+/// 排序方向（滴答「顺序」一栏）。
+enum MatrixOrderDirection: String, CaseIterable, Codable {
+    case ascending, descending
+    var title: String { self == .ascending ? "从旧到新" : "从新到旧" }
+}
+
 enum MatrixGrouping: String, CaseIterable, Codable {
-    case list, none
-    var title: String { self == .list ? "按清单分组" : "不分组" }
+    /// 顺序与滴答的「分组」子菜单一致。
+    case list, date, created, tag, priority, none
+    var title: String {
+        switch self {
+        case .list: "清单"
+        case .date: "时间"
+        case .created: "创建时间"
+        case .tag: "标签"
+        case .priority: "优先级"
+        case .none: "无"
+        }
+    }
 }
 enum MatrixDateBasis: String, CaseIterable, Codable {
     case schedule, deadline
@@ -93,6 +111,8 @@ struct MatrixQuadrantConfiguration: Equatable, Codable, Identifiable {
     var rule: MatrixRule
     var sort: MatrixSort = .manual
     var grouping: MatrixGrouping = .list
+    /// 排序方向；`.manual` 时反转拖拽顺序。
+    var direction: MatrixOrderDirection = .ascending
     var manualOrder: [UUID] = []
     var id: Int { quadrant.rawValue }
 }

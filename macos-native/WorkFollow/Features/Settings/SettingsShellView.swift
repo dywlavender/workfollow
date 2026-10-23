@@ -14,6 +14,19 @@ struct SettingsShellView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                Section("编辑") {
+                    Toggle("拼写检查", isOn: Binding(
+                        get: { EditorPreferences.spellCheckingEnabled },
+                        set: { EditorPreferences.setSpellCheckingEnabled($0) }))
+                    Text("智能引号与破折号替换始终关闭，避免破坏 Markdown 语法。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Section("桌面小组件") {
+                    Text("在桌面空白处右键，选择“编辑小组件”，搜索 WorkFollow 并添加“今日待办”。")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Text("查看今日和逾期任务，勾选完成，或快速进入本周计划。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             .formStyle(.grouped)
             .tabItem { Label("通用", systemImage: "gearshape") }

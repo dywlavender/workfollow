@@ -2,6 +2,8 @@
 
 > 当前功能以 [功能迁移清单](../docs/native-feature-migration-status.md) 及各批验收记录为准。本文后半部分保留早期实验记录，其中的功能范围和测试数量不代表当前版本。
 
+任务与笔记正文现可插入离线 draw.io 图表，支持图源保存、双击再编辑和 `.drawio` 导入导出。入口与实现说明见 [原生绘图接入](../docs/native-drawio-editor-2026-10-23.md)。
+
 Native macOS 实验版本，不是 Flutter 的替代版本。要求 macOS 14+、支持同步文件组的 Xcode 16+；本轮使用 Xcode 26.6 编译。
 
 ## 日用版构建与更新

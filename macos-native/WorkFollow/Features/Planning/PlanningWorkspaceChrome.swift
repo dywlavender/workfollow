@@ -12,7 +12,6 @@ struct PlanningComposerRequest: Equatable {
     var priority: TaskPriority
     var list: TaskList? = nil
     var tags: [String] = []
-    var matrixConfiguration: MatrixConfiguration? = nil
 }
 
 /// 日历与四象限共用的浮层宿主：把「正在新建什么 / 正在编辑哪个任务」变成贴着被点
@@ -34,6 +33,7 @@ struct PlanningWorkspaceChrome: View {
 
     @Binding var request: PlanningComposerRequest?
     @Binding var editingTaskID: UUID?
+    var taskHitRects: [CGRect] = []
 
     /// 浮层是主窗口之外的第二层视图树（`NSHostingView` 那套已经不用了），但内容里
     /// 仍可能有 `@EnvironmentObject`（`TaskInspectorShell` 要 AppEnvironment），
@@ -54,7 +54,6 @@ struct PlanningWorkspaceChrome: View {
                                       presetPriority: request.priority,
                                       presetList: request.list,
                                       presetTags: request.tags,
-                                      matrixConfiguration: request.matrixConfiguration,
                                       requestClose: closeComposer)
                         .environmentObject(environment)
                 }
@@ -63,6 +62,7 @@ struct PlanningWorkspaceChrome: View {
                                      placement: .bottomCenter,
                                      size: CGSize(width: WFPlanningOverlayMetrics.editorWidth,
                                                   height: WFPlanningOverlayMetrics.editorHeight),
+                                     taskHitRects: taskHitRects,
                                      onDismiss: closeEditor) {
                     TaskInspectorShell(workspace: workspace,
                                        showBack: true,

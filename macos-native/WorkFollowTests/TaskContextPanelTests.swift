@@ -6,6 +6,401 @@ import XCTest
 @MainActor
 final class TaskContextPanelTests: XCTestCase {
     private typealias Adapter = AnchoredPropertyPanel<AnyView>
+    private final class MenuProbe {
+        var rows: [TaskContextMenuAnchor: CGRect] = [:]
+        var tags: [TaskTagPickerAnchor: CGRect] = [:]
+        var focus: [InspectorRenderAnchor: CGRect] = [:]
+        var actions: [DialogActionAnchor: CGRect] = [:]
+        var lists: [TaskContextSubmenuAnchor: CGRect] = [:]
+        var sections: [TaskContextSubmenuAnchor: CGRect] = [:]
+        var menuRows: [BusinessMenuRowFrame] = []
+    }
+
+    private func openMenu(workspace: TaskWorkspaceModel, taskID: UUID, environment: AppEnvironment,
+                          probe: MenuProbe, appearance: NSAppearance.Name = .aqua) throws -> (NSWindow, TaskContextMenuPresenter.Session) {
+        let ownerView = NSView(frame: CGRect(x: 0, y: 0, width: 1000, height: 700))
+        let owner = InspectorPanelTestSupport.ownerWindow(for: ownerView, width: 1000, height: 700)
+        owner.appearance = NSAppearance(named: appearance)
+        environment.focusStore.notifier = nil
+        let session = TaskContextMenuPresenter.Session(in: try XCTUnwrap(owner.contentView),
+            at: CGPoint(x: 150, y: owner.contentLayoutRect.height - 12))
+        let presenter = PopupPresentingWindow()
+        presenter.window = owner
+        session.coordinator.presentingWindow = presenter
+        session.coordinator.root = AnyView(TaskContextMenuPopover(workspace: workspace,
+            isPresented: Binding(get: { [weak session] in session?.coordinator.presented == true },
+                                 set: { [weak session] in if !$0 { session?.close() } }),
+            task: try XCTUnwrap(workspace.task(for: taskID)), onCustomDate: {}, onChooseParent: {})
+            .environmentObject(environment)
+            .onPreferenceChange(TaskContextMenuFrames.self) { probe.rows = $0 }
+            .onPreferenceChange(BusinessMenuRowFrames.self) { probe.menuRows = $0 }
+            .environment(\.popupContentObservation, { content in
+                AnyView(content.coordinateSpace(name: "inspector-render").coordinateSpace(name: "dialog-render")
+                    .onPreferenceChange(TaskTagPickerFrames.self) { if !$0.isEmpty { probe.tags = $0 } }
+                    .onPreferenceChange(InspectorFramesKey.self) { if !$0.isEmpty { probe.focus = $0 } }
+                    .onPreferenceChange(TaskContextSubmenuFrames.self) {
+                        if $0[.search] != nil { probe.lists = $0 }
+                        else if $0[.addSection] != nil { probe.sections = $0 }
+                    }
+                    .onPreferenceChange(DialogActionFrames.self) { if !$0.isEmpty { probe.actions = $0 } })
+            }))
+        session.coordinator.update()
+        settle()
+        return (owner, session)
+    }
+
+    private func click(_ rect: CGRect, in window: NSWindow) throws {
+        try InspectorPanelTestSupport.click(rect, in: try XCTUnwrap(window.contentView), window: window)
+    }
+
+    private func savePreview(_ name: String, of window: NSWindow) throws {
+        guard let directory = ProcessInfo.processInfo.environment["WF_CONTEXT_MENU_ARTIFACTS"] else { return }
+        let host = try XCTUnwrap(window.contentView)
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: directory).appendingPathComponent(name + ".png"))
+    }
+
+    private func field(placeholder: String, in window: NSWindow) throws -> NSTextField {
+        func fields(_ view: NSView) -> [NSTextField] {
+            (view as? NSTextField).map { [$0] } ?? view.subviews.flatMap(fields)
+        }
+        return try XCTUnwrap(fields(try XCTUnwrap(window.contentView)).first {
+            $0.isEditable && $0.placeholderString == placeholder
+        })
+    }
+
+    private func enter(_ text: String, placeholder: String, in window: NSWindow) throws {
+        let field = try field(placeholder: placeholder, in: window)
+        window.makeFirstResponder(field)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.selectAll(nil)
+        editor.insertText(text, replacementRange: editor.selectedRange())
+        InspectorPanelTestSupport.settle(window)
+    }
+
+    private func key(_ code: UInt16, in window: NSWindow) throws {
+        let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: code))
+        NSApp.sendEvent(event)
+        InspectorPanelTestSupport.settle(window)
+    }
+
+    func testMoveSubmenuSearchesAndMovesToListWithUndo() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        XCTAssertTrue(workspace.saveList("工作"))
+        XCTAssertTrue(workspace.saveList("生活"))
+        let id = try XCTUnwrap(workspace.createTask(title: "移动清单验收", in: .inbox).taskID)
+        let probe = MenuProbe()
+        let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+            environment: AppEnvironment(), probe: probe)
+        defer { session.close(); owner.close() }
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        let original = menu.frame
+        try click(try XCTUnwrap(probe.rows[.action("移动到")]), in: menu)
+        let lists = try InspectorPanelTestSupport.panel(title: "移动到清单", below: owner)
+        XCTAssertEqual(lists.frame.width, PopupMetrics.menuWidth, accuracy: 0.5)
+        XCTAssertLessThan(lists.frame.height, 230, "少量清单按内容收高")
+        try savePreview("move-lists", of: lists)
+        try enter("工作", placeholder: "搜索", in: lists)
+        XCTAssertNotNil(probe.lists[.list("工作")])
+        XCTAssertNil(probe.lists[.list("生活")])
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox, "搜索不应移动任务")
+        try click(try XCTUnwrap(probe.lists[.list("工作")]), in: lists)
+        XCTAssertEqual(workspace.task(for: id)?.list.name, "工作")
+        XCTAssertTrue(lists.isVisible)
+        XCTAssertTrue(menu.isVisible)
+        XCTAssertEqual(menu.frame, original)
+        workspace.undo()
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox)
+        try InspectorPanelTestSupport.sendEscape(to: owner)
+        XCTAssertFalse(lists.isVisible)
+        XCTAssertTrue(menu.isVisible)
+    }
+
+    func testMoveSectionArrowAndKeyboardOpenWithoutMovingThenSelectionIsAtomic() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        XCTAssertTrue(workspace.saveList("工作"))
+        XCTAssertTrue(workspace.addListSection("工作", title: "进行中"))
+        let section = try XCTUnwrap(workspace.listSections(forList: "工作").first)
+        let id = try XCTUnwrap(workspace.createTask(title: "跨清单分组验收", in: .inbox).taskID)
+        let probe = MenuProbe()
+        let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+            environment: AppEnvironment(), probe: probe)
+        defer { session.close(); owner.close() }
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        try click(try XCTUnwrap(probe.rows[.action("移动到")]), in: menu)
+        let lists = try InspectorPanelTestSupport.panel(title: "移动到清单", below: owner)
+        lists.makeFirstResponder(nil)
+        let index = try XCTUnwrap(workspace.availableListNames.firstIndex(of: "工作"))
+        for _ in 0...index { try key(125, in: lists) }
+        try key(124, in: lists)
+        let first = try InspectorPanelTestSupport.panel(title: "移动到分组", below: owner)
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox, "右箭头只展开分组")
+        try key(123, in: first)
+        XCTAssertFalse(first.isVisible)
+        XCTAssertTrue(lists.isVisible)
+        let row = try XCTUnwrap(probe.lists[.list("工作")])
+        try click(CGRect(x: row.maxX - 12, y: row.midY, width: 1, height: 1), in: lists)
+        let groups = try InspectorPanelTestSupport.panel(title: "移动到分组", below: owner)
+        XCTAssertTrue(groups.parent === lists)
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox, "点击展开按钮也不能提前移动")
+        try savePreview("move-sections", of: groups)
+        let originalSection = try XCTUnwrap(probe.sections[.section(section.id)])
+        try click(originalSection, in: groups)
+        XCTAssertEqual(workspace.task(for: id)?.list.name, "工作")
+        XCTAssertEqual(workspace.task(for: id)?.sectionID, section.id)
+        XCTAssertEqual(probe.sections[.section(section.id)], originalSection, "选中后分组候选保持原位")
+        workspace.undo()
+        InspectorPanelTestSupport.settle(groups)
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox)
+        XCTAssertNil(workspace.task(for: id)?.sectionID, "一次撤销同时恢复清单和分组")
+        try click(try XCTUnwrap(probe.sections[.section(section.id)]), in: groups)
+        XCTAssertEqual(workspace.task(for: id)?.sectionID, section.id)
+        try click(try XCTUnwrap(probe.sections[.clearSection]), in: groups)
+        XCTAssertEqual(workspace.task(for: id)?.list.name, "工作")
+        XCTAssertNil(workspace.task(for: id)?.sectionID)
+        workspace.undo()
+        XCTAssertEqual(workspace.task(for: id)?.sectionID, section.id)
+    }
+
+    func testNewSectionFormValidatesCancelsAndCreatesThenMoves() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        XCTAssertTrue(workspace.saveList("工作"))
+        XCTAssertTrue(workspace.addListSection("工作", title: "进行中"))
+        let id = try XCTUnwrap(workspace.createTask(title: "新建分组验收", in: .inbox).taskID)
+        let probe = MenuProbe()
+        let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+            environment: AppEnvironment(), probe: probe)
+        defer { session.close(); owner.close() }
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        try click(try XCTUnwrap(probe.rows[.action("移动到")]), in: menu)
+        let lists = try InspectorPanelTestSupport.panel(title: "移动到清单", below: owner)
+        let row = try XCTUnwrap(probe.lists[.list("工作")])
+        try click(CGRect(x: row.maxX - 12, y: row.midY, width: 1, height: 1), in: lists)
+        let groups = try InspectorPanelTestSupport.panel(title: "移动到分组", below: owner)
+        try click(try XCTUnwrap(probe.sections[.addSection]), in: groups)
+        let form = try InspectorPanelTestSupport.panel(title: "添加分组", below: owner)
+        let original = form.frame
+        try enter("进行中", placeholder: "分组名称", in: form)
+        try click(try XCTUnwrap(probe.actions[.primary]), in: form)
+        XCTAssertEqual(workspace.listSections(forList: "工作").count, 1)
+        XCTAssertEqual(form.frame, original, "校验错误不能推走操作栏")
+        try click(try XCTUnwrap(probe.actions[.cancel]), in: form)
+        XCTAssertFalse(form.isVisible)
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox)
+        try click(try XCTUnwrap(probe.sections[.addSection]), in: groups)
+        let reopened = try InspectorPanelTestSupport.panel(title: "添加分组", below: owner)
+        try enter("验收", placeholder: "分组名称", in: reopened)
+        try savePreview("add-section", of: reopened)
+        try click(try XCTUnwrap(probe.actions[.primary]), in: reopened)
+        let added = try XCTUnwrap(workspace.listSections(forList: "工作").first { $0.title == "验收" })
+        XCTAssertEqual(workspace.task(for: id)?.list.name, "工作")
+        XCTAssertEqual(workspace.task(for: id)?.sectionID, added.id)
+        XCTAssertFalse(reopened.isVisible)
+        XCTAssertTrue(groups.isVisible)
+    }
+
+    func testReferenceMenuKeepsAllActionsInOrderWithFourDateShortcutsAndVisibleDelete() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "截图菜单验收", in: .inbox).taskID)
+        _ = workspace.createTask(title: "可关联的主任务", in: .inbox)
+        _ = workspace.createTag("1")
+        _ = workspace.createTag("rea 标签甲")
+        workspace.setTags(id, ["REA 标签验收"])
+        let environment = AppEnvironment()
+        let titles = ["添加子任务", "关联主任务", "置顶", "放弃", "移动到", "标签", "开始专注",
+                      "创建副本", "复制链接", "打开便签", "转换为笔记", "删除"]
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let probe = MenuProbe()
+            let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+                environment: environment, probe: probe, appearance: appearance)
+            defer { session.close(); owner.close() }
+            let menu = try XCTUnwrap(session.coordinator.panel)
+            let bounds = try XCTUnwrap(menu.contentView).bounds
+            let frames = try titles.map { try XCTUnwrap(probe.rows[.action($0)], "缺少菜单项：" + $0) }
+            XCTAssertEqual(frames.map(\.minY), frames.map(\.minY).sorted())
+            for frame in frames { XCTAssertTrue(bounds.insetBy(dx: -1, dy: -1).contains(frame), "菜单项不能被裁切") }
+            let shortcuts: [TaskContextMenuAnchor] = [.date(0), .date(1), .date(7), .customDate]
+            let dates = try shortcuts.map { try XCTUnwrap(probe.rows[$0]) }
+            XCTAssertEqual(dates.map(\.minX), dates.map(\.minX).sorted())
+            XCTAssertEqual(dates.count, 4)
+            XCTAssertEqual(probe.menuRows.count, titles.count, "主菜单动作也必须使用共享菜单行")
+            for row in probe.menuRows {
+                XCTAssertEqual(row.rect.height, PopupMetrics.menuRowHeight, accuracy: 0.5)
+                XCTAssertEqual(row.rect.minX, PopupMetrics.menuInset, accuracy: 0.5)
+                XCTAssertEqual(row.rect.maxX, bounds.width - PopupMetrics.menuInset, accuracy: 0.5)
+            }
+            let original = menu.frame
+            try savePreview("task-menu-" + name, of: menu)
+            try click(try XCTUnwrap(probe.rows[.action("标签")]), in: menu)
+            let tags = try InspectorPanelTestSupport.panel(title: "任务标签", below: owner)
+            XCTAssertTrue(tags.parent === menu)
+            XCTAssertNotNil(probe.tags[.remove("REA 标签验收")])
+            XCTAssertEqual(menu.frame, original)
+            try savePreview("task-tags-" + name, of: tags)
+            try InspectorPanelTestSupport.sendEscape(to: owner)
+            XCTAssertFalse(tags.isVisible)
+            XCTAssertTrue(menu.isVisible)
+            try click(try XCTUnwrap(probe.rows[.action("移动到")]), in: menu)
+            let lists = try InspectorPanelTestSupport.panel(title: "移动到清单", below: owner)
+            try savePreview("move-lists-" + name, of: lists)
+            try InspectorPanelTestSupport.sendEscape(to: owner)
+            try click(try XCTUnwrap(probe.rows[.action("开始专注")]), in: menu)
+            let focus = try InspectorPanelTestSupport.panel(title: "任务专注", below: owner)
+            try savePreview("task-focus-" + name, of: focus)
+            try click(try XCTUnwrap(probe.focus[.focusEstimate]), in: focus)
+            let estimate = try InspectorPanelTestSupport.panel(title: "预计专注", below: owner)
+            try savePreview("focus-estimate-" + name, of: estimate)
+            try InspectorPanelTestSupport.sendEscape(to: owner)
+            XCTAssertEqual(menu.frame, original)
+        }
+    }
+
+    func testContextTagChipRemovalUsesDraftAndConfirmIsUndoable() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "标签草稿验收", in: .inbox).taskID)
+        workspace.setTags(id, ["原标签"])
+        _ = workspace.createTag("工作")
+        let probe = MenuProbe()
+        let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+            environment: AppEnvironment(), probe: probe)
+        defer { session.close(); owner.close() }
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        try click(try XCTUnwrap(probe.rows[.action("标签")]), in: menu)
+        let tags = try InspectorPanelTestSupport.panel(title: "任务标签", below: owner)
+        let footer = try XCTUnwrap(probe.tags[.confirm])
+        try click(try XCTUnwrap(probe.tags[.remove("原标签")]), in: tags)
+        XCTAssertEqual(workspace.task(for: id)?.tags, ["原标签"])
+        XCTAssertEqual(probe.tags[.confirm], footer)
+        try click(try XCTUnwrap(probe.tags[.cancel]), in: tags)
+        XCTAssertFalse(tags.isVisible)
+        XCTAssertTrue(menu.isVisible)
+        try click(try XCTUnwrap(probe.rows[.action("标签")]), in: menu)
+        let reopened = try InspectorPanelTestSupport.panel(title: "任务标签", below: owner)
+        try click(try XCTUnwrap(probe.tags[.remove("原标签")]), in: reopened)
+        try click(try XCTUnwrap(probe.tags[.tag("工作")]), in: reopened)
+        XCTAssertEqual(workspace.task(for: id)?.tags, ["原标签"])
+        try click(try XCTUnwrap(probe.tags[.confirm]), in: reopened)
+        XCTAssertEqual(workspace.task(for: id)?.tags, ["工作"])
+        XCTAssertFalse(menu.isVisible)
+        XCTAssertFalse(reopened.isVisible)
+        workspace.undo()
+        XCTAssertEqual(workspace.task(for: id)?.tags, ["原标签"])
+    }
+
+    func testRootMenuKeyboardEntersListAndFocusWithoutExecutingAnAction() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "主卡键盘入口", in: .inbox).taskID)
+        _ = workspace.createTask(title: "可关联主任务", in: .inbox)
+        let environment = AppEnvironment(), probe = MenuProbe()
+        let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+            environment: environment, probe: probe)
+        defer { session.close(); owner.close() }
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        menu.makeFirstResponder(nil)
+        for _ in 0..<5 { try key(125, in: menu) }
+        try key(124, in: menu)
+        let lists = try InspectorPanelTestSupport.panel(title: "移动到清单", below: owner)
+        XCTAssertEqual(workspace.task(for: id)?.list, .inbox)
+        try InspectorPanelTestSupport.sendEscape(to: owner)
+        XCTAssertFalse(lists.isVisible)
+        try key(125, in: menu)
+        try key(125, in: menu)
+        try key(124, in: menu)
+        let focus = try InspectorPanelTestSupport.panel(title: "任务专注", below: owner)
+        XCTAssertEqual(environment.focusStore.phase, .idle)
+        try key(123, in: focus)
+        XCTAssertFalse(focus.isVisible)
+        XCTAssertTrue(menu.isVisible)
+    }
+
+    func testContextFocusSubmenuStartsTheChosenModeOnlyAfterSelection() throws {
+        for stopwatch in [false, true] {
+            let workspace = TaskWorkspaceModel(seedDemoData: false)
+            let id = try XCTUnwrap(workspace.createTask(title: "右键专注验收", in: .inbox).taskID)
+            let environment = AppEnvironment(), probe = MenuProbe()
+            let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+                environment: environment, probe: probe)
+            defer { _ = environment.focusStore.giveUp(); session.close(); owner.close() }
+            let menu = try XCTUnwrap(session.coordinator.panel)
+            try click(try XCTUnwrap(probe.rows[.action("开始专注")]), in: menu)
+            let focus = try InspectorPanelTestSupport.panel(title: "任务专注", below: owner)
+            XCTAssertTrue(focus.parent === menu)
+            XCTAssertEqual(focus.frame.width, PopupMetrics.taskMenuWidth, accuracy: 0.5)
+            XCTAssertEqual(environment.focusStore.phase, .idle, "展开子菜单不能直接启动专注")
+            try savePreview("task-focus", of: focus)
+            if stopwatch {
+                focus.makeFirstResponder(nil)
+                try key(125, in: focus)
+                try key(125, in: focus)
+                try key(36, in: focus)
+            } else {
+                try click(try XCTUnwrap(probe.focus[.focusPomodoro]), in: focus)
+            }
+            XCTAssertEqual(environment.focusStore.currentTaskID, id)
+            XCTAssertEqual(environment.focusStore.phase, .focusing)
+            XCTAssertEqual(environment.focusStore.sessionTiming?.projectedEndAt == nil, stopwatch)
+            XCTAssertEqual(environment.navigation.destination, .focus)
+            XCTAssertFalse(menu.isVisible)
+            XCTAssertFalse(focus.isVisible)
+        }
+    }
+
+    func testContextFocusEstimateCancelsOrSavesWithoutStartingTimer() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "右键预计专注", in: .inbox).taskID)
+        let environment = AppEnvironment(), probe = MenuProbe()
+        let (owner, session) = try openMenu(workspace: workspace, taskID: id,
+            environment: environment, probe: probe)
+        defer { session.close(); owner.close() }
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        func openEstimate() throws -> NSPanel {
+            try click(try XCTUnwrap(probe.rows[.action("开始专注")]), in: menu)
+            let focus = try InspectorPanelTestSupport.panel(title: "任务专注", below: owner)
+            try click(try XCTUnwrap(probe.focus[.focusEstimate]), in: focus)
+            let estimate = try InspectorPanelTestSupport.panel(title: "预计专注", below: owner)
+            XCTAssertFalse(focus.isVisible)
+            XCTAssertTrue(menu.isVisible)
+            XCTAssertEqual(environment.focusStore.phase, .idle)
+            return estimate
+        }
+
+        let canceled = try openEstimate()
+        try enter("40", placeholder: "数值", in: canceled)
+        try click(try XCTUnwrap(probe.actions[.cancel]), in: canceled)
+        XCTAssertFalse(canceled.isVisible)
+        XCTAssertNil(workspace.task(for: id)?.focusEstimate)
+
+        let estimate = try openEstimate()
+        try enter("40", placeholder: "数值", in: estimate)
+        try InspectorPanelTestSupport.clickElement(containing: "番茄数", in: estimate)
+        XCTAssertEqual(try field(placeholder: "数值", in: estimate).stringValue, "1")
+        try enter("2", placeholder: "数值", in: estimate)
+        try InspectorPanelTestSupport.clickElement(containing: "时长", in: estimate)
+        XCTAssertEqual(try field(placeholder: "数值", in: estimate).stringValue, "40", "切换单位保留各自的草稿")
+        try InspectorPanelTestSupport.clickElement(containing: "番茄数", in: estimate)
+        XCTAssertEqual(try field(placeholder: "数值", in: estimate).stringValue, "2")
+        try savePreview("focus-estimate", of: estimate)
+        try click(try XCTUnwrap(probe.actions[.primary]), in: estimate)
+        XCTAssertEqual(workspace.task(for: id)?.focusEstimate?.pomodoros, 2)
+        XCTAssertNil(workspace.task(for: id)?.focusEstimate?.minutes)
+        XCTAssertFalse(estimate.isVisible)
+        XCTAssertTrue(menu.isVisible)
+        XCTAssertEqual(environment.focusStore.phase, .idle)
+
+        let clear = try openEstimate()
+        try click(try XCTUnwrap(probe.focus[.focusEstimateClear]), in: clear)
+        XCTAssertFalse(clear.isVisible)
+        XCTAssertNil(workspace.task(for: id)?.focusEstimate)
+        workspace.undo()
+        XCTAssertEqual(workspace.task(for: id)?.focusEstimate?.pomodoros, 2)
+        workspace.undo()
+        XCTAssertNil(workspace.task(for: id)?.focusEstimate)
+    }
 
     private final class EscapeProbeView: NSView {
         var escapes = 0
@@ -72,7 +467,7 @@ final class TaskContextPanelTests: XCTestCase {
         XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
         XCTAssertFalse(panel.styleMask.contains(.titled))
         XCTAssertTrue(panel.parent === owner)
-        XCTAssertEqual(panel.frame.width, 220, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.width, PopupMetrics.menuWidth, accuracy: 0.5)
         let anchor = owner.convertToScreen(session.anchor.convert(session.anchor.bounds, to: nil))
         XCTAssertEqual(panel.frame.minX, anchor.minX, accuracy: 0.5)
         XCTAssertEqual(panel.frame.maxY, anchor.minY, accuracy: 0.5)

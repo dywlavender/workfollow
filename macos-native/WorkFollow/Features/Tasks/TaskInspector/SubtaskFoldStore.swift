@@ -27,3 +27,23 @@ struct SubtaskFoldStore {
         Set(defaults.stringArray(forKey: key) ?? [])
     }
 }
+
+/// 折叠提示的计数口径（纯函数，便于测试）。
+///
+/// 一个节点折叠后，它下面**所有**子孙都不可见；未折叠就继续往下找。
+/// 计数只算"当前树里真实存在"的节点，所以用户折叠过但已删除的 id 不参与。
+enum SubtaskFoldSummary {
+    static func hiddenCount(under rootID: UUID,
+                            children: (UUID) -> [UUID],
+                            collapsed: Set<UUID>) -> Int {
+        func descendants(_ id: UUID) -> Int {
+            children(id).reduce(0) { $0 + 1 + descendants($1) }
+        }
+        func hidden(under id: UUID) -> Int {
+            children(id).reduce(0) { total, child in
+                total + (collapsed.contains(child) ? descendants(child) : hidden(under: child))
+            }
+        }
+        return hidden(under: rootID)
+    }
+}

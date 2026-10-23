@@ -1139,7 +1139,8 @@ struct TaskListView: View {
                         allowsReordering: sortMode == .manual && !node.task.isClosed,
                         progress: workspace.subtaskProgress(for: node.task.id),
                         day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision)
-                    let hasTags = !node.task.tags.isEmpty
+                    let hasTags = !state.hidesDetails && !state.hiddenFields.contains(.tags)
+                        && !node.task.tags.isEmpty
                     let layout = TaskOutlineRowLayout(hasPreview: preview != nil, hasTags: hasTags,
                         completed: node.task.status == .completed, depth: node.depth)
                     rows.append(.init(id: rowIdentity(group: group, task: node.task), state: state,
@@ -1377,7 +1378,7 @@ struct TaskRowView: View {
                 .taskTreeRenderAnchor(task.id, .checkbox)
             }
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: WFSpace.sm) {
                     TaskRowTitleField(title: task.title,
                                       color: task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text,
@@ -1399,9 +1400,12 @@ struct TaskRowView: View {
                         .lineLimit(1)
                         .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.secondaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 1)
                         .taskTreeRenderAnchor(task.id, .preview)
                 }
-                if !task.tags.isEmpty { tagRow }
+                if !hidesDetails, !hiddenFields.contains(.tags), !task.tags.isEmpty {
+                    tagRow.padding(.top, TaskListMetrics.tagRowSpacing)
+                }
             }
             .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
         }
@@ -1489,7 +1493,7 @@ struct TaskRowView: View {
             .foregroundStyle(color ?? WFColors.text)
             .lineLimit(1)
             .padding(.horizontal, 8)
-            .frame(height: 22)
+            .frame(height: TaskListMetrics.tagChipHeight)
             .background(color?.opacity(0.1) ?? WFColors.hover, in: Capsule())
     }
 
@@ -1515,14 +1519,8 @@ enum TaskRowPriority {
     /// 文案统一取领域类型的 `title`，不再在这里维护第二份表。
     static func title(_ priority: TaskPriority) -> String { priority.title }
 
-    static func color(_ priority: TaskPriority) -> Color {
-        switch priority {
-        case .none: WFColors.secondaryText
-        case .low: WFColors.accent
-        case .medium: .orange
-        case .high: .red
-        }
-    }
+    /// 颜色只有一处真源：`TaskPriority.menuColor`（设计系统）。
+    static func color(_ priority: TaskPriority) -> Color { priority.menuColor }
 }
 
 /// 勾选框对齐 Flutter：18×18 槽位（即点击区），描边盒按 completionBoxSize
@@ -1635,11 +1633,6 @@ private struct TaskRowMetadataTrail: View {
         }
     }
 
-    /// 某条元信息是否被「显示设置」关掉（tags 单列一档，其余图标归 indicators）。
-    private func isHidden(_ id: String) -> Bool {
-        id == "tags" ? hiddenFields.contains(.tags) : hiddenFields.contains(.indicators)
-    }
-
     @ViewBuilder
     private var trail: some View {
         HStack(spacing: WFSpace.xs) {
@@ -1659,13 +1652,14 @@ private struct TaskRowMetadataTrail: View {
                     .foregroundStyle(task.isClosed ? muted : TaskRowPriority.color(task.priority))
                     .accessibilityLabel(TaskRowPriority.title(task.priority))
             }
-            ForEach(Array(secondaryMetadata.filter { !isHidden($0.id) }
-                .prefix(WFMetrics.secondaryMetadataLimit))) { item in
-                if let value = item.value {
-                    Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
-                } else if let symbol = item.symbol {
-                    Image(systemName: symbol).foregroundStyle(muted)
-                        .accessibilityLabel(item.accessibilityLabel)
+            if !hiddenFields.contains(.indicators) {
+                ForEach(Array(secondaryMetadata.prefix(WFMetrics.secondaryMetadataLimit))) { item in
+                    if let value = item.value {
+                        Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
+                    } else if let symbol = item.symbol {
+                        Image(systemName: symbol).foregroundStyle(muted)
+                            .accessibilityLabel(item.accessibilityLabel)
+                    }
                 }
             }
             if !hiddenFields.contains(.date), let deadline = task.schedule.deadlineAt {
@@ -1708,6 +1702,7 @@ private struct TaskRowMetadataTrail: View {
 
     private var secondaryMetadata: [TaskSecondaryMetadata] {
         TaskSecondaryMetadata.items(for: task, subtaskProgress: workspace.subtaskProgress(for: task.id))
+            .filter { $0.id != "tags" }
     }
 }
 

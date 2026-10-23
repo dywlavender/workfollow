@@ -24,10 +24,14 @@ struct WorkFollowApp: App {
             NSApp.activate(ignoringOtherApps: true)
             NSApp.windows.first { !($0 is NSPanel) && $0.isVisible }?.makeKeyAndOrderFront(nil)
         }))
+        lifecycle.environment = environment
+        lifecycle.resourceLinks.configure(route: { [weak environment] url in
+            environment?.openResourceLink(url) ?? false
+        })
     }
 
     var body: some Scene {
-        WindowGroup("WorkFollow Native", id: "main") {
+        Window("WorkFollow Native", id: "main") {
             RootShellView(workspace: environment.taskWorkspace,
                           navigation: environment.navigation)
                 .environmentObject(environment)
@@ -56,6 +60,7 @@ struct WorkFollowApp: App {
                      height: WFMetrics.defaultWindow.height)
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
+        .handlesExternalEvents(matching: [])
         .commands { AppCommands(environment: environment, quickAdd: quickAdd) }
 
         Settings {
@@ -64,6 +69,7 @@ struct WorkFollowApp: App {
                 .preferredColorScheme(environment.appearance.colorScheme)
                 .tint(WFColors.accent)
         }
+        .handlesExternalEvents(matching: [])
     }
 }
 

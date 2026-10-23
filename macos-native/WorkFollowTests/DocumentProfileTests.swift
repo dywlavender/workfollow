@@ -11,10 +11,10 @@ final class DocumentProfileTests: XCTestCase {
         let profile = TaskDocumentProfile.make(task: try XCTUnwrap(workspace.task(for: id)),
             host: TaskEditorHostActions(createChild: {}, openTags: {}, openRelation: {}, openLink: { _ in true }))
         let commands = profile.slashCommands
-        XCTAssertEqual(commands.count, 12)
-        XCTAssertEqual(commands[9].id, "task.child")
-        // 12 行 × 34 + 3 条分节细线 × 9 + 上下 8（分节对齐滴答 2026-10-16）。
-        XCTAssertEqual(SlashMenuMetrics.height(for: commands), 443)
+        XCTAssertEqual(commands.count, 13)
+        XCTAssertEqual(commands[10].id, "task.child")
+        // 13 行 × 34 + 3 条分节细线 × 9 + 上下 8。
+        XCTAssertEqual(SlashMenuMetrics.height(for: commands), 477)
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let host = NSHostingView(rootView: SlashCommandList(commands: commands, selected: 0,
                 compact: true, onSelect: { _ in }, onHover: { _ in }))
@@ -52,10 +52,10 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(parent.commands.map(\.id), ["task.child", "task.tags", "task.relation"])
         // 放开嵌套（2026-10-17）：子任务正文同样有"子任务"命令，可建孙任务。
         XCTAssertEqual(child.commands.map(\.id), ["task.child", "task.tags", "task.relation"])
-        XCTAssertEqual(parent.slashCommands.count, 12)
-        XCTAssertEqual(child.slashCommands.count, 12)
+        XCTAssertEqual(parent.slashCommands.count, 13)
+        XCTAssertEqual(child.slashCommands.count, 13)
         let common = ["format.heading1", "format.heading2", "format.heading3", "format.bullet",
-                      "format.ordered", "format.checklist", "format.quote", "shared.divider", "shared.attachment"]
+                      "format.ordered", "format.checklist", "format.quote", "shared.divider", "shared.attachment", "shared.drawio"]
         XCTAssertEqual(parent.slashCommands.map(\.id), common + ["task.child", "task.tags", "task.relation"])
         XCTAssertEqual(child.slashCommands.map(\.id), common + ["task.child", "task.tags", "task.relation"])
         XCTAssertNotNil(parent.slashCommandOverride)
@@ -348,11 +348,11 @@ final class DocumentProfileTests: XCTestCase {
 
         XCTAssertEqual(parentTitles, [
             "一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用",
-            "水平分割线", "附件", "子任务", "标签", "关联任务/笔记"
+            "水平分割线", "附件", "流程图（draw.io）", "子任务", "标签", "关联任务/笔记"
         ])
         XCTAssertEqual(childTitles, [
             "一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用",
-            "水平分割线", "附件", "标签", "关联任务/笔记"
+            "水平分割线", "附件", "流程图（draw.io）", "标签", "关联任务/笔记"
         ])
     }
 

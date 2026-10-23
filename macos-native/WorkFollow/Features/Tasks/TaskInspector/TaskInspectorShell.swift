@@ -35,6 +35,8 @@ struct TaskInspectorShell: View {
     @State private var focusStartFailed = false
     /// 「添加子任务」整行的悬停态（原版 `InkWell.hoverColor`）。
     @State private var hoveringAddChild = false
+    /// 子任务树里当前折叠的节点（TI2-04 收尾）：折叠后要告诉用户"少了多少"。
+    @State private var collapsedSubtaskIDs: Set<UUID> = []
     /// 文件拖到详情时的目标高亮（TI2-03：拖放即附件）。
     @State private var attachmentDropTargeted = false
     /// 内联评论区的展开态（TI2-09）。
@@ -277,6 +279,13 @@ struct TaskInspectorShell: View {
         binding.wrappedValue = opening
     }
 
+    /// 「更多」菜单的实测行数：16 个动作 + 1 条分组细线（见 `moreActionsPopover`）。
+    /// 加/删行时同步这个常量，菜单高度跟着走。
+    private var moreMenuHeight: CGFloat {
+        let screenHeight = (NSScreen.main?.visibleFrame.height ?? 900)
+        return TaskInspectorMetrics.moreMenuHeight(rowCount: 16, dividerCount: 1, screenHeight: screenHeight)
+    }
+
     private func moreActionsPopover(_ task: Task) -> some View {
         ScrollView {
             VStack(spacing: 2) {
@@ -326,7 +335,7 @@ struct TaskInspectorShell: View {
             }
             .padding(8)
         }
-        .frame(width: PopupMetrics.taskActionsWidth, height: 490)
+        .frame(width: PopupMetrics.taskActionsWidth, height: moreMenuHeight)
         .inspectorRenderAnchor(.moreMenu)
     }
 
@@ -367,7 +376,7 @@ struct TaskInspectorShell: View {
                 }, onSetEstimate: {
                     actionPresentation.dismiss()
                     showFocusEstimate = true
-                })
+                }, onCancel: { actionPresentation.dismissSubmenu() })
             })
     }
 
@@ -676,13 +685,30 @@ struct TaskInspectorShell: View {
                 },
                 onReorder: { id, index in
                     workspace.reorder(id, toSiblingIndex: index)
+                },
+                onCollapseChange: { collapsed in
+                    if collapsedSubtaskIDs != collapsed { collapsedSubtaskIDs = collapsed }
                 }
             )
             .frame(height: subtaskOutlineHeight(task.id))
+            if hiddenSubtaskCount(task.id) > 0 {
+                Text("已折叠 \(hiddenSubtaskCount(task.id)) 项")
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .inspectorRenderAnchor(.collapsedCount)
+            }
             // 放开嵌套（2026-10-17）：子任务同样给"添加子任务"入口，可建孙任务。
             addChildRow(task)
         }
         .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+    }
+
+    /// 被折叠节点遮住的子孙行数（用于「已折叠 N 项」提示）。
+    private func hiddenSubtaskCount(_ parentID: UUID) -> Int {
+        SubtaskFoldSummary.hiddenCount(under: parentID,
+                                       children: { editorChildren($0).map(\.id) },
+                                       collapsed: collapsedSubtaskIDs)
     }
 
     /// 子任务树默认全展开时的可见行数 × 行高（不含"添加子任务"行）。
@@ -1112,14 +1138,8 @@ struct TaskInspectorShell: View {
             hasTime: false, now: now, calendar: calendar)
     }
 
-    private func priorityColor(_ priority: TaskPriority) -> Color {
-        switch priority {
-        case .none: WFColors.secondaryText
-        case .low: WFColors.accent
-        case .medium: .orange
-        case .high: .red
-        }
-    }
+    /// 与列表、看板、快速添加共用同一份配色。
+    private func priorityColor(_ priority: TaskPriority) -> Color { priority.menuColor }
 }
 
 private enum ScheduleField: Equatable {

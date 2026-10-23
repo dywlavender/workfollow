@@ -26,6 +26,8 @@ enum TaskListMetrics {
 
     /// 任务行里最多平铺几个标签胶囊（其余折成「+N」），避免行被撑爆。
     static let maxVisibleTags = 3
+    static let tagRowSpacing: CGFloat = 6
+    static let tagChipHeight: CGFloat = 22
 
     /// 任务行高度：标题行固定，预览行与标签行各占一档（滴答的行会随之变高）。
     /// 行高必须由这里给出确定值——`NSOutlineView` 的 `heightOfRowByItem` 不能反查
@@ -33,7 +35,7 @@ enum TaskListMetrics {
     static func taskRowHeight(hasPreview: Bool, hasTags: Bool) -> CGFloat {
         var content: CGFloat = 18                     // 标题行
         if hasPreview { content += 1 + 17 }           // 预览行（spacing + 行高）
-        if hasTags { content += 4 + 22 }              // 标签胶囊行
+        if hasTags { content += tagRowSpacing + tagChipHeight }
         return max(WFMetrics.rowHeight, content + WFMetrics.rowVerticalPadding * 2)
     }
 }

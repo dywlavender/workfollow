@@ -4,6 +4,7 @@ import AppKit
 enum DocumentTextCodec {
     static let blockKey = NSAttributedString.Key("WorkFollow.block")
     static let attachmentKey = NSAttributedString.Key("WorkFollow.attachment")
+    static let diagramKey = NSAttributedString.Key("WorkFollow.diagram")
     static let inlineCodeKey = NSAttributedString.Key("WorkFollow.inlineCode")
     static let explicitBoldKey = NSAttributedString.Key("WorkFollow.explicitBold")
     static let completedChecklistPresentationKey = NSAttributedString.Key("WorkFollow.completedChecklistPresentation")
@@ -168,6 +169,13 @@ enum DocumentTextCodec {
                     }
                     attrs[.attachment] = attachment
                 }
+                if let diagram = run.diagram, let data = try? JSONEncoder().encode(diagram) {
+                    attrs[diagramKey] = data
+                    attrs[.toolTip] = diagram.title + " · 双击编辑"
+                    let attachment = NSTextAttachment()
+                    attachment.attachmentCell = DocumentDiagramCell(diagram: diagram)
+                    attrs[.attachment] = attachment
+                }
                 result.append(NSAttributedString(string: run.text, attributes: attrs))
             }
             if index < document.blocks.count - 1 {
@@ -219,7 +227,8 @@ enum DocumentTextCodec {
                 if attrs[.backgroundColor] != nil { marks.insert(.highlight) }
                 if let link = attrs[.link] { marks.insert(.link(String(describing: link))) }
                 let attachment = (attrs[attachmentKey] as? Data).flatMap { try? JSONDecoder().decode(NativeAttachment.self, from: $0) }
-                runs.append(DocumentRun(text: plain.substring(with: range), marks: marks, attachment: attachment))
+                let diagram = (attrs[diagramKey] as? Data).flatMap { try? JSONDecoder().decode(NativeDiagram.self, from: $0) }
+                runs.append(DocumentRun(text: plain.substring(with: range), marks: marks, attachment: attachment, diagram: diagram))
             }
             offset += length + 1
             return DocumentBlock(id: block.id, kind: kind, runs: runs)

@@ -23,10 +23,11 @@ final class TaskRowTagLayoutTests: XCTestCase {
 
     func testNativeRowResizesWhenTagsAreAddedAndUndoRestoresHeight() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let environment = AppEnvironment()
         let taskID = try XCTUnwrap(workspace.createTask(title: "标签行布局", in: .inbox).taskID)
         let root = TaskListView(workspace: workspace,
             navigation: AppNavigation(destination: .allTasks), navigationVisible: false)
-            .environmentObject(AppEnvironment())
+            .environmentObject(environment)
             .frame(width: 760, height: 640)
         let host = NSHostingView(rootView: root)
         let owner = InspectorPanelTestSupport.ownerWindow(for: host, width: 760, height: 640)
@@ -45,7 +46,23 @@ final class TaskRowTagLayoutTests: XCTestCase {
         }
         let original = try rowHeight()
         workspace.setTags(taskID, ["本周", "验收"])
-        XCTAssertGreaterThan(try rowHeight(), original, "真实列表行必须为标签胶囊腾出高度")
+        let tagged = try rowHeight()
+        XCTAssertGreaterThan(tagged, original, "真实列表行必须为标签胶囊腾出高度")
+        let key = TaskViewScopeKey.key(destination: .allTasks, activeList: nil, activeTag: nil)
+        environment.viewPreferences.setDetailField(.tags, hidden: true, for: key)
+        XCTAssertEqual(try rowHeight(), original, accuracy: 0.5, "隐藏标签后不能留下胶囊行的空位")
+        environment.viewPreferences.setDetailField(.tags, hidden: false, for: key)
+        XCTAssertEqual(try rowHeight(), tagged, accuracy: 0.5)
+        environment.viewPreferences.setHidesDetails(true, for: key)
+        XCTAssertEqual(try rowHeight(), original, accuracy: 0.5)
+        environment.viewPreferences.setHidesDetails(false, for: key)
+        XCTAssertEqual(try rowHeight(), tagged, accuracy: 0.5)
+        if let directory = ProcessInfo.processInfo.environment["WF_ROW_TAG_ARTIFACTS"] {
+            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                .write(to: URL(fileURLWithPath: directory).appendingPathComponent("task-row-tags.png"))
+        }
         workspace.undo()
         XCTAssertEqual(try rowHeight(), original, accuracy: 0.5)
     }

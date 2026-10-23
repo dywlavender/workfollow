@@ -5,6 +5,24 @@ extension AppEnvironment {
     /// so an internal link never falls back to opening an unrelated URL handler.
     @discardableResult
     func openResourceLink(_ url: URL) -> Bool {
+        if let destination = TaskWidgetLink.destination(for: url) {
+            if destination == .quickAdd {
+                widgetQuickAdd.present()
+                return true
+            }
+            navigation.taskSelectionToPreserveOnNextNavigation = nil
+            taskWorkspace.activeList = nil
+            taskWorkspace.activeTag = nil
+            taskWorkspace.openFilter(nil)
+            taskWorkspace.clearBulkSelection()
+            taskWorkspace.select(nil)
+            switch destination {
+            case .today: navigate(to: .today)
+            case .weekPlan: navigate(to: .weekPlan)
+            case .quickAdd: break // Presented independently above.
+            }
+            return true
+        }
         guard let link = NativeResourceLink(url: url) else { return false }
         if let reference = CalendarTaskReference(url: url) {
             if !openCalendarTask(reference) { feedback.show(FeedbackEvent(kind: .error, message: "该周期已不可用")) }

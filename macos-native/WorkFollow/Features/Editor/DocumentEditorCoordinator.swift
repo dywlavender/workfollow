@@ -88,6 +88,10 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
 
     func textView(_ textView: NSTextView, doubleClickedOn cell: NSTextAttachmentCellProtocol,
                   in cellFrame: NSRect, at charIndex: Int) {
+        if let native = textView as? NativeTextView, native.diagram(at: charIndex) != nil {
+            native.editDocumentDiagram(at: charIndex)
+            return
+        }
         guard let storage = textView.textStorage, charIndex < storage.length,
               let data = storage.attribute(DocumentTextCodec.attachmentKey, at: charIndex, effectiveRange: nil) as? Data,
               let attachment = try? JSONDecoder().decode(NativeAttachment.self, from: data),

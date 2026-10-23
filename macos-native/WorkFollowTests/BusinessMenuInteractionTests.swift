@@ -10,6 +10,7 @@ final class BusinessMenuInteractionTests: XCTestCase {
         var popupTriggers: [String: CGRect] = [:]
         var rows: [BusinessMenuRowFrame] = []
         var actions: [DialogActionAnchor: CGRect] = [:]
+        var popupActions: [DialogActionAnchor: CGRect] = [:]
     }
     private final class Model: ObservableObject {
         @Published var selection = 0
@@ -46,6 +47,24 @@ final class BusinessMenuInteractionTests: XCTestCase {
             BusinessPicker("关联任务", selection: $model.selection,
                 options: (0..<40).map { BusinessChoice($0, "任务 \($0)", symbol: "checklist") },
                 width: PopupMetrics.relationPickerWidth).frame(width: 260)
+        }
+    }
+    private final class SummaryModel: ObservableObject {
+        @Published var showing = true
+        var applied: SummaryFilter?
+        var cancelled = false
+    }
+    private struct SummaryFixture: View {
+        @ObservedObject var model: SummaryModel
+        var body: some View {
+            SummarySettingControl(title: "更多", value: "无", isPresented: $model.showing,
+                width: SummaryPopoverMetrics.moreWidth) {
+                SummaryMorePopover(filter: .all, tags: ["学习", "工作"], onApply: {
+                    model.applied = $0; model.showing = false
+                }, onCancel: {
+                    model.cancelled = true; model.showing = false
+                })
+            }.frame(width: 360)
         }
     }
 
@@ -139,26 +158,47 @@ final class BusinessMenuInteractionTests: XCTestCase {
 
     func testSummaryNestedTagPickerPreservesCancelAndConfirmDraftSemantics() throws {
         for confirm in [false, true] {
-            let probe = Probe()
-            var applied: SummaryFilter?
-            var cancelled = false
-            let owner = host(SummaryMorePopover(filter: .all, tags: ["学习", "工作"],
-                onApply: { applied = $0 }, onCancel: { cancelled = true }), probe: probe)
+            let probe = Probe(), model = SummaryModel()
+            let owner = host(SummaryFixture(model: model), probe: probe)
             defer { owner.close() }
-            try open("标签", probe: probe, owner: owner)
+            let parent = try panel("摘要：更多", below: owner)
+            let ownerFrame = owner.frame, parentFrame = parent.frame
+            try click(try XCTUnwrap(probe.popupTriggers["标签"]), in: parent)
             let tags = try panel("标签", below: owner)
+            XCTAssertTrue(tags.parent === parent)
             XCTAssertEqual(probe.rows.count, 3)
-            try click(probe.rows[2].rect, in: tags)
+            try InspectorPanelTestSupport.sendEscape(to: parent)
             XCTAssertFalse(tags.isVisible)
-            XCTAssertNil(applied)
-            let action = try XCTUnwrap(probe.actions[confirm ? .primary : .cancel])
-            try click(action, in: owner)
+            XCTAssertTrue(parent.isVisible, "父窗口收到 Escape 时先关闭二级下拉")
+            XCTAssertNil(model.applied)
+            XCTAssertFalse(model.cancelled)
+            try click(try XCTUnwrap(probe.popupTriggers["标签"]), in: parent)
+            let reopened = try panel("标签", below: owner)
+            try key(125, to: parent)
+            try key(125, to: parent)
+            try InspectorPanelTestSupport.sendReturn(to: parent)
+            XCTAssertFalse(reopened.isVisible)
+            XCTAssertTrue(parent.isVisible, "二级选项的回车不能触发父筛选卡确定")
+            XCTAssertNil(model.applied)
+            try click(try XCTUnwrap(probe.popupTriggers["优先级"]), in: parent)
+            let priority = try panel("优先级", below: owner)
+            XCTAssertTrue(priority.parent === parent)
+            XCTAssertEqual(probe.rows.count, 5)
+            try click(probe.rows[1].rect, in: priority)
+            XCTAssertFalse(priority.isVisible)
+            XCTAssertNil(model.applied, "二级下拉只修改父面板草稿")
+            XCTAssertEqual(parent.frame, parentFrame)
+            XCTAssertEqual(owner.frame, ownerFrame)
+            let action = try XCTUnwrap(probe.popupActions[confirm ? .primary : .cancel])
+            try click(action, in: parent)
+            XCTAssertTrue(InspectorPanelTestSupport.visibleWindows(below: owner).isEmpty)
             if confirm {
-                XCTAssertEqual(applied?.tagName, "工作")
-                XCTAssertFalse(cancelled)
+                XCTAssertEqual(model.applied?.tagName, "工作")
+                XCTAssertEqual(model.applied?.priority, .high)
+                XCTAssertFalse(model.cancelled)
             } else {
-                XCTAssertNil(applied)
-                XCTAssertTrue(cancelled)
+                XCTAssertNil(model.applied)
+                XCTAssertTrue(model.cancelled)
             }
         }
     }
@@ -303,9 +343,10 @@ final class BusinessMenuInteractionTests: XCTestCase {
             .onPreferenceChange(BusinessMenuTriggerFrames.self) { probe.triggers = $0 }
             .onPreferenceChange(DialogActionFrames.self) { probe.actions = $0 }
             .environment(\.popupContentObservation, { content in
-                AnyView(content.coordinateSpace(name: "business-menu")
+                AnyView(content.coordinateSpace(name: "business-menu").coordinateSpace(name: "dialog-render")
                     .onPreferenceChange(BusinessMenuRowFrames.self) { if !$0.isEmpty { probe.rows = $0 } }
-                    .onPreferenceChange(BusinessMenuTriggerFrames.self) { probe.popupTriggers = $0 })
+                    .onPreferenceChange(BusinessMenuTriggerFrames.self) { if !$0.isEmpty { probe.popupTriggers = $0 } }
+                    .onPreferenceChange(DialogActionFrames.self) { if !$0.isEmpty { probe.popupActions = $0 } })
             })
         return InspectorPanelTestSupport.ownerWindow(for: NSHostingView(rootView: root), width: 640, height: 480)
     }

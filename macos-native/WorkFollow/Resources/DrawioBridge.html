@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body,iframe{margin:0;width:100%;height:100%;border:0;overflow:hidden;background:white}</style>
+</head><body>
+<iframe id="editor" title="draw.io 流程图编辑器"></iframe>
+<script>
+// WorkFollow host bridge. The vendored draw.io files are unmodified.
+const editor = document.getElementById('editor');
+window.workfollowDrawio = {
+  send: message => editor.contentWindow.postMessage(JSON.stringify(message), '*')
+};
+window.addEventListener('message', event => {
+  if (event.source !== editor.contentWindow || typeof event.data !== 'string') return;
+  try {
+    const message = JSON.parse(event.data);
+    if (typeof message.event === 'string') window.webkit.messageHandlers.drawio.postMessage(message);
+  } catch (_) {}
+});
+editor.src = 'drawio/index.html?embed=1&proto=json&spin=1&ui=kennedy&lang=zh&libraries=1&saveAndExit=0&noSaveBtn=1&noExitBtn=1&stealth=1&offline=1&local=1&configure=1&compress=0';
+</script></body></html>

@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum TaskTagPickerAnchor: Hashable { case tag(String), cancel, confirm }
+enum TaskTagPickerAnchor: Hashable { case tag(String), remove(String), cancel, confirm }
 struct TaskTagPickerFrames: PreferenceKey {
     static let defaultValue: [TaskTagPickerAnchor: CGRect] = [:]
     static func reduce(value: inout [TaskTagPickerAnchor: CGRect], nextValue: () -> [TaskTagPickerAnchor: CGRect]) {

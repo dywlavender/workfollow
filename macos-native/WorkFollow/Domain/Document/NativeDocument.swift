@@ -15,6 +15,11 @@ struct NativeDocument: Equatable, Codable {
     var firstLinePreview: String? { deferred?.summary.firstLine }
     var previewText: String { deferred?.summary.head ?? String(plainText.prefix(160)) }
 
+    /// 未水合时的正文摘要（head / tail / firstLine）。
+    /// 读它**不会**触发正文加载，适合搜索、列表这类高频路径。
+    /// 已水合或本来就是内存文档时为 nil。
+    var deferredSummary: DocumentSummary? { deferred?.summary }
+
     init(deferred: DeferredDocument) { storedBlocks = []; self.deferred = deferred }
     func materialized() throws -> NativeDocument { try deferred?.resolve() ?? self }
     private enum CodingKeys: String, CodingKey { case blocks }
@@ -131,11 +136,14 @@ struct DocumentRun: Equatable, Codable {
     var text: String
     var marks: Set<DocumentMark>
     var attachment: NativeAttachment?
+    var diagram: NativeDiagram?
 
-    init(text: String, marks: Set<DocumentMark> = [], attachment: NativeAttachment? = nil) {
+    init(text: String, marks: Set<DocumentMark> = [], attachment: NativeAttachment? = nil,
+         diagram: NativeDiagram? = nil) {
         self.text = text
         self.marks = marks
         self.attachment = attachment
+        self.diagram = diagram
     }
 }
 

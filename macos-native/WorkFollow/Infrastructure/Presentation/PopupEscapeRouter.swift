@@ -15,7 +15,8 @@ enum PopupEscapeRank {
     static let schedule = 4
 }
 
-/// Presentation-only ownership. Mouse events are observed, never consumed.
+/// Presentation-only ownership. Outside clicks are observed; a matching context
+/// target consumes its right-click before normal view dispatch.
 /// A child taking key focus is still inside its owner's window family.
 @MainActor
 final class PopupInteractionRegistry {
@@ -119,11 +120,16 @@ final class PopupInteractionRegistry {
         let targets = contextEntries.values.filter { entry in
             guard let view = entry.view, view.window === event.window,
                   !view.isHiddenOrHasHiddenAncestor, view.window?.isVisible == true else { return false }
-            return view.visibleRect.contains(view.convert(event.locationInWindow, from: nil))
+            // An unclipped AppKit view can report an ancestor-sized visibleRect.
+            // Visibility alone is not a hit region: a sidebar row must not claim
+            // right-clicks in the task list or elsewhere in the same window.
+            return view.bounds.intersection(view.visibleRect)
+                .contains(view.convert(event.locationInWindow, from: nil))
         }
         // Nested rows win over their containing group; only one menu opens.
         let target = targets.min {
-            let lhs = $0.view?.visibleRect.size ?? .zero, rhs = $1.view?.visibleRect.size ?? .zero
+            let lhs = $0.view.map { $0.bounds.intersection($0.visibleRect).size } ?? .zero
+            let rhs = $1.view.map { $0.bounds.intersection($0.visibleRect).size } ?? .zero
             return lhs.width * lhs.height < rhs.width * rhs.height
         }
         guard let target, let view = target.view else { return false }

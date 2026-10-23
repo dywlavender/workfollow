@@ -105,7 +105,8 @@ struct CalendarWorkspaceView: View {
                 Button("取消", role: .cancel) { pendingOccurrenceSchedule = nil }
             }
         }
-        .overlay {
+        .overlayPreferenceValue(PlanningTaskAnchorsKey.self) { taskAnchors in
+            GeometryReader { geometry in
             if let agendaDay {
                 PlanningOverlayLayer(anchor: anchorSink, placement: .bottomEnd,
                                      size: CGSize(width: 330, height: 380), onDismiss: { self.agendaDay = nil }) {
@@ -120,7 +121,9 @@ struct CalendarWorkspaceView: View {
                 }
             } else {
                 PlanningWorkspaceChrome(workspace: workspace, anchor: anchorSink,
-                                        request: $composerRequest, editingTaskID: $editingTaskID)
+                                        request: $composerRequest, editingTaskID: $editingTaskID,
+                                        taskHitRects: taskAnchors.values.flatMap { $0.map { geometry[$0] } })
+            }
             }
         }
         .onChange(of: topWeek) { _, _ in
@@ -213,7 +216,7 @@ struct CalendarWorkspaceView: View {
     }
     private func firstOfMonth(_ date: Date) -> Date { calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date }
     private func openTask(_ id: UUID) {
-        guard editingTaskID == nil else { return }
+        guard editingTaskID != id else { return }
         if let occurrence = occurrences.first(where: { $0.task.id == id }), occurrence.isVirtual {
             workspace.selectOccurrence(occurrence)
             editingTaskID = occurrence.task.id
@@ -1029,6 +1032,7 @@ struct CalendarTaskBarView: View {
         }
         .help(task.title)
         .background(PlanningAnchorProbe(ref: anchor))
+        .planningTaskTarget(task.id)
     }
 }
 
@@ -1085,6 +1089,7 @@ struct CalendarTaskSpanBar: View {
         }
         .help(span.task.title)
         .background(PlanningAnchorProbe(ref: anchor))
+        .planningTaskTarget(span.task.id)
     }
 }
 
@@ -1383,5 +1388,6 @@ struct CalendarWeekPillButton: View {
                 pill.frame(width: 200)
             }
             .background(PlanningAnchorProbe(ref: anchor))
+            .planningTaskTarget(task.id)
     }
 }

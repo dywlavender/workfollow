@@ -96,6 +96,7 @@ final class DocumentEditorHandle: ObservableObject {
     func editLink() { textView?.editDocumentLink(nil); refreshStyle() }
     func removeLink() { textView?.removeDocumentLink(nil); refreshStyle() }
     func insertAttachment() { textView?.insertDocumentAttachment(nil); refreshStyle() }
+    func insertDiagram() { textView?.insertDocumentDiagram(at: nil); refreshStyle() }
     func insertTime(format: String) { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format); refreshStyle() }
     func insertDivider() { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider(); refreshStyle() }
     func insertReference(_ reference: EditorReference) {

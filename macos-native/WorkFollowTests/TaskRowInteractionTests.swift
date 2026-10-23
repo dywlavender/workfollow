@@ -222,6 +222,94 @@ final class TaskRowInteractionTests: XCTestCase {
         XCTAssertEqual(workspace.selectedTaskID, id)
     }
 
+    func testFullListRightClickReachesReferenceMenuAndItsChildPanels() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "列表右键入口验收", in: .inbox).taskID)
+        let navigation = AppNavigation()
+        navigation.destination = .inbox
+        let environment = AppEnvironment()
+        environment.focusStore.notifier = nil
+        let probe = Probe()
+        let root = TaskListView(workspace: workspace, navigation: navigation, navigationVisible: true)
+            .frame(width: 1000, height: 700)
+            .environment(\.recordsTaskTreeFrames, true)
+            .coordinateSpace(name: "task-tree-render")
+            .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 }
+            .environmentObject(environment)
+        let host = NSHostingView(rootView: AnyView(root))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1000, height: 700)
+        defer { TaskContextMenuPresenter.activeSession?.close(); window.close() }
+        let title = try XCTUnwrap(probe.frames[.init(taskID: id, part: .title)])
+        let local = NSPoint(x: title.midX, y: host.isFlipped ? title.midY : host.bounds.height - title.midY)
+        let point = host.convert(local, to: nil)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: point,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1))
+        NSApp.postEvent(event, atStart: true)
+        let down = try XCTUnwrap(NSApp.nextEvent(matching: .rightMouseDown, until: Date(),
+                                                inMode: .default, dequeue: true))
+        NSApp.sendEvent(down)
+        InspectorPanelTestSupport.settle(window)
+        let session = try XCTUnwrap(TaskContextMenuPresenter.activeSession,
+                                    "真实列表行必须打开共享菜单，而不是文本系统菜单")
+        let menu = try XCTUnwrap(session.coordinator.panel)
+        XCTAssertEqual(menu.title, "任务右键菜单")
+        XCTAssertNil(workspace.selectedTaskID, "右键不能变成左键选择或编辑")
+
+        var actions: [TaskContextMenuAnchor: CGRect] = [:]
+        var focus: [InspectorRenderAnchor: CGRect] = [:]
+        var lists: [TaskContextSubmenuAnchor: CGRect] = [:]
+        var tags: [TaskTagPickerAnchor: CGRect] = [:]
+        let productionRoot = session.coordinator.root
+        session.coordinator.root = AnyView(productionRoot
+            .onPreferenceChange(TaskContextMenuFrames.self) { actions = $0 }
+            .environment(\.popupContentObservation, { content in
+                AnyView(content.coordinateSpace(name: "inspector-render")
+                    .onPreferenceChange(InspectorFramesKey.self) { if !$0.isEmpty { focus = $0 } }
+                    .onPreferenceChange(TaskContextSubmenuFrames.self) { if !$0.isEmpty { lists = $0 } }
+                    .onPreferenceChange(TaskTagPickerFrames.self) { if !$0.isEmpty { tags = $0 } })
+            }))
+        session.coordinator.update()
+        InspectorPanelTestSupport.settle(window)
+        for title in ["添加子任务", "关联主任务", "置顶", "放弃", "移动到", "标签", "开始专注",
+                      "创建副本", "复制链接", "打开便签", "转换为笔记", "删除"] {
+            XCTAssertNotNil(actions[.action(title)], "缺少截图中的菜单项：" + title)
+        }
+        func open(_ title: String, panelTitle: String) throws -> NSPanel {
+            let target = try XCTUnwrap(actions[.action(title)])
+            XCTAssertTrue(try XCTUnwrap(menu.contentView).bounds.contains(target),
+                          "重新挂载后主卡必须按完整内容收高，不能只剩首次测量高度")
+            if let directory = ProcessInfo.processInfo.environment["WF_CONTEXT_MENU_ARTIFACTS"],
+               let view = menu.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try bitmap.representation(using: .png, properties: [:])?
+                    .write(to: URL(fileURLWithPath: directory).appendingPathComponent("actual-entry-" + title + ".png"))
+            }
+            try InspectorPanelTestSupport.click(target,
+                in: try XCTUnwrap(menu.contentView), window: menu)
+            return try InspectorPanelTestSupport.panel(title: panelTitle, below: window)
+        }
+        let move = try open("移动到", panelTitle: "移动到清单")
+        XCTAssertNotNil(lists[.search])
+        XCTAssertNotNil(lists[.list(TaskList.inbox.name)])
+        try InspectorPanelTestSupport.sendEscape(to: window)
+        XCTAssertFalse(move.isVisible)
+        let tag = try open("标签", panelTitle: "任务标签")
+        XCTAssertNotNil(tags[.confirm])
+        XCTAssertNotNil(tags[.cancel])
+        try InspectorPanelTestSupport.sendEscape(to: window)
+        XCTAssertFalse(tag.isVisible)
+        let timer = try open("开始专注", panelTitle: "任务专注")
+        for action: InspectorRenderAnchor in [.focusPomodoro, .focusStopwatch, .focusEstimate] {
+            XCTAssertNotNil(focus[action])
+        }
+        try InspectorPanelTestSupport.sendEscape(to: window)
+        XCTAssertFalse(timer.isVisible)
+        XCTAssertTrue(menu.isVisible)
+        XCTAssertEqual(environment.focusStore.phase, .idle)
+        XCTAssertEqual(workspace.task(for: id)?.title, "列表右键入口验收")
+    }
+
     func testReorderHandleDoesNotShiftContentColumns() throws {
         let withoutHandle = try fixture(allowsReordering: false)
         defer { withoutHandle.window.close() }

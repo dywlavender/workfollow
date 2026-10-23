@@ -7,6 +7,7 @@ from pathlib import Path
 import plistlib
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -37,6 +38,21 @@ def run_logged(command, log):
         raise AppError(f"构建或签名失败，请查看日志：{LOG}")
 
 
+def configure_local_widgets(package, folder):
+    """Select the extension's own container for local ad-hoc packages."""
+    widget = package / "Contents/PlugIns/WorkFollowWidgets.appex"
+    for bundle in [package, widget]:
+        value = info(bundle)
+        value["WorkFollowWidgetTransport"] = "widgetContainer"
+        with (bundle / "Contents/Info.plist").open("wb") as stream:
+            plistlib.dump(value, stream)
+    host_entitlements = folder / "local-host.entitlements"
+    widget_entitlements = folder / "local-widget.entitlements"
+    host_entitlements.write_bytes(plistlib.dumps({}))
+    widget_entitlements.write_bytes(plistlib.dumps({"com.apple.security.app-sandbox": True}))
+    return host_entitlements, widget_entitlements
+
+
 def validate(app):
     value = info(app)
     if value.get("CFBundleIdentifier") != BUNDLE_ID:
@@ -50,8 +66,17 @@ def validate(app):
         app / "Contents/MacOS" / executable, os.X_OK
     ):
         raise AppError("应用可执行文件不存在。")
-    if (app / "Contents/PlugIns").exists():
-        raise AppError("日用版不能包含测试插件。")
+    plugins = app / "Contents/PlugIns"
+    if plugins.exists():
+        for plugin in plugins.iterdir():
+            if plugin.name != "WorkFollowWidgets.appex":
+                raise AppError("日用版不能包含测试插件或未知扩展。")
+            extension = info(plugin)
+            if (extension.get("CFBundleIdentifier") != BUNDLE_ID + ".widgets"
+                    or extension.get("NSExtension", {}).get("NSExtensionPointIdentifier") != "com.apple.widgetkit-extension"):
+                raise AppError("桌面小组件扩展标识不符。")
+            if extension.get("WorkFollowWidgetTransport", "appGroup") != value.get("WorkFollowWidgetTransport", "appGroup"):
+                raise AppError("应用与桌面小组件的数据通道不一致。")
     result = subprocess.run(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)],
                             capture_output=True)
     if result.returncode:
@@ -68,9 +93,43 @@ def require_quit(app):
         raise AppError("请先在 WorkFollow 菜单中退出应用，等待保存完成，再更新或回退。")
 
 
+def widget_processes(app):
+    widget = app / "Contents/PlugIns/WorkFollowWidgets.appex"
+    if not widget.exists():
+        return []
+    value = info(widget)
+    if value.get("CFBundleIdentifier") != BUNDLE_ID + ".widgets":
+        raise AppError("已安装的桌面小组件标识不符。")
+    executable = value.get("CFBundleExecutable", "")
+    if not executable or Path(executable).name != executable:
+        raise AppError("已安装的桌面小组件可执行文件无效。")
+    expected = str(widget / "Contents/MacOS" / executable)
+    processes = subprocess.run(["/bin/ps", "-axo", "pid=,comm="],
+                               capture_output=True, text=True, check=True)
+    rows = (line.strip().split(None, 1) for line in processes.stdout.splitlines())
+    return [int(row[0]) for row in rows if len(row) == 2 and row[1] == expected]
+
+
+def refresh_installed_widget(app, previous_processes):
+    # Replace the package first, then end its previous stateless extension.
+    # A system relaunch now loads the installed package rather than the old one.
+    for pid in previous_processes:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    widget = app / "Contents/PlugIns/WorkFollowWidgets.appex"
+    if widget.exists():
+        result = subprocess.run(["/usr/bin/pluginkit", "-a", str(widget)],
+                                capture_output=True, text=True)
+        if result.returncode:
+            raise AppError("应用已更新，但桌面小组件登记失败，请重新运行安装命令。")
+
+
 def install(source, destination, backup_dir):
     validate(source)
     require_quit(destination)
+    previous_widget_processes = widget_processes(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     backup_dir.mkdir(parents=True, exist_ok=True)
     previous = backup_dir / "WorkFollow.app"
@@ -95,6 +154,7 @@ def install(source, destination, backup_dir):
             if displaced.exists():
                 displaced.rename(destination)
             raise
+    refresh_installed_widget(destination, previous_widget_processes)
     return destination
 
 
@@ -118,9 +178,12 @@ def build(output, build_number, identity):
         derived = Path(folder) / "DerivedData"
         command = ["/usr/bin/xcodebuild", "-project", str(PROJECT), "-scheme", "WorkFollow",
                    "-configuration", "Release", "-destination", "platform=macOS",
-                   "-derivedDataPath", str(derived), "CODE_SIGNING_ALLOWED=NO",
+                   "-derivedDataPath", str(derived), f"CODE_SIGNING_ALLOWED={'NO' if identity == '-' else 'YES'}",
                    "ENABLE_DEBUG_DYLIB=NO", f"CURRENT_PROJECT_VERSION={build_number}",
                    "WF_ACCEPTANCE_STORAGE_ROOT="]
+        if identity != "-":
+            # Xcode uses the configured team and profiles to authorize App Groups.
+            command.append("CODE_SIGN_IDENTITY=" + identity)
         if os.environ.get("WORKFOLLOW_DISABLE_SWIFT_SANDBOX"):
             command.append("OTHER_SWIFT_FLAGS=$(inherited) -Xfrontend -disable-sandbox")
         command.append("build")
@@ -133,7 +196,20 @@ def build(output, build_number, identity):
                 del value[key]
         with plist.open("wb") as stream:
             plistlib.dump(value, stream)
-        run_logged(["/usr/bin/codesign", "--force", "--deep", "--sign", identity, str(package)], log)
+        # Local builds use the widget's own container without an App Group;
+        # the extension remains sandboxed. Certificate builds retain App Groups.
+        if identity == "-":
+            widget = package / "Contents/PlugIns/WorkFollowWidgets.appex"
+            host_entitlements, widget_entitlements = configure_local_widgets(package, Path(folder))
+            run_logged(["/usr/bin/codesign", "--force", "--sign", identity,
+                        "--entitlements", str(widget_entitlements), str(widget)], log)
+            run_logged(["/usr/bin/codesign", "--force", "--sign", identity,
+                        "--entitlements", str(host_entitlements), str(package)], log)
+        else:
+            # Only the containing Info.plist changed above. Keep the profile and
+            # entitlements generated by Xcode, including both targets' group access.
+            run_logged(["/usr/bin/codesign", "--force", "--sign", identity,
+                        "--preserve-metadata=entitlements,requirements,flags", str(package)], log)
         validate(package)
         output.parent.mkdir(parents=True, exist_ok=True)
         if output.exists():

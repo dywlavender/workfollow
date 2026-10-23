@@ -56,6 +56,7 @@ final class NativeTextView: NSTextView {
     }
     var selectionPanel: NSPanel?
     var documentIdentity = UUID()
+    var diagramEditor: DrawioEditorWindowController?
     var needsHostCaretReveal = false
     /// A synchronous editor command may publish the document with host-owned
     /// fields in one commit. Never retained beyond that mutation.
@@ -75,6 +76,8 @@ final class NativeTextView: NSTextView {
     /// Both document rebind and teardown use the same owned-state boundary.
     /// The coordinator must flush composition to the old document first.
     func resetDocumentInteraction(for documentID: UUID) {
+        diagramEditor?.close()
+        diagramEditor = nil
         dismissSlash()
         dismissSelectionToolbar()
         lastSelectionToolbarRange = NSRange(location: NSNotFound, length: 0)
@@ -203,7 +206,7 @@ final class NativeTextView: NSTextView {
         }
     }
 
-    /// 空的标题/列表/代码行上按回车 → 退回正文（滴答/Quill 同款：再按一次回车
+    /// 空的标题/列表/引用/代码行上按回车 → 退回正文（滴答/Quill 同款：再按一次回车
     /// 退出格式），返回是否已处理。有内容的行回车会延续格式，不走这里。
     func exitEmptyBlockOnNewline() -> Bool {
         guard isEditable, !hasMarkedText(), let storage = textStorage else { return false }
@@ -212,10 +215,10 @@ final class NativeTextView: NSTextView {
         let trailingEmpty = source.length == 0
             || (caret == source.length && source.character(at: source.length - 1) == 0x0A)
         let plain = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
-        // 可退出的块：标题、三类列表（有序/无序/检查项）与代码块。
+        // 可退出的块：标题、三类列表（有序/无序/检查项）、引用与代码块。
         func isExitable(_ kind: DocumentBlockKind) -> Bool {
             switch kind {
-            case .heading, .bullet, .ordered, .checklist, .code: return true
+            case .heading, .bullet, .ordered, .checklist, .quote, .code: return true
             default: return false
             }
         }
@@ -477,7 +480,7 @@ final class NativeTextView: NSTextView {
         guard hit.contains(point) else { return false }
         window.makeFirstResponder(self)
         setSelectedRange(NSRange(location: paragraph.location, length: 0))
-        slashSession = SlashSession(start: paragraph.location, trigger: "")
+        slashSession = SlashSession(start: paragraph.location, trigger: "", scope: .block)
         refreshSlash()
         return true
     }
@@ -589,7 +592,7 @@ final class NativeTextView: NSTextView {
             default: break
             }
         }
-        // 空标题/列表行上回车：退回正文（有内容的行回车会延续格式，不受影响）。
+        // 空格式行上回车：退回正文（有内容的行回车会延续格式，不受影响）。
         if selector == #selector(insertNewline(_:)), !hasMarkedText(),
            exitEmptyBlockOnNewline() { return }
         super.doCommand(by: selector)
@@ -717,7 +720,18 @@ final class NativeTextView: NSTextView {
 
     // MARK: - 图片粘贴（迁移自 Flutter onImagePaste：剪贴板图片 → data URL 图片块）
 
+    override func copy(_ sender: Any?) {
+        if !copyDiagramContent(to: .general) { super.copy(sender) }
+    }
+
+    override func cut(_ sender: Any?) {
+        guard isEditable else { return }
+        if copyDiagramContent(to: .general) { insertText("", replacementRange: selectedRange()) }
+        else { super.cut(sender) }
+    }
+
     override func paste(_ sender: Any?) {
+        if pasteDiagramContent(from: .general) { return }
         // 剪贴板是文件（Finder 复制/拖到编辑区）：交给宿主落盘成附件（TI2-03）。
         if let pasteFiles = profile.onPasteFiles {
             let urls = (NSPasteboard.general.readObjects(
@@ -856,6 +870,7 @@ final class NativeTextView: NSTextView {
     /// 行首装饰层（选区之上）；见 `BlockDecorationOverlay`。
     private var decorationOverlay: BlockDecorationOverlay?
     private var decorationSelectionObserver: NSObjectProtocol?
+    private var spellObserver: NSObjectProtocol?
     private var decorationBoundsObserver: NSObjectProtocol?
 
     override func layout() {
@@ -910,6 +925,13 @@ final class NativeTextView: NSTextView {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.decorationOverlay?.needsDisplay = true }
         }
+        spellObserver = NotificationCenter.default.addObserver(
+            forName: EditorPreferences.spellCheckingDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.isContinuousSpellCheckingEnabled = EditorPreferences.spellCheckingEnabled
+            }
+        }
         storageObserver = NotificationCenter.default.addObserver(
             forName: NSTextStorage.didProcessEditingNotification, object: textStorage, queue: nil
         ) { [weak self] _ in
@@ -919,6 +941,15 @@ final class NativeTextView: NSTextView {
             }
         }
         focusRingType = .none
+        // 智能替换会把 Markdown 语法吃掉：代码块里 `"` → 弯引号、`--` → 破折号、
+        // `(c)` → ©，输入 `---` 分割线也会被替换掉（2026-10-24 实测默认全开）。
+        // 滴答的编辑面同样不做智能替换；拼写检查按用户偏好单独开关。
+        isAutomaticQuoteSubstitutionEnabled = false
+        isAutomaticDashSubstitutionEnabled = false
+        isAutomaticTextReplacementEnabled = false
+        isAutomaticSpellingCorrectionEnabled = false
+        isContinuousSpellCheckingEnabled = EditorPreferences.spellCheckingEnabled
+        isGrammarCheckingEnabled = false
         isRichText = true
         usesRuler = false
         importsGraphics = false
@@ -959,6 +990,7 @@ final class NativeTextView: NSTextView {
         if let decorationBoundsObserver {
             NotificationCenter.default.removeObserver(decorationBoundsObserver)
         }
+        if let spellObserver { NotificationCenter.default.removeObserver(spellObserver) }
     }
 
     override func cancelOperation(_ sender: Any?) {

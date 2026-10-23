@@ -17,7 +17,6 @@ struct MatrixWorkspaceView: View {
     /// 不占页头。
     private var showCompleted: Bool { settings.matrix.showCompleted }
     @State private var editingRule: MatrixQuadrantConfiguration?
-    @State private var dropProposal: MatrixDropProposal?
 
     @MainActor
     init(workspace: TaskWorkspaceModel, settings: PlanningSettingsStore? = nil) {
@@ -63,6 +62,7 @@ struct MatrixWorkspaceView: View {
                 },
                 onAddTask: addTask,
                 onEditRule: { editingRule = settings.matrix.configuration(for: $0) },
+                onUpdate: updateConfiguration(_:for:),
                 onDropTask: proposeDrop,
                 onMoveQuadrant: { source, target in settings.updateMatrix { $0.move(source, before: target) } },
                 onOpenTask: openTask,
@@ -80,19 +80,6 @@ struct MatrixWorkspaceView: View {
                 editingRule = nil
             } onCancel: { editingRule = nil }
         }
-        .sheet(item: $dropProposal) { proposal in
-            MatrixDropConfirmation(proposal: proposal, targetTitle: settings.matrix.configuration(for: proposal.target).title,
-                                   onChoose: { list, tag in
-                guard let task = workspace.task(for: proposal.taskID) else { return }
-                dropProposal = MatrixDropPlanner.propose(task: task, target: proposal.target,
-                    configuration: settings.matrix, now: workspace.clock(), calendar: workspace.calendar,
-                    chosenList: list, chosenTag: tag)
-            }, onCommit: {
-                _ = workspace.updateAttributes(proposal.taskID, priority: proposal.priority, schedule: proposal.schedule,
-                                               list: proposal.list, tags: proposal.tags)
-                dropProposal = nil
-            }, onCancel: { dropProposal = nil })
-        }
         .overlay {
             PlanningWorkspaceChrome(workspace: workspace,
                                     anchor: anchorSink,
@@ -109,24 +96,12 @@ struct MatrixWorkspaceView: View {
                 .font(WFType.pageTitle)
                 .foregroundStyle(WFColors.text)
             Spacer(minLength: 0)
+            // 页头「…」只管一件事：整页的已完成任务显隐。
+            // 撤销/重做、展开/折叠分组都不在这里——拖拽与规则编辑本身可以 ⌘Z，
+            // 展开折叠是每个分组的局部动作（点分组标题）。
             BusinessMenu {
-                ForEach([MatrixPreset.priority, .timeAndPriority, .legacyThreeDays], id: \.self) { preset in
-                    BusinessMenuOption(preset.title, selected: settings.matrix.preset == preset) { settings.updateMatrix { $0 = .makePreset(preset) } }
-                }
-            } label: { Label(settings.matrix.preset.title, systemImage: "slider.horizontal.3") }
-            .fixedSize()
-            Spacer().frame(width: WFSpace.sm)
-            BusinessMenu {
-                Toggle("显示已完成任务", isOn: Binding(get: { showCompleted }, set: { flag in
-                    settings.updateMatrix { $0.showCompleted = flag }
-                }))
-                Divider()
-                Button("撤销配置修改") { settings.undoConfiguration() }.disabled(!settings.canUndoConfiguration)
-                Button("重做配置修改") { settings.redoConfiguration() }.disabled(!settings.canRedoConfiguration)
-                Divider()
-                Button("展开全部分组") { collapsedGroups.removeAll() }
-                Button("折叠全部分组") {
-                    collapsedGroups.formUnion(quadrants.flatMap { $0.groups.map(\.id) })
+                Button(showCompleted ? "隐藏已完成" : "显示已完成") {
+                    settings.updateMatrix { $0.showCompleted.toggle() }
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -168,7 +143,7 @@ struct MatrixWorkspaceView: View {
         let schedule = proposal.schedule ?? blank.schedule
         composerRequest = PlanningComposerRequest(fallback: schedule, preset: schedule,
             priority: proposal.priority ?? blank.priority, list: proposal.list, tags: proposal.tags ?? [],
-            matrixConfiguration: settings.matrix)
+            )
     }
 
     private func proposeDrop(_ id: UUID, _ target: MatrixQuadrant, _ before: UUID?) {
@@ -192,8 +167,24 @@ struct MatrixWorkspaceView: View {
             }
             return
         }
-        dropProposal = MatrixDropPlanner.propose(task: task, target: target, configuration: settings.matrix,
+        // 跨象限拖拽直接落地：原来这里先弹一个「移入 XX / 优先级改为 YY」的确认框，
+        // 拖一次要点两下。改为按规则算完直接提交；有冲突（`canCommit == false`）时
+        // 不移动，保持原状——宁可不动，也不悄悄改半套属性。
+        let proposal = MatrixDropPlanner.propose(task: task, target: target, configuration: settings.matrix,
                                                  now: workspace.clock(), calendar: workspace.calendar)
+        guard proposal.canCommit else { return }
+        _ = workspace.updateAttributes(proposal.taskID, priority: proposal.priority,
+                                       schedule: proposal.schedule, list: proposal.list,
+                                       tags: proposal.tags)
+    }
+
+    /// 改某个象限的分组 / 排序 / 顺序。
+    private func updateConfiguration(_ mutate: @escaping (inout MatrixQuadrantConfiguration) -> Void,
+                                     for quadrant: MatrixQuadrant) {
+        settings.updateMatrix { configuration in
+            guard let index = configuration.quadrants.firstIndex(where: { $0.quadrant == quadrant }) else { return }
+            mutate(&configuration.quadrants[index])
+        }
     }
 
     private func openTask(_ id: UUID) {
@@ -221,6 +212,7 @@ struct MatrixBoardView: View {
     let onCollapseAll: (MatrixQuadrant) -> Void
     let onAddTask: (MatrixQuadrant) -> Void
     let onEditRule: (MatrixQuadrant) -> Void
+    let onUpdate: (@escaping (inout MatrixQuadrantConfiguration) -> Void, MatrixQuadrant) -> Void
     let onDropTask: (UUID, MatrixQuadrant, UUID?) -> Void
     let onMoveQuadrant: (MatrixQuadrant, MatrixQuadrant) -> Void
     let onOpenTask: (UUID) -> Void
@@ -251,6 +243,7 @@ struct MatrixBoardView: View {
                         onCollapseAll: { onCollapseAll(quadrant) },
                         onAddTask: { onAddTask(quadrant) },
                         onEditRule: { onEditRule(quadrant) },
+                        onUpdate: { mutate in onUpdate(mutate, quadrant) },
                         onDropTask: { id, before in onDropTask(id, quadrant, before) },
                         onMoveQuadrant: { onMoveQuadrant($0, quadrant) },
                         onOpenTask: onOpenTask,
@@ -279,6 +272,8 @@ struct MatrixQuadrantCard: View {
     let onCollapseAll: () -> Void
     let onAddTask: () -> Void
     let onEditRule: () -> Void
+    /// 改这个象限的分组 / 排序 / 顺序。
+    let onUpdate: (@escaping (inout MatrixQuadrantConfiguration) -> Void) -> Void
     let onDropTask: (UUID, UUID?) -> Void
     let onMoveQuadrant: (MatrixQuadrant) -> Void
     let onOpenTask: (UUID) -> Void
@@ -289,8 +284,52 @@ struct MatrixQuadrantCard: View {
     @State private var dropping = false
     /// 这一张卡自己的锚：卡上的新建按钮/菜单弹的是贴着这张卡的浮层。
     @State private var anchor = PlanningAnchorRef()
+    /// 「+」按钮自己的锚。用它而不是整张卡，弹层才会贴着按钮，而不是跑到卡片左上角。
+    @State private var addButtonAnchor = PlanningAnchorRef()
+    /// 「…」菜单是否展开。展开期间要压住 hover 判定：
+    /// 菜单在独立浮层里，鼠标一移过去卡片的 `hovering` 就变 false，
+    /// 原来会让按钮透明+禁用，菜单跟着消失，根本点不中。
+    @State private var menuOpen = false
 
     private var style: MatrixQuadrant { model.quadrant }
+
+    private var grouping: MatrixGrouping { model.configuration?.grouping ?? .list }
+    private var sort: MatrixSort { model.configuration?.sort ?? .manual }
+    private var direction: MatrixOrderDirection { model.configuration?.direction ?? .ascending }
+
+    /// 子菜单里的单选行：左侧名称、右侧当前值，展开后逐项打勾。
+    private func pickerMenu<T: Hashable>(_ title: String, selection: T, options: [T],
+                                          current: String,
+                                          apply: @escaping (T) -> Void) -> some View {
+        BusinessMenu(title: title) {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    apply(option)
+                } label: {
+                    if option == selection {
+                        Label(label(of: option, title: title), systemImage: "checkmark")
+                    } else {
+                        Text(label(of: option, title: title))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: WFSpace.sm) {
+                Text(title)
+                Spacer(minLength: 8)
+                Text(current).foregroundStyle(WFColors.secondaryText)
+            }
+        }
+    }
+
+    private func label(of option: Any, title: String) -> String {
+        switch option {
+        case let value as MatrixGrouping: return value.title
+        case let value as MatrixSort: return value.title
+        case let value as MatrixOrderDirection: return value.title
+        default: return "\(option)"
+        }
+    }
     private var color: Color { WFPlanningPalette.quadrant[model.configuration?.colorIndex ?? style.rawValue] }
     private var title: String { model.configuration?.title ?? style.title }
 
@@ -366,8 +405,9 @@ struct MatrixQuadrantCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             hoverAction(icon: "plus", tooltip: "在\(style.title)中新建任务",
                         visible: hovering,
+                        probe: addButtonAnchor,
                         action: {
-                            anchorSink.rect = anchor.rect
+                            anchorSink.rect = addButtonAnchor.rect ?? anchor.rect
                             onAddTask()
                         })
             quadrantMenu
@@ -378,6 +418,7 @@ struct MatrixQuadrantCard: View {
     /// 象限自己的动作只在指针停上来时出现；离开时不接收点击，也不被读屏念出来。
     @ViewBuilder
     private func hoverAction(icon: String, tooltip: String, visible: Bool,
+                             probe: PlanningAnchorRef? = nil,
                              action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
@@ -389,6 +430,9 @@ struct MatrixQuadrantCard: View {
         }
         .buttonStyle(.plain)
         .opacity(visible ? 1 : 0)
+        .background {
+            if let probe { PlanningAnchorProbe(ref: probe) }
+        }
         .disabled(!visible)
         .allowsHitTesting(visible)
         .accessibilityHidden(!visible)
@@ -398,20 +442,27 @@ struct MatrixQuadrantCard: View {
     /// 象限菜单：新建、显示/隐藏已完成、展开全部、折叠全部。
     /// 已完成是页面的偏好，所以那一项回传给页面，象限自己不留第二份状态。
     private var quadrantMenu: some View {
-        BusinessMenu {
-            Button("新建任务") {
-                anchorSink.rect = anchor.rect
-                onAddTask()
-            }
-            Button(showCompleted ? "隐藏已完成任务" : "显示已完成任务") {
-                onToggleGroup(MatrixGroupViewModel(id: MatrixQuadrantViewModel.completedToggleID,
-                                                   title: "", count: 0,
-                                                   completedGroup: true, tasks: []))
-            }
+        // 象限自己的菜单：编辑规则 + 排序（分组 / 排序依据 / 顺序方向，三级）。
+        // 「新建任务 / 显示已完成 / 展开折叠全部」是整页级动作，统一放在页头的「…」里。
+        BusinessMenu(isPresented: $menuOpen) {
+            Button("编辑") { onEditRule() }
             Divider()
-            Button("编辑名称与规则…") { onEditRule() }
-            Button("展开全部分组") { onExpandAll() }
-            Button("折叠全部分组") { onCollapseAll() }
+            BusinessMenu(title: "排序") {
+                pickerMenu("分组", selection: grouping, options: MatrixGrouping.allCases,
+                           current: grouping.title) { value in
+                    onUpdate { $0.grouping = value }
+                }
+                pickerMenu("排序", selection: sort, options: MatrixSort.allCases,
+                           current: sort.title) { value in
+                    onUpdate { $0.sort = value }
+                }
+                pickerMenu("顺序", selection: direction, options: MatrixOrderDirection.allCases,
+                           current: direction.title) { value in
+                    onUpdate { $0.direction = value }
+                }
+            } label: {
+                Label("排序", systemImage: "arrow.up.arrow.down")
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: WFMatrixMetrics.quadrantActionIconSize))
@@ -421,10 +472,11 @@ struct MatrixQuadrantCard: View {
                 .contentShape(Rectangle())
         }
         .fixedSize()
-        .opacity(hovering ? 1 : 0)
-        .disabled(!hovering)
-        .allowsHitTesting(hovering)
-        .accessibilityHidden(!hovering)
+        // 菜单展开时保持可见可点，否则鼠标一移向菜单它就消失。
+        .opacity(hovering || menuOpen ? 1 : 0)
+        .disabled(!hovering && !menuOpen)
+        .allowsHitTesting(hovering || menuOpen)
+        .accessibilityHidden(!hovering && !menuOpen)
         .help("\(style.title)更多操作")
     }
 }

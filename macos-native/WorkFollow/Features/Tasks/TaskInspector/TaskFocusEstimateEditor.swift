@@ -5,41 +5,56 @@ struct TaskFocusEstimateEditor: View {
     let onSave: (TaskFocusEstimate?) -> Void
     let onCancel: () -> Void
     @State private var usesPomodoros: Bool
-    @State private var count: Int
+    @State private var minutes: Int
+    @State private var pomodoros: Int
 
     init(estimate: TaskFocusEstimate?, onSave: @escaping (TaskFocusEstimate?) -> Void,
          onCancel: @escaping () -> Void) {
         self.estimate = estimate; self.onSave = onSave; self.onCancel = onCancel
         _usesPomodoros = State(initialValue: estimate?.pomodoros != nil)
-        _count = State(initialValue: estimate?.pomodoros ?? estimate?.minutes ?? 25)
+        _minutes = State(initialValue: estimate?.minutes ?? 25)
+        _pomodoros = State(initialValue: estimate?.pomodoros ?? 1)
     }
 
+    private var quantity: Binding<Int> { usesPomodoros ? $pomodoros : $minutes }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("预计专注").font(WFType.sectionSemibold)
-            Picker("单位", selection: $usesPomodoros) {
-                Text("时长").tag(false)
-                Text("番茄数").tag(true)
-            }.pickerStyle(.segmented)
-            HStack {
-                TextField("数值", value: $count, format: .number)
-                    .textFieldStyle(.roundedBorder).frame(width: 80)
-                    .accessibilityLabel("预计专注数值")
-                Text(usesPomodoros ? "个番茄" : "分钟")
-                Stepper("调整", value: $count, in: 1...10_000).labelsHidden()
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("预计专注").font(WFType.sectionSemibold)
+                Picker("单位", selection: $usesPomodoros) {
+                    Text("时长").tag(false)
+                    Text("番茄数").tag(true)
+                }.pickerStyle(.segmented).labelsHidden()
+                HStack {
+                    TextField("数值", value: quantity, format: .number)
+                        .textFieldStyle(.roundedBorder).frame(width: 80)
+                        .accessibilityLabel("预计专注数值").onSubmit(save)
+                    Text(usesPomodoros ? "个番茄" : "分钟")
+                    Stepper("调整", value: quantity, in: 1...10_000).labelsHidden()
+                }
             }
-            HStack {
-                Button("清除") { onSave(nil) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(PopupMetrics.contentInset)
+            PopupActionBar {
+                Button("清除") { onSave(nil) }.buttonStyle(.plain)
+                    .disabled(estimate == nil).accessibilityLabel("清除预计专注")
+                    .foregroundStyle(estimate == nil ? WFColors.tertiaryText : WFColors.secondaryText)
+                    .inspectorRenderAnchor(.focusEstimateClear)
                 Spacer()
-                Button("取消", action: onCancel).keyboardShortcut(.cancelAction)
-                Button("保存") {
-                    onSave(usesPomodoros ? TaskFocusEstimate(minutes: nil, pomodoros: count)
-                                       : TaskFocusEstimate(minutes: count, pomodoros: nil))
-                }.keyboardShortcut(.defaultAction).disabled(count < 1)
+                PopupActionButton(title: "取消", action: onCancel)
+                    .frame(width: 64).keyboardShortcut(.cancelAction)
+                PopupActionButton(title: "保存", primary: true, action: save)
+                    .frame(width: 64).keyboardShortcut(.defaultAction).disabled(quantity.wrappedValue < 1)
             }
         }
-        .font(WFType.control)
-        .padding(16).frame(width: PopupMetrics.focusEstimateWidth)
+        .font(WFType.body).frame(width: PopupMetrics.focusEstimateWidth)
+    }
+
+    private func save() {
+        guard quantity.wrappedValue > 0 else { return }
+        onSave(usesPomodoros ? TaskFocusEstimate(minutes: nil, pomodoros: pomodoros)
+                            : TaskFocusEstimate(minutes: minutes, pomodoros: nil))
     }
 }
 

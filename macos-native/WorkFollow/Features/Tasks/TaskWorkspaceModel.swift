@@ -692,13 +692,13 @@ final class TaskWorkspaceModel: ObservableObject {
                      tags: [String], reminder: Date?, reminderOffsets: [Int]? = nil,
                      repeatFrequency: TaskRepeat,
                      recurrenceRule: RecurrenceRule? = nil,
-                     document: NativeDocument = .empty) -> TaskActionResult {
+                     document: NativeDocument = .empty, selectCreatedTask: Bool = true) -> TaskActionResult {
         let result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
                                          tags: tags, reminder: reminder, reminderOffsets: reminderOffsets,
                                          frequency: repeatFrequency,
                                          recurrenceRule: recurrenceRule, document: document)
         didMutate(result)
-        if let id = result.taskID { select(id) }
+        if selectCreatedTask, let id = result.taskID { select(id) }
         return result
     }
 

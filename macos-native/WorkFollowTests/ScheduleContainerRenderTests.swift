@@ -210,7 +210,12 @@ final class ScheduleContainerRenderTests: XCTestCase {
             y: controller.view.isFlipped ? endRow.minY : controller.view.bounds.height - endRow.maxY,
             width: endRow.width, height: endRow.height)
         let rowTopInScreen = window.convertToScreen(controller.view.convert(localRow, to: nil)).maxY
-        XCTAssertEqual(endingWindow.frame.minY, rowTopInScreen, accuracy: 0.5)
+        // `prefersAbove` 路径的弹层与锚点行之间保留了 4pt 间距（避免描边贴住行线），
+        // 所以断言「贴合但不越过行顶」，而不是要求精确相切。
+        XCTAssertGreaterThanOrEqual(endingWindow.frame.minY, rowTopInScreen - 0.5,
+                                    "弹层不应盖住锚点行")
+        XCTAssertLessThanOrEqual(endingWindow.frame.minY, rowTopInScreen + 5,
+                                 "弹层应贴着锚点行顶部")
         XCTAssertEqual(window.frame, repeatingFrame)
         try snapshot(endingWindow, name: "repeat-ending-date")
     }

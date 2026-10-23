@@ -46,6 +46,9 @@ final class AppEnvironment: ObservableObject {
     @Published var sidebarVisible = true
     private let repository: NativePreviewRepository
     private let persistence: PersistenceCoordinator
+    private var taskWidget: TaskWidgetBridge?
+    lazy var widgetQuickAdd = WidgetQuickAddController(workspace: taskWorkspace,
+        appearance: { [weak self] in self?.appearance ?? .system })
     @Published private(set) var storageNeedsReload = false
     private var storageReplacementPending = false
     private var subscriptions = Set<AnyCancellable>()
@@ -178,6 +181,7 @@ final class AppEnvironment: ObservableObject {
                 self?.taskWorkspace.refreshDates()
                 self?.countdownStore.refresh()
                 self?.refreshSystemIntegrations()
+                _Concurrency.Task { @MainActor [weak self] in await self?.taskWidget?.processPending() }
             }
             .store(in: &subscriptions)
         // B2 笔记↔任务联动：笔记详情展示/勾选/打开 sourceNoteID 关联的任务。
@@ -259,6 +263,24 @@ final class AppEnvironment: ObservableObject {
             NotificationCenter.default.publisher(for: name).sink { [weak self] _ in
                 self?.refreshSystemIntegrations()
             }.store(in: &subscriptions)
+        }
+        if !loadFailed {
+            // Acceptance and unit-test workspaces never publish real data to
+            // the system widget's shared container.
+            let isolated = directory.standardizedFileURL != NativePreviewRepository.directory.standardizedFileURL
+                || !(Bundle.main.object(forInfoDictionaryKey: "WorkFollowAcceptanceStorageRoot") as? String ?? "").isEmpty
+            let channel = isolated ? TaskWidgetChannel(directory: directory.appendingPathComponent("widgets"))
+                : try? TaskWidgetChannel.shared()
+            if let channel {
+                taskWidget = TaskWidgetBridge(channel: channel, workspace: taskWorkspace,
+                    canProcess: { [weak self] in
+                        guard let self else { return false }
+                        return !self.loadFailed && !self.storageNeedsReload && !self.storageReplacementPending
+                    }, flush: { [weak self] completion in
+                        guard let self else { completion(TaskWidgetError.unavailable); return }
+                        self.persistence.flush(completion: completion)
+                    })
+            }
         }
     }
 

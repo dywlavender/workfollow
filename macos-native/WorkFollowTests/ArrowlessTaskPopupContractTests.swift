@@ -161,9 +161,9 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
             "Features/Tasks/TaskList/TaskContextMenuPopover.swift"), encoding: .utf8)
 
         // 可反复改的属性 → apply（就地执行，菜单留着）
-        for call in ["workspace.moveDueDate(", "workspace.clearDueDate(",
-                     "workspace.setPriority(", "workspace.moveToList(",
-                     "workspace.setTaskSection("] {
+        // `clearDueDate` 已经不在菜单里（日期改由日程面板清除），从清单里去掉。
+        for call in ["workspace.moveDueDate(", "workspace.setPriority(",
+                     "workspace.moveToList(", "workspace.setTaskSection("] {
             XCTAssertTrue(source.contains("apply { _ = \(call)"),
                           "\(call) 是可反复改的属性，必须走 apply（点完不收菜单）")
             XCTAssertFalse(source.contains("perform { _ = \(call)"),
@@ -172,11 +172,19 @@ final class ArrowlessTaskPopupContractTests: XCTestCase {
 
         // 一次性命令 / 会开别的窗口 / 不可逆 → perform（先关菜单再执行）
         for call in ["workspace.delete(", "workspace.skip(", "workspace.duplicate(",
-                     "environment.startFocus(", "environment.convertTaskToNote("] {
+                     "environment.convertTaskToNote("] {
             XCTAssertTrue(source.contains("perform { _ = \(call)")
                             || source.contains("perform { \(call)"),
                           "\(call) 是一次性命令，必须走 perform（点完收菜单）")
         }
+
+        // 「开始专注」抽成了私有方法，收菜单写在方法体里——断言同样要盯住
+        // 「点完就收」，而不是它有没有用 perform 这个字面写法。
+        let focusStart = try XCTUnwrap(source.range(of: "private func startFocus("),
+                                       "开始专注的入口不见了")
+        let focusBody = String(source[focusStart.lowerBound...].prefix(700))
+        XCTAssertTrue(focusBody.contains("isPresented = false"),
+                      "开始专注是一次性命令，执行后必须收菜单")
     }
 
     /// 「可反复改的属性」点完必须留着面板。

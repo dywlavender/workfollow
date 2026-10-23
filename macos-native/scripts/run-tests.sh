@@ -64,9 +64,12 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/workfollow-tests.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 # Check the producer itself, not grep's exit status; never run old build products.
+# The isolated XCTest host does not use the production App Group. Build without
+# provisioning so local tests continue to work without a developer certificate.
 echo "==> 构建测试产物"
 if xcodebuild build-for-testing \
   -project "$PROJECT" -scheme "$SCHEME" -destination "platform=macOS,arch=$(uname -m)" \
+  CODE_SIGNING_ALLOWED=NO \
   "${DERIVED_DATA_ARGS[@]+"${DERIVED_DATA_ARGS[@]}"}" \
   "${EXTRA_BUILD_ARGS[@]+"${EXTRA_BUILD_ARGS[@]}"}" \
   > "$WORK/build.log" 2>&1; then

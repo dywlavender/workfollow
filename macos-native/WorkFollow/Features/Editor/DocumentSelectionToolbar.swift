@@ -123,6 +123,7 @@ struct DocumentFormatToolbarView: View {
             }
             Button("链接") { handle.editLink() }
             Button("上传附件") { handle.insertAttachment() }
+            Button("流程图（draw.io）") { handle.insertDiagram() }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: DocumentFormatToolbarMetrics.iconSize))
@@ -189,6 +190,11 @@ struct DocumentFormatToolbarView: View {
                 }
                 formatButton("format.inlineCode")
                 formatButton("format.quote")
+                toolbarDivider
+                ToolbarButton(title: "流程图（draw.io）", active: false, state: overlay,
+                              action: { handle.insertDiagram() }) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                }
             }
             .buttonStyle(.plain)
             // Optical glyph size is separate from the unchanged hit target.

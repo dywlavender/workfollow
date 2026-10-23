@@ -20,7 +20,7 @@ struct TaskQuickComposer: View {
     let presetSchedule: TaskSchedule?
     /// 打开时的优先级（四象限的象限默认值；日历为无）。
     let presetPriority: TaskPriority
-    let matrixConfiguration: MatrixConfiguration?
+    let selectsCreatedTask: Bool
     let requestClose: () -> Void
 
     @State private var title = ""
@@ -46,13 +46,13 @@ struct TaskQuickComposer: View {
          presetPriority: TaskPriority,
          presetList: TaskList? = nil,
          presetTags: [String] = [],
-         matrixConfiguration: MatrixConfiguration? = nil,
+         selectsCreatedTask: Bool = true,
          requestClose: @escaping () -> Void) {
         self.workspace = workspace
         self.fallbackSchedule = fallbackSchedule
         self.presetSchedule = presetSchedule
         self.presetPriority = presetPriority
-        self.matrixConfiguration = matrixConfiguration
+        self.selectsCreatedTask = selectsCreatedTask
         self.requestClose = requestClose
         _schedule = State(initialValue: presetSchedule ?? TaskSchedule())
         _overridden = State(initialValue: presetSchedule?.dueAt != nil)
@@ -116,7 +116,8 @@ struct TaskQuickComposer: View {
             BusinessMenu(width: PopupMetrics.taskMenuWidth, title: "优先级") {
                 priorityItems
             } label: {
-                Image(systemName: "flag")
+                // 与任务右键菜单同一条规则：有优先级就用实心旗，无优先级才留描边。
+                Image(systemName: priority == .none ? "flag" : "flag.fill")
                     .font(.system(size: 20))
                     .foregroundStyle(priorityColor)
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
@@ -142,11 +143,6 @@ struct TaskQuickComposer: View {
             .focused($titleFocused)
             .onSubmit(submit)
             .accessibilityLabel("任务标题")
-            if let configuration = matrixConfiguration {
-                let target = configuration.quadrant(for: draftTask, now: workspace.clock(), calendar: workspace.calendar)
-                Text(target.map { "创建到“\(configuration.configuration(for: $0).title)”" } ?? "当前属性未命中象限")
-                    .font(WFType.caption).foregroundStyle(WFColors.overlaySecondaryText)
-            }
         }
         .padding(.horizontal, WFSpace.lg)
         .padding(.vertical, WFSpace.relaxed)
@@ -208,7 +204,12 @@ struct TaskQuickComposer: View {
     @ViewBuilder
     private var priorityItems: some View {
         ForEach(TaskPriority.menuOrder, id: \.self) { value in
-            BusinessMenuOption(Self.priorityTitle(value), selected: value == priority, symbol: "flag", color: value.menuColor) {
+            // 与任务详情里的优先级菜单完全一致：非「无优先级」都用实心旗，不染色、不带勾选。
+            BusinessMenuOption(Self.priorityTitle(value), selected: value == priority,
+                               symbol: value == .none ? "flag" : "flag.fill",
+                               color: value.menuColor,
+                               tintsWhenSelected: false,
+                               showsCheckmark: false) {
                 priority = value; titleFocused = true
             }
         }
@@ -267,7 +268,7 @@ struct TaskQuickComposer: View {
     private func submit() {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        workspace.createDraft(title: trimmed,
+        let result = workspace.createDraft(title: trimmed,
                               list: listName,
                               schedule: overridden ? schedule : fallbackSchedule,
                               priority: priority,
@@ -275,18 +276,13 @@ struct TaskQuickComposer: View {
                               reminder: reminder,
                               reminderOffsets: reminderOffsets.isEmpty ? nil : reminderOffsets,
                               repeatFrequency: frequency,
-                              recurrenceRule: recurrenceRule)
-        requestClose()
+                              recurrenceRule: recurrenceRule,
+                              selectCreatedTask: selectsCreatedTask)
+        if result.taskID != nil { requestClose() }
     }
 
-    private var priorityColor: Color {
-        switch priority {
-        case .high: WFColors.danger
-        case .medium: WFColors.warning
-        case .low: WFColors.accent
-        case .none: WFColors.overlayTertiaryText
-        }
-    }
+    /// 与任务列表 / 详情 / 右键菜单共用同一份配色。
+    private var priorityColor: Color { priority.menuColor }
 
     static func priorityTitle(_ value: TaskPriority) -> String {
         switch value {

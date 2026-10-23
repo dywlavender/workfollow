@@ -66,6 +66,12 @@ struct DocumentProfile {
     var selectionToolbarEnabled: Bool?
     /// Complete host-owned menu; nil keeps legacy/generic profile behavior.
     var slashCommandOverride: [DocumentCommand]?
+    /// 块菜单（行首手柄 / 空行「+」）的命令集。
+    ///
+    /// 与 Slash 菜单**不是同一份**：滴答的竖排块菜单资源是 `md_vertical_header1..6`
+    /// （六种标题都在），而 Slash 菜单实测只有 12 项、标题到 H3。共用一份会让块菜单
+    /// 少掉 H4–H6，所以这里单独给。
+    var blockMenuCommands: [DocumentCommand]?
     var supportsSelectionToolbar: Bool {
         selectionToolbarEnabled ?? (!taskSlash && !selectionActions.isEmpty)
     }
@@ -85,7 +91,8 @@ struct DocumentProfile {
                             perform: { $0.insertDocumentAttachment(nil) },
                             slash: { view, invocation in
                                 view.insertDocumentAttachment(at: invocation.slashOffset)
-                            })
+                            }),
+            Self.diagramCommand
         ] + commands
     }
 
@@ -105,8 +112,53 @@ struct DocumentProfile {
                             perform: { $0.insertDocumentAttachment(nil) },
                             slash: { view, invocation in
                                 view.insertDocumentAttachment(at: invocation.slashOffset)
-                            })
+                            }),
+            diagramCommand
         ]
+    }
+
+    /// 块类型菜单（滴答 `md_vertical_*`）：正文 / H1–H6 / 无序 / 有序 / 检查项 / 引用 /
+    /// 分割线 / 附件。分节决定细线位置：标题｜列表｜格式｜插入。
+    static var blockMenuCommands: [DocumentCommand] {
+        let formatIDs = ["format.paragraph",
+                         "format.heading1", "format.heading2", "format.heading3",
+                         "format.heading4", "format.heading5", "format.heading6",
+                         "format.bullet", "format.ordered", "format.checklist", "format.quote"]
+        var commands = formatIDs.compactMap(EditorCommandCatalog.format).map { format in
+            format.slashCommand(group: blockSection(forFormatID: format.id), useFormatGlyph: true)
+        }
+        commands.append(DocumentCommand(id: "shared.divider", title: "水平分割线", group: "格式",
+                                        perform: { $0.insertDocumentDivider() },
+                                        slash: { view, invocation in
+                                            view.insertDocumentDivider(at: invocation.slashOffset)
+                                        }))
+        commands.append(DocumentCommand(id: "shared.attachment", title: "附件", group: "插入",
+                                        perform: { $0.insertDocumentAttachment(nil) },
+                                        slash: { view, invocation in
+                                            view.insertDocumentAttachment(at: invocation.slashOffset)
+                                        }))
+        return commands
+    }
+
+    private static func blockSection(forFormatID id: String) -> String {
+        switch id {
+        case "format.paragraph", "format.heading1", "format.heading2", "format.heading3",
+             "format.heading4", "format.heading5", "format.heading6":
+            return "标题"
+        case "format.bullet", "format.ordered", "format.checklist":
+            return "列表"
+        default:
+            return "格式"
+        }
+    }
+
+    static var diagramCommand: DocumentCommand {
+        DocumentCommand(id: "shared.drawio", title: "流程图（draw.io）", group: "插入",
+                        keywords: "drawio draw.io diagram 流程图 绘图 思维导图 架构图",
+                        perform: { $0.insertDocumentDiagram(at: nil) },
+                        slash: { view, invocation in
+                            view.insertDocumentDiagram(at: invocation.slashOffset)
+                        })
     }
 
     /// Slash 菜单分节名：只决定分隔线位置与非 compact 的组文本；
@@ -123,16 +175,24 @@ struct DocumentProfile {
     }
 }
 
+/// 同一个浮层面板承载两种菜单：Slash 输入触发，或行首块手柄点开。
+enum SlashMenuScope: Equatable {
+    case slash
+    case block
+}
+
 struct SlashSession {
     let start: Int
     let trigger: String
+    var scope: SlashMenuScope = .slash
     private(set) var range: NSRange
     private(set) var query = ""
     private(set) var selectedIndex = 0
 
-    init(start: Int, trigger: String = "/") {
+    init(start: Int, trigger: String = "/", scope: SlashMenuScope = .slash) {
         self.start = start
         self.trigger = trigger
+        self.scope = scope
         range = NSRange(location: start, length: (trigger as NSString).length)
     }
 

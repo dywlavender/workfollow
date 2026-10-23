@@ -188,12 +188,20 @@ struct BusinessMenuOption: View {
     var selected: Bool
     var symbol: String?
     var color: Color?
+    /// 选中时是否把整行文字染成强调色。
+    /// 任务右键菜单的优先级/清单等选项一直是正文色 + 勾选，快速添加弹层要保持同一套观感。
+    var tintsWhenSelected = true
+    /// 是否显示右侧勾选。任务详情的优先级菜单靠「实心旗」表达当前值，没有勾选列。
+    var showsCheckmark = true
     let action: () -> Void
     @Environment(\.businessMenuContext) private var context
     @State private var identity = UUID()
     init(_ title: String, selected: Bool = false, symbol: String? = nil, color: Color? = nil,
+         tintsWhenSelected: Bool = true, showsCheckmark: Bool = true,
          action: @escaping () -> Void) {
-        self.title = title; self.selected = selected; self.symbol = symbol; self.color = color; self.action = action
+        self.title = title; self.selected = selected; self.symbol = symbol; self.color = color
+        self.tintsWhenSelected = tintsWhenSelected; self.showsCheckmark = showsCheckmark
+        self.action = action
     }
     var body: some View {
         Group {
@@ -221,9 +229,10 @@ struct BusinessMenuOption: View {
             Text(title).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 8)
             Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold))
-                .frame(width: 14).opacity(selected ? 1 : 0)
+                .frame(width: 14)
+                .opacity(selected && showsCheckmark ? 1 : 0)
         }
-        .foregroundStyle(selected ? WFColors.accent : WFColors.text)
+        .foregroundStyle(selected && tintsWhenSelected ? WFColors.accent : WFColors.text)
     }
 }
 
@@ -242,6 +251,20 @@ private struct BusinessMenuContext {
 private struct BusinessMenuContextKey: EnvironmentKey {
     static let defaultValue: BusinessMenuContext? = nil
 }
+private struct BusinessMenuSubmenuActionKey: EnvironmentKey {
+    static let defaultValue = false
+}
+extension View {
+    func businessMenuSubmenuAction() -> some View {
+        environment(\.businessMenuSubmenuAction, true)
+    }
+}
+private extension EnvironmentValues {
+    var businessMenuSubmenuAction: Bool {
+        get { self[BusinessMenuSubmenuActionKey.self] }
+        set { self[BusinessMenuSubmenuActionKey.self] = newValue }
+    }
+}
 private extension EnvironmentValues {
     var businessMenuContext: BusinessMenuContext? {
         get { self[BusinessMenuContextKey.self] }
@@ -253,7 +276,12 @@ private extension EnvironmentValues {
 /// animation, and pending child openings are cancelled when the menu closes.
 @MainActor
 final class BusinessMenuController: ObservableObject {
-    struct Action { var enabled: Bool; var submenu: Bool; var perform: () -> Void }
+    struct Action {
+        var enabled: Bool
+        var submenu: Bool
+        var perform: () -> Void
+        var openSubmenu: (() -> Void)? = nil
+    }
     @Published var highlighted: UUID?
     @Published var scrollTarget: UUID?
     @Published var activeChild: UUID?
@@ -299,7 +327,8 @@ final class BusinessMenuController: ObservableObject {
     func perform(onlySubmenu: Bool = false) {
         let id = highlighted ?? order.first { actions[$0]?.enabled == true }
         guard let id, let action = actions[id], action.enabled, !onlySubmenu || action.submenu else { return }
-        action.perform()
+        if onlySubmenu { (action.openSubmenu ?? action.perform)() }
+        else { action.perform() }
     }
 }
 
@@ -308,12 +337,20 @@ private struct BusinessMenuRowIDs: PreferenceKey {
     static func reduce(value: inout [UUID], nextValue: () -> [UUID]) { value += nextValue() }
 }
 
+private struct BusinessMenuContentHeight: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct BusinessMenuContent<Content: View>: View {
     @ObservedObject var controller: BusinessMenuController
     let close: () -> Void
     let dismissAll: () -> Void
     var search: Binding<String>? = nil
     var searchLabel = "搜索"
+    var maximumHeight: CGFloat? = PopupMetrics.menuMaximumHeight
     @ViewBuilder let content: () -> Content
     @State private var contentHeight: CGFloat = PopupMetrics.menuRowHeight
     var body: some View {
@@ -323,26 +360,30 @@ struct BusinessMenuContent<Content: View>: View {
                     .padding(.horizontal, 4).padding(.top, 4)
                     .accessibilityLabel(searchLabel)
             }
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: contentHeight > PopupMetrics.menuMaximumHeight) {
-                    VStack(alignment: .leading, spacing: 2) { content() }
-                        .frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true)
+            if let maximumHeight {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: contentHeight > maximumHeight) {
+                        rows
                         .background(GeometryReader { geometry in
-                            Color.clear
-                                .onAppear { updateHeight(geometry.size.height) }
-                                .onChange(of: geometry.size.height) { _, height in updateHeight(height) }
+                            Color.clear.preference(key: BusinessMenuContentHeight.self,
+                                                   value: geometry.size.height)
                         })
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .frame(height: min(contentHeight, maximumHeight))
+                    .onChange(of: controller.scrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: min(contentHeight, PopupMetrics.menuMaximumHeight))
-                .onChange(of: controller.scrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }
+            } else {
+                rows
             }
         }
         .padding(PopupMetrics.menuInset)
         .font(WFType.body).foregroundStyle(WFColors.text)
         .environment(\.businessMenuContext, BusinessMenuContext(controller: controller, dismissAll: dismissAll))
+        .environment(\.businessMenuSubmenuAction, false)
         .buttonStyle(BusinessMenuButtonStyle(controller: controller, dismissAll: dismissAll))
         .toggleStyle(BusinessMenuToggleStyle(controller: controller))
+        .onPreferenceChange(BusinessMenuContentHeight.self) { updateHeight($0) }
         .onPreferenceChange(BusinessMenuRowIDs.self) { ids in
             controller.order = ids
             if let current = controller.highlighted, !ids.contains(current) { controller.highlighted = nil }
@@ -350,6 +391,10 @@ struct BusinessMenuContent<Content: View>: View {
         .background(BusinessMenuKeyboard(controller: controller, close: close))
         .transaction { $0.animation = nil }
         .onDisappear { controller.reset(); search?.wrappedValue = "" }
+    }
+    private var rows: some View {
+        VStack(alignment: .leading, spacing: 2) { content() }
+            .frame(maxWidth: .infinity).fixedSize(horizontal: false, vertical: true)
     }
     private func updateHeight(_ height: CGFloat) {
         guard height > 0, abs(contentHeight - height) > 0.5 else { return }
@@ -374,8 +419,9 @@ private struct BusinessMenuButton<Label: View>: View {
     let action: () -> Void
     @ViewBuilder let label: () -> Label
     @State private var identity = UUID()
+    @Environment(\.businessMenuSubmenuAction) private var isSubmenu
     var body: some View {
-        BusinessMenuRow(controller: controller, id: identity, activate: action) { label() }
+        BusinessMenuRow(controller: controller, id: identity, submenu: isSubmenu, activate: action) { label() }
             .foregroundStyle(role == .destructive ? WFColors.danger : WFColors.text)
     }
 }
@@ -393,30 +439,40 @@ private struct BusinessMenuToggleStyle: ToggleStyle {
     }
 }
 
-private struct BusinessMenuRow<Label: View>: View {
+struct BusinessMenuRow<Label: View>: View {
     @ObservedObject var controller: BusinessMenuController
     let id: UUID
     var submenu = false
     let activate: () -> Void
     var hover: ((Bool) -> Void)?
+    var openSubmenu: (() -> Void)? = nil
     @ViewBuilder let label: () -> Label
     @Environment(\.isEnabled) private var enabled
     var body: some View {
-        Button(action: activate) {
-            HStack(spacing: 8) { label(); Spacer(minLength: 0) }
-                .frame(maxWidth: .infinity, minHeight: PopupMetrics.menuRowHeight, alignment: .leading)
-                .padding(.horizontal, 10).contentShape(Rectangle())
-                .background(enabled && controller.highlighted == id ? WFColors.hover : .clear,
-                            in: RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius))
+        HStack(spacing: 0) {
+            Button(action: activate) {
+                HStack(spacing: 8) { label(); Spacer(minLength: 0) }
+                    .frame(maxWidth: .infinity, minHeight: PopupMetrics.menuRowHeight, alignment: .leading)
+                    .padding(.horizontal, 10).contentShape(Rectangle())
+            }
+            if let openSubmenu {
+                Button(action: openSubmenu) {
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 24, height: PopupMetrics.menuRowHeight).contentShape(Rectangle())
+                }.accessibilityLabel("展开子菜单")
+            }
         }
         .buttonStyle(.plain).opacity(enabled ? 1 : 0.4)
+        .background(enabled && controller.highlighted == id ? WFColors.hover : .clear,
+                    in: RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius))
         .onHover { inside in
             guard enabled else { return }
             if let hover { hover(inside) }
             else if inside { controller.hoverAction(id) }
         }
         .background(BusinessMenuActionRegistration(controller: controller, id: id,
-            action: .init(enabled: enabled, submenu: submenu, perform: activate)))
+            action: .init(enabled: enabled, submenu: submenu, perform: activate, openSubmenu: openSubmenu)))
         .preference(key: BusinessMenuRowIDs.self, value: [id])
         .id(id)
         .businessMenuRowProbe(id, highlighted: controller.highlighted == id)

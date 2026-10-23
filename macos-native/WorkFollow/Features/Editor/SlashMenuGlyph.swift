@@ -25,6 +25,7 @@ enum SlashGlyphKind: Equatable {
         switch id {
         case "shared.divider": return .divider
         case "shared.attachment": return .symbol("paperclip")
+        case "shared.drawio": return .symbol("point.3.connected.trianglepath.dotted")
         case "shared.link": return .symbol("link")
         case "task.child": return .nestedItems
         case "task.tags": return .labelTag

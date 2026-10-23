@@ -303,6 +303,23 @@ UI 放开嵌套：`TaskInspectorShell` 更多菜单/子任务区/添加行、`Ta
 
 历史全量回归：**1479 项（6 跳过）0 失败**（2026-10-18；顺带修正标题扩到六级后 `SlashSessionTests` 的遗留断言 3→6）。此数值不是 2026-10-20 的验证结果。
 
+### 14.6 清掉长期红的测试 + 去掉搜索水合（2026-10-23）
+
+**全量 1728 项（7 跳过）0 失败**。此前长期挂着的 5 条全部修掉：
+
+| 用例 | 根因 | 处理 |
+|---|---|---|
+| `ScheduleExpandedSectionTests` ×2 | `reminderOptionText` 的选项文案从 `标题 (时刻)` 改成 `标题 · 时刻`，跨天项还带「昨天 / 9月21日」 | 测试不再写死格式，改用 `ScheduleDisplay.reminderOptionText(...)` 以同一口径生成锚点 |
+| `SchedulePanelWindowFlowTests` ×2 | 同上（`option("提前1天 (09:00)")` 之类找不到） | 该文件在并行改动里已改用前缀匹配，本轮只清掉多余的 helper |
+| `ScheduleContainerRenderTests` ×1 | `prefersAbove` 路径的弹层与锚点行之间保留 4pt，断言却要求精确相切 | 改成区间断言：不盖住行顶、且贴在行顶 5pt 内 |
+| `ArrowlessTaskPopupContractTests` ×2 | 菜单重构后 `clearDueDate` 已移出、`startFocus` 抽成私有方法（自己关菜单） | 契约断言同步新写法：检查 `startFocus` 方法体内有 `isPresented = false` |
+
+**搜索水合（性能债）**：`DeferredDocumentTests` 断言 1000 条任务 + 搜索入口不应水合任何正文，实际水合了 2 次。定位到 `CommandPaletteProjection.matchingSnippet` —— 它为命中结果读 `document.plainText`，命中 1 条任务 + 1 条笔记就 resolve 2 篇正文。改为：
+
+- `NativeDocument.deferredSummary`：暴露未水合时的 `DocumentSummary`（head / tail / firstLine），读取不触发加载；
+- `matchingSnippet` 优先用摘要头尾找命中词，命中在正文中段时退化成首行（不水合），只有本来就是内存文档才读全文；
+- 片段截取抽成 `snippet(in:query:)` 供两条路径共用。
+
 ### 14.5 摘要测试用例按最新代码补齐（2026-10-22）
 
 按最终形态（`SummaryFilter` / `SummaryDocumentOptions` / `SummaryContentField` / `TaskTemplate.kind`）重排测试，新增 **14 项**：

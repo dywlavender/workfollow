@@ -113,8 +113,23 @@ enum CommandPaletteProjection {
     }
 
     /// 只为截取后的结果读取正文，避免搜索时展开全部文档。
+    ///
+    /// 延迟文档连「截取后的结果」也不水合：只读摘要里的头/尾（各 160 字），
+    /// 命中在正文中段时退化成首行。搜索是高频操作，一旦为片段 resolve，
+    /// 命中 N 条就要读 N 篇正文——这正是延迟加载要避免的。
     private static func matchingSnippet(in document: NativeDocument, query: String) -> String? {
+        if let summary = document.deferredSummary {
+            for candidate in [summary.head, summary.tail] {
+                if let snippet = snippet(in: candidate, query: query) { return snippet }
+            }
+            return summary.firstLine
+        }
         let text = document.plainText
+        return snippet(in: text, query: query)
+    }
+
+    /// 命中词前后各取一段，压缩成一行。
+    private static func snippet(in text: String, query: String) -> String? {
         guard let match = text.range(of: query, options: .caseInsensitive) else { return nil }
         let start = text.index(match.lowerBound, offsetBy: -24, limitedBy: text.startIndex) ?? text.startIndex
         let end = text.index(match.upperBound, offsetBy: 70, limitedBy: text.endIndex) ?? text.endIndex

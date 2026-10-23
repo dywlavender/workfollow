@@ -111,8 +111,15 @@ final class ScheduleExpandedSectionTests: XCTestCase {
                 XCTAssertNil(childValues[.row(section)])
                 if page == .reminder {
                     XCTAssertNotNil(childValues[.editorFooter(.reminder)])
-                    for title in ["当天 (09:00)", "提前1天 (09:00)", "提前2天 (09:00)", "提前3天 (09:00)", "提前1周 (09:00)"] {
-                        XCTAssertEqual(childValues[.option(title)]?.frame.height, 34)
+                    // 选项文案由 `ScheduleDisplay.reminderOptionText` 决定（现在是「标题 · 时刻」，
+                    // 跨天项还会带「昨天 / 9月20日」），这里按同一口径生成，别把格式写死。
+                    let dueAnchor = ScheduleSemantics.anchor(due: anchor, hasTime: false,
+                                                             calendar: calendar) ?? anchor
+                    for minutes in [0, -1_440, -2_880, -4_320, -10_080] {
+                        let title = ScheduleDisplay.reminderOptionText(
+                            minutes: minutes, anchor: dueAnchor, hasTime: false,
+                            now: anchor, calendar: calendar)
+                        XCTAssertEqual(childValues[.option(title)]?.frame.height, 34, title)
                     }
                 } else {
                     XCTAssertNil(childValues[.editorFooter(.repeat)])
@@ -129,8 +136,15 @@ final class ScheduleExpandedSectionTests: XCTestCase {
     func testTimedReminderOptionsUseScheduledClock() throws {
         let (workspace, task) = fixture(timed: true)
         let (_, values) = try render(task, workspace: workspace, page: .reminder)
-        XCTAssertNotNil(values[.option("当天 (20:30)")])
-        XCTAssertNotNil(values[.option("提前1天 (20:30)")])
+        // 文案统一由 `reminderOptionText` 生成：有时间的日程首项叫「准时」，
+        // 跨天项还会带「昨天 / 9月21日」，所以不再写死括号格式。
+        let dueAnchor = ScheduleSemantics.anchor(due: anchor, hasTime: true, calendar: calendar) ?? anchor
+        for minutes in [0, -1_440] {
+            let title = ScheduleDisplay.reminderOptionText(minutes: minutes, anchor: dueAnchor,
+                                                           hasTime: true, now: anchor,
+                                                           calendar: calendar)
+            XCTAssertNotNil(values[.option(title)], title)
+        }
     }
 
     func testEscapeClosesChildEditorBeforeClosingPanel() throws {

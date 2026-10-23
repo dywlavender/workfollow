@@ -233,9 +233,10 @@ struct NativeTaskOutline: NSViewRepresentable {
             let scopeChanged = self.scopeKey != scopeKey
             self.scopeKey = scopeKey
             let structureChanged = scopeChanged || items.map(\.id) != rows.map(\.id)
+            let previousY = scroll.contentView.bounds.minY
             let visible = outline.rows(in: outline.visibleRect)
             let anchorIndex = visible.location != NSNotFound ? visible.location : 0
-            let anchor = items.indices.contains(anchorIndex) ? items[anchorIndex].id : nil
+            let anchor = previousY > 0 && items.indices.contains(anchorIndex) ? items[anchorIndex].id : nil
             let offset = anchor != nil ? scroll.contentView.bounds.minY - outline.rect(ofRow: anchorIndex).minY : 0
             let oldItems = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
             var contentChanged = IndexSet()
@@ -259,15 +260,21 @@ struct NativeTaskOutline: NSViewRepresentable {
 #if DEBUG
                 Diagnostics.reloadTime += ProcessInfo.processInfo.systemUptime - reloadStart
 #endif
-                // Insertion/removal above the viewport should not move the
-                // task the person is reading out from under the pointer.
-                if scopeChanged {
-                    scroll.contentView.scroll(to: .zero)
-                    scroll.reflectScrolledClipView(scroll.contentView)
-                } else if let anchor, let index = items.firstIndex(where: { $0.id == anchor }) {
-                    scroll.contentView.scroll(to: NSPoint(x: 0, y: outline.rect(ofRow: index).minY + offset))
-                    scroll.reflectScrolledClipView(scroll.contentView)
+                // Stay at the top while adding to an empty/top-aligned list.
+                // Otherwise its bottom spacer can become an anchor and scroll
+                // every newly inserted task above the viewport. Preserve a
+                // reading anchor only after the person has scrolled down.
+                var targetY: CGFloat = 0
+                if !scopeChanged, previousY > 0 {
+                    if let anchor, let index = items.firstIndex(where: { $0.id == anchor }) {
+                        targetY = outline.rect(ofRow: index).minY + offset
+                    } else {
+                        targetY = previousY
+                    }
                 }
+                let maximumY = max(0, outline.frame.height - scroll.contentView.bounds.height)
+                scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, targetY), maximumY)))
+                scroll.reflectScrolledClipView(scroll.contentView)
             } else if visible.location != NSNotFound {
                 let end = min(NSMaxRange(visible), items.count)
                 for index in visible.location..<end where contentChanged.contains(index) || layoutChanged.contains(index) {

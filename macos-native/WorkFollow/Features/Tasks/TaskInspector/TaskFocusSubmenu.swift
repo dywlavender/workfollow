@@ -5,26 +5,20 @@ struct TaskFocusSubmenu: View {
     /// 预计专注入口跟着专注动作走（滴答的 focus 动作同属一个委托：
     /// `StartPomoFocus` / `StartStopWatchFocus` / `SetFocusEstimate`）。
     let onSetEstimate: () -> Void
+    var estimateTitle = "设置预计专注"
+    var onCancel: () -> Void = {}
+    @StateObject private var controller = BusinessMenuController()
 
     var body: some View {
-        VStack(spacing: 2) {
-            Button { onStart(false) } label: { row("开始番茄专注") }
+        BusinessMenuContent(controller: controller, close: onCancel, dismissAll: {}) {
+            Button("开始番茄专注") { onStart(false) }
                 .inspectorRenderAnchor(.focusPomodoro)
-            Button { onStart(true) } label: { row("开始正计时") }
+            Button("开始正计时") { onStart(true) }
                 .inspectorRenderAnchor(.focusStopwatch)
             Divider().padding(.vertical, 2)
-            Button { onSetEstimate() } label: { row("设置预计专注") }
+            Button(estimateTitle, action: onSetEstimate)
                 .inspectorRenderAnchor(.focusEstimate)
         }
-        .buttonStyle(.plain)
-        .font(WFType.menu)
-        .foregroundStyle(WFColors.text)
-        .padding(8)
-    }
-
-    private func row(_ title: String) -> some View {
-        Text(title).frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-            .padding(.horizontal, 8).contentShape(Rectangle())
     }
 }
 

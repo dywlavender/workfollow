@@ -98,33 +98,3 @@ struct MatrixRuleEditor: View {
         Binding(get: { binding.wrappedValue ?? now }, set: { binding.wrappedValue = $0 })
     }
 }
-
-struct MatrixDropConfirmation: View {
-    let proposal: MatrixDropProposal
-    let targetTitle: String
-    let onChoose: (String?, String?) -> Void
-    let onCommit: () -> Void
-    let onCancel: () -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("移入“\(targetTitle)”").font(.title3.weight(.semibold))
-            ForEach(proposal.changes, id: \.self) { Text($0) }
-            if proposal.listChoices.count > 1 {
-                BusinessPicker("清单", selection: Binding(get: { proposal.list?.name ?? "" }, set: { onChoose($0, proposal.tags?.last) }),
-                    options: proposal.listChoices.map { BusinessChoice($0, $0, symbol: "tray") })
-            }
-            if proposal.tagChoices.count > 1 {
-                BusinessPicker("添加标签", selection: Binding(get: {
-                    proposal.tagChoices.first { proposal.tags?.contains($0) == true } ?? proposal.tagChoices[0]
-                }, set: { onChoose(proposal.list?.name, $0) }), options: proposal.tagChoices.map { BusinessChoice($0, $0, symbol: "tag") })
-            }
-            if let conflict = proposal.conflict { Text(conflict).foregroundStyle(WFColors.danger) }
-            HStack {
-                Spacer()
-                Button("取消", action: onCancel).keyboardShortcut(.cancelAction)
-                Button("移动", action: onCommit).keyboardShortcut(.defaultAction).disabled(!proposal.canCommit)
-            }
-        }
-        .padding(24).frame(width: 410)
-    }
-}

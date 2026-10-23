@@ -60,6 +60,15 @@ enum WFColors {
                 alpha: alpha)
     }
 
+    // MARK: 优先级旗子（2026-10-24 从滴答截图取色）
+    //
+    // 这四个是把任务列表、看板、详情、右键菜单、快速添加弹层统到一处之后的唯一色源。
+    // 暗色只把亮度提一档，色相保持不变，避免夜里红旗变粉、蓝旗变紫。
+    static let priorityHigh = themed(rgb(0xE04534), rgb(0xF1665A))
+    static let priorityMedium = themed(rgb(0xFCB915), rgb(0xFFC94A))
+    static let priorityLow = themed(rgb(0x5B8CFB), rgb(0x7BA3FC))
+    static let priorityNone = themed(rgb(0xA0A0A0), rgb(0x8E8E93))
+
     /// 控件描边（工具条胶囊、象限卡、星期表头细线）。比 `border` 重一档。
     static let borderStrong = themed(rgb(0xD3D5DC), rgb(0x4A505B))
     /// 过期日期与高优先级。

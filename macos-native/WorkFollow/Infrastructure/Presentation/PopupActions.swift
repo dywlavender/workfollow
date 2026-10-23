@@ -10,7 +10,7 @@ struct DialogActionFrames: PreferenceKey {
 }
 #endif
 
-private extension View {
+extension View {
     @ViewBuilder func dialogActionAnchor(_ primary: Bool) -> some View {
         #if DEBUG
         background(GeometryReader { geometry in
