@@ -1,0 +1,62 @@
+[
+  {
+    "line": 14945,
+    "context": [
+      "        instanceStart  8",
+      "        instanceSize   33",
+      "        reserved       0x0",
+      "        ivarLayout     0x0",
+      "        name           0x4e3f20 _TtC11TickTickKit16TTListIdentifier",
+      "        baseMethods    0x4c0678 __OBJC_$_INSTANCE_METHODS__TtC11TickTickKit16TTListIdentifier(TickTickKit|TickTickKit1)",
+      "            entsize 12 (relative)",
+      "            count   15",
+      "            name    0xae910 (0x56ef90) urlForAddTaskInList",
+      "            types   0x3850c (0x4f8b90) @16@0:8",
+      "            imp     0xffe7243c (0x332ac4)",
+      "            name    0xae90c (0x56ef98) entityID",
+      "            types   0x38500 (0x4f8b90) @16@0:8",
+      "            imp     0xffdefffc (0x2b0690)",
+      "            name    0xae2c0 (0x56e958) type"
+    ]
+  },
+  {
+    "line": 15013,
+    "context": [
+      "            name      0x4efbd0 isNeedShowAllProjects",
+      "            type      0x4f92a4 B",
+      "            alignment 0",
+      "            size      1",
+      "        weakIvarLayout 0x0",
+      "        baseProperties 0x56af20",
+      "            entsize    16",
+      "            count      9",
+      "            name       0x4f7630 urlForAddTaskInList",
+      "            attributes 0x4e5cf4 T@\"NSURL\",N,R",
+      "            name       0x4ed93c entityID",
+      "            attributes 0x4e5c30 T@\"NSString\",N,R",
+      "            name       0x4f72bc type",
+      "            attributes 0x4e6b51 Tq,N,R,Vtype",
+      "            name       0x4efbd0 isNeedShowAllProjects"
+    ]
+  },
+  {
+    "line": 28216,
+    "context": [
+      "    0x4f5368 setShortBreakDuration:",
+      "    0x4f4b11 setLongBreakDuration:",
+      "    0x4f4b29 setLongBreakInterval:",
+      "    0x4f3da1 setAutoPomodoroCycle:",
+      "    0x4f3d92 setAutoPomo:",
+      "    0x4f3d7b setAutoBreak:",
+      "    0x4efee0 isSyncing",
+      "    0x4f4926 setIsSyncing:",
+      "    0x4f7630 urlForAddTaskInList",
+      "    0x4ed93c entityID",
+      "    0x4efbd0 isNeedShowAllProjects",
+      "    0x4f48d0 setIsNeedShowAllProjects:",
+      "    0x4f76c0 userDefaultEncode",
+      "    0x4ef063 initWithUserDefaultDecode:",
+      "    0x4e5eac isInbox"
+    ]
+  }
+]

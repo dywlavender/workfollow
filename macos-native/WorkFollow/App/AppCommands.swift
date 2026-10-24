@@ -111,7 +111,19 @@ struct AppCommands: Commands {
             Button("显示或隐藏侧栏") { environment.toggleSidebar() }
                 .keyboardShortcut("\\", modifiers: .command)
         }
+        #if DEBUG
+        // 编辑器内核切换的 P0 骨架验收入口（验收后随正式组件移除）。
+        CommandMenu("调试") {
+            Button("Quill 内核 Spike") {
+                quillSpike.presentWindow()
+            }
+        }
+        #endif
     }
+
+    #if DEBUG
+    private let quillSpike = QuillSpikeWindowController()
+    #endif
 
     /// Text first responders keep their native history; business commands use
     /// the workspace history only after editing has ended.

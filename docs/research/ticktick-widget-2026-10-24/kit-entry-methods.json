@@ -1,0 +1,47 @@
+[
+  {
+    "class": "TTAppManager",
+    "selector": "recordDateWhenLaunching",
+    "implementation": "0x21edd8"
+  },
+  {
+    "class": "_TtCCE11TickTickKitVV9AppestKit6Appest5Focus8TickTick8Pomodoro",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x965cc"
+  },
+  {
+    "class": "_TtC11TickTickKit16TTListIdentifier",
+    "selector": "urlForAddTaskInList",
+    "implementation": "0x332ac4"
+  },
+  {
+    "class": "_TtC11TickTickKit25TTTaskTemplateSyncManager",
+    "selector": "isUserGuideForQuickAddToolBarShowed",
+    "implementation": "0x2d3f40"
+  },
+  {
+    "class": "_TtC11TickTickKit25TTTaskTemplateSyncManager",
+    "selector": "setIsUserGuideForQuickAddToolBarShowed:",
+    "implementation": "0x2d3f58"
+  },
+  {
+    "class": "_TtCCE11TickTickKitVV9AppestKit6Appest5Focus8TickTick9Stopwatch",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x31e974"
+  },
+  {
+    "class": "_TtC11TickTickKit11TTAnalytics",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x3d729c"
+  },
+  {
+    "class": "_TtC11TickTickKit11TTAnalytics",
+    "selector": "applicationDidFinishLaunching:",
+    "implementation": "0x3d735c"
+  },
+  {
+    "class": "_TtC11TickTickKit20TTAttachmentLauncher",
+    "selector": "processWhenLaunching",
+    "implementation": "0x421fc8"
+  }
+]

@@ -1,0 +1,21 @@
+args:
+  type: object
+  properties:
+    path:
+      type: string
+      minLength: 1
+      description: Path to the local artifact to inspect.
+    operation:
+      type: string
+      enum[7]: file_headers,section_headers,symbols,relocations,dwarf,disassemble,disassemble_all
+      description: GNU objdump inspection operation to run.
+  required[2]: path,operation
+  additionalProperties: false
+options:
+  type: object
+  properties:
+    followDebugLinks:
+      description: Follow local DWARF debug links. External debug-file identity is not bound to Evidence.
+      default: false
+      type: boolean
+  additionalProperties: false

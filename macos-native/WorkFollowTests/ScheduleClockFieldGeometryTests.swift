@@ -11,6 +11,12 @@ import XCTest
 final class ScheduleClockFieldGeometryTests: XCTestCase {
     private let rowWidth: CGFloat = 240
 
+    /// 图标槽右缘的推导值（horizontalPadding + 图标 18 + 间距 8）：
+    /// 第三条组合行测试用作「结束前缀之后」的基准。
+    private var expectedLeading: CGFloat {
+        ScheduleMetrics.propertyRowHorizontalPadding + 18 + 8
+    }
+
     func testClockEditorHugsTheLeadingEdgeOfTheValueArea() throws {
         let canvas = try makeCanvasWithClockEditor()
         let field = try XCTUnwrap(firstTextField(in: canvas), "画布里应有一个时钟输入框")

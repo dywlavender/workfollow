@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>WorkFollow Quill Bridge</title>
+<link rel="stylesheet" href="quill/quill.snow.css">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  #wf-spike-toolbar {
+    display: flex; gap: 2px; align-items: center;
+    padding: 2px 6px; border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  #wf-spike-toolbar button {
+    border: 0; background: transparent; border-radius: 4px;
+    width: 26px; height: 24px; cursor: pointer; color: #555;
+    font-size: 13px;
+  }
+  #wf-spike-toolbar button:hover { background: rgba(0,0,0,0.06); }
+  .ql-container { border: 0 !important; font-family: -apple-system, "PingFang SC", sans-serif; }
+  .ql-editor { font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="wf-spike-toolbar">
+  <button data-cmd="bold"><b>B</b></button>
+  <button data-cmd="italic"><i>I</i></button>
+  <button data-cmd="underline"><u>U</u></button>
+  <button data-cmd="strike"><s>S</s></button>
+  <button data-cmd="list">•</button>
+  <button data-cmd="checklist">☑</button>
+  <button data-cmd="header">H</button>
+  <button data-cmd="blockquote">❝</button>
+  <button data-cmd="code-block">{ }</button>
+</div>
+<div id="editor"></div>
+<script src="quill/quill.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Swift → JS ----------
+  window.workfollowQuill = { send: function () {} };
+
+  var quill = new Quill("#editor", {
+    theme: "snow",
+    placeholder: "准备做什么？",
+    modules: {
+      toolbar: false,          // 工具条由桥外（P2 Web 组件）提供
+      keyboard: { bindings: {} },
+      history: { delay: 400, maxStack: 200 }
+    }
+  });
+  // 暴露给外部 evaluateJavaScript（测试与宿主命令都用它）。
+  window.quill = quill;
+
+  function post(message) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.quill) {
+      window.webkit.messageHandlers.quill.postMessage(message);
+    }
+  }
+
+  function emitDelta() {
+    post({
+      event: "deltaChanged",
+      delta: quill.getContents().ops,
+      plainText: quill.getText(),
+      length: quill.getLength()
+    });
+  }
+
+  function handleSwiftMessage(message) {
+    switch (message.action) {
+      case "load":
+        quill.setContents(message.delta || [], "silent");
+        quill.setSelection(message.delta && message.delta.length ? message.delta.length : 0, "silent");
+        // silent 加载不触发 text-change；主动补一次，宿主拿得到加载后的全文。
+        emitDelta();
+        break;
+      case "focus":
+        quill.focus();
+        break;
+      case "blur":
+        quill.blur();
+        break;
+      case "format":
+        quill.format(message.name, message.value === undefined ? !quill.getFormat()[message.name] : message.value);
+        break;
+      case "setPlaceholder":
+        // Quill 2 的 placeholder 只能在初始化时给；这里直接改 data 属性。
+        var editor = document.querySelector(".ql-editor");
+        if (editor) editor.setAttribute("data-placeholder", message.text || "");
+        break;
+    }
+  }
+
+  // 消息入口：Swift 用 callAsyncJavaScript 调 window.workfollowQuill.send(message)。
+  window.workfollowQuill.send = handleSwiftMessage;
+
+  // ---------- JS → Swift ----------
+  var changeTimer = null;
+  quill.on("text-change", function (delta, oldDelta, source) {
+    if (source === "silent") return;
+    if (changeTimer) clearTimeout(changeTimer);
+    changeTimer = setTimeout(emitDelta, 120);
+  });
+
+  quill.on("selection-change", function (range) {
+    post({ event: "selectionChanged", range: range ? { index: range.index, length: range.length } : null });
+  });
+
+  // 高度自适应：容器内容变化即上报（宿主据此调 WebView frame）。
+  function reportHeight() {
+    var editor = document.querySelector(".ql-editor");
+    var toolbar = document.getElementById("wf-spike-toolbar");
+    if (editor) post({ event: "heightChanged", height: editor.scrollHeight + (toolbar ? toolbar.offsetHeight : 0) });
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(reportHeight).observe(document.querySelector(".ql-editor"));
+  }
+
+  // Esc / Tab 拦截：交 Swift 裁决（PopupEscapeRouter 是唯一真源）。
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      post({ event: "escapePressed" });
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      post({ event: "tabPressed", shift: event.shiftKey });
+    }
+  }, true);
+
+  // spike 工具条：验证 format 命令与 Delta 上报。
+  document.querySelectorAll("#wf-spike-toolbar button").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var cmd = button.getAttribute("data-cmd");
+      if (cmd === "list") quill.format("list", quill.getFormat().list === "bullet" ? false : "bullet");
+      else if (cmd === "checklist") quill.format("list", quill.getFormat().list === "checked" || quill.getFormat().list === "unchecked" ? false : "unchecked");
+      else if (cmd === "header") quill.format("header", quill.getFormat().header === 2 ? false : 2);
+      else if (cmd === "blockquote") quill.format("blockquote", !quill.getFormat().blockquote);
+      else if (cmd === "code-block") quill.format("code-block", !quill.getFormat()["code-block"]);
+      else quill.format(cmd === "strike" ? "strike" : cmd, !quill.getFormat()[cmd === "strike" ? "strike" : cmd]);
+      quill.focus();
+    });
+  });
+
+  window.addEventListener("load", function () {
+    post({ event: "ready" });
+    reportHeight();
+  });
+})();
+</script>
+</body>
+</html>

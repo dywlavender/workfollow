@@ -1,0 +1,446 @@
+{
+  "healthy": true,
+  "environment_healthy": false,
+  "scope": {
+    "mode": "explicit",
+    "clients": [
+      "codex"
+    ],
+    "providers": [],
+    "skill": false,
+    "target": null
+  },
+  "scope_checks": [
+    {
+      "name": "node",
+      "ok": true,
+      "classification": "healthy",
+      "detail": "24.21.0",
+      "details": {
+        "runtime": "node",
+        "version": "24.21.0"
+      }
+    },
+    {
+      "name": "registration:codex",
+      "ok": true,
+      "classification": "healthy",
+      "detail": "/Users/dongyangwei/.codex/config.toml"
+    }
+  ],
+  "informational_checks": [
+    {
+      "name": "host",
+      "ok": true,
+      "classification": "healthy",
+      "detail": "27.0.1"
+    },
+    {
+      "name": "hopper",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "remediation": "Run rea setup to install Hopper, or set HOPPER_LAUNCHER_PATH."
+    },
+    {
+      "name": "ghidra",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "GHIDRA_INSTALL_DIR is not set",
+      "remediation": "Set GHIDRA_INSTALL_DIR to an extracted Ghidra 12.1.x release directory."
+    },
+    {
+      "name": "ida-registration",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "IDA MCP registration is not configured.",
+      "remediation": "Set REA_IDA_MCP_CONFIG to your upstream IDA MCP registration JSON; see docs/ida-provider.md."
+    },
+    {
+      "name": "jadx",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "Set REA_JADX_MCP_JAR to the absolute path of a caller-supplied jadx-headless-mcp 0.7.1 JAR. REA does not download or install it.",
+      "remediation": "Set REA_JADX_MCP_JAR to the absolute path of a caller-supplied jadx-headless-mcp 0.7.1 JAR. REA does not download or install it."
+    },
+    {
+      "name": "kuna-installation",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "Set REA_KUNA_COMMAND to the absolute path of a caller-supplied kuna executable (verified with 1.833). REA does not download, install or update Kuna.",
+      "remediation": "Set REA_KUNA_COMMAND to the absolute path of a caller-supplied kuna executable (verified with 1.833). REA does not download, install or update Kuna.",
+      "details": {
+        "configured": false
+      }
+    },
+    {
+      "name": "registration:claude_desktop",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/Library/Application Support/Claude/claude_desktop_config.json",
+      "remediation": "Quit Claude Desktop fully, run rea setup to refresh this registration, then start Claude Desktop again. A running Claude Desktop can rewrite its configuration from memory and drop the registration."
+    },
+    {
+      "name": "registration:copilot_cli",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.copilot/mcp-config.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:cursor",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.cursor/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:opencode",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.config/opencode/opencode.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:pi",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.pi/agent/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:trae",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/Library/Application Support/Trae/User/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:vscode",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/Library/Application Support/Code/User/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:workbuddy",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.workbuddy/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    }
+  ],
+  "providerInspections": [
+    {
+      "id": "ghidra",
+      "configured": false,
+      "available": false,
+      "providerVersion": null,
+      "registrationEnvironment": {},
+      "checks": [
+        {
+          "name": "configuration",
+          "ok": false,
+          "code": "not_configured",
+          "detail": "GHIDRA_INSTALL_DIR is not set",
+          "remediation": "Set GHIDRA_INSTALL_DIR to an extracted Ghidra 12.1.x release directory.",
+          "classification": "missing_analysis_engine"
+        }
+      ]
+    },
+    {
+      "id": "ida",
+      "configured": false,
+      "available": false,
+      "providerVersion": null,
+      "registrationEnvironment": {},
+      "checks": [
+        {
+          "name": "registration",
+          "ok": false,
+          "code": "not_configured",
+          "detail": "IDA MCP registration is not configured.",
+          "remediation": "Set REA_IDA_MCP_CONFIG to your upstream IDA MCP registration JSON; see docs/ida-provider.md.",
+          "classification": "missing_analysis_engine"
+        }
+      ]
+    },
+    {
+      "id": "jadx",
+      "configured": false,
+      "available": false,
+      "providerVersion": null,
+      "registrationEnvironment": {},
+      "checks": [
+        {
+          "name": "configuration",
+          "ok": false,
+          "code": "not_configured",
+          "detail": "Set REA_JADX_MCP_JAR to the absolute path of a caller-supplied jadx-headless-mcp 0.7.1 JAR. REA does not download or install it.",
+          "remediation": "Set REA_JADX_MCP_JAR to the absolute path of a caller-supplied jadx-headless-mcp 0.7.1 JAR. REA does not download or install it.",
+          "classification": "missing_analysis_engine"
+        }
+      ]
+    },
+    {
+      "id": "kuna",
+      "configured": false,
+      "available": false,
+      "providerVersion": null,
+      "registrationEnvironment": {},
+      "checks": [
+        {
+          "name": "installation",
+          "ok": false,
+          "code": "not_configured",
+          "detail": "Set REA_KUNA_COMMAND to the absolute path of a caller-supplied kuna executable (verified with 1.833). REA does not download, install or update Kuna.",
+          "remediation": "Set REA_KUNA_COMMAND to the absolute path of a caller-supplied kuna executable (verified with 1.833). REA does not download, install or update Kuna.",
+          "classification": "missing_analysis_engine",
+          "details": {
+            "configured": false
+          }
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "node",
+      "ok": true,
+      "classification": "healthy",
+      "detail": "24.21.0",
+      "details": {
+        "runtime": "node",
+        "version": "24.21.0"
+      }
+    },
+    {
+      "name": "host",
+      "ok": true,
+      "classification": "healthy",
+      "detail": "27.0.1"
+    },
+    {
+      "name": "hopper",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "remediation": "Run rea setup to install Hopper, or set HOPPER_LAUNCHER_PATH."
+    },
+    {
+      "name": "ghidra",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "GHIDRA_INSTALL_DIR is not set",
+      "remediation": "Set GHIDRA_INSTALL_DIR to an extracted Ghidra 12.1.x release directory."
+    },
+    {
+      "name": "ida-registration",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "IDA MCP registration is not configured.",
+      "remediation": "Set REA_IDA_MCP_CONFIG to your upstream IDA MCP registration JSON; see docs/ida-provider.md."
+    },
+    {
+      "name": "jadx",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "Set REA_JADX_MCP_JAR to the absolute path of a caller-supplied jadx-headless-mcp 0.7.1 JAR. REA does not download or install it.",
+      "remediation": "Set REA_JADX_MCP_JAR to the absolute path of a caller-supplied jadx-headless-mcp 0.7.1 JAR. REA does not download or install it."
+    },
+    {
+      "name": "kuna-installation",
+      "ok": false,
+      "classification": "missing_analysis_engine",
+      "detail": "Set REA_KUNA_COMMAND to the absolute path of a caller-supplied kuna executable (verified with 1.833). REA does not download, install or update Kuna.",
+      "remediation": "Set REA_KUNA_COMMAND to the absolute path of a caller-supplied kuna executable (verified with 1.833). REA does not download, install or update Kuna.",
+      "details": {
+        "configured": false
+      }
+    },
+    {
+      "name": "registration:claude_desktop",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/Library/Application Support/Claude/claude_desktop_config.json",
+      "remediation": "Quit Claude Desktop fully, run rea setup to refresh this registration, then start Claude Desktop again. A running Claude Desktop can rewrite its configuration from memory and drop the registration."
+    },
+    {
+      "name": "registration:copilot_cli",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.copilot/mcp-config.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:cursor",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.cursor/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:opencode",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.config/opencode/opencode.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:pi",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.pi/agent/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:trae",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/Library/Application Support/Trae/User/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:vscode",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/Library/Application Support/Code/User/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    },
+    {
+      "name": "registration:workbuddy",
+      "ok": false,
+      "classification": "config_drift",
+      "detail": "/Users/dongyangwei/.workbuddy/mcp.json",
+      "remediation": "Run rea setup to refresh this registration, then restart the client."
+    }
+  ],
+  "identity": {
+    "cli_package_version": "6.7.0",
+    "expected_skill_version": "42",
+    "sdk": {
+      "server": "2.3.1",
+      "client_test": "2.3.1",
+      "core": "2.3.1"
+    },
+    "catalog": {
+      "counts": {
+        "cli_commands": 153,
+        "mcp_tools": 207,
+        "mcp_prompts": 6
+      }
+    },
+    "live_server": {
+      "state": "unknown",
+      "remediation": "Call binary_session in the active client to inspect the running server identity."
+    },
+    "installations": {
+      "paths": [
+        "/opt/homebrew/bin/rea"
+      ],
+      "state": "single"
+    },
+    "skill": {
+      "installed_version": "42",
+      "installed_tool_count": 207,
+      "state": "aligned",
+      "remediation": null
+    },
+    "registrations": [
+      {
+        "client": "claude_code",
+        "config_path": "/Users/dongyangwei/.claude.json",
+        "command": [
+          "/opt/homebrew/bin/rea",
+          "mcp"
+        ],
+        "state": "aligned",
+        "remediation": null
+      },
+      {
+        "client": "claude_desktop",
+        "config_path": "/Users/dongyangwei/Library/Application Support/Claude/claude_desktop_config.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Quit Claude Desktop fully, run rea setup to refresh this registration, then start Claude Desktop again. A running Claude Desktop can rewrite its configuration from memory and drop the registration."
+      },
+      {
+        "client": "codex",
+        "config_path": "/Users/dongyangwei/.codex/config.toml",
+        "command": [
+          "/opt/homebrew/bin/rea",
+          "mcp"
+        ],
+        "state": "aligned",
+        "remediation": null
+      },
+      {
+        "client": "copilot_cli",
+        "config_path": "/Users/dongyangwei/.copilot/mcp-config.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "cursor",
+        "config_path": "/Users/dongyangwei/.cursor/mcp.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "dsh",
+        "config_path": "/Users/dongyangwei/.dsh/cordis.patch.yml",
+        "command": [
+          "/opt/homebrew/bin/rea",
+          "mcp"
+        ],
+        "state": "aligned",
+        "remediation": null
+      },
+      {
+        "client": "opencode",
+        "config_path": "/Users/dongyangwei/.config/opencode/opencode.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "pi",
+        "config_path": "/Users/dongyangwei/.pi/agent/mcp.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "trae",
+        "config_path": "/Users/dongyangwei/Library/Application Support/Trae/User/mcp.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "vscode",
+        "config_path": "/Users/dongyangwei/Library/Application Support/Code/User/mcp.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "workbuddy",
+        "config_path": "/Users/dongyangwei/.workbuddy/mcp.json",
+        "command": [],
+        "state": "missing",
+        "remediation": "Run rea setup to refresh this registration, then restart the client."
+      },
+      {
+        "client": "zcode",
+        "config_path": "/Users/dongyangwei/.zcode/cli/config.json",
+        "command": [
+          "/opt/homebrew/bin/rea",
+          "mcp"
+        ],
+        "state": "aligned",
+        "remediation": null
+      }
+    ]
+  }
+}

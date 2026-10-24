@@ -1,0 +1,122 @@
+{
+  "ok": true,
+  "data": {
+    "evidence_id": "ev_e11bc07d80d2664bbe886b9acbb58d8c9c2bf35621b90e50e585ddb77fb26d03",
+    "subject": {
+      "name": "TickTick",
+      "local_path": "/Applications/TickTick.app/Contents/MacOS/TickTick",
+      "format": "mach-o-universal",
+      "architecture": "arm64"
+    },
+    "provider": {
+      "id": "native-macos",
+      "name": "macOS native inspection utilities",
+      "version": null
+    },
+    "analysis_profile": null,
+    "predicate_type": "rea.analysis",
+    "operation": "inspect_plist",
+    "parameters": {
+      "path": "Contents/PlugIns/TickTick.Widget.Extension.appex/Contents/Info.plist"
+    },
+    "raw_result": null,
+    "normalized_result": {
+      "format": "xml",
+      "value": {
+        "CFBundleName": "TickTick.Widget.Extension",
+        "DTXcode": "2650",
+        "DTSDKName": "macosx26.5",
+        "NSHumanReadableCopyright": "Copyright © 2020 Appest Limited. All rights reserved.",
+        "DTSDKBuild": "25F70",
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleVersion": "492",
+        "BuildMachineOSBuild": "25F71",
+        "DTPlatformName": "macosx",
+        "CFBundlePackageType": "XPC!",
+        "CFBundleShortVersionString": "8.0.80",
+        "CFBundleSupportedPlatforms": [
+          "MacOSX"
+        ],
+        "CFBundleInfoDictionaryVersion": "6.0",
+        "CFBundleExecutable": "TickTick.Widget.Extension",
+        "DTCompiler": "com.apple.compilers.llvm.clang.1_0",
+        "NSAccentColorName": "AccentColor",
+        "CFBundleIdentifier": "com.TickTick.task.mac.MainWidget",
+        "UIAppFonts": [
+          "SongMyung-Regular.ttf"
+        ],
+        "DTPlatformVersion": "26.5",
+        "DTXcodeBuild": "17F42",
+        "LSMinimumSystemVersion": "11.0",
+        "CFBundleDisplayName": "TickTick.Widget.Extension",
+        "DTPlatformBuild": "25F70",
+        "NSExtension": {
+          "NSExtensionPointIdentifier": "com.apple.widgetkit-extension"
+        }
+      },
+      "bundle": {
+        "identifier": "com.TickTick.task.mac.MainWidget",
+        "executable": "TickTick.Widget.Extension",
+        "name": "TickTick.Widget.Extension",
+        "version": "492",
+        "short_version": "8.0.80"
+      },
+      "source_path": "/Applications/TickTick.app/Contents/PlugIns/TickTick.Widget.Extension.appex/Contents/Info.plist",
+      "provenance": [
+        {
+          "tool": "file",
+          "command": [
+            "/usr/bin/file",
+            "-b",
+            "$PLIST"
+          ],
+          "tool_version": null,
+          "version_reason": "Tool exposes no uniform stable version flag; executable SHA-256 is a prelaunch file sample and does not prove atomic OS image binding.",
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "stdout_bytes": 48,
+          "stderr_bytes": 0
+        },
+        {
+          "tool": "plutil",
+          "command": [
+            "/usr/bin/plutil",
+            "-convert",
+            "json",
+            "-o",
+            "-",
+            "--",
+            "$PLIST"
+          ],
+          "tool_version": null,
+          "version_reason": "Tool exposes no uniform stable version flag; executable SHA-256 is a prelaunch file sample and does not prove atomic OS image binding.",
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "stdout_bytes": 912,
+          "stderr_bytes": 0
+        }
+      ],
+      "limitations": []
+    },
+    "confidence": "observed",
+    "authority": "shipped-artifact",
+    "environment": null,
+    "limitations": [],
+    "relationship_coverage": null,
+    "locations": [
+      {
+        "kind": "artifact-path",
+        "path": "/Applications/TickTick.app/Contents/PlugIns/TickTick.Widget.Extension.appex/Contents/Info.plist"
+      }
+    ],
+    "evidence_links": []
+  },
+  "meta": {
+    "command": "inspect-plist",
+    "duration": "5335ms"
+  }
+}

@@ -1,0 +1,8 @@
+args:
+  type: object
+  properties:
+    path:
+      type: string
+      description: Mach-O or app path
+  required[1]: path
+  additionalProperties: false

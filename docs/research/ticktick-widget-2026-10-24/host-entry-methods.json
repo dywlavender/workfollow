@@ -1,0 +1,167 @@
+[
+  {
+    "class": "_TtC8TickTick18TTURLSchemeManager",
+    "selector": "handleWithUrl:",
+    "implementation": "0x1001729f4"
+  },
+  {
+    "class": "_TtC8TickTick31TTSignificantTimeChangeObserver",
+    "selector": "applicationDidFinishLaunching:",
+    "implementation": "0x10029c448"
+  },
+  {
+    "class": "_TtC8TickTick31TTSignificantTimeChangeObserver",
+    "selector": "isSwitchedTimeZoneBeforeLaunch",
+    "implementation": "0x10029bf4c"
+  },
+  {
+    "class": "_TtC8TickTick31TTSignificantTimeChangeObserver",
+    "selector": "setIsSwitchedTimeZoneBeforeLaunch:",
+    "implementation": "0x10029bfc4"
+  },
+  {
+    "class": "_TtC8TickTick15TTStickyManager",
+    "selector": "showStickiesAfterLaunch",
+    "implementation": "0x1004824ac"
+  },
+  {
+    "class": "_TtC8TickTick27TTAccountCalendarSubscriber",
+    "selector": "launchAccountSelectionForGoogle:",
+    "implementation": "0x100f49cf4"
+  },
+  {
+    "class": "_TtC8TickTick27TTAccountCalendarSubscriber",
+    "selector": "launchAccountSelectionForOutlook:",
+    "implementation": "0x100f4a00c"
+  },
+  {
+    "class": "_TtC8TickTick27TTAccountCalendarSubscriber",
+    "selector": "launchNotionConnectionFrom::::",
+    "implementation": "0x100f4abac"
+  },
+  {
+    "class": "_TtC8TickTick18TTNewTaskTextField",
+    "selector": "isInQuickAddPopover",
+    "implementation": "0x100793924"
+  },
+  {
+    "class": "_TtC8TickTick18TTNewTaskTextField",
+    "selector": "setIsInQuickAddPopover:",
+    "implementation": "0x100793934"
+  },
+  {
+    "class": "_TtC8TickTick28TTSettingsMoreViewController",
+    "selector": "launchAtLoginLabel",
+    "implementation": "0x100806d38"
+  },
+  {
+    "class": "_TtC8TickTick28TTSettingsMoreViewController",
+    "selector": "setLaunchAtLoginLabel:",
+    "implementation": "0x100806d48"
+  },
+  {
+    "class": "_TtC8TickTick28TTSettingsMoreViewController",
+    "selector": "launchAtLoginButton",
+    "implementation": "0x100806d7c"
+  },
+  {
+    "class": "_TtC8TickTick28TTSettingsMoreViewController",
+    "selector": "setLaunchAtLoginButton:",
+    "implementation": "0x100806d8c"
+  },
+  {
+    "class": "_TtC8TickTick28TTSettingsMoreViewController",
+    "selector": "launchAtLoginButtonClicked:",
+    "implementation": "0x10080c9c8"
+  },
+  {
+    "class": "_TtC8TickTick19TTTaskListInputView",
+    "selector": "quickAddConfDidChanged:",
+    "implementation": "0x100935160"
+  },
+  {
+    "class": "_TtC8TickTick21TTFocusRunningManager",
+    "selector": "applicationDidFinishLaunching:",
+    "implementation": "0x100997c38"
+  },
+  {
+    "class": "_TtCE8TickTickCCE11TickTickKitVV9AppestKit6Appest5Focus8TickTick9Stopwatch10Subscriber",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x100c49978"
+  },
+  {
+    "class": "_TtCE8TickTickCCE11TickTickKitVV9AppestKit6Appest5Focus8TickTick8Pomodoro10Subscriber",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x100c50c48"
+  },
+  {
+    "class": "_TtC8TickTick7TTAnyGo",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x100d51f04"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "toggleQuickAdd",
+    "implementation": "0x100d86654"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "handleFinishLaunching:",
+    "implementation": "0x100d87f44"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "handleGetURLEvent:withReplyEvent:",
+    "implementation": "0x100d87fc0"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "showMainWindowForExternalActivation",
+    "implementation": "0x100d8bda4"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "showMainWindow",
+    "implementation": "0x100d8e2a4"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "widgetDidRequestSyncAndRemind:",
+    "implementation": "0x100d84978"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "handleLaunchHelperIfNeeded",
+    "implementation": "0x100d841b4"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "oc_handleFinishLaunching:",
+    "implementation": "0x100d83648"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "ap_applicationDidFinishLaunching:",
+    "implementation": "0x100d5bdf4"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "applicationWillFinishLaunching:",
+    "implementation": "0x100d81ccc"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "applicationDidFinishLaunching:",
+    "implementation": "0x100d82810"
+  },
+  {
+    "class": "AppDelegate",
+    "selector": "applicationShouldHandleReopen:hasVisibleWindows:",
+    "implementation": "0x100d82a50"
+  },
+  {
+    "class": "_TtC8TickTick33TTInputBoxSettingWindowController",
+    "selector": "quickAddConfDidChanged:",
+    "implementation": "0x100dbd56c"
+  }
+]

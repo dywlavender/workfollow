@@ -1,0 +1,192 @@
+  332900:	e0 03 15 aa	mov	x0, x21
+  332904:	e1 03 14 aa	mov	x1, x20
+  332908:	e3 03 16 aa	mov	x3, x22
+  33290c:	04 00 80 52	mov	w4, #0x0
+  332910:	f3 d9 05 94	bl	0x4a90dc
+  332914:	f7 03 00 aa	mov	x23, x0
+  332918:	e0 03 16 aa	mov	x0, x22
+  33291c:	ae dc 05 94	bl	0x4a9bd4 ; symbol stub for: _swift_bridgeObjectRelease
+  332920:	97 0a 00 37	tbnz	w23, #0x0, 0x332a70
+  332924:	75 52 00 a9	stp	x21, x20, [x19]
+  332928:	00 00 80 d2	mov	x0, #0x0
+  33292c:	43 d4 05 94	bl	0x4a7a38
+  332930:	e1 03 00 aa	mov	x1, x0
+  332934:	e0 03 13 aa	mov	x0, x19
+  332938:	22 00 80 52	mov	w2, #0x1
+  33293c:	3b 00 00 14	b	0x332a28
+  332940:	68 12 00 f0	adrp	x8, 591 ; 0x581000
+  332944:	08 21 3f 91	add	x8, x8, #0xfc8
+  332948:	08 01 40 f9	ldr	x8, [x8]
+  33294c:	88 02 08 8b	add	x8, x20, x8
+  332950:	09 51 40 a9	ldp	x9, x20, [x8]
+  332954:	69 52 00 a9	stp	x9, x20, [x19]
+  332958:	00 00 80 d2	mov	x0, #0x0
+  33295c:	37 d4 05 94	bl	0x4a7a38
+  332960:	e1 03 00 aa	mov	x1, x0
+  332964:	e0 03 13 aa	mov	x0, x19
+  332968:	62 00 80 52	mov	w2, #0x3
+  33296c:	2f 00 00 14	b	0x332a28
+  332970:	00 00 80 d2	mov	x0, #0x0
+  332974:	2e d4 05 94	bl	0x4a7a2c
+  332978:	14 14 80 b9	ldrsw	x20, [x0, #0x14]
+  33297c:	00 00 80 d2	mov	x0, #0x0
+  332980:	35 cd 05 94	bl	0x4a5e54
+  332984:	e3 03 00 aa	mov	x3, x0
+  332988:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  33298c:	08 1d 40 f9	ldr	x8, [x8, #0x38]
+  332990:	60 02 14 8b	add	x0, x19, x20
+  332994:	21 00 80 52	mov	w1, #0x1
+  332998:	22 00 80 52	mov	w2, #0x1
+  33299c:	00 01 3f d6	blr	x8
+  3329a0:	7f 02 00 39	strb	wzr, [x19]
+  3329a4:	00 00 80 d2	mov	x0, #0x0
+  3329a8:	24 d4 05 94	bl	0x4a7a38
+  3329ac:	e1 03 00 aa	mov	x1, x0
+  3329b0:	e0 03 13 aa	mov	x0, x19
+  3329b4:	c2 00 80 52	mov	w2, #0x6
+  3329b8:	a0 ff ff 17	b	0x332838
+  3329bc:	1f 11 00 f1	cmp	x8, #0x4
+  3329c0:	01 07 00 54	b.ne	0x332aa0
+  3329c4:	68 12 00 f0	adrp	x8, 591 ; 0x581000
+  3329c8:	08 21 3f 91	add	x8, x8, #0xfc8
+  3329cc:	08 01 40 f9	ldr	x8, [x8]
+  3329d0:	88 02 08 8b	add	x8, x20, x8
+  3329d4:	09 51 40 a9	ldp	x9, x20, [x8]
+  3329d8:	69 52 00 a9	stp	x9, x20, [x19]
+  3329dc:	00 00 80 d2	mov	x0, #0x0
+  3329e0:	16 d4 05 94	bl	0x4a7a38
+  3329e4:	e1 03 00 aa	mov	x1, x0
+  3329e8:	e0 03 13 aa	mov	x0, x19
+  3329ec:	82 00 80 52	mov	w2, #0x4
+  3329f0:	0e 00 00 14	b	0x332a28
+  3329f4:	1f 05 00 f1	cmp	x8, #0x1
+  3329f8:	41 05 00 54	b.ne	0x332aa0
+  3329fc:	68 12 00 f0	adrp	x8, 591 ; 0x581000
+  332a00:	08 21 3f 91	add	x8, x8, #0xfc8
+  332a04:	08 01 40 f9	ldr	x8, [x8]
+  332a08:	88 02 08 8b	add	x8, x20, x8
+  332a0c:	09 51 40 a9	ldp	x9, x20, [x8]
+  332a10:	69 52 00 a9	stp	x9, x20, [x19]
+  332a14:	00 00 80 d2	mov	x0, #0x0
+  332a18:	08 d4 05 94	bl	0x4a7a38
+  332a1c:	e1 03 00 aa	mov	x1, x0
+  332a20:	e0 03 13 aa	mov	x0, x19
+  332a24:	42 00 80 52	mov	w2, #0x2
+  332a28:	3a dd 05 94	bl	0x4a9f10 ; symbol stub for: _swift_storeEnumTagMultiPayload
+  332a2c:	e0 03 14 aa	mov	x0, x20
+  332a30:	fd 7b 44 a9	ldp	x29, x30, [sp, #0x40]
+  332a34:	f4 4f 43 a9	ldp	x20, x19, [sp, #0x30]
+  332a38:	f6 57 42 a9	ldp	x22, x21, [sp, #0x20]
+  332a3c:	f8 5f 41 a9	ldp	x24, x23, [sp, #0x10]
+  332a40:	ff 43 01 91	add	sp, sp, #0x50
+  332a44:	6a dc 05 14	b	0x4a9bec ; symbol stub for: _swift_bridgeObjectRetain
+  332a48:	1f 29 00 f1	cmp	x8, #0xa
+  332a4c:	a1 02 00 54	b.ne	0x332aa0
+  332a50:	00 00 80 d2	mov	x0, #0x0
+  332a54:	f9 d3 05 94	bl	0x4a7a38
+  332a58:	e1 03 00 aa	mov	x1, x0
+  332a5c:	e0 03 13 aa	mov	x0, x19
+  332a60:	22 01 80 52	mov	w2, #0x9
+  332a64:	75 ff ff 17	b	0x332838
+  332a68:	e0 03 16 aa	mov	x0, x22
+  332a6c:	5a dc 05 94	bl	0x4a9bd4 ; symbol stub for: _swift_bridgeObjectRelease
+  332a70:	00 00 80 d2	mov	x0, #0x0
+  332a74:	f1 d3 05 94	bl	0x4a7a38
+  332a78:	e1 03 00 aa	mov	x1, x0
+  332a7c:	e0 03 13 aa	mov	x0, x19
+  332a80:	02 01 80 52	mov	w2, #0x8
+  332a84:	6d ff ff 17	b	0x332838
+  332a88:	a0 12 00 b0	adrp	x0, 597 ; 0x587000
+  332a8c:	00 00 2b 91	add	x0, x0, #0xac0
+  332a90:	21 04 00 f0	adrp	x1, 135 ; 0x3b9000
+  332a94:	21 00 01 91	add	x1, x1, #0x40
+  332a98:	fd dc 05 94	bl	0x4a9e8c ; symbol stub for: _swift_once
+  332a9c:	8d ff ff 17	b	0x3328d0
+  332aa0:	e8 07 00 f9	str	x8, [sp, #0x8]
+  332aa4:	20 10 00 d0	adrp	x0, 518 ; 0x538000
+  332aa8:	00 ec 44 f9	ldr	x0, [x0, #0x9d8]
+  332aac:	23 10 00 f0	adrp	x3, 519 ; 0x539000
+  332ab0:	63 90 41 f9	ldr	x3, [x3, #0x320]
+  332ab4:	e1 23 00 91	add	x1, sp, #0x8
+  332ab8:	e2 03 00 aa	mov	x2, x0
+  332abc:	94 d9 05 94	bl	0x4a910c
+  332ac0:	20 00 20 d4	brk	#0x1
+  332ac4:	f6 57 bd a9	stp	x22, x21, [sp, #-0x30]!
+  332ac8:	f4 4f 01 a9	stp	x20, x19, [sp, #0x10]
+  332acc:	fd 7b 02 a9	stp	x29, x30, [sp, #0x20]
+  332ad0:	fd 83 00 91	add	x29, sp, #0x20
+  332ad4:	f4 03 00 aa	mov	x20, x0
+  332ad8:	40 12 00 d0	adrp	x0, 586 ; 0x57c000
+  332adc:	00 a0 29 91	add	x0, x0, #0xa68
+  332ae0:	81 0c 00 f0	adrp	x1, 403 ; 0x4c5000
+  332ae4:	21 00 28 91	add	x1, x1, #0xa00
+  332ae8:	50 ed f4 97	bl	___swift_instantiateConcreteTypeFromMangledNameV2
+  332aec:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  332af0:	09 21 40 f9	ldr	x9, [x8, #0x40]
+  332af4:	28 3d 00 91	add	x8, x9, #0xf
+  332af8:	08 ed 7c 92	and	x8, x8, #0xfffffffffffffff0
+  332afc:	30 10 00 f0	adrp	x16, 519 ; 0x539000
+  332b00:	10 a2 40 f9	ldr	x16, [x16, #0x140] ; literal pool symbol address: ___chkstk_darwin
+  332b04:	00 02 3f d6	blr	x16
+  332b08:	e9 03 00 91	mov	x9, sp
+  332b0c:	33 01 08 cb	sub	x19, x9, x8
+  332b10:	7f 02 00 91	mov	sp, x19
+  332b14:	e0 03 14 aa	mov	x0, x20
+  332b18:	d5 db 05 94	bl	0x4a9a6c ; symbol stub for: _objc_retain
+  332b1c:	f4 03 00 aa	mov	x20, x0
+  332b20:	e8 03 13 aa	mov	x8, x19
+  332b24:	1d 00 00 94	bl	0x332b98
+  332b28:	e0 03 14 aa	mov	x0, x20
+  332b2c:	cd db 05 94	bl	0x4a9a60 ; symbol stub for: _objc_release
+  332b30:	00 00 80 d2	mov	x0, #0x0
+  332b34:	68 cc 05 94	bl	0x4a5cd4
+  332b38:	f5 03 00 aa	mov	x21, x0
+  332b3c:	16 80 5f f8	ldur	x22, [x0, #-0x8]
+  332b40:	c8 1a 40 f9	ldr	x8, [x22, #0x30]
+  332b44:	e0 03 13 aa	mov	x0, x19
+  332b48:	21 00 80 52	mov	w1, #0x1
+  332b4c:	e2 03 15 aa	mov	x2, x21
+  332b50:	00 01 3f d6	blr	x8
+  332b54:	e8 03 00 aa	mov	x8, x0
+  332b58:	00 00 80 d2	mov	x0, #0x0
+  332b5c:	1f 05 00 71	cmp	w8, #0x1
+  332b60:	20 01 00 54	b.eq	0x332b84
+  332b64:	f4 03 13 aa	mov	x20, x19
+  332b68:	43 cc 05 94	bl	0x4a5c74
+  332b6c:	f4 03 00 aa	mov	x20, x0
+  332b70:	c8 06 40 f9	ldr	x8, [x22, #0x8]
+  332b74:	e0 03 13 aa	mov	x0, x19
+  332b78:	e1 03 15 aa	mov	x1, x21
+  332b7c:	00 01 3f d6	blr	x8
+  332b80:	e0 03 14 aa	mov	x0, x20
+  332b84:	bf 83 00 d1	sub	sp, x29, #0x20
+  332b88:	fd 7b 42 a9	ldp	x29, x30, [sp, #0x20]
+  332b8c:	f4 4f 41 a9	ldp	x20, x19, [sp, #0x10]
+  332b90:	f6 57 c3 a8	ldp	x22, x21, [sp], #0x30
+  332b94:	80 db 05 14	b	0x4a9994 ; symbol stub for: _objc_autoreleaseReturnValue
+  332b98:	fa 67 bb a9	stp	x26, x25, [sp, #-0x50]!
+  332b9c:	f8 5f 01 a9	stp	x24, x23, [sp, #0x10]
+  332ba0:	f6 57 02 a9	stp	x22, x21, [sp, #0x20]
+  332ba4:	f4 4f 03 a9	stp	x20, x19, [sp, #0x30]
+  332ba8:	fd 7b 04 a9	stp	x29, x30, [sp, #0x40]
+  332bac:	fd 03 01 91	add	x29, sp, #0x40
+  332bb0:	f3 03 08 aa	mov	x19, x8
+  332bb4:	00 00 80 d2	mov	x0, #0x0
+  332bb8:	9a d3 05 94	bl	0x4a7a20
+  332bbc:	f5 03 00 aa	mov	x21, x0
+  332bc0:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  332bc4:	08 21 40 f9	ldr	x8, [x8, #0x40]
+  332bc8:	e9 03 08 aa	mov	x9, x8
+  332bcc:	30 10 00 f0	adrp	x16, 519 ; 0x539000
+  332bd0:	10 a2 40 f9	ldr	x16, [x16, #0x140] ; literal pool symbol address: ___chkstk_darwin
+  332bd4:	00 02 3f d6	blr	x16
+  332bd8:	e9 03 00 91	mov	x9, sp
+  332bdc:	08 3d 00 91	add	x8, x8, #0xf
+  332be0:	08 ed 7c 92	and	x8, x8, #0xfffffffffffffff0
+  332be4:	36 01 08 cb	sub	x22, x9, x8
+  332be8:	df 02 00 91	mov	sp, x22
+  332bec:	00 00 80 d2	mov	x0, #0x0
+  332bf0:	86 d3 05 94	bl	0x4a7a08
+  332bf4:	f7 03 00 aa	mov	x23, x0
+  332bf8:	18 3c 80 b9	ldrsw	x24, [x0, #0x3c]
+  332bfc:	c8 02 18 8b	add	x8, x22, x24

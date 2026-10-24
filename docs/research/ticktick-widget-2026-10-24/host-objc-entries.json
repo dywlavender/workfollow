@@ -1,0 +1,182 @@
+[
+  {
+    "line": 228611,
+    "context": [
+      "            types   0xe199c (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd74d6c (0x100d86424)",
+      "            name    0x2bcfb4 (0x1012ce670) checkGrammarWithSpellingMenuItemClicked:",
+      "            types   0xe1990 (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd74d74 (0x100d86438)",
+      "            name    0x2bcfb0 (0x1012ce678) correctSpellingAutomaticallyMenuItemClicked:",
+      "            types   0xe1984 (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd74d7c (0x100d8644c)",
+      "            name    0x2bcfac (0x1012ce680) toggleQuickAdd",
+      "            types   0xe1718 (0x1010f2df0) v16@0:8",
+      "            imp     0xffd74f78 (0x100d86654)",
+      "            name    0x2bcfa8 (0x1012ce688) toggleMainPopover",
+      "            types   0xe170c (0x1010f2df0) v16@0:8",
+      "            imp     0xffd7503c (0x100d86724)",
+      "            name    0x2bcfa4 (0x1012ce690) toggleMainWindow"
+    ]
+  },
+  {
+    "line": 228623,
+    "context": [
+      "            types   0xe170c (0x1010f2df0) v16@0:8",
+      "            imp     0xffd7503c (0x100d86724)",
+      "            name    0x2bcfa4 (0x1012ce690) toggleMainWindow",
+      "            types   0xe1700 (0x1010f2df0) v16@0:8",
+      "            imp     0xffd752f8 (0x100d869ec)",
+      "            name    0x2b4ba8 (0x1012c62a0) handleFinishLaunching:",
+      "            types   0xe1954 (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd76844 (0x100d87f44)",
+      "            name    0x2b3284 (0x1012c4988) handleGetURLEvent:withReplyEvent:",
+      "            types   0xe5c48 (0x1010f7350) v32@0:8@16@24",
+      "            imp     0xffd768b4 (0x100d87fc0)",
+      "            name    0x2b2a18 (0x1012c4128) userDidSignIn:",
+      "            types   0xe193c (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd7768c (0x100d88da4)",
+      "            name    0x2b2a7c (0x1012c4198) userDidSignOut:"
+    ]
+  },
+  {
+    "line": 228983,
+    "context": [
+      "            types   0xe13cc (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd70b88 (0x100d82810)",
+      "            name    0x2bccac (0x1012ce938) applicationWillBecomeActive:",
+      "            types   0xe13c0 (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd70b88 (0x100d8281c)",
+      "            name    0x2bcca8 (0x1012ce940) applicationWillTerminate:",
+      "            types   0xe13b4 (0x1010f3050) v24@0:8@16",
+      "            imp     0xffd70da4 (0x100d82a44)",
+      "            name    0x2bcca4 (0x1012ce948) applicationShouldHandleReopen:hasVisibleWindows:",
+      "            types   0xe92db (0x1010faf83) B28@0:8@16B24",
+      "            imp     0xffd70da4 (0x100d82a50)",
+      "            name    0x2bcca0 (0x1012ce950) applicationShouldTerminate:",
+      "            types   0xe7f2c (0x1010f9be0) Q24@0:8@16",
+      "            imp     0xffd70df0 (0x100d82aa8)",
+      "            name    0x2bcc9c (0x1012ce958) applicationWillResignActive:"
+    ]
+  },
+  {
+    "line": 229162,
+    "context": [
+      "                    types   0xcdda0 (0x1010f9c10) B32@0:8@16@24",
+      "                    imp     0x0",
+      "                    name    0x2a74d8 (0x1012d3350) application:printFiles:withSettings:showPrintPanels:",
+      "                    types   0xcf124 (0x1010fafa0) Q44@0:8@16@24@32B40",
+      "                    imp     0x0",
+      "                    name    0x2a74d4 (0x1012d3358) applicationShouldTerminateAfterLastWindowClosed:",
+      "                    types   0xc9108 (0x1010f4f90) B24@0:8@16",
+      "                    imp     0x0",
+      "                    name    0x2a2ab8 (0x1012ce948) applicationShouldHandleReopen:hasVisibleWindows:",
+      "                    types   0xcf0ef (0x1010faf83) B28@0:8@16B24",
+      "                    imp     0x0",
+      "                    name    0x2a2ac4 (0x1012ce960) applicationDockMenu:",
+      "                    types   0xc9dd0 (0x1010f5c70) @24@0:8@16",
+      "                    imp     0x0",
+      "                    name    0x2a74b8 (0x1012d3360) application:willPresentError:"
+    ]
+  },
+  {
+    "line": 229783,
+    "context": [
+      "                    types   0xcdda0 (0x1010f9c10) B32@0:8@16@24",
+      "                    imp     0x0",
+      "                    name    0x2a74d8 (0x1012d3350) application:printFiles:withSettings:showPrintPanels:",
+      "                    types   0xcf124 (0x1010fafa0) Q44@0:8@16@24@32B40",
+      "                    imp     0x0",
+      "                    name    0x2a74d4 (0x1012d3358) applicationShouldTerminateAfterLastWindowClosed:",
+      "                    types   0xc9108 (0x1010f4f90) B24@0:8@16",
+      "                    imp     0x0",
+      "                    name    0x2a2ab8 (0x1012ce948) applicationShouldHandleReopen:hasVisibleWindows:",
+      "                    types   0xcf0ef (0x1010faf83) B28@0:8@16B24",
+      "                    imp     0x0",
+      "                    name    0x2a2ac4 (0x1012ce960) applicationDockMenu:",
+      "                    types   0xc9dd0 (0x1010f5c70) @24@0:8@16",
+      "                    imp     0x0",
+      "                    name    0x2a74b8 (0x1012d3360) application:willPresentError:"
+    ]
+  },
+  {
+    "line": 286025,
+    "context": [
+      "        types   0xcdda0 (0x1010f9c10) B32@0:8@16@24",
+      "        imp     0x0",
+      "        name    0x2a74d8 (0x1012d3350) application:printFiles:withSettings:showPrintPanels:",
+      "        types   0xcf124 (0x1010fafa0) Q44@0:8@16@24@32B40",
+      "        imp     0x0",
+      "        name    0x2a74d4 (0x1012d3358) applicationShouldTerminateAfterLastWindowClosed:",
+      "        types   0xc9108 (0x1010f4f90) B24@0:8@16",
+      "        imp     0x0",
+      "        name    0x2a2ab8 (0x1012ce948) applicationShouldHandleReopen:hasVisibleWindows:",
+      "        types   0xcf0ef (0x1010faf83) B28@0:8@16B24",
+      "        imp     0x0",
+      "        name    0x2a2ac4 (0x1012ce960) applicationDockMenu:",
+      "        types   0xc9dd0 (0x1010f5c70) @24@0:8@16",
+      "        imp     0x0",
+      "        name    0x2a74b8 (0x1012d3360) application:willPresentError:"
+    ]
+  },
+  {
+    "line": 286982,
+    "context": [
+      "    0x1010ee771 timerTodayDurationChanged:",
+      "    0x1010b8936 autoNext",
+      "    0x1010c1f04 dotButtonClicked:",
+      "    0x1010c0d2e detailWindowWillClose:",
+      "    0x10109a9d5 commentDidEdit:",
+      "    0x1010bcc05 commentAttachmentDidDownload:",
+      "    0x1010cdc9a mainSplitViewStateChanged:",
+      "    0x1010eb864 systemClockDidChange:",
+      "    0x1010c6160 handleGetURLEvent:withReplyEvent:",
+      "    0x1010bd133 computerDidAwake:",
+      "    0x1010f0a45 userGuideDidEnd:",
+      "    0x1010f1ea3 widgetDidRequestSyncAndRemind:",
+      "    0x1010c1dcb dockMenuDidShowLogs",
+      "    0x1010c1daf dockMenuDidClearData",
+      "    0x10109d670 refresh"
+    ]
+  },
+  {
+    "line": 292005,
+    "context": [
+      "    0x1010d1059 openAboutPanelItemDidClick:",
+      "    0x1010d1165 openHelpCenterItemDidClick:",
+      "    0x1010f13c1 visitHomepageItemDidClick:",
+      "    0x1010bb1ac checkForUpdates:",
+      "    0x1010cdd0d mainWindowMenuItemClicked:",
+      "    0x1010bb2d8 checkSpellingWhileTypingMenuItemClicked:",
+      "    0x1010bb1e1 checkGrammarWithSpellingMenuItemClicked:",
+      "    0x1010be0da correctSpellingAutomaticallyMenuItemClicked:",
+      "    0x1010ef087 toggleQuickAdd",
+      "    0x1010ef046 toggleMainPopover",
+      "    0x1010ef058 toggleMainWindow",
+      "    0x1010b768b application:willContinueUserActivityWithType:",
+      "    0x1010b7405 application:continueUserActivity:restorationHandler:",
+      "    0x1010ea516 startOrAbandonPomo",
+      "    0x1010b7110 appMainMenu"
+    ]
+  },
+  {
+    "line": 292094,
+    "context": [
+      "    0x1010db2a7 setCheckSpellingWhileTypingMenuItem:",
+      "    0x1010bb1c0 checkGrammarWithSpellingMenuItem",
+      "    0x1010db23d setCheckGrammarWithSpellingMenuItem:",
+      "    0x1010b87f0 autoCorrectSpellingMenuItem",
+      "    0x10109df7e setAutoCorrectSpellingMenuItem:",
+      "    0x1010b77d0 applicationDidFinishLaunching:",
+      "    0x1010b7a3d applicationWillBecomeActive:",
+      "    0x1010b7aca applicationWillTerminate:",
+      "    0x1010b7944 applicationShouldHandleReopen:hasVisibleWindows:",
+      "    0x1010b79a5 applicationShouldTerminate:",
+      "    0x1010b7a81 applicationWillResignActive:",
+      "    0x1010b786e applicationDockMenu:",
+      "    0x1010b5960 addImageViewLeadingLC",
+      "    0x1010d9884 setAddImageViewLeadingLC:",
+      "    0x1010bb9f0 clickedHandler"
+    ]
+  }
+]
