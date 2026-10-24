@@ -22,15 +22,22 @@ struct NativeDocument: Equatable, Codable {
 
     init(deferred: DeferredDocument) { storedBlocks = []; self.deferred = deferred }
     func materialized() throws -> NativeDocument { try deferred?.resolve() ?? self }
-    private enum CodingKeys: String, CodingKey { case blocks }
+    /// 持久化形态（2026-10-24 内核切换决策）：`{ops, plainText}`——Delta 是真源，
+    /// 块模型只是内存投影。**旧档 `{blocks}` 仍可读**（读入即转换，下次保存落新形态）。
+    private enum CodingKeys: String, CodingKey { case blocks, ops, plainText }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
-        storedBlocks = try values.decode([DocumentBlock].self, forKey: .blocks)
+        if let ops = try? values.decode([QuillDeltaOp].self, forKey: .ops) {
+            storedBlocks = QuillDeltaCodec.document(from: ops).blocks
+        } else {
+            storedBlocks = try values.decode([DocumentBlock].self, forKey: .blocks)
+        }
     }
     func encode(to encoder: Encoder) throws {
         let document = try materialized()
         var values = encoder.container(keyedBy: CodingKeys.self)
-        try values.encode(document.storedBlocks, forKey: .blocks)
+        try values.encode(QuillDeltaCodec.delta(from: document), forKey: .ops)
+        try values.encode(document.plainText, forKey: .plainText)
     }
     static func == (lhs: NativeDocument, rhs: NativeDocument) -> Bool {
         if let left = lhs.deferred, left === rhs.deferred { return true }
