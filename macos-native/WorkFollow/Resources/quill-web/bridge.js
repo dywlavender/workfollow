@@ -9,6 +9,23 @@
   // 工具条（滴答：顶部裸条）必须挂在编辑器**上方**——先 build 工具条
   // 再 append 编辑器，DOM 顺序即视觉顺序。
   var toolbar = window.WorkFollowToolbar.build(root, {
+    colorMenu: function (anchorButton) {
+      if (window.WorkFollowColorMenu.isOpen()) {
+        window.WorkFollowColorMenu.close();
+        quill.focus();
+        return;
+      }
+      window.WorkFollowColorMenu.open(anchorButton, {
+        applyText: function (value) {
+          quill.format("color", value === null ? false : value, "user");
+          quill.focus();
+        },
+        applyHighlight: function (value) {
+          quill.format("background", value === null ? false : value, "user");
+          quill.focus();
+        }
+      });
+    },
     toggle: function (name) {
       var format = quill.getFormat();
       switch (name) {
@@ -354,6 +371,11 @@
       }
     }
     if (event.key === "Escape") {
+      if (window.WorkFollowColorMenu && window.WorkFollowColorMenu.isOpen()) {
+        event.preventDefault();
+        window.WorkFollowColorMenu.close();
+        return;
+      }
       event.preventDefault();
       post({ event: "escapePressed" });
     } else if (event.key === "Tab") {

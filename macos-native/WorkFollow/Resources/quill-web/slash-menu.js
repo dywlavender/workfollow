@@ -1,30 +1,35 @@
 /* WorkFollow 编辑器：斜杠菜单（滴答 13 项 + 我们独有的流程图 = 14 项）。
-   菜单项与 2026-10-24 REA 取证的滴答斜杠菜单逐条对齐。 */
+   菜单项与 2026-10-24 REA 取证的滴答斜杠菜单逐条对齐；
+   图标用滴答 Assets.car 原版（icons/md_*.png），图片/表格/流程图为同风格自绘 SVG。 */
 "use strict";
 
 (function () {
+  function icon(name) {
+    return "<img class='wf-slash-img' src='icons/" + name + "' alt=''>";
+  }
+
   var GROUPS = [
     [
-      { name: "paragraph", title: "文本", glyph: "¶" },
-      { name: "heading1", title: "标题1", glyph: "H1" },
-      { name: "heading2", title: "标题2", glyph: "H2" },
-      { name: "heading3", title: "标题3", glyph: "H3" }
+      { name: "paragraph", title: "文本", glyph: icon("md_body.png") },
+      { name: "heading1", title: "标题1", glyph: icon("md_header1.png") },
+      { name: "heading2", title: "标题2", glyph: icon("md_header2.png") },
+      { name: "heading3", title: "标题3", glyph: icon("md_header3.png") }
     ],
     [
-      { name: "bullet", title: "无序列表", glyph: "•" },
-      { name: "ordered", title: "有序列表", glyph: "1." },
-      { name: "checklist", title: "清单", glyph: "☑" }
+      { name: "bullet", title: "无序列表", glyph: icon("md_list.png") },
+      { name: "ordered", title: "有序列表", glyph: icon("md_orderList.png") },
+      { name: "checklist", title: "清单", glyph: icon("md_checkBox.png") }
     ],
     [
-      { name: "blockquote", title: "引用", glyph: "❝" },
-      { name: "code-block", title: "代码块", glyph: "{ }" },
-      { name: "divider", title: "分割线", glyph: "—" }
+      { name: "blockquote", title: "引用", glyph: icon("md_quote.png") },
+      { name: "code-block", title: "代码块", glyph: icon("md_code.png") },
+      { name: "divider", title: "分割线", glyph: icon("md_horizontal.png") }
     ],
     [
-      { name: "image", title: "图片", glyph: "🖼" },
-      { name: "attachment", title: "附件", glyph: "📎" },
-      { name: "table", title: "表格", glyph: "▦" },
-      { name: "diagram", title: "流程图（draw.io）", glyph: "◬" }
+      { name: "image", title: "图片", glyph: icon("wf_image.svg") },
+      { name: "attachment", title: "附件", glyph: icon("md_attachment.png") },
+      { name: "table", title: "表格", glyph: icon("wf_table.svg") },
+      { name: "diagram", title: "流程图（draw.io）", glyph: icon("wf_diagram.svg") }
     ]
   ];
 
@@ -60,7 +65,7 @@
         row.dataset.index = flatIndex;
         var glyph = document.createElement("span");
         glyph.className = "wf-slash-glyph";
-        glyph.textContent = item.glyph;
+        glyph.innerHTML = item.glyph;
         var label = document.createElement("span");
         label.textContent = item.title;
         row.appendChild(glyph);

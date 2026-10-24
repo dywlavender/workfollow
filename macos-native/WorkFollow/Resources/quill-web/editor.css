@@ -1,5 +1,8 @@
 /* WorkFollow 编辑器（Quill 内核）的滴答观感层。
-   布局/间距按 2026-10-24 REA 取证（笔记工具条 28px 裸条、斜杠菜单卡片）。 */
+   布局/排版按 2026-10-24 REA 取证：
+   - 工具条 28px 裸条、按钮 26px、图标 16px（滴答 Assets.car 原版图标）
+   - 正文 14px / 行距 1.6（滴答实测行距 ~22pt）
+   - 复选框：圆角方形细描边；引用：3px 浅灰竖条；代码块：浅底圆角 */
 
 html, body {
   margin: 0;
@@ -9,11 +12,112 @@ html, body {
 }
 
 .ql-container { border: 0 !important; font-family: inherit; }
-.ql-editor { font-size: 14px; line-height: 1.6; padding: 4px 0 8px; caret-color: #476bff; }
+
+/* ---------- 排版（滴答口径） ---------- */
+.ql-editor {
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 4px 0 8px;
+  caret-color: #476bff;
+  color: #333333;
+}
 .ql-editor.ql-blank::before {
   left: 0; right: 0;
-  color: #858d9a;
+  color: #8a9099;
   font-style: normal;
+}
+.ql-snow .ql-editor h1,
+.ql-snow .ql-editor h2,
+.ql-snow .ql-editor h3,
+.ql-snow .ql-editor h4,
+.ql-snow .ql-editor h5,
+.ql-snow .ql-editor h6 {
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0.35em 0 0.15em;
+}
+.ql-snow .ql-editor h1 { font-size: 21px; }
+.ql-snow .ql-editor h2 { font-size: 18px; }
+.ql-snow .ql-editor h3 { font-size: 16px; }
+.ql-snow .ql-editor h4 { font-size: 15px; }
+.ql-snow .ql-editor h5 { font-size: 14px; }
+.ql-snow .ql-editor h6 { font-size: 13px; color: #8a9099; }
+.ql-editor p { margin: 0; }
+
+/* 列表缩进与间距（滴答：24px 一级，行距略窄） */
+.ql-editor ol { padding-left: 24px; }
+.ql-editor ul { padding-left: 6px; }
+.ql-editor li { padding-left: 18px; margin: 1px 0; }
+.ql-editor li > .ql-ui:before { margin-left: -18px; margin-right: 6px; width: 12px; }
+.ql-editor li[data-list=bullet] > .ql-ui:before { content: '•'; font-size: 15px; }
+.ql-editor li.ql-indent-1:not(.ql-direction-rtl) { padding-left: 42px; }
+.ql-editor li.ql-indent-2:not(.ql-direction-rtl) { padding-left: 66px; }
+.ql-editor li.ql-indent-3:not(.ql-direction-rtl) { padding-left: 90px; }
+
+/* 清单复选框：滴答圆角方形（CSS 绘制，替换 Quill 默认 ☑/☐ 字符） */
+.ql-editor li[data-list=checked] > .ql-ui:before,
+.ql-editor li[data-list=unchecked] > .ql-ui:before {
+  content: '';
+  width: 14px; height: 14px;
+  border: 1.4px solid #b8bec9;
+  border-radius: 4px;
+  box-sizing: border-box;
+  vertical-align: -2px;
+  transition: background 0.1s, border-color 0.1s;
+}
+.ql-editor li[data-list=unchecked]:hover > .ql-ui:before { border-color: #476bff; }
+.ql-editor li[data-list=checked] > .ql-ui:before {
+  border-color: #476bff;
+  background: #476bff
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.2 7.3 6 10l4.8-5.6' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+    center / 100% 100% no-repeat;
+}
+.ql-editor li[data-list=checked] { color: #9aa0ab; text-decoration: line-through; }
+
+/* 引用：滴答浅灰竖条 */
+.ql-snow .ql-editor blockquote {
+  border-left: 3px solid #d8dce3;
+  padding-left: 12px;
+  margin: 4px 0;
+  color: #4a5058;
+}
+
+/* 行内代码 / 代码块：滴答浅底圆角（覆盖 snow 的黑底终端风） */
+.ql-snow .ql-editor code {
+  background-color: #f2f3f5;
+  border-radius: 3px;
+  color: #eb5757;
+  font-size: 12.5px;
+  padding: 1px 5px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+.ql-snow .ql-editor .ql-code-block-container {
+  background-color: #f7f8fa;
+  color: #333333;
+  border-radius: 6px;
+  margin: 4px 0;
+  padding: 10px 12px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.ql-snow .ql-editor .ql-code-block-container code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+/* 链接 / 选区 */
+.ql-snow a, .ql-editor a { color: #476bff; text-decoration: none; }
+.ql-editor a:hover { text-decoration: underline; }
+.ql-editor ::selection { background: rgba(71, 107, 255, 0.18); }
+.ql-editor img { max-width: 100%; border-radius: 4px; }
+
+/* ---------- 图标（滴答 Assets.car 提取；PNG 深色模式反色，SVG 用 currentColor） ---------- */
+img.wf-icon, #wf-toolbar .wf-btn img {
+  width: 16px; height: 16px;
+  display: block;
+  -webkit-user-drag: none;
+}
+img.wf-slash-img, #wf-slash .wf-slash-glyph img {
+  width: 18px; height: 18px;
+  display: block;
 }
 
 /* ---------- 工具条：顶部固定裸条（无底色无描边，28px，竖线分组） ---------- */
@@ -29,53 +133,91 @@ html, body {
   scrollbar-width: none;
 }
 #wf-toolbar::-webkit-scrollbar { display: none; }
-#wf-toolbar .wf-btn { min-width: 22px; padding: 0 3px; font-size: 12px; }
 #wf-toolbar .wf-btn {
   border: 0; background: transparent; cursor: pointer;
-  min-width: 26px; height: 26px;
-  border-radius: 4px;
-  color: #5f6672;
-  font-size: 13px;
+  min-width: 26px; height: 24px;
+  border-radius: 5px;
+  color: #4a5058;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0 4px;
+  gap: 1px;
 }
 #wf-toolbar .wf-btn:hover { background: rgba(0,0,0,0.055); }
 #wf-toolbar .wf-btn.active { color: #476bff; background: rgba(71,107,255,0.10); }
-#wf-toolbar .wf-btn .wf-letter { font-weight: 600; }
-#wf-toolbar .wf-btn[data-name="highlight"] .wf-letter {
-  background: #ffe98a; border-radius: 2px; padding: 0 5px; font-weight: 400;
+#wf-toolbar .wf-btn.active img.wf-icon:not(.wf-keep-color) { filter: none; }
+#wf-toolbar .wf-btn[data-name="color"] { padding: 0 2px; }
+#wf-toolbar .wf-btn[data-name="color"] .wf-letter {
+  font-size: 13px; font-weight: 600; line-height: 1;
+}
+#wf-toolbar .wf-btn[data-name="color"] img.wf-icon {
+  width: 8px; height: 8px; margin-left: 1px;
 }
 #wf-toolbar .wf-sep {
   width: 1px; height: 16px; margin: 0 5px;
+  flex: none;
   background: rgba(0,0,0,0.10);
 }
 
-/* ---------- 斜杠菜单：光标锚定卡片 ---------- */
+/* ---------- 斜杠菜单：光标锚定卡片（滴答样式） ---------- */
 #wf-slash {
   position: fixed;
   z-index: 30;
-  width: 220px;
-  max-height: 320px;
+  width: 224px;
+  max-height: 324px;
   overflow-y: auto;
   background: #ffffff;
-  border: 1px solid rgba(0,0,0,0.10);
-  border-radius: 8px;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.16);
-  padding: 4px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.16);
+  padding: 5px;
   font-size: 13px;
   color: #2b2f36;
 }
 #wf-slash .wf-slash-item {
-  display: flex; align-items: center; gap: 9px;
-  padding: 6px 8px; border-radius: 5px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
 }
 #wf-slash .wf-slash-item.selected { background: rgba(71,107,255,0.10); }
 #wf-slash .wf-slash-glyph {
   width: 20px; height: 20px; flex: none;
   display: inline-flex; align-items: center; justify-content: center;
-  color: #5f6672; font-size: 12px; font-weight: 600;
+  color: #4a5058;
 }
-#wf-slash .wf-slash-sep { height: 1px; margin: 3px 8px; background: rgba(0,0,0,0.07); }
+#wf-slash .wf-slash-sep { height: 1px; margin: 4px 8px; background: rgba(0,0,0,0.07); }
+
+/* ---------- A▾ 颜色下拉面板 ---------- */
+#wf-color-menu {
+  position: fixed;
+  z-index: 40;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.16);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #2b2f36;
+}
+#wf-color-menu .wf-color-label {
+  color: #8a9099;
+  margin: 2px 0 6px;
+}
+#wf-color-menu .wf-color-row {
+  display: flex; gap: 6px; margin-bottom: 8px;
+}
+#wf-color-menu .wf-color-row:last-child { margin-bottom: 0; }
+#wf-color-menu .wf-color-cell {
+  width: 24px; height: 24px;
+  border: 0; background: transparent; padding: 0;
+  border-radius: 5px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+#wf-color-menu .wf-color-cell:hover { background: rgba(0,0,0,0.06); }
+#wf-color-menu .wf-color-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  display: block;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+}
 
 /* ---------- 块 embed 的静态观感（占位卡） ---------- */
 .wf-embed-divider {
@@ -89,19 +231,44 @@ html, body {
 }
 .wf-embed-card img { max-width: 320px; max-height: 180px; display: block; }
 
-/* 深色模式（跟随系统） */
+/* ---------- 深色模式（跟随系统） ---------- */
 @media (prefers-color-scheme: dark) {
   .ql-editor { color: #e8eaed; }
   .ql-editor.ql-blank::before { color: #6b7280; }
+  .ql-snow .ql-editor h6 { color: #8a9099; }
+
+  /* 滴答图标是黑色模板 PNG：深色下整体反白 */
+  #wf-toolbar .wf-btn img.wf-icon,
+  #wf-slash .wf-slash-glyph img,
+  #wf-color-menu .wf-color-cell img.wf-icon {
+    filter: invert(1) brightness(1.55);
+  }
+  #wf-toolbar .wf-btn.active img.wf-icon {
+    filter: invert(1) brightness(1.55) sepia(1) saturate(3) hue-rotate(200deg);
+  }
+
+  .ql-editor li[data-list=checked] > .ql-ui:before,
+  .ql-editor li[data-list=unchecked] > .ql-ui:before { border-color: #6b7280; }
+  .ql-editor li[data-list=checked] { color: #6b7280; }
+  .ql-snow .ql-editor blockquote { border-left-color: #4a5058; color: #c3c8d1; }
+  .ql-snow .ql-editor code { background-color: #2f3238; color: #ff8a8a; }
+  .ql-snow .ql-editor .ql-code-block-container { background-color: #26282e; color: #e8eaed; }
+
   #wf-toolbar .wf-btn { color: #a8adb8; }
   #wf-toolbar .wf-btn:hover { background: rgba(255,255,255,0.08); }
   #wf-toolbar .wf-btn.active { color: #98a1ff; background: rgba(152,161,255,0.14); }
-  #wf-toolbar .wf-btn[data-name="highlight"] .wf-letter { background: #6b5d23; color: #e8eaed; }
   #wf-toolbar .wf-sep { background: rgba(255,255,255,0.14); }
+
   #wf-slash { background: #26282e; border-color: rgba(255,255,255,0.12); color: #e8eaed; }
   #wf-slash .wf-slash-item.selected { background: rgba(152,161,255,0.16); }
   #wf-slash .wf-slash-glyph { color: #a8adb8; }
   #wf-slash .wf-slash-sep { background: rgba(255,255,255,0.08); }
+
+  #wf-color-menu { background: #26282e; border-color: rgba(255,255,255,0.12); color: #e8eaed; }
+  #wf-color-menu .wf-color-label { color: #8a9099; }
+  #wf-color-menu .wf-color-cell:hover { background: rgba(255,255,255,0.08); }
+  #wf-color-menu .wf-color-dot { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); }
+
   .wf-embed-card { background: #2a2d33; border-color: rgba(255,255,255,0.10); color: #a8adb8; }
   .wf-embed-divider { background: rgba(255,255,255,0.18); }
 }

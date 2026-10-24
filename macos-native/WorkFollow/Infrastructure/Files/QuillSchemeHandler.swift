@@ -29,6 +29,8 @@ final class QuillSchemeHandler: NSObject, WKURLSchemeHandler {
         case "js": mime = "text/javascript"
         case "css": mime = "text/css"
         case "html": mime = "text/html"
+        case "png": mime = "image/png"
+        case "svg": mime = "image/svg+xml"
         default: mime = "application/octet-stream"
         }
         let response = HTTPURLResponse(url: url, statusCode: 200,

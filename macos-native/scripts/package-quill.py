@@ -39,6 +39,14 @@ def main() -> None:
                 info = zipfile.ZipInfo(path.name, date_time=FIXED_TIMESTAMP)
                 info.external_attr = 0o644 << 16
                 zf.writestr(info, path.read_bytes())
+        # 图标（滴答 Assets.car 提取的 PNG + 自绘 SVG）保留子目录结构。
+        icons_dir = web_dir / "icons"
+        if icons_dir.is_dir():
+            for path in sorted(icons_dir.iterdir()):
+                if path.is_file() and path.suffix in {".png", ".svg"}:
+                    info = zipfile.ZipInfo(f"icons/{path.name}", date_time=FIXED_TIMESTAMP)
+                    info.external_attr = 0o644 << 16
+                    zf.writestr(info, path.read_bytes())
         license_text = urllib.request.urlopen(
             "https://raw.githubusercontent.com/slab/quill/main/LICENSE", timeout=30
         ).read()

@@ -20,6 +20,13 @@ final class QuillBridgeSpikeTests: XCTestCase {
         let runtimeJS = index.deletingLastPathComponent().appendingPathComponent("quill/quill.js")
         let js = try String(contentsOf: runtimeJS, encoding: .utf8)
         XCTAssertTrue(js.hasPrefix("/*! For license information"), "解压出的应是 Quill 官方分发")
+        // 图标（滴答 Assets.car 提取）随包就位。
+        for icon in ["icons/md_bold.png", "icons/md_orderList.png", "icons/md_arrow_down_alpha57.png",
+                     "icons/wf_image.svg", "icons/wf_table.svg", "icons/wf_diagram.svg"] {
+            XCTAssertTrue(FileManager.default.fileExists(
+                atPath: index.deletingLastPathComponent().appendingPathComponent(icon).path),
+                "运行时缺图标：\(icon)")
+        }
         try? FileManager.default.removeItem(at: cacheRoot)
     }
 
@@ -28,7 +35,7 @@ final class QuillBridgeSpikeTests: XCTestCase {
     func testQuillWebComponentsShipTheFullAssembly() throws {
         let html = try String(contentsOf: Bundle.main.url(forResource: "index", withExtension: "html")!, encoding: .utf8)
         for needle in ["quill/quill.js", "blots.js", "toolbar.js", "slash-menu.js",
-                       "markdown.js", "bridge.js", "editor.css"] {
+                       "color-menu.js", "markdown.js", "bridge.js", "editor.css"] {
             XCTAssertTrue(html.contains(needle), "入口页缺少模块引用：\(needle)")
         }
         func webSource(_ name: String) throws -> String {
