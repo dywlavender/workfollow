@@ -247,6 +247,31 @@ $__lazy_storage_$_actionButton  +  actionButtonClicked:  +  actionButtonHandler
 
 ---
 
+## 5. 实施记录（2026-10-24）
+
+三批全部落地，提交 `9b91fba`。
+
+| 批次 | 项 | 实现 | 测试 |
+|---|---|---|---|
+| 一 | 分组头动作全量 | 新增 `TaskGroupHeaderActions`（纯规则）：`+` 覆盖所有非已完成分组；文字动作已过期 →「顺延」、其它 →「全选」、0 条不给（死按钮）、已完成组一个不给；`+` 的预填落点按分组类型算（自定义小节 → 该小节；日期型 → 该组日期；**已过期 → 今天**，新建任务不该一出生就逾期）。悬停身份从 `sectionID` 换成 `TaskListGroup.id`，系统分组也能悬停；`+`/`…` 命中格 18 → 24（nib 实测） | `TaskGroupHeaderActionsTests` 11 项 |
+| 二 | 折叠持久化 | `TaskViewPreference.collapsedGroups`（可选，键沿用 `TaskViewScopeKey`）。存**折叠**而非展开；全展开写回 nil 以便 `isDefault` 清空档案。新增 `hasCollapsedGroupsRecord` 区分"从没表过态"与"全展开了"，避免已完成组被"首次出现自动折叠"反复折回 | `TaskListBatchOptimizationTests` 3 项 |
+| 二 | 空态动作 | `TaskEmptyStateView` 加 `actionTitle`/`action`；今天 →「看看未来 7 天」、收集箱 →「新建第一个任务」、最近 7 天/明天 →「回到今天」。无动作时保持 `allowsHitTesting(false)` | 同上 2 项 |
+| 二 | 已完成分页 | 默认 30 条 + 行尾「显示更多（还有 N 条）」，点击先转圈 0.18s 再追加（同步追加会"跳"） | 同上 2 项 |
+| 三 | 列表区批量动作条 | 新增 `TaskBulkActionBar`：`bulkSelection` 非空时**替换**快速添加条，给完成 / 置顶 / 删除 / 更多 / 取消；动作全部转发到既有 `TaskBatchOperation`，撤销粒度与右侧面板一致 | `TaskBulkActionBarTests` 5 项 |
+
+口径：
+
+- 新增 3 个测试文件共 24 项；回归（列表/树/行/批量/偏好）**78 + 24 + 72 + 36 项 0 失败**，
+  暂存树单独构建通过，`InspectorWalkthroughTests` 走查通过。
+- **未做**：§3 的第四批（type-select 打字跳转、清单名就地改名）——两项都要改
+  `NativeTaskOutline` 的键盘焦点与顶栏标题的编辑态，比前三批风险高，留待单独一轮。
+- 一处旧测试口径同步改了：`TaskListViewDefaultsTests.testOnlyOverdueGroupCarriesPostponeNote`
+  断言"只有已过期组有尾注"，而现在每组都有文字动作。改为只锁"已完成组没有文字动作"，
+  逐 kind 的完整断言在 `TaskGroupHeaderActionsTests`。同时删掉了已无调用点的
+  `TaskListViewDefaults.groupTrailingNote`。
+
+---
+
 ## 4. 与既有审计的关系
 
 - 编辑栏相关的差距见 `docs/audits/ticktick-rea-2026-10-17/editor-gap-analysis.md`
