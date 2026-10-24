@@ -17,6 +17,8 @@ struct QuillDocumentEditorView: NSViewRepresentable {
     let onEditingChanged: (Bool) -> Void
     var contentSized = false
     var handle: DocumentEditorHandle?
+    /// 滴答口径：工具条默认隐藏，由宿主的 Aa 开关控制（底部展开）。
+    var toolbarVisible = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -27,12 +29,14 @@ struct QuillDocumentEditorView: NSViewRepresentable {
         view.delegate = context.coordinator
         context.coordinator.attach(view: view)
         view.loadBridge()
+        view.setToolbarVisible(toolbarVisible)
         return view
     }
 
     func updateNSView(_ view: QuillWebView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.syncDocumentIfNeeded()
+        view.setToolbarVisible(toolbarVisible)
     }
 
     static func dismantleNSView(_ view: QuillWebView, coordinator: Coordinator) {
@@ -251,6 +255,11 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
 
     func focusEditor() {
         call("window.workfollowEditor.focus()")
+    }
+
+    /// 滴答口径：工具条默认隐藏，Aa 开关展开（编辑器底部）。
+    func setToolbarVisible(_ visible: Bool) {
+        call("window.workfollowEditor.setToolbar(\(visible))")
     }
 
     func performDefaultTab() {

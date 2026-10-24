@@ -120,12 +120,15 @@ img.wf-slash-img, #wf-slash .wf-slash-glyph img {
   display: block;
 }
 
-/* ---------- 工具条：顶部固定裸条（无底色无描边，28px，竖线分组） ---------- */
+/* ---------- 工具条：默认隐藏，Aa 展开于编辑区底部（滴答口径） ---------- */
 #wf-toolbar {
-  display: flex;
+  display: none;                 /* bridge setToolbar 控制显隐 */
+  flex-direction: row;
   align-items: center;
-  height: 28px;
+  height: 32px;
   padding: 0 6px;
+  margin-top: 6px;
+  border-top: 1px solid rgba(0,0,0,0.06);
   user-select: none;
   -webkit-user-select: none;
   overflow-x: auto;
@@ -258,6 +261,7 @@ img.wf-slash-img, #wf-slash .wf-slash-glyph img {
   #wf-toolbar .wf-btn:hover { background: rgba(255,255,255,0.08); }
   #wf-toolbar .wf-btn.active { color: #98a1ff; background: rgba(152,161,255,0.14); }
   #wf-toolbar .wf-sep { background: rgba(255,255,255,0.14); }
+  #wf-toolbar { border-top-color: rgba(255,255,255,0.10); }
 
   #wf-slash { background: #26282e; border-color: rgba(255,255,255,0.12); color: #e8eaed; }
   #wf-slash .wf-slash-item.selected { background: rgba(152,161,255,0.16); }

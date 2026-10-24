@@ -196,29 +196,16 @@ struct NotesWorkspaceView: View {
                     if trash {
                         Label("已删除的笔记", systemImage: "trash").foregroundStyle(.secondary)
                     } else {
-                        BusinessMenu {
-                            ForEach(["未归档"] + notes.folders, id: \.self) { value in
-                            Button(value) { notes.moveNoteToFolder(note.id, named: value) }
-                        }
-                        Divider()
-                        Button("移到新文件夹…") {
-                            if let value = TaskNamePrompt.ask("文件夹名称"), !value.isEmpty {
-                                guard notes.addFolder(value) else { TaskNamePrompt.invalidName(); return }
-                                notes.moveNoteToFolder(note.id, named: value)
-                            }
-                        }
-                    } label: { Label(note.folder, systemImage: "folder") }
-                    .lineLimit(1)
+                        // 滴答口径：笔记顶栏是相对日期行（蓝色"今天，10月24日"），
+                        // 文件夹/收藏/操作全部下沉到底部操作栏。
+                        Text(tickStyleDate(note.updatedAt))
+                            .font(WFType.body.weight(.medium))
+                            .foregroundStyle(WFColors.accent)
                     }
                     Spacer()
                     if trash {
                         Button { notes.restore(note.id); detailOnly = false } label: { Image(systemName: "arrow.uturn.backward") }.help("恢复笔记")
                         Button(role: .destructive) { purgeID = note.id } label: { Image(systemName: "trash.slash") }.help("永久删除笔记")
-                    } else {
-                        Button { notes.edit(note.id) { $0.favorite.toggle() } } label: {
-                            Image(systemName: note.favorite ? "star.fill" : "star")
-                        }
-                        noteActionsMenu(note)
                     }
                 }.buttonStyle(.borderless).padding(.horizontal, 20).frame(height: 44)
                 Divider()
@@ -239,9 +226,6 @@ struct NotesWorkspaceView: View {
                         .textFieldStyle(.plain).font(WFType.detailTitle)
                         .lineLimit(1...3).focused($focusedTitle, equals: note.id)
                         .task(id: note.id) { if note.title.isEmpty { focusedTitle = note.id } }
-                    Text(note.updatedAt.formatted(.dateTime.year().month().day().hour().minute().locale(.appDate)))
-                        .font(.caption).foregroundStyle(.secondary)
-                    Divider()
                     if note.hasPreservedRichContent {
                         HStack(spacing: 8) {
                             Image(systemName: "lock.shield")
@@ -250,12 +234,13 @@ struct NotesWorkspaceView: View {
                         }.font(.caption).foregroundStyle(.secondary)
                     }
                     // 内核切换 P3：笔记页第一个切到 Quill 宿主（同签名）。
-                    // 工具条/斜杠在 Web 侧，onEscape 只剩"结束编辑"一层。
+                    // 工具条（滴答口径默认隐藏，Aa 开关在底部操作栏）与斜杠在 Web 侧。
                     QuillDocumentEditorView(documentID: note.id, document: note.document,
                                    onDocumentChange: { document in notes.edit(note.id) { $0.document = document } },
                                    onEscape: { .endEditing },
                                    onEditingChanged: { _ in },
-                                   contentSized: true, handle: editorHandle).id(note.id)
+                                   contentSized: true, handle: editorHandle,
+                                   toolbarVisible: showFormatToolbar).id(note.id)
                         .overlay(alignment: .topLeading) {
                             if note.document.isEmpty {
                                 // 位置要和插入点一致：`NativeTextView` 用
@@ -297,6 +282,9 @@ struct NotesWorkspaceView: View {
 
     private func noteActionsMenu(_ note: Note) -> some View {
         BusinessMenu {
+            Button(note.favorite ? "取消收藏" : "收藏") {
+                notes.edit(note.id) { $0.favorite.toggle() }
+            }
             Button("复制笔记正文") { copyPlainText(note) }
             if note.hasPreservedRichContent {
                 Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
@@ -385,25 +373,53 @@ struct NotesWorkspaceView: View {
 
     // MARK: - 页脚：字数统计 + 浮动格式工具条开关
 
+    /// 滴达口径的底部操作栏：左＝文件夹，右＝Aa（展开正文工具条）＋更多。
     private func footer(_ note: Note) -> some View {
-        HStack {
-            Text("\(noteWordCount(note.document.plainText)) 字")
-                .font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+            BusinessMenu {
+                ForEach(["未归档"] + notes.folders, id: \.self) { value in
+                    Button(value) { notes.moveNoteToFolder(note.id, named: value) }
+                }
+                Divider()
+                Button("移到新文件夹…") {
+                    if let value = TaskNamePrompt.ask("文件夹名称"), !value.isEmpty {
+                        guard notes.addFolder(value) else { TaskNamePrompt.invalidName(); return }
+                        notes.moveNoteToFolder(note.id, named: value)
+                    }
+                }
+            } label: { Label(note.folder, systemImage: "folder") }
+            .lineLimit(1).fixedSize()
             Spacer()
             if let error = environment.storageError {
                 Button("保存失败 · 重试") { environment.flush { _ in } }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(.red).help(error)
             }
-            Button { showFormatToolbar.toggle(); if showFormatToolbar { editorHandle.focusEditor() } } label: {
-                Image(systemName: "textformat")
+            Button {
+                showFormatToolbar.toggle()
+            } label: {
+                Text("Aa")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(width: 30, height: 22)
                     .foregroundStyle(showFormatToolbar ? WFColors.accent : WFColors.secondaryText)
-            }.buttonStyle(.plain).help("正文格式").accessibilityLabel("正文格式")
-        }
-        .overlay(alignment: .bottom) {
-            if showFormatToolbar {
-                DocumentFormatToolbarView(handle: editorHandle)
-                    .padding(.trailing, 2).padding(.bottom, 32)
+                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(showFormatToolbar ? WFColors.accent : WFColors.border))
             }
+            .buttonStyle(.plain).help("正文格式").accessibilityLabel("正文格式")
+            noteActionsMenu(note)
         }
+    }
+
+    /// 滴答笔记顶栏日期："今天，10月24日" / "昨天，…" / 本周内"周X，…"。
+    private func tickStyleDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let datePart = "\(calendar.component(.month, from: date))月\(calendar.component(.day, from: date))日"
+        if calendar.isDateInToday(date) { return "今天，\(datePart)" }
+        if calendar.isDateInYesterday(date) { return "昨天，\(datePart)" }
+        if let twoDaysAgo = calendar.date(byAdding: .day, value: -2, to: calendar.startOfDay(for: Date())),
+           calendar.isDate(date, inSameDayAs: twoDaysAgo) { return "前天，\(datePart)" }
+        if let week = calendar.dateInterval(of: .weekOfYear, for: Date()), week.contains(date) {
+            let names = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            return "\(names[calendar.component(.weekday, from: date) - 1])，\(datePart)"
+        }
+        return datePart
     }
 }

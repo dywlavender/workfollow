@@ -54,6 +54,9 @@
   });
 
   root.appendChild(editorHost);
+  // 滴答口径：工具条默认隐藏，展开时出现在编辑区**底部**（DOM 移到编辑器之后）。
+  root.appendChild(toolbar);
+  toolbar.style.display = "none";
   var quill = new Quill("#editor", {
     theme: "snow",
     placeholder: "写下你的想法…",
@@ -264,6 +267,10 @@
       emitDelta();
     },
     focus: function () { quill.focus(); },
+    setToolbar: function (visible) {
+      toolbar.style.display = visible ? "flex" : "none";
+      reportHeight();
+    },
     tab: function () {
       // 列表行内 Tab 缩进（Quill 键盘绑定默认不覆盖 Tab），这里手动实现。
       var selection = quill.getSelection();
