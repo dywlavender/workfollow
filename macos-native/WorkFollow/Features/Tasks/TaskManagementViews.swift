@@ -592,7 +592,10 @@ struct TaskComposer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("新建任务").font(WFType.detailTitle)
-            TextField("准备做什么？", text: $title).focused($titleFocused)
+            TextField("准备做什么？", text: $title,
+                      prompt: Text("准备做什么？").foregroundStyle(QuickAddBarStyle.placeholderColor))
+                .foregroundStyle(WFColors.text)
+                .focused($titleFocused)
             BusinessPicker("清单", selection: $list, options:
                 workspace.availableListNames.map { BusinessChoice($0, $0, symbol: "tray") })
             .onChange(of: list) { _, _ in listEdited = true }

@@ -34,7 +34,11 @@ struct AppKitTaskTitleField: NSViewRepresentable {
         field.maximumNumberOfLines = 0
         field.font = .systemFont(ofSize: 19, weight: .medium)
         field.textColor = .labelColor
-        field.placeholderString = placeholder
+        // 占位符灰与待办框唯一真源同源（默认灰偏深）。
+        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
+            .foregroundColor: QuickAddBarStyle.placeholderNSColor,
+            .font: NSFont.systemFont(ofSize: 19, weight: .medium)
+        ])
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         field.stringValue = text
@@ -45,7 +49,12 @@ struct AppKitTaskTitleField: NSViewRepresentable {
     func updateNSView(_ field: HeightTrackingTextField, context: Context) {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
-        if field.placeholderString != placeholder { field.placeholderString = placeholder }
+        if (field.placeholderString as String?) != placeholder {
+            field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
+                .foregroundColor: QuickAddBarStyle.placeholderNSColor,
+                .font: NSFont.systemFont(ofSize: 19, weight: .medium)
+            ])
+        }
         // 宽度变化会改变换行位置，必须同步给 cell 才能算对高度。
         if field.bounds.width > 0, field.preferredMaxLayoutWidth != field.bounds.width {
             field.preferredMaxLayoutWidth = field.bounds.width

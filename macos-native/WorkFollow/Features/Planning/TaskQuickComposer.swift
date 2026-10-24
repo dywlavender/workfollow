@@ -93,8 +93,8 @@ struct TaskQuickComposer: View {
             } label: {
                 HStack(spacing: WFSpace.sm) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 20))
-                        .foregroundStyle(WFColors.overlaySecondaryText)
+                        .font(.system(size: 14))
+                        .foregroundStyle(QuickAddBarStyle.iconColor)
                     Text(scheduleLabel)
                         .font(.system(size: 14))
                         .lineLimit(1)
@@ -118,7 +118,7 @@ struct TaskQuickComposer: View {
             } label: {
                 // 与任务右键菜单同一条规则：有优先级就用实心旗，无优先级才留描边。
                 Image(systemName: priority == .none ? "flag" : "flag.fill")
-                    .font(.system(size: 20))
+                    .font(.system(size: 14))
                     .foregroundStyle(priorityColor)
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
                     .contentShape(Rectangle())
@@ -132,11 +132,12 @@ struct TaskQuickComposer: View {
     }
 
     /// 第二行：标题输入，高 126。原版是 4 行的输入框但回车即提交，所以这里是
-    /// 单行输入铺在 126 高的槽位里，文字贴左上。
+    /// 单行输入铺在 126 高的槽位里，文字贴左上。占位符与图标走待办框唯一真源
+    /// `QuickAddBarStyle`（日历 / 四象限 / 桌面小组件共用这张卡）。
     private var titleField: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("", text: $title, prompt: Text("准备做什么？")
-            .foregroundStyle(WFColors.overlayTertiaryText))
+            .foregroundStyle(QuickAddBarStyle.placeholderColor))
             .textFieldStyle(.plain)
             .font(.system(size: 18))
             .foregroundStyle(WFColors.overlayText)
@@ -159,8 +160,8 @@ struct TaskQuickComposer: View {
             } label: {
                 HStack(spacing: WFSpace.sm) {
                     Image(systemName: "tray")
-                        .font(.system(size: 20))
-                        .foregroundStyle(WFColors.overlaySecondaryText)
+                        .font(.system(size: 14))
+                        .foregroundStyle(QuickAddBarStyle.iconColor)
                     Text(listName)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(WFColors.overlayText)
@@ -182,8 +183,8 @@ struct TaskQuickComposer: View {
                 Button("重复") { datePage = .recurrence }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 20))
-                    .foregroundStyle(WFColors.overlaySecondaryText)
+                    .font(.system(size: 14))
+                    .foregroundStyle(QuickAddBarStyle.iconColor)
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
                     .contentShape(Rectangle())
             }

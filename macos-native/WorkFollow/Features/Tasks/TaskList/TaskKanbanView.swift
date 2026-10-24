@@ -77,15 +77,21 @@ struct TaskKanbanView: View {
                             newCardTitle = ""
                             newCardFocused = true
                         } label: {
-                            Image(systemName: "plus").frame(width: 22, height: 24).contentShape(Rectangle())
+                            Image(systemName: "plus")
+                                .font(.system(size: QuickAddBarStyle.iconSize))
+                                .foregroundStyle(QuickAddBarStyle.iconColor)
+                                .frame(width: 22, height: 24).contentShape(Rectangle())
                         }.buttonStyle(.plain).help("添加任务").accessibilityLabel("在" + (group.label ?? "此分组") + "添加任务")
                     }
                 }
                 .padding(.horizontal, WFSpace.sm)
 
                 if allowsCreation, addingGroupID == group.id {
-                    TextField("任务标题", text: $newCardTitle)
+                    // 添加卡的占位符走待办框唯一真源（AppKit/SwiftUI 默认灰偏深）。
+                    TextField("任务标题", text: $newCardTitle,
+                              prompt: Text("任务标题").foregroundStyle(QuickAddBarStyle.placeholderColor))
                         .textFieldStyle(.plain).font(WFType.listBody)
+                        .foregroundStyle(WFColors.text)
                         .focused($newCardFocused)
                         .padding(WFSpace.sm)
                         .background(WFColors.content, in: RoundedRectangle(cornerRadius: WFMetrics.corner))

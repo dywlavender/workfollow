@@ -18,6 +18,8 @@ enum QuickAddBarStyle {
     static let panelIconColor = WFColors.accent
     /// 占位符颜色（映射到 NSTextField 的 secondaryLabel，≈ 0x7F8D92）。
     static let placeholderNSColor = NSColor.secondaryLabelColor
+    /// SwiftUI 侧的同一份占位符灰（小卡/看板添加卡的 `TextField` prompt 用）。
+    static let placeholderColor = WFColors.secondaryText
     /// 「⌘N」角标比占位符再退半档。
     static let shortcutColor = WFColors.tertiaryText
     /// 未选中的条底。

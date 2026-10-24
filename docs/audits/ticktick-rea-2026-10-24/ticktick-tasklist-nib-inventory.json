@@ -1,0 +1,6329 @@
+{
+  "meta": {
+    "scope": "任务列表区（task list）静态证据：主控制器 + 标准/详细行 + 分组头 + 快速添加条 + 倒计时行 + 空态",
+    "source": "/Applications/TickTick.app 8.0.80 (NIBArchive)",
+    "tool": "docs/audits/ticktick-rea-2026-10-17/scripts/parse_nibarchive.py"
+  },
+  "nibs": [
+    {
+      "file": "TTTaskListViewController.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTTaskListViewController.nib",
+      "size_bytes": 27963,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 482,
+        "offset_objects": 50,
+        "key_count": 187,
+        "offset_keys": 1962,
+        "value_count": 2415,
+        "offset_values": 5547,
+        "class_name_count": 32,
+        "offset_class_names": 27452,
+        "file_size": 27963
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "IBClassReference",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibConnector",
+        "NSStackView",
+        "NSClassSwapper",
+        "NSArray",
+        "NSLayoutConstraint",
+        "NSButtonCell",
+        "NSFont",
+        "NSCustomResource",
+        "NSValue",
+        "NSStackViewContainer",
+        "NSNibOutletConnector",
+        "NSTextFieldCell",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSAppearance",
+        "_NSCornerView",
+        "NSTableColumn",
+        "NSTableHeaderCell",
+        "NSFontDescriptor",
+        "NSDictionary",
+        "NSNumber",
+        "NSClipView",
+        "NSPanGestureRecognizer",
+        "NSNibControlConnector"
+      ],
+      "files_owner_class": "_TtC8TickTick24TTTaskListViewController",
+      "root": {
+        "object": 258,
+        "cls": "NSView",
+        "original_class": "NSView",
+        "frame": {
+          "raw": "{596, 744}",
+          "w": 596.0,
+          "h": 744.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{596, 744}",
+        "design_size_wh": [
+          596.0,
+          744.0
+        ],
+        "class": "NSView"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick10TTScroller",
+        "_TtC8TickTick12TTScrollView",
+        "_TtC8TickTick13TTThemeButton",
+        "_TtC8TickTick21TTTaskListOutlineView",
+        "_TtC8TickTick23TTTaskListConditionView",
+        "_TtC8TickTick24TTTaskListViewController",
+        "_TtC8TickTick25TTTaskListEmptyHolderView",
+        "_TtC8TickTick28TTListNameEditBackgroundView",
+        "_TtC8TickTick7TTLabel"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSButton",
+        "NSButtonCell",
+        "NSClipView",
+        "NSLayoutConstraint",
+        "NSOutlineView",
+        "NSScrollView",
+        "NSScroller",
+        "NSStackView",
+        "NSStackViewContainer",
+        "NSTableHeaderCell",
+        "NSTextField",
+        "NSTextFieldCell",
+        "NSView",
+        "_NSCornerView"
+      ],
+      "outlets": [
+        {
+          "name": "aiRecTaskButton",
+          "destination_object": 13,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{28, 28}"
+        },
+        {
+          "name": "closeButton",
+          "destination_object": 65,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 10}, {28, 28}}"
+        },
+        {
+          "name": "closeButtonTailingLC",
+          "destination_object": 77,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "conditionBar",
+          "destination_object": 89,
+          "destination_class": "_TtC8TickTick23TTTaskListConditionView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{0, 588}, {595, 40}}"
+        },
+        {
+          "name": "conditionBarHeightConstraint",
+          "destination_object": 115,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "emptyHolderView",
+          "destination_object": 120,
+          "destination_class": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{596, 744}"
+        },
+        {
+          "name": "emptyTrashButton",
+          "destination_object": 48,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{102, 0}, {28, 28}}"
+        },
+        {
+          "name": "hamburgerButton",
+          "destination_object": 78,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{18, 10}, {28, 28}}"
+        },
+        {
+          "name": "hamburgerButtonRightLC",
+          "destination_object": 129,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "inputContainer",
+          "destination_object": 189,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{0, 628}, {595, 58}}"
+        },
+        {
+          "name": "inputContainerHeightLC",
+          "destination_object": 192,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "moreButton",
+          "destination_object": 39,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{68, 0}, {28, 28}}"
+        },
+        {
+          "name": "outlineOffsetDivider",
+          "destination_object": 199,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{0, 585}, {596, 3}}"
+        },
+        {
+          "name": "outlineView",
+          "destination_object": 205,
+          "destination_class": "_TtC8TickTick21TTTaskListOutlineView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{596, 584}"
+        },
+        {
+          "name": "projectNameEditBackgroundLeadingLC",
+          "destination_object": 174,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "projectNameEditBackgroundView",
+          "destination_object": 147,
+          "destination_class": "_TtC8TickTick28TTListNameEditBackgroundView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{79, 6}, {127, 36}}"
+        },
+        {
+          "name": "saveFilterButton",
+          "destination_object": 141,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{504, 8}, {82, 32}}"
+        },
+        {
+          "name": "shareButton",
+          "destination_object": 132,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{204, 10}, {28, 28}}"
+        },
+        {
+          "name": "sortButton",
+          "destination_object": 30,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{34, 0}, {28, 28}}"
+        },
+        {
+          "name": "titleLabel",
+          "destination_object": 150,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{83, 10}, {119, 28}}"
+        },
+        {
+          "name": "view",
+          "destination_object": 258,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{596, 744}"
+        },
+        {
+          "name": "dataSource",
+          "destination_object": 2,
+          "destination_class": "NSCustomObject",
+          "destination_kind": "view_or_controller",
+          "destination_frame": null
+        },
+        {
+          "name": "delegate",
+          "destination_object": 2,
+          "destination_class": "NSCustomObject",
+          "destination_kind": "view_or_controller",
+          "destination_frame": null
+        },
+        {
+          "name": "dateButton",
+          "destination_object": 93,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{20, 6}, {80, 24}}"
+        },
+        {
+          "name": "listsButton",
+          "destination_object": 101,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{110, 6}, {74, 24}}"
+        },
+        {
+          "name": "statusButton",
+          "destination_object": 109,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{278, 6}, {84, 24}}"
+        },
+        {
+          "name": "tagsButton",
+          "destination_object": 105,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{194, 6}, {74, 24}}"
+        }
+      ],
+      "actions": [
+        {
+          "selector": "aiRecTaskButtonClicked:",
+          "source_object": 13,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{28, 28}"
+        },
+        {
+          "selector": "hamburgerButtonClicked:",
+          "source_object": 78,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{18, 10}, {28, 28}}"
+        },
+        {
+          "selector": "closeButtonClicked:",
+          "source_object": 65,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{53, 10}, {28, 28}}"
+        },
+        {
+          "selector": "dateButtonClicked:",
+          "source_object": 93,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{20, 6}, {80, 24}}"
+        },
+        {
+          "selector": "statusButtonClicked:",
+          "source_object": 109,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{278, 6}, {84, 24}}"
+        },
+        {
+          "selector": "listsButtonClicked:",
+          "source_object": 101,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{110, 6}, {74, 24}}"
+        },
+        {
+          "selector": "moreButtonClicked:",
+          "source_object": 39,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{68, 0}, {28, 28}}"
+        },
+        {
+          "selector": "sortButtonClicked:",
+          "source_object": 30,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{34, 0}, {28, 28}}"
+        },
+        {
+          "selector": "saveFilterButtonClicked:",
+          "source_object": 141,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{504, 8}, {82, 32}}"
+        },
+        {
+          "selector": "tagButtonClicked:",
+          "source_object": 105,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{194, 6}, {74, 24}}"
+        },
+        {
+          "selector": "emptyTrashButtonClicked:",
+          "source_object": 48,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{102, 0}, {28, 28}}"
+        },
+        {
+          "selector": "shareButtonClicked:",
+          "source_object": 132,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{204, 10}, {28, 28}}"
+        }
+      ],
+      "connector_notes": [
+        {
+          "cls": "NSNibConnector",
+          "label": "Encoding NSStackView requires being decoded before other connections with an early decoding order priority of 999980.",
+          "source_class": "NSStackView"
+        }
+      ],
+      "counts": {
+        "objects": 482,
+        "connections": 39,
+        "outlets": 27,
+        "actions": 12,
+        "distinct_actions": 12,
+        "views": 28,
+        "cells": 15
+      },
+      "distinct_actions": [
+        "aiRecTaskButtonClicked:",
+        "hamburgerButtonClicked:",
+        "closeButtonClicked:",
+        "dateButtonClicked:",
+        "statusButtonClicked:",
+        "listsButtonClicked:",
+        "moreButtonClicked:",
+        "sortButtonClicked:",
+        "saveFilterButtonClicked:",
+        "tagButtonClicked:",
+        "emptyTrashButtonClicked:",
+        "shareButtonClicked:"
+      ],
+      "texts": [
+        "All Dates",
+        "All Lists",
+        "All Tags",
+        "All Status",
+        "Save as filter",
+        "LIST TITLE",
+        "Text Cell"
+      ],
+      "text_details": [
+        {
+          "text": "All Dates",
+          "from_object": 95,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        },
+        {
+          "text": "All Lists",
+          "from_object": 103,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        },
+        {
+          "text": "All Tags",
+          "from_object": 107,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        },
+        {
+          "text": "All Status",
+          "from_object": 111,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        },
+        {
+          "text": "Save as filter",
+          "from_object": 145,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        },
+        {
+          "text": "LIST TITLE",
+          "from_object": 156,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        },
+        {
+          "text": "Text Cell",
+          "from_object": 234,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick21TTTaskListOutlineView"
+        }
+      ],
+      "images": [
+        "ai_rec_task",
+        "sort",
+        "more",
+        "empty_trash",
+        "x_mark",
+        "hamburger_list_left",
+        "downward_triangle",
+        "share"
+      ],
+      "image_details": [
+        {
+          "name": "ai_rec_task",
+          "design_size": "{24, 24}",
+          "from_object": 21,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "sort",
+          "design_size": "{24, 24}",
+          "from_object": 35,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "more",
+          "design_size": "{24, 24}",
+          "from_object": 44,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "empty_trash",
+          "design_size": "{24, 24}",
+          "from_object": 53,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "x_mark",
+          "design_size": "{18, 18}",
+          "from_object": 70,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "hamburger_list_left",
+          "design_size": "{24, 24}",
+          "from_object": 83,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "downward_triangle",
+          "design_size": "{20, 20}",
+          "from_object": 95,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "share",
+          "design_size": "{24, 24}",
+          "from_object": 137,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        }
+      ],
+      "frames": [
+        {
+          "object": 11,
+          "cls": "NSStackView",
+          "original_class": "NSStackView",
+          "frame_key": "NSFrame",
+          "frame": "{{450, 10}, {130, 28}}",
+          "superview": 130,
+          "x": 450.0,
+          "y": 10.0,
+          "w": 130.0,
+          "h": 28.0
+        },
+        {
+          "object": 13,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrameSize",
+          "frame": "{28, 28}",
+          "superview": 11,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 30,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{34, 0}, {28, 28}}",
+          "superview": 11,
+          "x": 34.0,
+          "y": 0.0,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 39,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{68, 0}, {28, 28}}",
+          "superview": 11,
+          "x": 68.0,
+          "y": 0.0,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 48,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{102, 0}, {28, 28}}",
+          "superview": 11,
+          "x": 102.0,
+          "y": 0.0,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 58,
+          "cls": "NSStackViewContainer",
+          "original_class": "NSStackViewContainer",
+          "frame_key": "NSFrameSize",
+          "frame": "{0, 0}",
+          "superview": null,
+          "w": 0.0,
+          "h": 0.0
+        },
+        {
+          "object": 65,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 10}, {28, 28}}",
+          "superview": 130,
+          "x": 53.0,
+          "y": 10.0,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 78,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{18, 10}, {28, 28}}",
+          "superview": 130,
+          "x": 18.0,
+          "y": 10.0,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 89,
+          "cls": "_TtC8TickTick23TTTaskListConditionView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 588}, {595, 40}}",
+          "superview": 258,
+          "x": 0.0,
+          "y": 588.0,
+          "w": 595.0,
+          "h": 40.0
+        },
+        {
+          "object": 93,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{20, 6}, {80, 24}}",
+          "superview": 89,
+          "x": 20.0,
+          "y": 6.0,
+          "w": 80.0,
+          "h": 24.0
+        },
+        {
+          "object": 101,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{110, 6}, {74, 24}}",
+          "superview": 89,
+          "x": 110.0,
+          "y": 6.0,
+          "w": 74.0,
+          "h": 24.0
+        },
+        {
+          "object": 105,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{194, 6}, {74, 24}}",
+          "superview": 89,
+          "x": 194.0,
+          "y": 6.0,
+          "w": 74.0,
+          "h": 24.0
+        },
+        {
+          "object": 109,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{278, 6}, {84, 24}}",
+          "superview": 89,
+          "x": 278.0,
+          "y": 6.0,
+          "w": 84.0,
+          "h": 24.0
+        },
+        {
+          "object": 120,
+          "cls": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{596, 744}",
+          "superview": 258,
+          "w": 596.0,
+          "h": 744.0
+        },
+        {
+          "object": 130,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 686}, {596, 48}}",
+          "superview": 258,
+          "x": 0.0,
+          "y": 686.0,
+          "w": 596.0,
+          "h": 48.0
+        },
+        {
+          "object": 132,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{204, 10}, {28, 28}}",
+          "superview": 130,
+          "x": 204.0,
+          "y": 10.0,
+          "w": 28.0,
+          "h": 28.0
+        },
+        {
+          "object": 141,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{504, 8}, {82, 32}}",
+          "superview": 130,
+          "x": 504.0,
+          "y": 8.0,
+          "w": 82.0,
+          "h": 32.0
+        },
+        {
+          "object": 147,
+          "cls": "_TtC8TickTick28TTListNameEditBackgroundView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{79, 6}, {127, 36}}",
+          "superview": 130,
+          "x": 79.0,
+          "y": 6.0,
+          "w": 127.0,
+          "h": 36.0
+        },
+        {
+          "object": 150,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{83, 10}, {119, 28}}",
+          "superview": 130,
+          "x": 83.0,
+          "y": 10.0,
+          "w": 119.0,
+          "h": 28.0
+        },
+        {
+          "object": 189,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 628}, {595, 58}}",
+          "superview": 258,
+          "x": 0.0,
+          "y": 628.0,
+          "w": 595.0,
+          "h": 58.0
+        },
+        {
+          "object": 199,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 585}, {596, 3}}",
+          "superview": 258,
+          "x": 0.0,
+          "y": 585.0,
+          "w": 596.0,
+          "h": 3.0
+        },
+        {
+          "object": 205,
+          "cls": "_TtC8TickTick21TTTaskListOutlineView",
+          "original_class": "NSOutlineView",
+          "frame_key": "NSFrameSize",
+          "frame": "{596, 584}",
+          "superview": 264,
+          "w": 596.0,
+          "h": 584.0
+        },
+        {
+          "object": 214,
+          "cls": "_NSCornerView",
+          "original_class": "_NSCornerView",
+          "frame_key": "NSFrameSize",
+          "frame": "{17, 28}",
+          "superview": null,
+          "w": 17.0,
+          "h": 28.0
+        },
+        {
+          "object": 258,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{596, 744}",
+          "superview": null,
+          "w": 596.0,
+          "h": 744.0
+        },
+        {
+          "object": 260,
+          "cls": "_TtC8TickTick12TTScrollView",
+          "original_class": "NSScrollView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 4}, {596, 584}}",
+          "superview": 258,
+          "x": 0.0,
+          "y": 4.0,
+          "w": 596.0,
+          "h": 584.0
+        },
+        {
+          "object": 264,
+          "cls": "NSClipView",
+          "original_class": "NSClipView",
+          "frame_key": "NSFrameSize",
+          "frame": "{596, 584}",
+          "superview": 260,
+          "w": 596.0,
+          "h": 584.0
+        },
+        {
+          "object": 266,
+          "cls": "_TtC8TickTick10TTScroller",
+          "original_class": "NSScroller",
+          "frame_key": "NSFrame",
+          "frame": "{{-100, -100}, {581, 15}}",
+          "superview": 260,
+          "x": -100.0,
+          "y": -100.0,
+          "w": 581.0,
+          "h": 15.0
+        },
+        {
+          "object": 271,
+          "cls": "_TtC8TickTick10TTScroller",
+          "original_class": "NSScroller",
+          "frame_key": "NSFrame",
+          "frame": "{{581, 0}, {15, 604}}",
+          "superview": 260,
+          "x": 581.0,
+          "y": 0.0,
+          "w": 15.0,
+          "h": 604.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 13,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{28, 28}",
+          "outlet": "aiRecTaskButton",
+          "text": null,
+          "image": "ai_rec_task",
+          "image_design_size": "{24, 24}",
+          "action": "aiRecTaskButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 30,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{34, 0}, {28, 28}}",
+          "outlet": "sortButton",
+          "text": null,
+          "image": "sort",
+          "image_design_size": "{24, 24}",
+          "action": "sortButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 39,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{68, 0}, {28, 28}}",
+          "outlet": "moreButton",
+          "text": null,
+          "image": "more",
+          "image_design_size": "{24, 24}",
+          "action": "moreButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 48,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{102, 0}, {28, 28}}",
+          "outlet": "emptyTrashButton",
+          "text": null,
+          "image": "empty_trash",
+          "image_design_size": "{24, 24}",
+          "action": "emptyTrashButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 65,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{53, 10}, {28, 28}}",
+          "outlet": "closeButton",
+          "text": null,
+          "image": "x_mark",
+          "image_design_size": "{18, 18}",
+          "action": "closeButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 78,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{18, 10}, {28, 28}}",
+          "outlet": "hamburgerButton",
+          "text": null,
+          "image": "hamburger_list_left",
+          "image_design_size": "{24, 24}",
+          "action": "hamburgerButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 89,
+          "cls": "_TtC8TickTick23TTTaskListConditionView",
+          "original_class": "NSView",
+          "frame": "{{0, 588}, {595, 40}}",
+          "outlet": "conditionBar",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 93,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{20, 6}, {80, 24}}",
+          "outlet": "dateButton",
+          "text": "All Dates",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "action": "dateButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 101,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{110, 6}, {74, 24}}",
+          "outlet": "listsButton",
+          "text": "All Lists",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "action": "listsButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 105,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{194, 6}, {74, 24}}",
+          "outlet": "tagsButton",
+          "text": "All Tags",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "action": "tagButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 109,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{278, 6}, {84, 24}}",
+          "outlet": "statusButton",
+          "text": "All Status",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "action": "statusButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 120,
+          "cls": "_TtC8TickTick25TTTaskListEmptyHolderView",
+          "original_class": "NSView",
+          "frame": "{596, 744}",
+          "outlet": "emptyHolderView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 132,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{204, 10}, {28, 28}}",
+          "outlet": "shareButton",
+          "text": null,
+          "image": "share",
+          "image_design_size": "{24, 24}",
+          "action": "shareButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 141,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{504, 8}, {82, 32}}",
+          "outlet": "saveFilterButton",
+          "text": "Save as filter",
+          "image": null,
+          "image_design_size": null,
+          "action": "saveFilterButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 147,
+          "cls": "_TtC8TickTick28TTListNameEditBackgroundView",
+          "original_class": "NSView",
+          "frame": "{{79, 6}, {127, 36}}",
+          "outlet": "projectNameEditBackgroundView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 150,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{83, 10}, {119, 28}}",
+          "outlet": "titleLabel",
+          "text": "LIST TITLE",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 189,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{0, 628}, {595, 58}}",
+          "outlet": "inputContainer",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 199,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{0, 585}, {596, 3}}",
+          "outlet": "outlineOffsetDivider",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 205,
+          "cls": "_TtC8TickTick21TTTaskListOutlineView",
+          "original_class": "NSOutlineView",
+          "frame": "{596, 584}",
+          "outlet": "outlineView",
+          "text": "Text Cell",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 258,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{596, 744}",
+          "outlet": "view",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 2,
+          "cls": "NSCustomObject",
+          "original_class": "NSCustomObject",
+          "frame": null,
+          "outlet": "dataSource",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 77,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "closeButtonTailingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 115,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "conditionBarHeightConstraint",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 129,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "hamburgerButtonRightLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 174,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "projectNameEditBackgroundLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListViewController.nib",
+          "object": 192,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "inputContainerHeightLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        }
+      ],
+      "cells": [
+        {
+          "object": 21,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "ai_rec_task",
+          "image_design_size": "{24, 24}",
+          "control_view": 13
+        },
+        {
+          "object": 35,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "sort",
+          "image_design_size": "{24, 24}",
+          "control_view": 30
+        },
+        {
+          "object": 44,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "more",
+          "image_design_size": "{24, 24}",
+          "control_view": 39
+        },
+        {
+          "object": 53,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "empty_trash",
+          "image_design_size": "{24, 24}",
+          "control_view": 48
+        },
+        {
+          "object": 70,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "x_mark",
+          "image_design_size": "{18, 18}",
+          "control_view": 65
+        },
+        {
+          "object": 83,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "hamburger_list_left",
+          "image_design_size": "{24, 24}",
+          "control_view": 78
+        },
+        {
+          "object": 95,
+          "cls": "NSButtonCell",
+          "text": "All Dates",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "control_view": 93
+        },
+        {
+          "object": 103,
+          "cls": "NSButtonCell",
+          "text": "All Lists",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "control_view": 101
+        },
+        {
+          "object": 107,
+          "cls": "NSButtonCell",
+          "text": "All Tags",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "control_view": 105
+        },
+        {
+          "object": 111,
+          "cls": "NSButtonCell",
+          "text": "All Status",
+          "image": "downward_triangle",
+          "image_design_size": "{20, 20}",
+          "control_view": 109
+        },
+        {
+          "object": 137,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "share",
+          "image_design_size": "{24, 24}",
+          "control_view": 132
+        },
+        {
+          "object": 145,
+          "cls": "NSButtonCell",
+          "text": "Save as filter",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 141
+        },
+        {
+          "object": 156,
+          "cls": "NSTextFieldCell",
+          "text": "LIST TITLE",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 150
+        },
+        {
+          "object": 219,
+          "cls": "NSTableHeaderCell",
+          "text": "",
+          "image": null,
+          "image_design_size": null,
+          "control_view": null
+        },
+        {
+          "object": 234,
+          "cls": "NSTextFieldCell",
+          "text": "Text Cell",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 205
+        }
+      ],
+      "object_class_histogram": {
+        "NSNumber": 138,
+        "NSString": 128,
+        "NSLayoutConstraint": 56,
+        "NSNibOutletConnector": 27,
+        "NSClassSwapper": 24,
+        "NSArray": 19,
+        "NSColor": 13,
+        "NSButtonCell": 12,
+        "NSNibControlConnector": 12,
+        "NSMutableArray": 10,
+        "NSCustomResource": 8,
+        "NSValue": 8,
+        "NSFont": 3,
+        "IBClassReference": 2,
+        "NSColorSpace": 2,
+        "NSCustomObject": 2,
+        "NSData": 2,
+        "NSTextFieldCell": 2,
+        "NSAppearance": 1,
+        "NSClipView": 1,
+        "NSDictionary": 1,
+        "NSFontDescriptor": 1,
+        "NSIBObjectData": 1,
+        "NSMutableSet": 1,
+        "NSNibConnector": 1,
+        "NSObject": 1,
+        "NSPanGestureRecognizer": 1,
+        "NSStackView": 1,
+        "NSStackViewContainer": 1,
+        "NSTableColumn": 1,
+        "NSTableHeaderCell": 1,
+        "_NSCornerView": 1
+      }
+    },
+    {
+      "file": "TTTaskListStandardCell.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTTaskListStandardCell.nib",
+      "size_bytes": 22406,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 393,
+        "offset_objects": 50,
+        "key_count": 117,
+        "offset_keys": 1602,
+        "value_count": 1952,
+        "offset_values": 3559,
+        "class_name_count": 24,
+        "offset_class_names": 22045,
+        "file_size": 22406
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibOutletConnector",
+        "NSClassSwapper",
+        "NSArray",
+        "NSLayoutConstraint",
+        "NSImageCell",
+        "NSCustomResource",
+        "NSValue",
+        "NSButtonCell",
+        "NSFont",
+        "NSTextFieldCell",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSImageView",
+        "NSAppearance",
+        "NSNibControlConnector",
+        "IBClassReference",
+        "NSNumber"
+      ],
+      "files_owner_class": "NSObject",
+      "root": {
+        "object": 7,
+        "cls": "_TtC8TickTick22TTTaskListStandardCell",
+        "original_class": "NSView",
+        "frame": {
+          "raw": "{618, 74}",
+          "w": 618.0,
+          "h": 74.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{618, 74}",
+        "design_size_wh": [
+          618.0,
+          74.0
+        ],
+        "class": "_TtC8TickTick22TTTaskListStandardCell"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick14TTListNameView",
+        "_TtC8TickTick14TTToolTipLabel",
+        "_TtC8TickTick17TTToolTipNSButton",
+        "_TtC8TickTick18TTTaskListTagsView",
+        "_TtC8TickTick20TTHoverableImageView",
+        "_TtC8TickTick22TTTaskListStandardCell",
+        "_TtC8TickTick23TTTaskListCellTextField",
+        "_TtC8TickTick23TTTaskProgressIndicator",
+        "_TtC8TickTick8TTButton"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSButton",
+        "NSButtonCell",
+        "NSImageCell",
+        "NSImageView",
+        "NSLayoutConstraint",
+        "NSObject",
+        "NSTextField",
+        "NSTextFieldCell",
+        "NSView"
+      ],
+      "outlets": [
+        {
+          "name": "assigneeAvatarLeading",
+          "destination_object": 199,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "assigneeButton",
+          "destination_object": 139,
+          "destination_class": "_TtC8TickTick17TTToolTipNSButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{580, 28}, {18, 18}}"
+        },
+        {
+          "name": "attachmentIcon",
+          "destination_object": 95,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{461, 30}, {14, 14}}"
+        },
+        {
+          "name": "attachmentIconLeading",
+          "destination_object": 181,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "checkboxButton",
+          "destination_object": 45,
+          "destination_class": "_TtC8TickTick8TTButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{32, 29}, {17, 17}}"
+        },
+        {
+          "name": "checkboxLeadingLC",
+          "destination_object": 163,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "checkboxWidthLC",
+          "destination_object": 50,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "commentIcon",
+          "destination_object": 84,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{445, 30}, {14, 14}}"
+        },
+        {
+          "name": "commentIconLeading",
+          "destination_object": 177,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "contentIcon",
+          "destination_object": 111,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{493, 30}, {14, 14}}"
+        },
+        {
+          "name": "contentIconLeading",
+          "destination_object": 189,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "dateLabel",
+          "destination_object": 130,
+          "destination_class": "_TtC8TickTick14TTToolTipLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{539, 30}, {29, 14}}"
+        },
+        {
+          "name": "dateLabelLeading",
+          "destination_object": 200,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "dragIndicator",
+          "destination_object": 11,
+          "destination_class": "_TtC8TickTick20TTHoverableImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{2, 31}, {12, 12}}"
+        },
+        {
+          "name": "listNameLeading",
+          "destination_object": 171,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "listNameView",
+          "destination_object": 146,
+          "destination_class": "_TtC8TickTick14TTListNameView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{385, 27}, {40, 20}}"
+        },
+        {
+          "name": "progressIcon",
+          "destination_object": 127,
+          "destination_class": "_TtC8TickTick23TTTaskProgressIndicator",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{525, 30}, {14, 14}}"
+        },
+        {
+          "name": "progressIconLeading",
+          "destination_object": 197,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "reminderIcon",
+          "destination_object": 119,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{509, 30}, {14, 14}}"
+        },
+        {
+          "name": "reminderIconLeading",
+          "destination_object": 193,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "repeatIcon",
+          "destination_object": 103,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{477, 30}, {14, 14}}"
+        },
+        {
+          "name": "repeatIconLeading",
+          "destination_object": 185,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "subtaskIcon",
+          "destination_object": 76,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{429, 30}, {14, 14}}"
+        },
+        {
+          "name": "subtaskIconLeading",
+          "destination_object": 173,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "tagsView",
+          "destination_object": 151,
+          "destination_class": "_TtC8TickTick18TTTaskListTagsView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{281, 28}, {100, 18}}"
+        },
+        {
+          "name": "tagsViewLeading",
+          "destination_object": 170,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "titleTextField",
+          "destination_object": 61,
+          "destination_class": "_TtC8TickTick23TTTaskListCellTextField",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 29}, {224, 17}}"
+        },
+        {
+          "name": "titleTextFieldLeading",
+          "destination_object": 166,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "triangleImageView",
+          "destination_object": 35,
+          "destination_class": "_TtC8TickTick20TTHoverableImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{16, 0}, {16, 74}}"
+        }
+      ],
+      "actions": [
+        {
+          "selector": "assigneeButtonClicked:",
+          "source_object": 139,
+          "source_class": "_TtC8TickTick17TTToolTipNSButton",
+          "source_frame": "{{580, 28}, {18, 18}}"
+        },
+        {
+          "selector": "checkButtonClicked:",
+          "source_object": 45,
+          "source_class": "_TtC8TickTick8TTButton",
+          "source_frame": "{{32, 29}, {17, 17}}"
+        }
+      ],
+      "connector_notes": [],
+      "counts": {
+        "objects": 393,
+        "connections": 31,
+        "outlets": 29,
+        "actions": 2,
+        "distinct_actions": 2,
+        "views": 16,
+        "cells": 12
+      },
+      "distinct_actions": [
+        "assigneeButtonClicked:",
+        "checkButtonClicked:"
+      ],
+      "texts": [
+        "LabelLabelLa",
+        "Date"
+      ],
+      "text_details": [
+        {
+          "text": "LabelLabelLa",
+          "from_object": 66,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick23TTTaskListCellTextField"
+        },
+        {
+          "text": "Date",
+          "from_object": 135,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick14TTToolTipLabel"
+        }
+      ],
+      "images": [
+        "drag_indicator",
+        "arrow_down",
+        "checkbox",
+        "subtask_mini",
+        "comment_mini",
+        "attachment_mini",
+        "repeat_mini",
+        "text_mini",
+        "reminder_mini"
+      ],
+      "image_details": [
+        {
+          "name": "drag_indicator",
+          "design_size": "{12, 12}",
+          "from_object": 29,
+          "cell_class": "NSImageCell",
+          "owner": "_TtC8TickTick20TTHoverableImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "arrow_down",
+          "design_size": "{12, 12}",
+          "from_object": 41,
+          "cell_class": "NSImageCell",
+          "owner": "_TtC8TickTick20TTHoverableImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "checkbox",
+          "design_size": "{24, 24}",
+          "from_object": 53,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick8TTButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "subtask_mini",
+          "design_size": "{12, 12}",
+          "from_object": 80,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "comment_mini",
+          "design_size": "{12, 12}",
+          "from_object": 91,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "attachment_mini",
+          "design_size": "{12, 12}",
+          "from_object": 99,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "repeat_mini",
+          "design_size": "{12, 12}",
+          "from_object": 107,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "text_mini",
+          "design_size": "{12, 12}",
+          "from_object": 115,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "reminder_mini",
+          "design_size": "{12, 12}",
+          "from_object": 123,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        }
+      ],
+      "frames": [
+        {
+          "object": 7,
+          "cls": "_TtC8TickTick22TTTaskListStandardCell",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{618, 74}",
+          "superview": null,
+          "w": 618.0,
+          "h": 74.0
+        },
+        {
+          "object": 11,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{2, 31}, {12, 12}}",
+          "superview": 7,
+          "x": 2.0,
+          "y": 31.0,
+          "w": 12.0,
+          "h": 12.0
+        },
+        {
+          "object": 35,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{16, 0}, {16, 74}}",
+          "superview": 7,
+          "x": 16.0,
+          "y": 0.0,
+          "w": 16.0,
+          "h": 74.0
+        },
+        {
+          "object": 45,
+          "cls": "_TtC8TickTick8TTButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{32, 29}, {17, 17}}",
+          "superview": 7,
+          "x": 32.0,
+          "y": 29.0,
+          "w": 17.0,
+          "h": 17.0
+        },
+        {
+          "object": 61,
+          "cls": "_TtC8TickTick23TTTaskListCellTextField",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 29}, {224, 17}}",
+          "superview": 7,
+          "x": 53.0,
+          "y": 29.0,
+          "w": 224.0,
+          "h": 17.0
+        },
+        {
+          "object": 76,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{429, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 429.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 84,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{445, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 445.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 95,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{461, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 461.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 103,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{477, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 477.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 111,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{493, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 493.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 119,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{509, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 509.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 127,
+          "cls": "_TtC8TickTick23TTTaskProgressIndicator",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{525, 30}, {14, 14}}",
+          "superview": 7,
+          "x": 525.0,
+          "y": 30.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 130,
+          "cls": "_TtC8TickTick14TTToolTipLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{539, 30}, {29, 14}}",
+          "superview": 7,
+          "x": 539.0,
+          "y": 30.0,
+          "w": 29.0,
+          "h": 14.0
+        },
+        {
+          "object": 139,
+          "cls": "_TtC8TickTick17TTToolTipNSButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{580, 28}, {18, 18}}",
+          "superview": 7,
+          "x": 580.0,
+          "y": 28.0,
+          "w": 18.0,
+          "h": 18.0
+        },
+        {
+          "object": 146,
+          "cls": "_TtC8TickTick14TTListNameView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{385, 27}, {40, 20}}",
+          "superview": 7,
+          "x": 385.0,
+          "y": 27.0,
+          "w": 40.0,
+          "h": 20.0
+        },
+        {
+          "object": 151,
+          "cls": "_TtC8TickTick18TTTaskListTagsView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{281, 28}, {100, 18}}",
+          "superview": 7,
+          "x": 281.0,
+          "y": 28.0,
+          "w": 100.0,
+          "h": 18.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 11,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame": "{{2, 31}, {12, 12}}",
+          "outlet": "dragIndicator",
+          "text": null,
+          "image": "drag_indicator",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 35,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame": "{{16, 0}, {16, 74}}",
+          "outlet": "triangleImageView",
+          "text": null,
+          "image": "arrow_down",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 45,
+          "cls": "_TtC8TickTick8TTButton",
+          "original_class": "NSButton",
+          "frame": "{{32, 29}, {17, 17}}",
+          "outlet": "checkboxButton",
+          "text": null,
+          "image": "checkbox",
+          "image_design_size": "{24, 24}",
+          "action": "checkButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 61,
+          "cls": "_TtC8TickTick23TTTaskListCellTextField",
+          "original_class": "NSTextField",
+          "frame": "{{53, 29}, {224, 17}}",
+          "outlet": "titleTextField",
+          "text": "LabelLabelLa",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 76,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{429, 30}, {14, 14}}",
+          "outlet": "subtaskIcon",
+          "text": null,
+          "image": "subtask_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 84,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{445, 30}, {14, 14}}",
+          "outlet": "commentIcon",
+          "text": null,
+          "image": "comment_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 95,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{461, 30}, {14, 14}}",
+          "outlet": "attachmentIcon",
+          "text": null,
+          "image": "attachment_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 103,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{477, 30}, {14, 14}}",
+          "outlet": "repeatIcon",
+          "text": null,
+          "image": "repeat_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 111,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{493, 30}, {14, 14}}",
+          "outlet": "contentIcon",
+          "text": null,
+          "image": "text_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 119,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{509, 30}, {14, 14}}",
+          "outlet": "reminderIcon",
+          "text": null,
+          "image": "reminder_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 127,
+          "cls": "_TtC8TickTick23TTTaskProgressIndicator",
+          "original_class": "NSView",
+          "frame": "{{525, 30}, {14, 14}}",
+          "outlet": "progressIcon",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 130,
+          "cls": "_TtC8TickTick14TTToolTipLabel",
+          "original_class": "NSTextField",
+          "frame": "{{539, 30}, {29, 14}}",
+          "outlet": "dateLabel",
+          "text": "Date",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 139,
+          "cls": "_TtC8TickTick17TTToolTipNSButton",
+          "original_class": "NSButton",
+          "frame": "{{580, 28}, {18, 18}}",
+          "outlet": "assigneeButton",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": "assigneeButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 146,
+          "cls": "_TtC8TickTick14TTListNameView",
+          "original_class": "NSView",
+          "frame": "{{385, 27}, {40, 20}}",
+          "outlet": "listNameView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 151,
+          "cls": "_TtC8TickTick18TTTaskListTagsView",
+          "original_class": "NSView",
+          "frame": "{{281, 28}, {100, 18}}",
+          "outlet": "tagsView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 50,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "checkboxWidthLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 163,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "checkboxLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 166,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "titleTextFieldLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 170,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "tagsViewLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 171,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "listNameLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 173,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "subtaskIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 177,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "commentIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 181,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "attachmentIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 185,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "repeatIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 189,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "contentIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 193,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "reminderIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 197,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "progressIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 199,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "assigneeAvatarLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListStandardCell.nib",
+          "object": 200,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "dateLabelLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        }
+      ],
+      "cells": [
+        {
+          "object": 29,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "drag_indicator",
+          "image_design_size": "{12, 12}",
+          "control_view": 11
+        },
+        {
+          "object": 41,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "arrow_down",
+          "image_design_size": "{12, 12}",
+          "control_view": 35
+        },
+        {
+          "object": 53,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "checkbox",
+          "image_design_size": "{24, 24}",
+          "control_view": 45
+        },
+        {
+          "object": 66,
+          "cls": "NSTextFieldCell",
+          "text": "LabelLabelLa",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 61
+        },
+        {
+          "object": 80,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "subtask_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 76
+        },
+        {
+          "object": 91,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "comment_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 84
+        },
+        {
+          "object": 99,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "attachment_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 95
+        },
+        {
+          "object": 107,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "repeat_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 103
+        },
+        {
+          "object": 115,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "text_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 111
+        },
+        {
+          "object": 123,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "reminder_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 119
+        },
+        {
+          "object": 135,
+          "cls": "NSTextFieldCell",
+          "text": "Date",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 130
+        },
+        {
+          "object": 145,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 139
+        }
+      ],
+      "object_class_histogram": {
+        "NSNumber": 116,
+        "NSString": 94,
+        "NSLayoutConstraint": 55,
+        "NSNibOutletConnector": 29,
+        "NSArray": 13,
+        "NSMutableArray": 11,
+        "NSClassSwapper": 10,
+        "NSCustomResource": 9,
+        "NSMutableSet": 9,
+        "NSValue": 9,
+        "NSImageCell": 8,
+        "NSImageView": 6,
+        "NSColor": 5,
+        "NSFont": 3,
+        "NSButtonCell": 2,
+        "NSColorSpace": 2,
+        "NSCustomObject": 2,
+        "NSData": 2,
+        "NSNibControlConnector": 2,
+        "NSTextFieldCell": 2,
+        "IBClassReference": 1,
+        "NSAppearance": 1,
+        "NSIBObjectData": 1,
+        "NSObject": 1
+      }
+    },
+    {
+      "file": "TTTaskListDetailedCell.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTTaskListDetailedCell.nib",
+      "size_bytes": 26499,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 506,
+        "offset_objects": 50,
+        "key_count": 118,
+        "offset_keys": 2060,
+        "value_count": 2617,
+        "offset_values": 4028,
+        "class_name_count": 24,
+        "offset_class_names": 26138,
+        "file_size": 26499
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibOutletConnector",
+        "NSClassSwapper",
+        "NSArray",
+        "NSLayoutConstraint",
+        "NSImageCell",
+        "NSCustomResource",
+        "NSValue",
+        "NSButtonCell",
+        "NSFont",
+        "NSTextFieldCell",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSImageView",
+        "NSAppearance",
+        "NSNibControlConnector",
+        "IBClassReference",
+        "NSNumber"
+      ],
+      "files_owner_class": "NSObject",
+      "root": {
+        "object": 7,
+        "cls": "_TtC8TickTick22TTTaskListDetailedCell",
+        "original_class": "NSView",
+        "frame": {
+          "raw": "{691, 295}",
+          "w": 691.0,
+          "h": 295.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{691, 295}",
+        "design_size_wh": [
+          691.0,
+          295.0
+        ],
+        "class": "_TtC8TickTick22TTTaskListDetailedCell"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick14TTListNameView",
+        "_TtC8TickTick14TTToolTipLabel",
+        "_TtC8TickTick17TTToolTipNSButton",
+        "_TtC8TickTick18TTTaskListTagsView",
+        "_TtC8TickTick20TTHoverableImageView",
+        "_TtC8TickTick22TTTaskListDetailedCell",
+        "_TtC8TickTick23TTTaskListCellTextField",
+        "_TtC8TickTick23TTTaskProgressIndicator",
+        "_TtC8TickTick7TTLabel",
+        "_TtC8TickTick8TTButton"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSButton",
+        "NSButtonCell",
+        "NSImageCell",
+        "NSImageView",
+        "NSLayoutConstraint",
+        "NSObject",
+        "NSTextField",
+        "NSTextFieldCell",
+        "NSView"
+      ],
+      "outlets": [
+        {
+          "name": "assigneeAvatarLeading",
+          "destination_object": 257,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "assigneeButton",
+          "destination_object": 137,
+          "destination_class": "_TtC8TickTick17TTToolTipNSButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{653, 267}, {18, 18}}"
+        },
+        {
+          "name": "attachmentIcon",
+          "destination_object": 95,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{534, 269}, {14, 14}}"
+        },
+        {
+          "name": "attachmentIconLeading",
+          "destination_object": 239,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "checkboxButton",
+          "destination_object": 35,
+          "destination_class": "_TtC8TickTick8TTButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{32, 267}, {17, 17}}"
+        },
+        {
+          "name": "checkboxLeadingLC",
+          "destination_object": 209,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "checkboxTopLC",
+          "destination_object": 210,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "commentIcon",
+          "destination_object": 84,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{518, 269}, {14, 14}}"
+        },
+        {
+          "name": "commentIconLeading",
+          "destination_object": 235,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "contentIcon",
+          "destination_object": 111,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{566, 269}, {14, 14}}"
+        },
+        {
+          "name": "contentIconLeading",
+          "destination_object": 247,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "dateLabel",
+          "destination_object": 130,
+          "destination_class": "_TtC8TickTick14TTToolTipLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{612, 269}, {29, 14}}"
+        },
+        {
+          "name": "dateLabelLeading",
+          "destination_object": 258,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "dragIndicator",
+          "destination_object": 11,
+          "destination_class": "_TtC8TickTick20TTHoverableImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{2, 142}, {12, 12}}"
+        },
+        {
+          "name": "listNameLeading",
+          "destination_object": 229,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "listNameView",
+          "destination_object": 171,
+          "destination_class": "_TtC8TickTick14TTListNameView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{458, 266}, {40, 20}}"
+        },
+        {
+          "name": "noteDateLabel",
+          "destination_object": 165,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 228}, {25, 12}}"
+        },
+        {
+          "name": "progressIcon",
+          "destination_object": 127,
+          "destination_class": "_TtC8TickTick23TTTaskProgressIndicator",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{598, 269}, {14, 14}}"
+        },
+        {
+          "name": "progressIconLeading",
+          "destination_object": 255,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "reminderIcon",
+          "destination_object": 119,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{582, 269}, {14, 14}}"
+        },
+        {
+          "name": "reminderIconLeading",
+          "destination_object": 251,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "repeatIcon",
+          "destination_object": 103,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{550, 269}, {14, 14}}"
+        },
+        {
+          "name": "repeatIconLeading",
+          "destination_object": 243,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "secondarySearchContainerView",
+          "destination_object": 181,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 8}, {618, 18}}"
+        },
+        {
+          "name": "secondarySearchContainerViewHeightLC",
+          "destination_object": 198,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "secondarySearchImageView",
+          "destination_object": 183,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{0, 2}, {14, 14}}"
+        },
+        {
+          "name": "secondarySearchLabel",
+          "destination_object": 193,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{18, 2}, {600, 15}}"
+        },
+        {
+          "name": "subtaskIcon",
+          "destination_object": 67,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{502, 269}, {14, 14}}"
+        },
+        {
+          "name": "subtaskIconLeading",
+          "destination_object": 230,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "subtaskProgressLabel",
+          "destination_object": 75,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{518, 269}, {22, 14}}"
+        },
+        {
+          "name": "subtitleLabel",
+          "destination_object": 144,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{55, 246}, {616, 15}}"
+        },
+        {
+          "name": "subtitleTopLC",
+          "destination_object": 217,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "tagsView",
+          "destination_object": 176,
+          "destination_class": "_TtC8TickTick18TTTaskListTagsView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 34}, {618, 18}}"
+        },
+        {
+          "name": "tagsViewBottomLC",
+          "destination_object": 222,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "titleTextField",
+          "destination_object": 51,
+          "destination_class": "_TtC8TickTick23TTTaskListCellTextField",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 267}, {401, 17}}"
+        },
+        {
+          "name": "titleTextFieldLeading",
+          "destination_object": 213,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "triangleImageView",
+          "destination_object": 155,
+          "destination_class": "_TtC8TickTick20TTHoverableImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{16, 256}, {16, 39}}"
+        }
+      ],
+      "actions": [
+        {
+          "selector": "assigneeButtonClicked:",
+          "source_object": 137,
+          "source_class": "_TtC8TickTick17TTToolTipNSButton",
+          "source_frame": "{{653, 267}, {18, 18}}"
+        },
+        {
+          "selector": "checkButtonClicked:",
+          "source_object": 35,
+          "source_class": "_TtC8TickTick8TTButton",
+          "source_frame": "{{32, 267}, {17, 17}}"
+        }
+      ],
+      "connector_notes": [],
+      "counts": {
+        "objects": 506,
+        "connections": 39,
+        "outlets": 37,
+        "actions": 2,
+        "distinct_actions": 2,
+        "views": 22,
+        "cells": 17
+      },
+      "distinct_actions": [
+        "assigneeButtonClicked:",
+        "checkButtonClicked:"
+      ],
+      "texts": [
+        "LabelLabelLa",
+        "0/4",
+        "Date",
+        "Label"
+      ],
+      "text_details": [
+        {
+          "text": "LabelLabelLa",
+          "from_object": 57,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick23TTTaskListCellTextField"
+        },
+        {
+          "text": "0/4",
+          "from_object": 80,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        },
+        {
+          "text": "Date",
+          "from_object": 133,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick14TTToolTipLabel"
+        },
+        {
+          "text": "Label",
+          "from_object": 149,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        }
+      ],
+      "images": [
+        "drag_indicator",
+        "checkbox",
+        "subtask_mini",
+        "comment_mini",
+        "attachment_mini",
+        "repeat_mini",
+        "text_mini",
+        "reminder_mini",
+        "arrow_down",
+        "comment"
+      ],
+      "image_details": [
+        {
+          "name": "drag_indicator",
+          "design_size": "{12, 12}",
+          "from_object": 29,
+          "cell_class": "NSImageCell",
+          "owner": "_TtC8TickTick20TTHoverableImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "checkbox",
+          "design_size": "{24, 24}",
+          "from_object": 43,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick8TTButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "subtask_mini",
+          "design_size": "{12, 12}",
+          "from_object": 71,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "comment_mini",
+          "design_size": "{12, 12}",
+          "from_object": 91,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "attachment_mini",
+          "design_size": "{12, 12}",
+          "from_object": 99,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "repeat_mini",
+          "design_size": "{12, 12}",
+          "from_object": 107,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "text_mini",
+          "design_size": "{12, 12}",
+          "from_object": 115,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "reminder_mini",
+          "design_size": "{12, 12}",
+          "from_object": 123,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "arrow_down",
+          "design_size": "{12, 12}",
+          "from_object": 161,
+          "cell_class": "NSImageCell",
+          "owner": "_TtC8TickTick20TTHoverableImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "comment",
+          "design_size": "{24, 24}",
+          "from_object": 189,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        }
+      ],
+      "frames": [
+        {
+          "object": 7,
+          "cls": "_TtC8TickTick22TTTaskListDetailedCell",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{691, 295}",
+          "superview": null,
+          "w": 691.0,
+          "h": 295.0
+        },
+        {
+          "object": 11,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{2, 142}, {12, 12}}",
+          "superview": 7,
+          "x": 2.0,
+          "y": 142.0,
+          "w": 12.0,
+          "h": 12.0
+        },
+        {
+          "object": 35,
+          "cls": "_TtC8TickTick8TTButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{32, 267}, {17, 17}}",
+          "superview": 7,
+          "x": 32.0,
+          "y": 267.0,
+          "w": 17.0,
+          "h": 17.0
+        },
+        {
+          "object": 51,
+          "cls": "_TtC8TickTick23TTTaskListCellTextField",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 267}, {401, 17}}",
+          "superview": 7,
+          "x": 53.0,
+          "y": 267.0,
+          "w": 401.0,
+          "h": 17.0
+        },
+        {
+          "object": 67,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{502, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 502.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 75,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{518, 269}, {22, 14}}",
+          "superview": 7,
+          "x": 518.0,
+          "y": 269.0,
+          "w": 22.0,
+          "h": 14.0
+        },
+        {
+          "object": 84,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{518, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 518.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 95,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{534, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 534.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 103,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{550, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 550.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 111,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{566, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 566.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 119,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{582, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 582.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 127,
+          "cls": "_TtC8TickTick23TTTaskProgressIndicator",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{598, 269}, {14, 14}}",
+          "superview": 7,
+          "x": 598.0,
+          "y": 269.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 130,
+          "cls": "_TtC8TickTick14TTToolTipLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{612, 269}, {29, 14}}",
+          "superview": 7,
+          "x": 612.0,
+          "y": 269.0,
+          "w": 29.0,
+          "h": 14.0
+        },
+        {
+          "object": 137,
+          "cls": "_TtC8TickTick17TTToolTipNSButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{653, 267}, {18, 18}}",
+          "superview": 7,
+          "x": 653.0,
+          "y": 267.0,
+          "w": 18.0,
+          "h": 18.0
+        },
+        {
+          "object": 144,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{55, 246}, {616, 15}}",
+          "superview": 7,
+          "x": 55.0,
+          "y": 246.0,
+          "w": 616.0,
+          "h": 15.0
+        },
+        {
+          "object": 155,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{16, 256}, {16, 39}}",
+          "superview": 7,
+          "x": 16.0,
+          "y": 256.0,
+          "w": 16.0,
+          "h": 39.0
+        },
+        {
+          "object": 165,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 228}, {25, 12}}",
+          "superview": 7,
+          "x": 53.0,
+          "y": 228.0,
+          "w": 25.0,
+          "h": 12.0
+        },
+        {
+          "object": 171,
+          "cls": "_TtC8TickTick14TTListNameView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{458, 266}, {40, 20}}",
+          "superview": 7,
+          "x": 458.0,
+          "y": 266.0,
+          "w": 40.0,
+          "h": 20.0
+        },
+        {
+          "object": 176,
+          "cls": "_TtC8TickTick18TTTaskListTagsView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 34}, {618, 18}}",
+          "superview": 7,
+          "x": 53.0,
+          "y": 34.0,
+          "w": 618.0,
+          "h": 18.0
+        },
+        {
+          "object": 181,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 8}, {618, 18}}",
+          "superview": 7,
+          "x": 53.0,
+          "y": 8.0,
+          "w": 618.0,
+          "h": 18.0
+        },
+        {
+          "object": 183,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 2}, {14, 14}}",
+          "superview": 181,
+          "x": 0.0,
+          "y": 2.0,
+          "w": 14.0,
+          "h": 14.0
+        },
+        {
+          "object": 193,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{18, 2}, {600, 15}}",
+          "superview": 181,
+          "x": 18.0,
+          "y": 2.0,
+          "w": 600.0,
+          "h": 15.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 11,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame": "{{2, 142}, {12, 12}}",
+          "outlet": "dragIndicator",
+          "text": null,
+          "image": "drag_indicator",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 35,
+          "cls": "_TtC8TickTick8TTButton",
+          "original_class": "NSButton",
+          "frame": "{{32, 267}, {17, 17}}",
+          "outlet": "checkboxButton",
+          "text": null,
+          "image": "checkbox",
+          "image_design_size": "{24, 24}",
+          "action": "checkButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 51,
+          "cls": "_TtC8TickTick23TTTaskListCellTextField",
+          "original_class": "NSTextField",
+          "frame": "{{53, 267}, {401, 17}}",
+          "outlet": "titleTextField",
+          "text": "LabelLabelLa",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 67,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{502, 269}, {14, 14}}",
+          "outlet": "subtaskIcon",
+          "text": null,
+          "image": "subtask_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 75,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{518, 269}, {22, 14}}",
+          "outlet": "subtaskProgressLabel",
+          "text": "0/4",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 84,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{518, 269}, {14, 14}}",
+          "outlet": "commentIcon",
+          "text": null,
+          "image": "comment_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 95,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{534, 269}, {14, 14}}",
+          "outlet": "attachmentIcon",
+          "text": null,
+          "image": "attachment_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 103,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{550, 269}, {14, 14}}",
+          "outlet": "repeatIcon",
+          "text": null,
+          "image": "repeat_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 111,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{566, 269}, {14, 14}}",
+          "outlet": "contentIcon",
+          "text": null,
+          "image": "text_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 119,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{582, 269}, {14, 14}}",
+          "outlet": "reminderIcon",
+          "text": null,
+          "image": "reminder_mini",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 127,
+          "cls": "_TtC8TickTick23TTTaskProgressIndicator",
+          "original_class": "NSView",
+          "frame": "{{598, 269}, {14, 14}}",
+          "outlet": "progressIcon",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 130,
+          "cls": "_TtC8TickTick14TTToolTipLabel",
+          "original_class": "NSTextField",
+          "frame": "{{612, 269}, {29, 14}}",
+          "outlet": "dateLabel",
+          "text": "Date",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 137,
+          "cls": "_TtC8TickTick17TTToolTipNSButton",
+          "original_class": "NSButton",
+          "frame": "{{653, 267}, {18, 18}}",
+          "outlet": "assigneeButton",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": "assigneeButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 144,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{55, 246}, {616, 15}}",
+          "outlet": "subtitleLabel",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 155,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame": "{{16, 256}, {16, 39}}",
+          "outlet": "triangleImageView",
+          "text": null,
+          "image": "arrow_down",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 165,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{53, 228}, {25, 12}}",
+          "outlet": "noteDateLabel",
+          "text": "Date",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 171,
+          "cls": "_TtC8TickTick14TTListNameView",
+          "original_class": "NSView",
+          "frame": "{{458, 266}, {40, 20}}",
+          "outlet": "listNameView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 176,
+          "cls": "_TtC8TickTick18TTTaskListTagsView",
+          "original_class": "NSView",
+          "frame": "{{53, 34}, {618, 18}}",
+          "outlet": "tagsView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 181,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{53, 8}, {618, 18}}",
+          "outlet": "secondarySearchContainerView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 183,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{0, 2}, {14, 14}}",
+          "outlet": "secondarySearchImageView",
+          "text": null,
+          "image": "comment",
+          "image_design_size": "{24, 24}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 193,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{18, 2}, {600, 15}}",
+          "outlet": "secondarySearchLabel",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 198,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "secondarySearchContainerViewHeightLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 209,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "checkboxLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 210,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "checkboxTopLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 213,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "titleTextFieldLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 217,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "subtitleTopLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 222,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "tagsViewBottomLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 229,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "listNameLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 230,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "subtaskIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 235,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "commentIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 239,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "attachmentIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 243,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "repeatIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 247,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "contentIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 251,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "reminderIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 255,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "progressIconLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 257,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "assigneeAvatarLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListDetailedCell.nib",
+          "object": 258,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "dateLabelLeading",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        }
+      ],
+      "cells": [
+        {
+          "object": 29,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "drag_indicator",
+          "image_design_size": "{12, 12}",
+          "control_view": 11
+        },
+        {
+          "object": 43,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "checkbox",
+          "image_design_size": "{24, 24}",
+          "control_view": 35
+        },
+        {
+          "object": 57,
+          "cls": "NSTextFieldCell",
+          "text": "LabelLabelLa",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 51
+        },
+        {
+          "object": 71,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "subtask_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 67
+        },
+        {
+          "object": 80,
+          "cls": "NSTextFieldCell",
+          "text": "0/4",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 75
+        },
+        {
+          "object": 91,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "comment_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 84
+        },
+        {
+          "object": 99,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "attachment_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 95
+        },
+        {
+          "object": 107,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "repeat_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 103
+        },
+        {
+          "object": 115,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "text_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 111
+        },
+        {
+          "object": 123,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "reminder_mini",
+          "image_design_size": "{12, 12}",
+          "control_view": 119
+        },
+        {
+          "object": 133,
+          "cls": "NSTextFieldCell",
+          "text": "Date",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 130
+        },
+        {
+          "object": 143,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 137
+        },
+        {
+          "object": 149,
+          "cls": "NSTextFieldCell",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 144
+        },
+        {
+          "object": 161,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "arrow_down",
+          "image_design_size": "{12, 12}",
+          "control_view": 155
+        },
+        {
+          "object": 167,
+          "cls": "NSTextFieldCell",
+          "text": "Date",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 165
+        },
+        {
+          "object": 189,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "comment",
+          "image_design_size": "{24, 24}",
+          "control_view": 183
+        },
+        {
+          "object": 195,
+          "cls": "NSTextFieldCell",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 193
+        }
+      ],
+      "object_class_histogram": {
+        "NSNumber": 155,
+        "NSString": 115,
+        "NSLayoutConstraint": 75,
+        "NSNibOutletConnector": 37,
+        "NSArray": 16,
+        "NSClassSwapper": 15,
+        "NSMutableArray": 13,
+        "NSCustomResource": 10,
+        "NSMutableSet": 10,
+        "NSValue": 10,
+        "NSImageCell": 9,
+        "NSColor": 8,
+        "NSImageView": 7,
+        "NSFont": 6,
+        "NSTextFieldCell": 6,
+        "NSButtonCell": 2,
+        "NSColorSpace": 2,
+        "NSCustomObject": 2,
+        "NSData": 2,
+        "NSNibControlConnector": 2,
+        "IBClassReference": 1,
+        "NSAppearance": 1,
+        "NSIBObjectData": 1,
+        "NSObject": 1
+      }
+    },
+    {
+      "file": "TTTaskListSectionCell.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTTaskListSectionCell.nib",
+      "size_bytes": 14014,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 231,
+        "offset_objects": 50,
+        "key_count": 113,
+        "offset_keys": 944,
+        "value_count": 1098,
+        "offset_values": 2827,
+        "class_name_count": 23,
+        "offset_class_names": 13668,
+        "file_size": 14014
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibOutletConnector",
+        "NSClassSwapper",
+        "NSArray",
+        "NSLayoutConstraint",
+        "NSImageCell",
+        "NSCustomResource",
+        "NSValue",
+        "NSImageView",
+        "NSTextFieldCell",
+        "NSFont",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSButtonCell",
+        "NSNibControlConnector",
+        "IBClassReference",
+        "NSNumber"
+      ],
+      "files_owner_class": "NSObject",
+      "root": {
+        "object": 7,
+        "cls": "_TtC8TickTick21TTTaskListSectionCell",
+        "original_class": "NSView",
+        "frame": {
+          "raw": "{626, 34}",
+          "w": 626.0,
+          "h": 34.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{626, 34}",
+        "design_size_wh": [
+          626.0,
+          34.0
+        ],
+        "class": "_TtC8TickTick21TTTaskListSectionCell"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick13TTThemeButton",
+        "_TtC8TickTick20TTHoverableImageView",
+        "_TtC8TickTick21TTTaskListSectionCell",
+        "_TtC8TickTick7TTLabel"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSButton",
+        "NSButtonCell",
+        "NSImageCell",
+        "NSImageView",
+        "NSLayoutConstraint",
+        "NSObject",
+        "NSTextField",
+        "NSTextFieldCell",
+        "NSView"
+      ],
+      "outlets": [
+        {
+          "name": "actionButton",
+          "destination_object": 105,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{548, 4}, {58, 18}}"
+        },
+        {
+          "name": "addButton",
+          "destination_object": 75,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{492, 1}, {24, 24}}"
+        },
+        {
+          "name": "countLabel",
+          "destination_object": 98,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{471, 7}, {11, 13}}"
+        },
+        {
+          "name": "countTailingLC",
+          "destination_object": 125,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "dragIndicatorView",
+          "destination_object": 64,
+          "destination_class": "_TtC8TickTick20TTHoverableImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{3, 7}, {12, 12}}"
+        },
+        {
+          "name": "iconImageView",
+          "destination_object": 34,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{31, 5}, {17, 17}}"
+        },
+        {
+          "name": "iconImageViewTailingLC",
+          "destination_object": 120,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "moreButton",
+          "destination_object": 89,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{516, 1}, {24, 24}}"
+        },
+        {
+          "name": "titleLabel",
+          "destination_object": 46,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{50, 6}, {412, 14}}"
+        },
+        {
+          "name": "titleLabelLeadingLC",
+          "destination_object": 123,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "triangleImageLeadingLC",
+          "destination_object": 117,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "triangleImageView",
+          "destination_object": 11,
+          "destination_class": "_TtC8TickTick20TTHoverableImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{16, 0}, {16, 26}}"
+        }
+      ],
+      "actions": [
+        {
+          "selector": "moreButtonClicked:",
+          "source_object": 89,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{516, 1}, {24, 24}}"
+        },
+        {
+          "selector": "addButtonClicked:",
+          "source_object": 75,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{492, 1}, {24, 24}}"
+        }
+      ],
+      "connector_notes": [],
+      "counts": {
+        "objects": 231,
+        "connections": 14,
+        "outlets": 12,
+        "actions": 2,
+        "distinct_actions": 2,
+        "views": 9,
+        "cells": 8
+      },
+      "distinct_actions": [
+        "moreButtonClicked:",
+        "addButtonClicked:"
+      ],
+      "texts": [
+        "TitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitle",
+        "0",
+        "Postpone"
+      ],
+      "text_details": [
+        {
+          "text": "TitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitle",
+          "from_object": 51,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        },
+        {
+          "text": "0",
+          "from_object": 101,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        },
+        {
+          "text": "Postpone",
+          "from_object": 110,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        }
+      ],
+      "images": [
+        "arrow_down",
+        "section_icon_pinned",
+        "drag_indicator",
+        "add",
+        "more"
+      ],
+      "image_details": [
+        {
+          "name": "arrow_down",
+          "design_size": "{12, 12}",
+          "from_object": 28,
+          "cell_class": "NSImageCell",
+          "owner": "_TtC8TickTick20TTHoverableImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "section_icon_pinned",
+          "design_size": "{18, 18}",
+          "from_object": 41,
+          "cell_class": "NSImageCell",
+          "owner": "NSImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "drag_indicator",
+          "design_size": "{12, 12}",
+          "from_object": 71,
+          "cell_class": "NSImageCell",
+          "owner": "_TtC8TickTick20TTHoverableImageView",
+          "source_key": "cell image"
+        },
+        {
+          "name": "add",
+          "design_size": "{24, 24}",
+          "from_object": 82,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "more",
+          "design_size": "{24, 24}",
+          "from_object": 94,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        }
+      ],
+      "frames": [
+        {
+          "object": 7,
+          "cls": "_TtC8TickTick21TTTaskListSectionCell",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{626, 34}",
+          "superview": null,
+          "w": 626.0,
+          "h": 34.0
+        },
+        {
+          "object": 11,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{16, 0}, {16, 26}}",
+          "superview": 7,
+          "x": 16.0,
+          "y": 0.0,
+          "w": 16.0,
+          "h": 26.0
+        },
+        {
+          "object": 34,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{31, 5}, {17, 17}}",
+          "superview": 7,
+          "x": 31.0,
+          "y": 5.0,
+          "w": 17.0,
+          "h": 17.0
+        },
+        {
+          "object": 46,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{50, 6}, {412, 14}}",
+          "superview": 7,
+          "x": 50.0,
+          "y": 6.0,
+          "w": 412.0,
+          "h": 14.0
+        },
+        {
+          "object": 64,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{3, 7}, {12, 12}}",
+          "superview": 7,
+          "x": 3.0,
+          "y": 7.0,
+          "w": 12.0,
+          "h": 12.0
+        },
+        {
+          "object": 75,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{492, 1}, {24, 24}}",
+          "superview": 7,
+          "x": 492.0,
+          "y": 1.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 89,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{516, 1}, {24, 24}}",
+          "superview": 7,
+          "x": 516.0,
+          "y": 1.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 98,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{471, 7}, {11, 13}}",
+          "superview": 7,
+          "x": 471.0,
+          "y": 7.0,
+          "w": 11.0,
+          "h": 13.0
+        },
+        {
+          "object": 105,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{548, 4}, {58, 18}}",
+          "superview": 7,
+          "x": 548.0,
+          "y": 4.0,
+          "w": 58.0,
+          "h": 18.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 11,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame": "{{16, 0}, {16, 26}}",
+          "outlet": "triangleImageView",
+          "text": null,
+          "image": "arrow_down",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 34,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{31, 5}, {17, 17}}",
+          "outlet": "iconImageView",
+          "text": null,
+          "image": "section_icon_pinned",
+          "image_design_size": "{18, 18}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 46,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{50, 6}, {412, 14}}",
+          "outlet": "titleLabel",
+          "text": "TitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitle",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 64,
+          "cls": "_TtC8TickTick20TTHoverableImageView",
+          "original_class": "NSImageView",
+          "frame": "{{3, 7}, {12, 12}}",
+          "outlet": "dragIndicatorView",
+          "text": null,
+          "image": "drag_indicator",
+          "image_design_size": "{12, 12}",
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 75,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{492, 1}, {24, 24}}",
+          "outlet": "addButton",
+          "text": null,
+          "image": "add",
+          "image_design_size": "{24, 24}",
+          "action": "addButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 89,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{516, 1}, {24, 24}}",
+          "outlet": "moreButton",
+          "text": null,
+          "image": "more",
+          "image_design_size": "{24, 24}",
+          "action": "moreButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 98,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{471, 7}, {11, 13}}",
+          "outlet": "countLabel",
+          "text": "0",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 105,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{548, 4}, {58, 18}}",
+          "outlet": "actionButton",
+          "text": "Postpone",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 117,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "triangleImageLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 120,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "iconImageViewTailingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 123,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "titleLabelLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListSectionCell.nib",
+          "object": 125,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "countTailingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        }
+      ],
+      "cells": [
+        {
+          "object": 28,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "arrow_down",
+          "image_design_size": "{12, 12}",
+          "control_view": 11
+        },
+        {
+          "object": 41,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "section_icon_pinned",
+          "image_design_size": "{18, 18}",
+          "control_view": 34
+        },
+        {
+          "object": 51,
+          "cls": "NSTextFieldCell",
+          "text": "TitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitleTitle",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 46
+        },
+        {
+          "object": 71,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": "drag_indicator",
+          "image_design_size": "{12, 12}",
+          "control_view": 64
+        },
+        {
+          "object": 82,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "add",
+          "image_design_size": "{24, 24}",
+          "control_view": 75
+        },
+        {
+          "object": 94,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "more",
+          "image_design_size": "{24, 24}",
+          "control_view": 89
+        },
+        {
+          "object": 101,
+          "cls": "NSTextFieldCell",
+          "text": "0",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 98
+        },
+        {
+          "object": 110,
+          "cls": "NSButtonCell",
+          "text": "Postpone",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 105
+        }
+      ],
+      "object_class_histogram": {
+        "NSString": 63,
+        "NSNumber": 61,
+        "NSLayoutConstraint": 28,
+        "NSArray": 12,
+        "NSNibOutletConnector": 12,
+        "NSClassSwapper": 8,
+        "NSMutableArray": 6,
+        "NSColor": 5,
+        "NSCustomResource": 5,
+        "NSValue": 5,
+        "NSFont": 4,
+        "NSMutableSet": 4,
+        "NSButtonCell": 3,
+        "NSImageCell": 3,
+        "NSCustomObject": 2,
+        "NSNibControlConnector": 2,
+        "NSTextFieldCell": 2,
+        "IBClassReference": 1,
+        "NSColorSpace": 1,
+        "NSData": 1,
+        "NSIBObjectData": 1,
+        "NSImageView": 1,
+        "NSObject": 1
+      }
+    },
+    {
+      "file": "TTTaskListInputView.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTTaskListInputView.nib",
+      "size_bytes": 26920,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 449,
+        "offset_objects": 50,
+        "key_count": 189,
+        "offset_keys": 1832,
+        "value_count": 2293,
+        "offset_values": 5390,
+        "class_name_count": 36,
+        "offset_class_names": 26354,
+        "file_size": 26920
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibConnector",
+        "NSStackView",
+        "NSClassSwapper",
+        "NSArray",
+        "NSLayoutConstraint",
+        "NSButtonCell",
+        "NSFont",
+        "NSCustomResource",
+        "NSValue",
+        "NSImageView",
+        "NSImageCell",
+        "NSStackViewContainer",
+        "NSNibOutletConnector",
+        "NSScrollView",
+        "NSClipView",
+        "NSTableView",
+        "_NSCornerView",
+        "NSTableColumn",
+        "NSTableHeaderCell",
+        "NSFontDescriptor",
+        "NSDictionary",
+        "NSNumber",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSTextFieldCell",
+        "NSScroller",
+        "NSPanGestureRecognizer",
+        "NSNibControlConnector",
+        "IBClassReference"
+      ],
+      "files_owner_class": "NSObject",
+      "root": {
+        "object": 48,
+        "cls": "_TtC8TickTick19TTTaskListInputView",
+        "original_class": "NSView",
+        "frame": {
+          "raw": "{421, 449}",
+          "w": 421.0,
+          "h": 449.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{421, 449}",
+        "design_size_wh": [
+          421.0,
+          449.0
+        ],
+        "class": "_TtC8TickTick19TTTaskListInputView"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick13TTThemeButton",
+        "_TtC8TickTick19TTTaskListInputView",
+        "_TtC8TickTick7TTLabel"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSButton",
+        "NSButtonCell",
+        "NSClipView",
+        "NSImageCell",
+        "NSImageView",
+        "NSLayoutConstraint",
+        "NSObject",
+        "NSScrollView",
+        "NSScroller",
+        "NSStackView",
+        "NSStackViewContainer",
+        "NSTableHeaderCell",
+        "NSTableView",
+        "NSTextField",
+        "NSTextFieldCell",
+        "NSView",
+        "_NSCornerView"
+      ],
+      "outlets": [
+        {
+          "name": "actionsContainer",
+          "destination_object": 112,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{8, 6}, {373, 24}}"
+        },
+        {
+          "name": "addButton",
+          "destination_object": 161,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{334, 0}, {29, 24}}"
+        },
+        {
+          "name": "addButtonHeightLC",
+          "destination_object": 164,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "additionalButton",
+          "destination_object": 188,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{40, 0}, {24, 24}}"
+        },
+        {
+          "name": "buttonsContainer",
+          "destination_object": 186,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{381, 7}, {64, 24}}"
+        },
+        {
+          "name": "buttonsContainerBottomLC",
+          "destination_object": 213,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "buttonsContainerLeadingLC",
+          "destination_object": 214,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "calendarButton",
+          "destination_object": 9,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{24, 24}"
+        },
+        {
+          "name": "contentBottomLC",
+          "destination_object": 231,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "contentLeadingLC",
+          "destination_object": 230,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "contentTrailingLC",
+          "destination_object": 229,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "contentView",
+          "destination_object": 52,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{20, 16}, {381, 433}}"
+        },
+        {
+          "name": "dateButton",
+          "destination_object": 114,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{24, 24}"
+        },
+        {
+          "name": "dateRepeatImageView",
+          "destination_object": 119,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{26, 6}, {12, 12}}"
+        },
+        {
+          "name": "enterTipsLabel",
+          "destination_object": 215,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{365, 3}, {28, 11}}"
+        },
+        {
+          "name": "inputContainer",
+          "destination_object": 54,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{0, 395}, {381, 38}}"
+        },
+        {
+          "name": "inputContainerHeightLC",
+          "destination_object": 107,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "listButton",
+          "destination_object": 144,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{64, 0}, {24, 24}}"
+        },
+        {
+          "name": "moreButton",
+          "destination_object": 152,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{96, 0}, {24, 24}}"
+        },
+        {
+          "name": "moreButton2ListLeadingLC",
+          "destination_object": 180,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "moreButton2TagLeadingLC",
+          "destination_object": 181,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "priorityButton",
+          "destination_object": 126,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{32, 0}, {24, 24}}"
+        },
+        {
+          "name": "priorityButtonLeadingLC",
+          "destination_object": 175,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "repeatImageView",
+          "destination_object": 25,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{26, 6}, {12, 12}}"
+        },
+        {
+          "name": "tableView",
+          "destination_object": 60,
+          "destination_class": "NSTableView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{363, 28}"
+        },
+        {
+          "name": "tableViewTrailingLC",
+          "destination_object": 108,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "tagButton",
+          "destination_object": 135,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{64, 0}, {24, 24}}"
+        },
+        {
+          "name": "tagButtonLeadingLC",
+          "destination_object": 178,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "nextKeyView",
+          "destination_object": 188,
+          "destination_class": "_TtC8TickTick13TTThemeButton",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{40, 0}, {24, 24}}"
+        }
+      ],
+      "actions": [
+        {
+          "selector": "listButtonClicked:",
+          "source_object": 144,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{64, 0}, {24, 24}}"
+        },
+        {
+          "selector": "tagButtonClicked:",
+          "source_object": 135,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{64, 0}, {24, 24}}"
+        },
+        {
+          "selector": "dateButtonClicked:",
+          "source_object": 9,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{24, 24}"
+        },
+        {
+          "selector": "triangleButtonClicked:",
+          "source_object": 188,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{40, 0}, {24, 24}}"
+        },
+        {
+          "selector": "moreButtonClicked:",
+          "source_object": 152,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{96, 0}, {24, 24}}"
+        },
+        {
+          "selector": "addButtonClicked:",
+          "source_object": 161,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{334, 0}, {29, 24}}"
+        },
+        {
+          "selector": "priorityButtonClicked:",
+          "source_object": 126,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{{32, 0}, {24, 24}}"
+        },
+        {
+          "selector": "dateButtonClicked:",
+          "source_object": 114,
+          "source_class": "_TtC8TickTick13TTThemeButton",
+          "source_frame": "{24, 24}"
+        }
+      ],
+      "connector_notes": [
+        {
+          "cls": "NSNibConnector",
+          "label": "Encoding NSStackView requires being decoded before other connections with an early decoding order priority of 999970.",
+          "source_class": "NSStackView"
+        }
+      ],
+      "counts": {
+        "objects": 449,
+        "connections": 37,
+        "outlets": 29,
+        "actions": 8,
+        "distinct_actions": 7,
+        "views": 24,
+        "cells": 13
+      },
+      "distinct_actions": [
+        "listButtonClicked:",
+        "tagButtonClicked:",
+        "dateButtonClicked:",
+        "triangleButtonClicked:",
+        "moreButtonClicked:",
+        "addButtonClicked:",
+        "priorityButtonClicked:"
+      ],
+      "texts": [
+        "Text Cell",
+        "Add",
+        "Label"
+      ],
+      "text_details": [
+        {
+          "text": "Text Cell",
+          "from_object": 86,
+          "cell_class": "NSTextFieldCell",
+          "owner": "NSTableView"
+        },
+        {
+          "text": "Add",
+          "from_object": 165,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton"
+        },
+        {
+          "text": "Label",
+          "from_object": 220,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        }
+      ],
+      "images": [
+        "detail_calendar",
+        "priority_stroke",
+        "tag",
+        "normal_project",
+        "more",
+        "input_arrow_down"
+      ],
+      "image_details": [
+        {
+          "name": "detail_calendar",
+          "design_size": "{24, 24}",
+          "from_object": 17,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "priority_stroke",
+          "design_size": "{24, 24}",
+          "from_object": 131,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "tag",
+          "design_size": "{24, 24}",
+          "from_object": 140,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "normal_project",
+          "design_size": "{24, 24}",
+          "from_object": 148,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "more",
+          "design_size": "{24, 24}",
+          "from_object": 157,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        },
+        {
+          "name": "input_arrow_down",
+          "design_size": "{24, 24}",
+          "from_object": 193,
+          "cell_class": "NSButtonCell",
+          "owner": "_TtC8TickTick13TTThemeButton",
+          "source_key": "cell image"
+        }
+      ],
+      "frames": [
+        {
+          "object": 7,
+          "cls": "NSStackView",
+          "original_class": "NSStackView",
+          "frame_key": "NSFrameSize",
+          "frame": "{38, 24}",
+          "superview": 186,
+          "w": 38.0,
+          "h": 24.0
+        },
+        {
+          "object": 9,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrameSize",
+          "frame": "{24, 24}",
+          "superview": 7,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 25,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{26, 6}, {12, 12}}",
+          "superview": 7,
+          "x": 26.0,
+          "y": 6.0,
+          "w": 12.0,
+          "h": 12.0
+        },
+        {
+          "object": 43,
+          "cls": "NSStackViewContainer",
+          "original_class": "NSStackViewContainer",
+          "frame_key": "NSFrameSize",
+          "frame": "{0, 0}",
+          "superview": null,
+          "w": 0.0,
+          "h": 0.0
+        },
+        {
+          "object": 48,
+          "cls": "_TtC8TickTick19TTTaskListInputView",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{421, 449}",
+          "superview": null,
+          "w": 421.0,
+          "h": 449.0
+        },
+        {
+          "object": 52,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{20, 16}, {381, 433}}",
+          "superview": 48,
+          "x": 20.0,
+          "y": 16.0,
+          "w": 381.0,
+          "h": 433.0
+        },
+        {
+          "object": 54,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 395}, {381, 38}}",
+          "superview": 52,
+          "x": 0.0,
+          "y": 395.0,
+          "w": 381.0,
+          "h": 38.0
+        },
+        {
+          "object": 56,
+          "cls": "NSScrollView",
+          "original_class": "NSScrollView",
+          "frame_key": "NSFrame",
+          "frame": "{{10, 0}, {363, 28}}",
+          "superview": 54,
+          "x": 10.0,
+          "y": 0.0,
+          "w": 363.0,
+          "h": 28.0
+        },
+        {
+          "object": 58,
+          "cls": "NSClipView",
+          "original_class": "NSClipView",
+          "frame_key": "NSFrameSize",
+          "frame": "{363, 28}",
+          "superview": 56,
+          "w": 363.0,
+          "h": 28.0
+        },
+        {
+          "object": 60,
+          "cls": "NSTableView",
+          "original_class": "NSTableView",
+          "frame_key": "NSFrameSize",
+          "frame": "{363, 28}",
+          "superview": 58,
+          "w": 363.0,
+          "h": 28.0
+        },
+        {
+          "object": 62,
+          "cls": "_NSCornerView",
+          "original_class": "_NSCornerView",
+          "frame_key": "NSFrameSize",
+          "frame": "{17, 28}",
+          "superview": null,
+          "w": 17.0,
+          "h": 28.0
+        },
+        {
+          "object": 96,
+          "cls": "NSScroller",
+          "original_class": "NSScroller",
+          "frame_key": "NSFrame",
+          "frame": "{{0, 12}, {363, 16}}",
+          "superview": 56,
+          "x": 0.0,
+          "y": 12.0,
+          "w": 363.0,
+          "h": 16.0
+        },
+        {
+          "object": 99,
+          "cls": "NSScroller",
+          "original_class": "NSScroller",
+          "frame_key": "NSFrame",
+          "frame": "{{224, 17}, {15, 102}}",
+          "superview": 56,
+          "x": 224.0,
+          "y": 17.0,
+          "w": 15.0,
+          "h": 102.0
+        },
+        {
+          "object": 112,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{8, 6}, {373, 24}}",
+          "superview": 52,
+          "x": 8.0,
+          "y": 6.0,
+          "w": 373.0,
+          "h": 24.0
+        },
+        {
+          "object": 114,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrameSize",
+          "frame": "{24, 24}",
+          "superview": 112,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 119,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{26, 6}, {12, 12}}",
+          "superview": 112,
+          "x": 26.0,
+          "y": 6.0,
+          "w": 12.0,
+          "h": 12.0
+        },
+        {
+          "object": 126,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{32, 0}, {24, 24}}",
+          "superview": 112,
+          "x": 32.0,
+          "y": 0.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 135,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{64, 0}, {24, 24}}",
+          "superview": 112,
+          "x": 64.0,
+          "y": 0.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 144,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{64, 0}, {24, 24}}",
+          "superview": 112,
+          "x": 64.0,
+          "y": 0.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 152,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{96, 0}, {24, 24}}",
+          "superview": 112,
+          "x": 96.0,
+          "y": 0.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 161,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{334, 0}, {29, 24}}",
+          "superview": 112,
+          "x": 334.0,
+          "y": 0.0,
+          "w": 29.0,
+          "h": 24.0
+        },
+        {
+          "object": 186,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{381, 7}, {64, 24}}",
+          "superview": 52,
+          "x": 381.0,
+          "y": 7.0,
+          "w": 64.0,
+          "h": 24.0
+        },
+        {
+          "object": 188,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame_key": "NSFrame",
+          "frame": "{{40, 0}, {24, 24}}",
+          "superview": 186,
+          "x": 40.0,
+          "y": 0.0,
+          "w": 24.0,
+          "h": 24.0
+        },
+        {
+          "object": 215,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{365, 3}, {28, 11}}",
+          "superview": 48,
+          "x": 365.0,
+          "y": 3.0,
+          "w": 28.0,
+          "h": 11.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 9,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{24, 24}",
+          "outlet": "calendarButton",
+          "text": null,
+          "image": "detail_calendar",
+          "image_design_size": "{24, 24}",
+          "action": "dateButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 25,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{26, 6}, {12, 12}}",
+          "outlet": "repeatImageView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 52,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{20, 16}, {381, 433}}",
+          "outlet": "contentView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 54,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{0, 395}, {381, 38}}",
+          "outlet": "inputContainer",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 60,
+          "cls": "NSTableView",
+          "original_class": "NSTableView",
+          "frame": "{363, 28}",
+          "outlet": "tableView",
+          "text": "Text Cell",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 112,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{8, 6}, {373, 24}}",
+          "outlet": "actionsContainer",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 114,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{24, 24}",
+          "outlet": "dateButton",
+          "text": null,
+          "image": "detail_calendar",
+          "image_design_size": "{24, 24}",
+          "action": "dateButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 119,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{26, 6}, {12, 12}}",
+          "outlet": "dateRepeatImageView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 126,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{32, 0}, {24, 24}}",
+          "outlet": "priorityButton",
+          "text": null,
+          "image": "priority_stroke",
+          "image_design_size": "{24, 24}",
+          "action": "priorityButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 135,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{64, 0}, {24, 24}}",
+          "outlet": "tagButton",
+          "text": null,
+          "image": "tag",
+          "image_design_size": "{24, 24}",
+          "action": "tagButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 144,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{64, 0}, {24, 24}}",
+          "outlet": "listButton",
+          "text": null,
+          "image": "normal_project",
+          "image_design_size": "{24, 24}",
+          "action": "listButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 152,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{96, 0}, {24, 24}}",
+          "outlet": "moreButton",
+          "text": null,
+          "image": "more",
+          "image_design_size": "{24, 24}",
+          "action": "moreButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 161,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{334, 0}, {29, 24}}",
+          "outlet": "addButton",
+          "text": "Add",
+          "image": null,
+          "image_design_size": null,
+          "action": "addButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 186,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{381, 7}, {64, 24}}",
+          "outlet": "buttonsContainer",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 188,
+          "cls": "_TtC8TickTick13TTThemeButton",
+          "original_class": "NSButton",
+          "frame": "{{40, 0}, {24, 24}}",
+          "outlet": "additionalButton, nextKeyView",
+          "text": null,
+          "image": "input_arrow_down",
+          "image_design_size": "{24, 24}",
+          "action": "triangleButtonClicked:",
+          "cell_class": "NSButtonCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 215,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{365, 3}, {28, 11}}",
+          "outlet": "enterTipsLabel",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 107,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "inputContainerHeightLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 108,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "tableViewTrailingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 164,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "addButtonHeightLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 175,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "priorityButtonLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 178,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "tagButtonLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 180,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "moreButton2ListLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 181,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "moreButton2TagLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 213,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "buttonsContainerBottomLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 214,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "buttonsContainerLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 229,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "contentTrailingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 230,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "contentLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListInputView.nib",
+          "object": 231,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "contentBottomLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        }
+      ],
+      "cells": [
+        {
+          "object": 17,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "detail_calendar",
+          "image_design_size": "{24, 24}",
+          "control_view": 9
+        },
+        {
+          "object": 41,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "control_view": 25
+        },
+        {
+          "object": 67,
+          "cls": "NSTableHeaderCell",
+          "text": "",
+          "image": null,
+          "image_design_size": null,
+          "control_view": null
+        },
+        {
+          "object": 86,
+          "cls": "NSTextFieldCell",
+          "text": "Text Cell",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 60
+        },
+        {
+          "object": 118,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "detail_calendar",
+          "image_design_size": "{24, 24}",
+          "control_view": 114
+        },
+        {
+          "object": 125,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "control_view": 119
+        },
+        {
+          "object": 131,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "priority_stroke",
+          "image_design_size": "{24, 24}",
+          "control_view": 126
+        },
+        {
+          "object": 140,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "tag",
+          "image_design_size": "{24, 24}",
+          "control_view": 135
+        },
+        {
+          "object": 148,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "normal_project",
+          "image_design_size": "{24, 24}",
+          "control_view": 144
+        },
+        {
+          "object": 157,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "more",
+          "image_design_size": "{24, 24}",
+          "control_view": 152
+        },
+        {
+          "object": 165,
+          "cls": "NSButtonCell",
+          "text": "Add",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 161
+        },
+        {
+          "object": 193,
+          "cls": "NSButtonCell",
+          "text": "",
+          "image": "input_arrow_down",
+          "image_design_size": "{24, 24}",
+          "control_view": 188
+        },
+        {
+          "object": 220,
+          "cls": "NSTextFieldCell",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 215
+        }
+      ],
+      "object_class_histogram": {
+        "NSNumber": 135,
+        "NSString": 102,
+        "NSLayoutConstraint": 61,
+        "NSNibOutletConnector": 29,
+        "NSArray": 21,
+        "NSClassSwapper": 14,
+        "NSMutableArray": 14,
+        "NSColor": 10,
+        "NSButtonCell": 8,
+        "NSNibControlConnector": 8,
+        "NSCustomResource": 6,
+        "NSValue": 6,
+        "NSFont": 3,
+        "NSMutableSet": 3,
+        "NSColorSpace": 2,
+        "NSCustomObject": 2,
+        "NSData": 2,
+        "NSImageCell": 2,
+        "NSImageView": 2,
+        "NSScroller": 2,
+        "NSTextFieldCell": 2,
+        "IBClassReference": 1,
+        "NSClipView": 1,
+        "NSDictionary": 1,
+        "NSFontDescriptor": 1,
+        "NSIBObjectData": 1,
+        "NSNibConnector": 1,
+        "NSObject": 1,
+        "NSPanGestureRecognizer": 1,
+        "NSScrollView": 1,
+        "NSStackView": 1,
+        "NSStackViewContainer": 1,
+        "NSTableColumn": 1,
+        "NSTableHeaderCell": 1,
+        "NSTableView": 1,
+        "_NSCornerView": 1
+      }
+    },
+    {
+      "file": "TTTaskListCountdownCell.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTTaskListCountdownCell.nib",
+      "size_bytes": 9575,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 107,
+        "offset_objects": 50,
+        "key_count": 96,
+        "offset_keys": 448,
+        "value_count": 450,
+        "offset_values": 2080,
+        "class_name_count": 19,
+        "offset_class_names": 9297,
+        "file_size": 9575
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibOutletConnector",
+        "NSClassSwapper",
+        "NSTextFieldCell",
+        "NSFont",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSImageView",
+        "NSArray",
+        "NSLayoutConstraint",
+        "NSImageCell",
+        "IBClassReference",
+        "NSNumber"
+      ],
+      "files_owner_class": "NSObject",
+      "root": {
+        "object": 7,
+        "cls": "_TtC8TickTick23TTTaskListCountdownCell",
+        "original_class": "NSTableCellView",
+        "frame": {
+          "raw": "{338, 40}",
+          "w": 338.0,
+          "h": 40.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{338, 40}",
+        "design_size_wh": [
+          338.0,
+          40.0
+        ],
+        "class": "_TtC8TickTick23TTTaskListCountdownCell"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick23TTTaskListCountdownCell",
+        "_TtC8TickTick7TTLabel"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSImageCell",
+        "NSImageView",
+        "NSLayoutConstraint",
+        "NSObject",
+        "NSTableCellView",
+        "NSTextField",
+        "NSTextFieldCell"
+      ],
+      "outlets": [
+        {
+          "name": "dateLabel",
+          "destination_object": 29,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{289, 14}, {31, 13}}"
+        },
+        {
+          "name": "dateRightLC",
+          "destination_object": 60,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "iconImageLeadingLC",
+          "destination_object": 56,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        },
+        {
+          "name": "iconImageView",
+          "destination_object": 34,
+          "destination_class": "NSImageView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{30, 10}, {20, 20}}"
+        },
+        {
+          "name": "nameLabel",
+          "destination_object": 11,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{53, 12}, {234, 17}}"
+        },
+        {
+          "name": "nameLeadingLC",
+          "destination_object": 58,
+          "destination_class": "NSLayoutConstraint",
+          "destination_kind": "layout_constraint",
+          "destination_frame": null
+        }
+      ],
+      "actions": [],
+      "connector_notes": [],
+      "counts": {
+        "objects": 107,
+        "connections": 6,
+        "outlets": 6,
+        "actions": 0,
+        "distinct_actions": 0,
+        "views": 4,
+        "cells": 3
+      },
+      "distinct_actions": [],
+      "texts": [
+        "Label"
+      ],
+      "text_details": [
+        {
+          "text": "Label",
+          "from_object": 16,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        }
+      ],
+      "images": [],
+      "image_details": [],
+      "frames": [
+        {
+          "object": 7,
+          "cls": "_TtC8TickTick23TTTaskListCountdownCell",
+          "original_class": "NSTableCellView",
+          "frame_key": "NSFrameSize",
+          "frame": "{338, 40}",
+          "superview": null,
+          "w": 338.0,
+          "h": 40.0
+        },
+        {
+          "object": 11,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{53, 12}, {234, 17}}",
+          "superview": 7,
+          "x": 53.0,
+          "y": 12.0,
+          "w": 234.0,
+          "h": 17.0
+        },
+        {
+          "object": 29,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{289, 14}, {31, 13}}",
+          "superview": 7,
+          "x": 289.0,
+          "y": 14.0,
+          "w": 31.0,
+          "h": 13.0
+        },
+        {
+          "object": 34,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame_key": "NSFrame",
+          "frame": "{{30, 10}, {20, 20}}",
+          "superview": 7,
+          "x": 30.0,
+          "y": 10.0,
+          "w": 20.0,
+          "h": 20.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTTaskListCountdownCell.nib",
+          "object": 11,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{53, 12}, {234, 17}}",
+          "outlet": "nameLabel",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListCountdownCell.nib",
+          "object": 29,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{289, 14}, {31, 13}}",
+          "outlet": "dateLabel",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        },
+        {
+          "nib": "TTTaskListCountdownCell.nib",
+          "object": 34,
+          "cls": "NSImageView",
+          "original_class": "NSImageView",
+          "frame": "{{30, 10}, {20, 20}}",
+          "outlet": "iconImageView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSImageCell"
+        },
+        {
+          "nib": "TTTaskListCountdownCell.nib",
+          "object": 56,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "iconImageLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListCountdownCell.nib",
+          "object": 58,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "nameLeadingLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTTaskListCountdownCell.nib",
+          "object": 60,
+          "cls": "NSLayoutConstraint",
+          "original_class": "NSLayoutConstraint",
+          "frame": null,
+          "outlet": "dateRightLC",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        }
+      ],
+      "cells": [
+        {
+          "object": 16,
+          "cls": "NSTextFieldCell",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 11
+        },
+        {
+          "object": 32,
+          "cls": "NSTextFieldCell",
+          "text": "Label",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 29
+        },
+        {
+          "object": 51,
+          "cls": "NSImageCell",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "control_view": 34
+        }
+      ],
+      "object_class_histogram": {
+        "NSString": 33,
+        "NSNumber": 25,
+        "NSLayoutConstraint": 10,
+        "NSArray": 7,
+        "NSNibOutletConnector": 6,
+        "NSColor": 4,
+        "NSMutableArray": 4,
+        "NSClassSwapper": 3,
+        "NSCustomObject": 2,
+        "NSFont": 2,
+        "NSMutableSet": 2,
+        "NSTextFieldCell": 2,
+        "IBClassReference": 1,
+        "NSColorSpace": 1,
+        "NSData": 1,
+        "NSIBObjectData": 1,
+        "NSImageCell": 1,
+        "NSImageView": 1,
+        "NSObject": 1
+      }
+    },
+    {
+      "file": "TTProjectListEmptyHolderCell.nib",
+      "path": "/Applications/TickTick.app/Contents/Resources/TTProjectListEmptyHolderCell.nib",
+      "size_bytes": 8286,
+      "header": {
+        "magic": "NIBArchive",
+        "unknown1": 1,
+        "unknown2": 10,
+        "object_count": 71,
+        "offset_objects": 50,
+        "key_count": 86,
+        "offset_keys": 301,
+        "value_count": 300,
+        "offset_values": 1772,
+        "class_name_count": 17,
+        "offset_class_names": 8036,
+        "file_size": 8286
+      },
+      "classes_table": [
+        "NSObject",
+        "NSIBObjectData",
+        "NSCustomObject",
+        "NSString",
+        "NSMutableSet",
+        "NSMutableArray",
+        "NSNibOutletConnector",
+        "NSClassSwapper",
+        "NSTextFieldCell",
+        "NSFont",
+        "NSColor",
+        "NSColorSpace",
+        "NSData",
+        "NSArray",
+        "NSLayoutConstraint",
+        "IBClassReference",
+        "NSNumber"
+      ],
+      "files_owner_class": "NSObject",
+      "root": {
+        "object": 7,
+        "cls": "_TtC8TickTick28TTProjectListEmptyHolderCell",
+        "original_class": "NSView",
+        "frame": {
+          "raw": "{392, 103}",
+          "w": 392.0,
+          "h": 103.0,
+          "kind": "size"
+        },
+        "frame_key": "NSFrameSize",
+        "superview": null,
+        "cell": null,
+        "is_root": true,
+        "design_size": "{392, 103}",
+        "design_size_wh": [
+          392.0,
+          103.0
+        ],
+        "class": "_TtC8TickTick28TTProjectListEmptyHolderCell"
+      },
+      "window": null,
+      "custom_classes": [
+        "_TtC8TickTick28TTProjectListEmptyHolderCell",
+        "_TtC8TickTick7TTLabel"
+      ],
+      "app_objc_classes": [],
+      "system_classes": [
+        "NSObject",
+        "NSTextField",
+        "NSTextFieldCell",
+        "NSView"
+      ],
+      "outlets": [
+        {
+          "name": "containerView",
+          "destination_object": 11,
+          "destination_class": "NSView",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{10, 4}, {372, 95}}"
+        },
+        {
+          "name": "messageLabel",
+          "destination_object": 13,
+          "destination_class": "_TtC8TickTick7TTLabel",
+          "destination_kind": "view_or_controller",
+          "destination_frame": "{{8, 8}, {356, 79}}"
+        }
+      ],
+      "actions": [],
+      "connector_notes": [],
+      "counts": {
+        "objects": 71,
+        "connections": 2,
+        "outlets": 2,
+        "actions": 0,
+        "distinct_actions": 0,
+        "views": 3,
+        "cells": 1
+      },
+      "distinct_actions": [],
+      "texts": [
+        "You don't have any team list, click \"Add List\" at the bottom to start working efficiently"
+      ],
+      "text_details": [
+        {
+          "text": "You don't have any team list, click \"Add List\" at the bottom to start working efficiently",
+          "from_object": 18,
+          "cell_class": "NSTextFieldCell",
+          "owner": "_TtC8TickTick7TTLabel"
+        }
+      ],
+      "images": [],
+      "image_details": [],
+      "frames": [
+        {
+          "object": 7,
+          "cls": "_TtC8TickTick28TTProjectListEmptyHolderCell",
+          "original_class": "NSView",
+          "frame_key": "NSFrameSize",
+          "frame": "{392, 103}",
+          "superview": null,
+          "w": 392.0,
+          "h": 103.0
+        },
+        {
+          "object": 11,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame_key": "NSFrame",
+          "frame": "{{10, 4}, {372, 95}}",
+          "superview": 7,
+          "x": 10.0,
+          "y": 4.0,
+          "w": 372.0,
+          "h": 95.0
+        },
+        {
+          "object": 13,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame_key": "NSFrame",
+          "frame": "{{8, 8}, {356, 79}}",
+          "superview": 11,
+          "x": 8.0,
+          "y": 8.0,
+          "w": 356.0,
+          "h": 79.0
+        }
+      ],
+      "controls": [
+        {
+          "nib": "TTProjectListEmptyHolderCell.nib",
+          "object": 11,
+          "cls": "NSView",
+          "original_class": "NSView",
+          "frame": "{{10, 4}, {372, 95}}",
+          "outlet": "containerView",
+          "text": null,
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": null
+        },
+        {
+          "nib": "TTProjectListEmptyHolderCell.nib",
+          "object": 13,
+          "cls": "_TtC8TickTick7TTLabel",
+          "original_class": "NSTextField",
+          "frame": "{{8, 8}, {356, 79}}",
+          "outlet": "messageLabel",
+          "text": "You don't have any team list, click \"Add List\" at the bottom to start working efficiently",
+          "image": null,
+          "image_design_size": null,
+          "action": null,
+          "cell_class": "NSTextFieldCell"
+        }
+      ],
+      "cells": [
+        {
+          "object": 18,
+          "cls": "NSTextFieldCell",
+          "text": "You don't have any team list, click \"Add List\" at the bottom to start working efficiently",
+          "image": null,
+          "image_design_size": null,
+          "control_view": 13
+        }
+      ],
+      "object_class_histogram": {
+        "NSString": 17,
+        "NSNumber": 16,
+        "NSLayoutConstraint": 8,
+        "NSArray": 7,
+        "NSColor": 4,
+        "NSMutableArray": 4,
+        "NSClassSwapper": 3,
+        "NSCustomObject": 2,
+        "NSNibOutletConnector": 2,
+        "IBClassReference": 1,
+        "NSColorSpace": 1,
+        "NSData": 1,
+        "NSFont": 1,
+        "NSIBObjectData": 1,
+        "NSMutableSet": 1,
+        "NSObject": 1,
+        "NSTextFieldCell": 1
+      }
+    }
+  ],
+  "parse_errors": [],
+  "class_level_evidence": [
+    {
+      "class": "_TtC8TickTick25TTTaskListEmptyHolderView",
+      "why": "空态视图没有独立 nib（TTTaskListEmptyHolderView.nib 不存在），outlet 是 @IBOutlet + lazy storage，从 ObjC 方法表能完整读出",
+      "members": [
+        "actionButtonClicked:",
+        "awakeFromNib",
+        "initWithFrame:",
+        "initWithCoder:",
+        ".cxx_destruct",
+        "$__lazy_storage_$_imageView",
+        "$__lazy_storage_$_titleLabel",
+        "$__lazy_storage_$_titleWithLinkLabel",
+        "$__lazy_storage_$_subtitleLabel",
+        "$__lazy_storage_$_subtitleWithLinkLabel",
+        "$__lazy_storage_$_actionButton",
+        "actionButtonHandler",
+        "isContentBeenLayout",
+        "$__lazy_storage_$_imageTintColors"
+      ]
+    }
+  ]
+}
