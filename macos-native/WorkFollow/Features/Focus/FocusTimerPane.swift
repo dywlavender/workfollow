@@ -123,7 +123,7 @@ struct FocusTimerPane: View {
             .buttonStyle(.plain)
             .foregroundStyle(theme.text2)
             .help("节奏设置")
-            .background(AnchoredPropertyPanel(isPresented: $showRhythmPopover, width: 360) {
+            .background(AnchoredPropertyPanel(isPresented: $showRhythmPopover, width: PopupMetrics.rhythmPopoverWidth) {
                 rhythmPopover
             })
         }

@@ -1146,7 +1146,7 @@ struct TaskListView: View {
         // nil sections must remain closed; the shared panel builds content on demand.
         .background(AnchoredPropertyPanel(isPresented: Binding(get: { moveTargetSectionID != nil && moveTargetSectionID == group.sectionID },
                                       set: { if !$0 { moveTargetSectionID = nil } }),
-                                         width: 230, focusPolicy: .panel) {
+                                         width: PopupMetrics.moveTargetWidth, focusPolicy: .panel) {
             Group {
                 if let sectionID = group.sectionID {
                     MoveTargetPickerCard(

@@ -112,7 +112,7 @@ private struct LinkHoverMenuView: View {
             button("移除", symbol: "link.badge.minus", action: onRemove)
         }
         .padding(3)
-        .frame(width: 226)
+        .frame(width: PopupMetrics.linkHoverMenuWidth)
         .background(WFColors.overlay)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder))

@@ -54,7 +54,7 @@ struct MoveTargetPickerCard: View {
                 }
             }
         }
-        .frame(width: 230)
+        .frame(width: PopupMetrics.moveTargetWidth)
         .padding(.vertical, WFSpace.xs)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(WFColors.border))

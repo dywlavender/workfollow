@@ -72,7 +72,9 @@ final class PopupStandardizationTests: XCTestCase {
         XCTAssertEqual(kindRect.height, WFMetrics.controlHeight, accuracy: 0.5)
         XCTAssertEqual(kindPanel.frame.maxX, kindRect.maxX, accuracy: 0.5)
         XCTAssertEqual(kindPanel.frame.maxY, kindRect.minY - 4, accuracy: 0.5)
-        XCTAssertEqual(kindPanel.frame.width, 176, accuracy: 0.5)
+        // 任务类型菜单 176 → 144：实测三项内容只到 108pt，176 是被优先级菜单
+        // 拖着走的（见 PopupMetrics.taskMenuWidth 注释）。
+        XCTAssertEqual(kindPanel.frame.width, PopupMetrics.taskMenuWidth, accuracy: 0.5)
 
         // Accessibility/keyboard actions have no outside mouse-down to clean up.
         info.performClick(nil)

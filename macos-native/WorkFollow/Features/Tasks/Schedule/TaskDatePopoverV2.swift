@@ -511,9 +511,13 @@ struct TaskDatePopoverV2: View {
     }
 
     /// 两行共用的 HH:mm 输入框（固定宽度，行内不跳动）。
+    /// 外层再包一个铺满值区域的 leading 框：宿主（`NSHostingView`）的
+    /// frame 是整段值区域，默认居中会把 52pt 的输入框悬浮在行中间，
+    /// 与其它属性行「值紧跟图标左对齐」的画法错位。
     private func clockField(_ property: ScheduleProperty, text: Binding<String>, submit: @escaping () -> Void) -> some View {
         ScheduleClockInput(text: text, requestsFocus: inlineSheet == property, onSubmit: submit)
             .frame(width: 52, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// 时间值在别处变化（列表点选、日历改天、清除）后同步两行的行内文本。

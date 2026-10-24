@@ -204,7 +204,7 @@ private struct TagCandidateList: View {
             }
         }
         .padding(4)
-        .frame(width: 160)
+        .frame(width: PopupMetrics.completionWidth)
         .background(WFColors.overlay)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(WFColors.overlayBorder))

@@ -71,7 +71,7 @@ struct TaskTagEditorView: View {
                 .taskTagEditorFrame(.save)
             }
         }
-        .padding(WFSpace.xxl).frame(width: 420)
+        .padding(WFSpace.xxl).frame(width: PopupMetrics.settingsSheetWidth)
         .coordinateSpace(name: TaskTagEditorFrames.coordinateSpace)
         .onAppear { DispatchQueue.main.async { nameFocused = true } }
         .onChange(of: name) { _, _ in invalid = false }

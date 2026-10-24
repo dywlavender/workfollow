@@ -74,7 +74,7 @@ struct QuickAddPropertiesPopover: View {
             }
             .buttonStyle(.plain)
             .quickAddRenderAnchor(.list)
-            .background(AnchoredPropertyPanel(isPresented: presented(.list), width: 250,
+            .background(AnchoredPropertyPanel(isPresented: presented(.list), width: PopupMetrics.quickAddChildWidth,
                                               placement: .submenu, focusPolicy: .panel) {
                 QuickAddListPickerPopover(workspace: workspace, selectedList: selectedList,
                     onCancel: { activeChild = nil },
@@ -225,7 +225,7 @@ private struct QuickAddDisplayModePopover: View {
             }
         }
         .padding(WFSpace.sm)
-        .frame(width: 250)
+        .frame(width: PopupMetrics.quickAddChildWidth)
         .onExitCommand(perform: onCancel)
     }
 }

@@ -56,7 +56,7 @@ struct AdvancedFilterRuleEditor: View {
             .buttonStyle(.plain)
             // 业务弹层统一走无箭头呈现（与任务详情/日期面板同一套壳）。
             .background {
-                AnchoredPropertyPanel(isPresented: $showingOptions, width: 264,
+                AnchoredPropertyPanel(isPresented: $showingOptions, width: PopupMetrics.sortOptionWidth,
                                       placement: .verticalInOwner,
                                       focusPolicy: .preservePresenter) {
                     organizationOptions
@@ -119,7 +119,7 @@ struct AdvancedFilterRuleEditor: View {
             }
             .frame(maxHeight: 240)
         }
-        .frame(width: 264)
+        .frame(width: PopupMetrics.sortOptionWidth)
         .onExitCommand { showingOptions = false }
     }
 

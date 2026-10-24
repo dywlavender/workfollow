@@ -33,7 +33,7 @@ struct TemplateEducationView: View {
                 .keyboardShortcut(.defaultAction)
         }
         .padding(24)
-        .frame(width: 380, alignment: .leading)
+        .frame(width: PopupMetrics.templateNoteWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .background(WFColors.content)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))

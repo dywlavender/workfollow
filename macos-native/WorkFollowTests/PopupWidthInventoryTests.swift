@@ -129,8 +129,8 @@ final class PopupWidthInventoryTests: XCTestCase {
     }
 
     func testSortOptions() throws {
-        try add("排序选项", source: "字面量 264",
-                width: 264) {
+        try add("排序选项", source: "PopupMetrics.sortOptionWidth",
+                width: PopupMetrics.sortOptionWidth) {
             VStack(alignment: .leading, spacing: 0) {
                 MenuRowProbe(title: "手动排序", symbol: "line.3.horizontal")
                 MenuRowProbe(title: "按日期排序", symbol: "calendar")
@@ -179,8 +179,8 @@ final class PopupWidthInventoryTests: XCTestCase {
     // MARK: - Sheet / 对话框
 
     func testListActivitySheet() throws {
-        try add("清单动态 Sheet", source: "字面量 360",
-                width: 360) {
+        try add("清单动态 Sheet", source: "PopupMetrics.activitySheetWidth",
+                width: PopupMetrics.activitySheetWidth) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("清单动态").font(WFType.pageTitle)
                 ForEach(0..<5, id: \.self) { index in
@@ -193,8 +193,8 @@ final class PopupWidthInventoryTests: XCTestCase {
     }
 
     func testTagEditorSheet() throws {
-        try add("标签编辑 Sheet", source: "字面量 420",
-                width: 420) {
+        try add("标签编辑 Sheet", source: "PopupMetrics.settingsSheetWidth",
+                width: PopupMetrics.settingsSheetWidth) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("编辑标签").font(WFType.pageTitle)
                 HStack(spacing: 12) {
@@ -207,8 +207,8 @@ final class PopupWidthInventoryTests: XCTestCase {
     }
 
     func testTemplateEducation() throws {
-        try add("模板说明", source: "字面量 380",
-                width: 380) {
+        try add("模板说明", source: "PopupMetrics.templateNoteWidth",
+                width: PopupMetrics.templateNoteWidth) {
             Text("模板可以把一组固定流程的任务一次建好：先把流程里的每一步写进清单，之后每次从模板添加只改日期。")
                 .font(WFType.body)
                 .fixedSize(horizontal: false, vertical: true)

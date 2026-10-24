@@ -369,7 +369,7 @@ struct CountdownEditorView: View {
             .buttonStyle(.plain)
             .help("图标")
             .accessibilityLabel("图标")
-            .background(AnchoredPropertyPanel(isPresented: $symbolPickerOpen, width: 240) {
+            .background(AnchoredPropertyPanel(isPresented: $symbolPickerOpen, width: PopupMetrics.symbolPickerWidth) {
                 symbolPicker
             })
             // 槽比图标宽，多出的 6pt 用来把名称框推到与属性字段同一条左边界上。
@@ -441,7 +441,7 @@ struct CountdownEditorView: View {
             }
         }
         .padding(WFSpace.lg)
-        .frame(width: 240)
+        .frame(width: PopupMetrics.countdownPaletteWidth)
     }
 
     /// 一个图标格：图标在上、中文名在下；选中时**图标和名字一起**染成强调色，
@@ -1255,7 +1255,7 @@ struct CountdownStyleView: View {
         }
         // 350 = 左右内边距各 20 + 预览卡 310（**与真卡片同宽**，1:1）。
         // 顺带让 12 格色板在 4pt 间距下正好排得下（12×22 + 11×4 = 308 ≤ 310）。
-        .frame(width: 350)
+        .frame(width: PopupMetrics.countdownPreviewWidth)
         .background(WFColors.canvas)
     }
 
@@ -1308,7 +1308,7 @@ struct CountdownNoteView: View {
             }
             .padding(WFSpace.lg)
         }
-        .frame(width: 360)
+        .frame(width: PopupMetrics.countdownStyleWidth)
         .background(WFColors.canvas)
     }
 }
@@ -1352,7 +1352,7 @@ struct ArchivedCountdownsView: View {
             }
             .padding(WFSpace.lg)
         }
-        .frame(width: 380)
+        .frame(width: PopupMetrics.countdownDisplayWidth)
         .background(WFColors.canvas)
         .onAppear { today = Date() }
     }

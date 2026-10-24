@@ -1053,7 +1053,7 @@ struct TaskInspectorShell: View {
                          action: { togglePanel($showPriorityMenu) })
             .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
         .background {
-            AnchoredPropertyPanel(isPresented: $showPriorityMenu, width: PopupMetrics.taskMenuWidth,
+            AnchoredPropertyPanel(isPresented: $showPriorityMenu, width: PopupMetrics.priorityMenuWidth,
                                   placement: .dropdown,
                                   focusPolicy: .preservePresenter, title: "优先级") {
                 priorityPopover(task)
@@ -1123,7 +1123,7 @@ struct TaskInspectorShell: View {
             }
         }
         .padding(8)
-        .frame(width: PopupMetrics.taskMenuWidth)
+        .frame(width: PopupMetrics.priorityMenuWidth)
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showPriorityMenu = false })

@@ -114,7 +114,7 @@ struct TaskQuickComposer: View {
 
             Spacer(minLength: 0)
 
-            BusinessMenu(width: PopupMetrics.taskMenuWidth, title: "优先级") {
+            BusinessMenu(width: PopupMetrics.priorityMenuWidth, title: "优先级") {
                 priorityItems
             } label: {
                 // 与任务右键菜单同一条规则：有优先级就用实心旗，无优先级才留描边。

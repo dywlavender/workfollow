@@ -126,7 +126,7 @@ struct FocusOverviewPane: View {
         }
         .buttonStyle(.plain)
         .help("点击修改每日目标")
-        .background(AnchoredPropertyPanel(isPresented: $showGoalPopover, width: 190) {
+        .background(AnchoredPropertyPanel(isPresented: $showGoalPopover, width: PopupMetrics.goalPopoverWidth) {
             goalEditor
         })
     }
@@ -240,7 +240,7 @@ struct FocusOverviewPane: View {
             }
         }
         .padding(WFSpace.lg)
-        .frame(width: 190, alignment: .leading)
+        .frame(width: PopupMetrics.goalPopoverWidth, alignment: .leading)
     }
 
     private func taskTitle(for id: UUID) -> String? {

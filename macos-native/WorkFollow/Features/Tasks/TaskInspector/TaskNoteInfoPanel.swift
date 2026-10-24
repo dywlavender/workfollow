@@ -29,7 +29,7 @@ struct TaskNoteInfoPanel: View {
             row("修改", Self.dateText(info.updatedAt, calendar: calendar))
         }
         .padding(14)
-        .frame(width: 220)
+        .frame(width: PopupMetrics.noteInfoWidth)
     }
 
     private func row(_ title: String, _ value: String) -> some View {

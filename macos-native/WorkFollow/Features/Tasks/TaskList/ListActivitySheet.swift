@@ -73,7 +73,7 @@ struct ListActivitySheet: View {
             }
         }
         .task(id: queryKey) { await history.reset(store: activity, taskIDs: taskIDs) }
-        .frame(width: 360, height: 420)
+        .frame(width: PopupMetrics.activitySheetWidth, height: 420)
         .environment(\.calendar, workspace.calendar)
         .environment(\.timeZone, workspace.calendar.timeZone)
     }

@@ -1,0 +1,9 @@
+- insert:
+    - id: rea-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: rea
+        transport: stdio
+        command: /Users/dongyangwei/.npm/_npx/9b9809298fe40d2c/node_modules/rea-agents/scripts/rea.mjs
+        args:
+          - mcp
