@@ -7,7 +7,7 @@ import Foundation
 /// `editor.css`、`bridge.js`、`toolbar.js`、`slash-menu.js`、`markdown.js`、`blots.js`。
 enum QuillResources {
     /// 换包（升级 Quill / 改 Web 组件）时递增。
-    static let runtimeVersion = "2"
+    static let runtimeVersion = "7"
 
     enum Failure: LocalizedError {
         case missingResources

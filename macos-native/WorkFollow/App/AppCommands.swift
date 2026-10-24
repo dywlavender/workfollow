@@ -117,6 +117,9 @@ struct AppCommands: Commands {
             Button("Quill 内核 Spike") {
                 quillSpike.presentWindow()
             }
+            Button("Quill 探针：注入文本") {
+                NotificationCenter.default.post(name: .quillProbeInsert, object: nil)
+            }
         }
         #endif
     }

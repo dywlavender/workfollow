@@ -249,17 +249,12 @@ struct NotesWorkspaceView: View {
                             Button("创建副本") { _ = notes.createPlainTextCopy(note.id) }
                         }.font(.caption).foregroundStyle(.secondary)
                     }
-                    DocumentEditor(documentID: note.id, document: note.document,
+                    // 内核切换 P3：笔记页第一个切到 Quill 宿主（同签名）。
+                    // 工具条/斜杠在 Web 侧，onEscape 只剩"结束编辑"一层。
+                    QuillDocumentEditorView(documentID: note.id, document: note.document,
                                    onDocumentChange: { document in notes.edit(note.id) { $0.document = document } },
-                                   onEscape: {
-                                       if showFormatToolbar {
-                                           showFormatToolbar = false
-                                           return .dismissPopover
-                                       }
-                                       return .endEditing
-                                   },
+                                   onEscape: { .endEditing },
                                    onEditingChanged: { _ in },
-                                   profile: NoteDocumentProfile.make(host: .make(noteID: note.id, tasks: tasks, notes: notes)),
                                    contentSized: true, handle: editorHandle).id(note.id)
                         .overlay(alignment: .topLeading) {
                             if note.document.isEmpty {

@@ -53,10 +53,13 @@
     }
   }
 
+  var deltaRevision = 0;        // 防同步回环：宿主记录"最后一次 load 的 rev"
   function emitDelta() {
+    deltaRevision += 1;
     post({
       event: "deltaChanged",
-      delta: quill.getContents().ops,
+      rev: deltaRevision,
+      delta: JSON.stringify(quill.getContents().ops),
       plainText: trimTrailingNewline(quill.getText()),
       length: quill.getLength()
     });
@@ -80,6 +83,7 @@
 
   quill.on("text-change", function (delta, oldDelta, source) {
     if (source === "silent") return;
+    emitDelta();
     handleMarkdown();
     handleSlash(delta);
   });
@@ -231,6 +235,41 @@
 
   window.workfollowQuill = { send: handleSwiftMessage };
 
+  // 宿主稳定 API：load(deltaOps) / focus / tab / insertImage(base64)
+  window.workfollowEditor = {
+    load: function (ops) {
+      quill.setContents(ops || [], "silent");
+      quill.setSelection(ops && ops.length ? quill.getLength() - 1 : 0, "silent");
+      // 静默装载也要推 rev：宿主随后收到的 deltaChanged（用户键入）才不会
+      // 被误判为"自己刚 load 的回声"。
+      deltaRevision += 1;
+      post({ event: "loaded", rev: deltaRevision });
+      emitDelta();
+    },
+    focus: function () { quill.focus(); },
+    tab: function () {
+      // 列表行内 Tab 缩进（Quill 键盘绑定默认不覆盖 Tab），这里手动实现。
+      var selection = quill.getSelection();
+      if (!selection) return;
+      var format = quill.getFormat(selection.index, selection.length);
+      if (format.list || format.blockquote || format["code-block"]) {
+        quill.indent(selection.index, selection.length);
+      }
+    },
+    insertText: function (text) {
+      var selection = quill.getSelection();
+      var index = selection ? selection.index : quill.getLength() - 1;
+      quill.insertText(index, text, "user");
+      quill.setSelection(index + text.length, 0, "user");
+    },
+    insertImage: function (base64) {
+      var selection = quill.getSelection();
+      var index = selection ? selection.index : quill.getLength() - 1;
+      quill.insertEmbed(index, "image", "data:image/png;base64," + base64, "user");
+      quill.setSelection(index + 1, 0, "user");
+    }
+  };
+
   function handleSwiftMessage(message) {
     switch (message.action) {
       case "load":
@@ -305,6 +344,12 @@
   if (window.ResizeObserver) {
     new ResizeObserver(reportHeight).observe(root);
   }
+
+  // SwiftUI 宿主下点击夺焦保底：WKWebView 的 mouseDown 不总是触发
+  // firstResponder 变更（实测缺陷），这里显式 focus 编辑器。
+  editorHost.addEventListener("mousedown", function () {
+    setTimeout(function () { quill.focus(); }, 0);
+  });
 
   window.addEventListener("load", function () {
     post({ event: "ready" });
