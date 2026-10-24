@@ -175,6 +175,10 @@ struct TaskListGroup {
 /// View-only folding state for task group headings.
 struct TaskGroupExpansionState: Equatable {
     private(set) var collapsedIDs: Set<String> = []
+    /// 从持久化偏好恢复时必须用这个初始化器——直接改 `collapsedIDs` 是私有的。
+    init(collapsedIDs: Set<String> = []) {
+        self.collapsedIDs = collapsedIDs
+    }
 
     func isCollapsed(_ group: TaskListGroup) -> Bool {
         collapsedIDs.contains(group.id)

@@ -16,21 +16,41 @@ struct TaskEmptyStateView: View {
 
     let style: Style
     var message: String? = nil
+    /// 空态的下一步动作（对齐滴答 `TTTaskListEmptyHolderView` 的
+    /// `actionButton` + `actionButtonHandler`）。nil = 纯装饰，不占可点区域。
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    private var showsAction: Bool { actionTitle != nil && action != nil }
 
     var body: some View {
         VStack(spacing: WFSpace.md) {
             illustration
                 .frame(width: style == .inspector ? 176 : 168,
                        height: style == .inspector ? 120 : 108)
+                // 插画永远是装饰：不拦点击、不进可访问性树。
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             if let message {
                 Text(message)
                     .font(WFType.body)
                     .foregroundStyle(WFColors.secondaryText)
                     .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isStaticText)
+            }
+            if let actionTitle, let action {
+                Button(action: action) { Text(actionTitle) }
+                    .buttonStyle(.plain)
+                    .font(WFType.control)
+                    .foregroundStyle(WFColors.accent)
+                    .padding(.horizontal, WFSpace.md)
+                    .frame(height: WFMetrics.controlHeight)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(actionTitle)
             }
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        // 只有"有动作"时才让整块可点：否则空态会把下方列表的点击吞掉。
+        .allowsHitTesting(showsAction)
     }
 
     /// 场景式线稿（对照滴答空态插画迭代）：整体 -8° 桌面摆拍构图，便签笑脸、

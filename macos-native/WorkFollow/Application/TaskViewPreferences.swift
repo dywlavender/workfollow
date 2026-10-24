@@ -146,11 +146,15 @@ struct TaskViewPreference: Equatable, Codable {
     var hiddenFields: [TaskRowDetailField]?
     /// 视图形态。nil = 列表（滴答默认）。
     var viewMode: TaskListViewMode?
+    /// 被折叠的分组 id（滴答 `taskCollapseStateChanged:` + `expandedTasksInSmartList`）。
+    /// 存的是**折叠**而非展开：新增分组默认展开，旧档案缺键也就保持既有观感。
+    var collapsedGroups: [String]?
 
     init(sortMode: TaskListSortMode? = nil, grouping: TaskListGrouping? = nil,
          sortDescending: Bool? = nil, hidesCompleted: Bool? = nil,
          hidesDetails: Bool? = nil, hiddenFields: [TaskRowDetailField]? = nil,
-         viewMode: TaskListViewMode? = nil) {
+         viewMode: TaskListViewMode? = nil,
+         collapsedGroups: [String]? = nil) {
         self.sortMode = sortMode
         self.grouping = grouping
         self.sortDescending = sortDescending
@@ -158,17 +162,19 @@ struct TaskViewPreference: Equatable, Codable {
         self.hidesDetails = hidesDetails
         self.hiddenFields = hiddenFields
         self.viewMode = viewMode
+        self.collapsedGroups = collapsedGroups
     }
 
     /// 全是默认值 → 该视图不必留档案（与 resetSort 的"不留垃圾"同一口径）。
     var isDefault: Bool {
         sortMode == nil && grouping == nil && sortDescending == nil
             && hidesCompleted != true && hidesDetails != true && (hiddenFields ?? []).isEmpty
-            && viewMode == nil
+            && viewMode == nil && (collapsedGroups ?? []).isEmpty
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sortMode, grouping, sortDescending, hidesCompleted, hidesDetails, hiddenFields, viewMode
+        case sortMode, grouping, sortDescending, hidesCompleted, hidesDetails, hiddenFields,
+             viewMode, collapsedGroups
     }
 
     init(from decoder: Decoder) throws {
@@ -180,6 +186,7 @@ struct TaskViewPreference: Equatable, Codable {
         hidesDetails = try values.decodeIfPresent(Bool.self, forKey: .hidesDetails)
         hiddenFields = try values.decodeIfPresent([TaskRowDetailField].self, forKey: .hiddenFields)
         viewMode = try values.decodeIfPresent(TaskListViewMode.self, forKey: .viewMode)
+        collapsedGroups = try values.decodeIfPresent([String].self, forKey: .collapsedGroups)
     }
 }
 
@@ -323,6 +330,27 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
 
     func setViewMode(_ mode: TaskListViewMode, for key: String) {
         update(key) { $0.viewMode = mode == .list ? nil : mode }
+    }
+
+    /// 折叠状态（滴答 `taskCollapseStateChanged:` 落盘的口径）。
+    /// 全展开时不写键，让 `isDefault` 能把这个视图的档案整个清掉。
+    func setCollapsedGroups(_ ids: Set<String>, for key: String) {
+        let ordered = ids.sorted()
+        update(key) { entry in
+            entry.collapsedGroups = ordered.isEmpty ? nil : ordered
+        }
+    }
+
+    func collapsedGroups(for key: String) -> Set<String> {
+        Set(preferences[key]?.collapsedGroups ?? [])
+    }
+
+    /// 这个视图有没有"用户明确表过态"的折叠记录。
+    ///
+    /// 区分"从没展开过"与"用户把全部展开"——两者读出来都是空集合，
+    /// 但后者不该再被"已完成组首次出现自动折叠"覆盖一次。
+    func hasCollapsedGroupsRecord(for key: String) -> Bool {
+        preferences[key]?.collapsedGroups != nil
     }
 
     func setHidesCompleted(_ hides: Bool, for key: String) {

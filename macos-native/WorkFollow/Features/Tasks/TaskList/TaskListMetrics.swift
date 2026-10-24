@@ -5,6 +5,9 @@ enum TaskListMetrics {
     static let groupTopGap: CGFloat = 18
     static let groupHeaderHeight: CGFloat = 30
     static let groupChevronSize: CGFloat = 11
+    /// 分组头 `+` / `…` 的命中格。滴答这两枚都是 24×24（`TTTaskListSectionCell.nib`
+    /// 里 `addButton` / `moreButton` 的 frame），本地原来是 18×18 裸图标。
+    static let groupActionHit: CGFloat = 24
     static let quickAddHeight: CGFloat = 42
     static let quickAddRadius: CGFloat = 10
     static let hierarchyIndent: CGFloat = 24
@@ -28,6 +31,15 @@ enum TaskListMetrics {
     static let maxVisibleTags = 3
     static let tagRowSpacing: CGFloat = 6
     static let tagChipHeight: CGFloat = 22
+
+    /// 批量动作条高度（列表区多选时出现）。
+    static let bulkBarHeight: CGFloat = 36
+
+    /// 已完成组每页条数（滴答 `countToShowOfCompleted` + `didClickLoadMore`：
+    /// 已完成是"看历史"，不该和待办一样一次性全铺出来）。
+    static let completedPageSize = 30
+    /// 「显示更多」行高。比任务行矮：它只是一枚文字按钮 + 转圈位。
+    static let loadMoreRowHeight: CGFloat = 34
 
     /// 任务行高度：标题行固定，预览行与标签行各占一档（滴答的行会随之变高）。
     /// 行高必须由这里给出确定值——`NSOutlineView` 的 `heightOfRowByItem` 不能反查

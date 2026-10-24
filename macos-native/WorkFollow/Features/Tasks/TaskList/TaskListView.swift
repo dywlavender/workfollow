@@ -30,7 +30,8 @@ private struct TaskOutlineHeaderState: Equatable {
     let title: String
     let count: Int
     let collapsed: Bool
-    let hovered: Bool
+    /// 悬停中的分组 id（系统分组没有 sectionID，也要能悬停出按钮）。
+    let hoveredGroupID: String?
     let menuOpen: Bool
     let moveTarget: String?
 }
@@ -81,7 +82,8 @@ struct TaskListView: View {
     @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
     /// 光标落在哪个分组标题上（滴答的 `+` / `⋯` 是 hover 才出现的，未悬停时标题行
     /// 只有箭头 + 标题 + 计数——这是对着本机滴答实测出来的）。
-    @State private var hoveredSectionID: String?
+    /// 悬停中的分组 id（用 `TaskListGroup.id`，系统分组也有，不再只限自定义小节）。
+    @State private var hoveredGroupID: String?
     @State private var activeSectionMenuID: String?
     /// 正在为哪个分组挑目标清单（非 nil 时弹出自绘卡片 MoveTargetPickerCard）。
     @State private var moveTargetSectionID: String?
@@ -119,7 +121,14 @@ struct TaskListView: View {
     /// 按它做程序化聚焦与交还。读写都可靠，那些守卫才恢复意义。
     @State private var quickAddFocused = false
     @State private var groupExpansion = TaskGroupExpansionState()
+    /// 折叠态是否已经从偏好里恢复过（只在首次出现时读一次，避免每次 body 都覆盖用户操作）。
+    @State private var groupExpansionRestored = false
     @State private var seenCompletedGroupIDs: Set<String> = []
+    /// 已完成组的"已展开条数"（按 group.id）。缺省 = 第一页。
+    /// 对齐滴答 `countToShowOfCompleted` + `didClickLoadMore`。
+    @State private var completedPageCounts: [String: Int] = [:]
+    /// 正在"加载"的已完成组（滴答 `TTListLoadMoreCell.startLoading` 的转圈态）。
+    @State private var loadingCompletedGroupIDs: Set<String> = []
     /// 「倒数纪念日」小节的折叠状态。它与任务组的折叠是两套：任务组按 `id` 记，
     /// 这里只有一个固定小节，用布尔就够。
     @State private var countdownSectionCollapsed = false
@@ -186,7 +195,13 @@ struct TaskListView: View {
             }
             // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
             // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
-            if canAdd, let scope {
+            // 多选时快速添加条让位给批量动作条（滴答 `isMultipleModeForOneSelected`：
+            // 多选是一个显式模式，输入区换成批量动作）。两者不同时出现——
+            // 批量态下用户的意图是"处理已选的"，不是"再建一条"。
+            if !workspace.bulkSelection.isEmpty {
+                TaskBulkActionBar(workspace: workspace, onOpenPanel: openBatchPanel)
+                    .zIndex(2)
+            } else if canAdd, let scope {
                 quickAddBar(in: scope)
                     .zIndex(1)
                     // 占位文案实测过"清单已经是学习、却仍写着收集箱"：内容按 activeList
@@ -218,7 +233,11 @@ struct TaskListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
             quickAddTagsOverride = QuickAddPropertiesOverrides.renamedTags(quickAddTagsOverride, notification: notification)
         }
-        .onAppear { restoreCaptureDraft() }
+        .onAppear {
+            restoreCaptureDraft()
+            restoreGroupExpansion()
+        }
+        .onChange(of: preferenceKey) { _, _ in restoreGroupExpansion() }
         .onChange(of: capturePersistenceValue) { _, _ in saveCaptureDraft() }
         .onChange(of: environment.quickAddRequest) { _, _ in quickAddFocused = true }
         .onChange(of: draft) { _, _ in
@@ -325,6 +344,25 @@ struct TaskListView: View {
         .padding(.horizontal, WFSpace.xl)
         .padding(.top, WFSpace.lg)
         .padding(.bottom, WFSpace.md)
+    }
+
+    /// 空态的下一步动作（滴答 `TTTaskListEmptyHolderView.actionButton`）。
+    ///
+    /// 文案与落点按视图给：空列表最怕的是"看着一句话，不知道下一步点哪"。
+    private var emptyStateAction: (title: String, perform: () -> Void)? {
+        switch navigation.destination {
+        case .today:
+            return ("看看未来 7 天", { navigation.destination = .nextSevenDays })
+        case .inbox:
+            return ("新建第一个任务", {
+                quickAddFocused = true
+                listFocused = false
+            })
+        case .nextSevenDays, .tomorrow:
+            return ("回到今天", { navigation.destination = .today })
+        default:
+            return nil
+        }
     }
 
     private var headerTitle: String {
@@ -954,6 +992,65 @@ struct TaskListView: View {
         }
     }
 
+    /// 从持久化偏好恢复折叠态（滴答 `expandedTasksInSmartList` 的落盘口径）。
+    ///
+    /// 每个视图键恢复一次：`preferenceKey` 变了（切清单/标签/过滤器）要重新读。
+    /// **不覆盖**已完成组的"首次出现自动折叠"——那是 `collapseNewCompletedGroups()`
+    /// 的事；这里只把存档里的折叠集合装回去，若该组没有存档记录则保持默认展开。
+    private func restoreGroupExpansion() {
+        let stored = environment.viewPreferences.collapsedGroups(for: preferenceKey)
+        groupExpansion = TaskGroupExpansionState(collapsedIDs: stored)
+        groupExpansionRestored = environment.viewPreferences.hasCollapsedGroupsRecord(for: preferenceKey)
+    }
+
+    /// 这一组的动作位（`+` / `…` / 文字动作）。
+    private func headerActions(for group: TaskListGroup) -> TaskGroupHeaderActions {
+        TaskGroupHeaderActions.resolve(kind: group.kind, sectionID: group.sectionID,
+                                       day: group.day, taskCount: group.tasks.count,
+                                       isUnsectionedBucket: group.isUnsectionedBucket,
+                                       today: workspace.calendar.startOfDay(for: workspace.clock()))
+    }
+
+    /// 当前分组是否在悬停（用 `group.id`，系统分组也有）。
+    private func isHovered(_ group: TaskListGroup) -> Bool { hoveredGroupID == group.id }
+
+    /// 选中这一组的全部任务（滴答 `selectAllButtonClicked`）。
+    ///
+    /// 走 `setBulkSelection` 而不是逐条 `toggleBulkSelection`：后者是"切换"，
+    /// 对已选中的会取消，全选语义会变成反选。
+    private func selectAll(in group: TaskListGroup) {
+        let ids = displayedNodes(for: group, scope: scope ?? .today).map(\.task.id)
+        guard !ids.isEmpty else { return }
+        workspace.setBulkSelection(in: ids)
+        listFocused = true
+    }
+
+    /// 分组头的「+」。
+    ///
+    /// 分两条路（都是已验证的实现，不新造状态机）：
+    /// - **自定义小节**：走既有的「在此分组新建任务」对话框 → `createTaskInSection`，
+    ///   因为"归到哪个小节"是创建参数，快速添加条目前不接受小节。
+    /// - **系统分组**（今天 / 已过期 / 未来 / 无日期）：把这一组的日期预填进
+    ///   快速添加条的 schedule override，再聚焦输入框——用户可以直接连写标题、
+    ///   按 Tab 补描述，与滴答在该分组下原地开输入一致。
+    private func beginCapture(in group: TaskListGroup) {
+        let actions = headerActions(for: group)
+        if case .section(let sectionID) = actions.prefill {
+            guard let list = workspace.activeList,
+                  let title = TaskNamePrompt.ask("在此分组新建任务"),
+                  !title.isEmpty else { return }
+            if !workspace.createTaskInSection(sectionID, list: list, title: title) {
+                TaskNamePrompt.invalidName()
+            }
+            return
+        }
+        if case .due(let day) = actions.prefill {
+            quickAddScheduleOverride = QuickAddScheduleDraft(dueAt: day)
+        }
+        quickAddFocused = true
+        listFocused = false
+    }
+
     /// 在分组上/下方插入新分组（滴答分组标题菜单的两项）。
     /// "在下方" = 插到**下一个分组之前**；没有下一个就追加到末尾。
     private func addSection(above id: String?) {
@@ -970,8 +1067,15 @@ struct TaskListView: View {
     }
 
     private func headerContent(_ group: TaskListGroup) -> some View {
-        HStack(spacing: WFSpace.sm) {
-            Button { groupExpansion.toggle(group) } label: {
+        let headerActions = headerActions(for: group)
+        let isGroupHovered = isHovered(group)
+        return HStack(spacing: WFSpace.sm) {
+            Button {
+                groupExpansion.toggle(group)
+                // 滴答 `taskCollapseStateChanged:`：折叠态落盘，重启后保持。
+                environment.viewPreferences.setCollapsedGroups(groupExpansion.collapsedIDs,
+                                                               for: preferenceKey)
+            } label: {
                 HStack(spacing: 6) {
                     Image(systemName: groupExpansion.isCollapsed(group) ? "chevron.right" : "chevron.down")
                         .font(.system(size: TaskListMetrics.groupChevronSize, weight: .semibold))
@@ -989,29 +1093,22 @@ struct TaskListView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            // 分组标题上的 +（滴答：直接在这个分组里建任务）。弹一次标题而不是
-            // 造空任务进编辑态——我们的行内编辑状态机比滴答薄，先给可靠的那条路。
-            if let sectionID = group.sectionID, hoveredSectionID == sectionID {
-                Button {
-                    guard let list = workspace.activeList,
-                          let title = TaskNamePrompt.ask("在此分组新建任务"),
-                          !title.isEmpty else { return }
-                    if !workspace.createTaskInSection(sectionID, list: list, title: title) {
-                        TaskNamePrompt.invalidName()
-                    }
-                } label: {
+            // + / … / 文字动作：规则在 `TaskGroupHeaderActions`（纯逻辑、可单测）。
+            // 滴答三枚都是固定 outlet——不是"有 sectionID 才有"，系统分组同样要有。
+            if headerActions.showsAdd, isGroupHovered {
+                Button { beginCapture(in: group) } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
-                        .frame(width: 18, height: 18)
+                        .frame(width: TaskListMetrics.groupActionHit, height: TaskListMetrics.groupActionHit)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help("在此分组新建任务")
+                .accessibilityLabel("在「\(groupTitle(group))」新建任务")
             }
-            // 分组标题上的可见 ⋯（滴答是 hover 显示）：右键之外再给一个看得见的入口，
-            // 否则"就地能改分组"只有知道要右键的人才用得上。
-            if let sectionID = group.sectionID, hoveredSectionID == sectionID || activeSectionMenuID == sectionID {
+            if headerActions.showsMenu, let sectionID = group.sectionID,
+               isGroupHovered || activeSectionMenuID == sectionID {
                 BusinessMenu(isPresented: Binding(get: { activeSectionMenuID == sectionID },
                     set: { visible in
                         if visible { activeSectionMenuID = sectionID }
@@ -1020,23 +1117,30 @@ struct TaskListView: View {
                     Image(systemName: "ellipsis")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
-                        .frame(width: 18, height: 18)
+                        .frame(width: TaskListMetrics.groupActionHit, height: TaskListMetrics.groupActionHit)
                         .contentShape(Rectangle())
                 }
                 .fixedSize()
                 .help("分组操作")
             }
             Spacer(minLength: 0)
-            if let note = TaskListViewDefaults.groupTrailingNote(for: group.kind) {
-                Button(note) {
-                    workspace.postponeOverdue(Set(group.tasks.map(\.id)))
+            if let primary = headerActions.primary {
+                Button(primary.title) {
+                    switch primary {
+                    case .postpone:
+                        workspace.postponeOverdue(Set(group.tasks.map(\.id)))
+                    case .selectAll:
+                        selectAll(in: group)
+                    }
                 }
                 .buttonStyle(.plain)
                 .font(WFType.supporting)
                 .foregroundStyle(WFColors.accent)
-                .help("将已过期任务顺延到今天")
+                .help(primary.help)
+                .accessibilityLabel(primary.title + "：" + groupTitle(group))
             }
         }
+        .background(alignment: .trailing) { EmptyView() }
         .padding(.horizontal, WFSpace.sm)
         .frame(height: TaskListMetrics.groupHeaderHeight)
         // nil sections must remain closed; the shared panel builds content on demand.
@@ -1059,9 +1163,10 @@ struct TaskListView: View {
             }
         })
         .onHover { inside in
-            guard let sectionID = group.sectionID else { return }
-            if inside { hoveredSectionID = sectionID }
-            else if hoveredSectionID == sectionID { hoveredSectionID = nil }
+            // 系统分组没有 sectionID，但按钮同样要有——用 group.id 做悬停身份。
+            let groupID = group.id
+            if inside { hoveredGroupID = groupID }
+            else if hoveredGroupID == groupID { hoveredGroupID = nil }
         }
         // 把任务拖到**分组标题**上 = 改归属（滴答主手势）。
         // 列表行拖的是任务 UUID 字符串；侧栏清单拖拽带 `wf-list:` 前缀，UUID 解析失败即忽略。
@@ -1091,11 +1196,46 @@ struct TaskListView: View {
 
     private func collapseNewCompletedGroups() {
         guard scope?.isClosedScope != true else { return }
+        // 用户在这个视图上明确表过态（有过折叠记录）就完全尊重存档：
+        // 否则"手动展开已完成组 → 下次进来又被自动折叠"会反复出现。
+        if groupExpansionRestored { return }
+        var changed = false
         for group in groups where group.kind == .completed {
             if seenCompletedGroupIDs.insert(group.id).inserted,
                !groupExpansion.isCollapsed(group) {
                 groupExpansion.toggle(group)
+                changed = true
             }
+        }
+        if changed {
+            environment.viewPreferences.setCollapsedGroups(groupExpansion.collapsedIDs,
+                                                           for: preferenceKey)
+        }
+    }
+
+    /// 已完成组的可见条数上限（其它组不看这个）。
+    private func visibleCompletedLimit(for group: TaskListGroup) -> Int {
+        guard group.kind == .completed else { return .max }
+        return max(TaskListMetrics.completedPageSize,
+                   completedPageCounts[group.id] ?? TaskListMetrics.completedPageSize)
+    }
+
+    /// 这一组还有多少条没显示（0 = 不需要「显示更多」行）。
+    private func hiddenCompletedCount(for group: TaskListGroup, scope: TaskListScope) -> Int {
+        guard group.kind == .completed else { return 0 }
+        let total = displayedNodes(for: group, scope: scope).count
+        return max(0, total - visibleCompletedLimit(for: group))
+    }
+
+    /// 「显示更多」：先转圈一小拍再追加，对齐滴答 `startLoading` / `endLoading` 的观感。
+    /// 直接同步追加的话列表会"跳"一下，用户以为点漏了。
+    private func loadMoreCompleted(in group: TaskListGroup) {
+        guard !loadingCompletedGroupIDs.contains(group.id) else { return }
+        loadingCompletedGroupIDs.insert(group.id)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            let current = visibleCompletedLimit(for: group)
+            completedPageCounts[group.id] = current + TaskListMetrics.completedPageSize
+            loadingCompletedGroupIDs.remove(group.id)
         }
     }
 
@@ -1142,7 +1282,7 @@ struct TaskListView: View {
             if group.kind != .plain || group.label != nil {
                 let header = TaskOutlineHeaderState(revision: workspace.revision, title: groupTitle(group),
                     count: group.tasks.count, collapsed: groupExpansion.isCollapsed(group),
-                    hovered: hoveredSectionID == group.sectionID,
+                    hoveredGroupID: hoveredGroupID,
                     menuOpen: activeSectionMenuID != nil && activeSectionMenuID == group.sectionID,
                     moveTarget: moveTargetSectionID)
                 rows.append(.init(id: "header:" + group.id, state: header, layout: "header") {
@@ -1154,7 +1294,12 @@ struct TaskListView: View {
                 })
             }
             if (group.kind == .plain && group.label == nil) || !groupExpansion.isCollapsed(group) {
-                for node in displayedNodes(for: group, scope: scope ?? .today) {
+                // 已完成组分页（滴答 `countToShowOfCompleted`）：先给一页，
+                // 其余由行尾的「显示更多」按页追加。
+                let allNodes = displayedNodes(for: group, scope: scope ?? .today)
+                let limit = visibleCompletedLimit(for: group)
+                let nodes = allNodes.count > limit ? Array(allNodes.prefix(limit)) : allNodes
+                for node in nodes {
                     let preview = TaskListViewDefaults.bodyPreview(of: node.task.document)
                     let state = TaskOutlineRowState(task: node.task, depth: node.depth,
                         hasChildren: node.hasChildren, expanded: node.expanded,
@@ -1177,12 +1322,43 @@ struct TaskListView: View {
                         taskRow(group: group, node: node).environmentObject(environment)
                     })
                 }
+                if allNodes.count > nodes.count {
+                    let remaining = allNodes.count - nodes.count
+                    let loading = loadingCompletedGroupIDs.contains(group.id)
+                    rows.append(.init(id: "loadMore:" + group.id,
+                                      state: "loadMore:\(remaining):\(loading)",
+                                      layout: "loadMore") {
+                        Button { loadMoreCompleted(in: group) } label: {
+                            HStack(spacing: 6) {
+                                if loading {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Text(loading ? "正在加载…" : "显示更多（还有 \(remaining) 条）")
+                                    .font(WFType.supporting)
+                                    .foregroundStyle(WFColors.accent)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: TaskListMetrics.loadMoreRowHeight)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(loading)
+                        .accessibilityLabel("显示更多已完成任务，还有 \(remaining) 条")
+                    })
+                }
             }
         }
         rows.append(.init(id: "bottom-inset", state: "inset", layout: "inset") {
             Color.clear.frame(height: WFSpace.xl).accessibilityHidden(true)
         })
         return rows
+    }
+
+    /// 「更多」：把焦点交给右侧完整面板。批量面板是按 `bulkSelection` 投影的，
+    /// 这里只需保证列表区不再抢焦点。
+    private func openBatchPanel() {
+        listFocused = false
+        quickAddFocused = false
     }
 
     private func taskListSection() -> some View {
@@ -1194,6 +1370,8 @@ struct TaskListView: View {
                         collapsed: countdownSectionCollapsed,
                         onToggle: { countdownSectionCollapsed.toggle() },
                         onSelect: { _ in navigation.destination = .countdown },
+                        emptyActionTitle: emptyStateAction?.title,
+                        emptyAction: emptyStateAction?.perform,
                         rows: taskOutlineRows, scopeKey: preferenceKey, onKey: handleOutlineKey)
         .focusable(!editingRowTitle)
         .focused($listFocused)
@@ -1867,11 +2045,6 @@ enum TaskListViewDefaults {
         return nil
     }
 
-    /// 分组标题右侧的小字尾注；只有"已过期"组显示"顺延"。
-    static func groupTrailingNote(for kind: TaskGroupKind) -> String? {
-        kind == .overdue ? "顺延" : nil
-    }
-
     static func hasReminder(reminderAt: Date?, reminderOffsets: [Int]?) -> Bool {
         reminderAt != nil || !(reminderOffsets ?? []).isEmpty
     }
@@ -1898,6 +2071,9 @@ private struct TaskOutlineHost: View {
     let collapsed: Bool
     let onToggle: () -> Void
     let onSelect: (UUID) -> Void
+    /// 空态的下一步动作（滴答 `actionButtonHandler`）：文案 + 点击。
+    var emptyActionTitle: String? = nil
+    var emptyAction: (() -> Void)? = nil
     let rows: [NativeTaskOutline.Row]
     let scopeKey: String
     let onKey: (TaskOutlineKey) -> Bool
@@ -1930,7 +2106,8 @@ private struct TaskOutlineHost: View {
             .overlay {
                 if tasksAreEmpty && !showsCountdown {
                     TaskEmptyStateView(style: .list,
-                                       message: TaskListViewDefaults.emptyStateMessage(destination: destination))
+                                       message: TaskListViewDefaults.emptyStateMessage(destination: destination),
+                                       actionTitle: emptyActionTitle, action: emptyAction)
                 }
             }
     }

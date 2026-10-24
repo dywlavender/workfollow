@@ -63,11 +63,13 @@ final class TaskListViewDefaultsTests: XCTestCase {
         XCTAssertEqual(TaskListViewDefaults.emptyStateMessage(destination: .completed), "这里还没有任务")
     }
 
-    func testOnlyOverdueGroupCarriesPostponeNote() {
-        XCTAssertEqual(TaskListViewDefaults.groupTrailingNote(for: .overdue), "顺延")
-        for kind in [TaskGroupKind.pinned, .today, .upcoming, .later, .undated, .day, .plain, .completed] {
-            XCTAssertNil(TaskListViewDefaults.groupTrailingNote(for: kind))
-        }
+    /// 分组头文字动作已迁到 `TaskGroupHeaderActions`（那边覆盖「顺延 / 全选 / 空组不给」）。
+    /// 这里只锁住"已完成组没有文字动作"这一条历史口径，其余在
+    /// `TaskGroupHeaderActionsTests` 里逐 kind 断言。
+    func testCompletedGroupCarriesNoTrailingAction() {
+        let completed = TaskGroupHeaderActions.resolve(kind: .completed, sectionID: nil, day: nil,
+                                                       taskCount: 3, today: now)
+        XCTAssertNil(completed.primary)
     }
 
     func testReminderMetadataIncludesRelativeAndLegacyReminders() {
