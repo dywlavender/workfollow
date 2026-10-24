@@ -54,3 +54,18 @@
 - 测试：QuillBridgeSpikeTests / QuillDeltaCodecTests / NoteFeatureTests 25/25 绿
 
 提交：7114294（P0）→ bdf13d8（P1）→ 463ca44（P2）→ e3c97bf → 本文件随收尾提交。
+
+## 终局（2026-10-24 晚补充）：问题是假象，键盘焦点从未坏过
+
+用 CGEvent `keyboardSetUnicodeString`（`post(tap: .cghidEventTap)`，走 HID→
+WindowServer→App 的真实硬件分发路径）在笔记页实测：点击编辑区后输入
+"KEYTEST"，AXTextArea 立即变为 `PROBEGoKEYTEST`、字数统计 7→14 字。
+
+**结论**：此前 7 轮修复全部"无效"的根因是验证手段本身——System Events
+`keystroke` 走 AX 合成路径，不经过 local event monitor、也不按
+firstResponder 链分发到 WKWebView。真实键盘（与 CGEvent 同路径）无此问题。
+
+- 焦点战报中 3 个候选方案作废：无需真人验证、无需 bridge diff、无需 AppKit 直宿。
+- `injectKeyEvent` 直注通道与 focusObserver 兜底保留（无害，处理
+  Enter/Backspace/方向键之外的极端场景）。
+- P4（任务详情/摘要卡切 Quill）解除阻塞。
