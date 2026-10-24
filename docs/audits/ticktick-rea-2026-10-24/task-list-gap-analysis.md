@@ -100,7 +100,8 @@ if let note = TaskListViewDefaults.groupTrailingNote(for: group.kind) { Button(n
 ### 2.2 已完成分组分页（P1，M）
 
 **滴答**：`TTTaskListViewController` 有 `countToShowOfCompleted` 与 `didClickLoadMore`；
-`TTTaskListOutlineView` 里存在 `TTSubtasksLoadmoreCell` 同族的加载更多单元格。
+加载行是 `TTListLoadMoreCell`（`progressIndicator` + `loadMoreLabel` + `leadingLC`，
+另有 `startLoading` / `endLoading` —— 点一下变转圈，加载完再收起）。
 
 **本地**：`groups` 一次性把已完成全部算出来（`TaskListView.swift:155`），
 `collapseNewCompletedGroups()` 只负责默认折叠（`:1092`）。任务多时：
@@ -108,7 +109,8 @@ if let note = TaskListViewDefaults.groupTrailingNote(for: group.kind) { Button(n
 - 展开后整段渲染，没有"再加载 30 条"。
 
 **建议**：已完成分组默认只放 `TaskListMetrics.completedPageSize`（30）条 + 一行
-「显示更多（还有 N 条）」，点一次 `+30`。折叠状态下不建行（现在的
+「显示更多（还有 N 条）」，点一次 `+30`，点击后先转圈再追加（对齐
+`startLoading` / `endLoading` 的观感）。折叠状态下不建行（现在的
 `displayedNodes` 仍会算出来，可以顺手短路）。这条同时也是性能优化。
 
 ### 2.3 折叠状态持久化（P1，S）
@@ -117,8 +119,9 @@ if let note = TaskListViewDefaults.groupTrailingNote(for: group.kind) { Button(n
 分组展开态跟着账号走，重启后保持。
 
 **本地**：`TaskGroupExpansionState` 是 `@State`（`TaskListView.swift:121`），
-`TaskViewPreferences` 里只有 `sortMode` / `grouping` / `hidesCompleted` /
-`hidesDetails` / `hiddenDetailFields` / `viewMode`，**没有折叠态**。
+`TaskViewPreference`（`TaskViewPreferences.swift:136`）只有
+`sortMode` / `grouping` / `sortDescending` / `hidesCompleted` / `hidesDetails` /
+`hiddenFields` / `viewMode`，**没有折叠态**。
 
 **建议**：`TaskViewPreference` 加 `collapsedGroups: [String]?`（optional，
 旧档案缺键 = 默认行为）。键用现有 `TaskViewScopeKey.key(...)` + 分组 id，
@@ -163,7 +166,23 @@ $__lazy_storage_$_actionButton  +  actionButtonClicked:  +  actionButtonHandler
 - `.inbox` 空 → 「新建第一个任务」→ 聚焦快速添加条
 - `.trash` 空 → 不给动作
 
-### 2.6 类型选择（P2，S）
+### 2.6 快速添加条（对比结论：已经对齐，不再动）
+
+这一块是本项目**已经做到位**的部分，写在这里是为了避免后续再"优化"：
+
+| 滴答 (`TTTaskListInputView.nib`) | 本地 |
+|---|---|
+| `inputContainerHeightLC` + `contentView` 上下留白 | `TaskListMetrics.quickAddHeight = 42`，`QuickAddBarStyle` 统一留白 |
+| `dateButton` / `priorityButton` / `tagButton` / `listButton` / `moreButton`（各 24×24） | 展开后「日历」「▾更多属性」两枚 + `QuickAddPropertiesPopover` 里的优先级/清单/标签/附件/模板 |
+| `addButton` 29×24 | 回车提交、`⌘N` 角标提示 |
+| `enterTipsLabel`（"↵"提示） | `Text("⌘N")`（快捷键提示，语义等价） |
+| `calendarButton` / `repeatImageView` / `dateRepeatImageView`（日期+重复叠加小图标） | 日期 badge 上叠重复标记，`quickAddBadgeColor` 按过期/今天/未来着色 |
+
+差别只在**入口密度**：滴答是 5 枚常显图标平铺，本地是「日期 + 更多」两枚折叠。
+本地这个选择是刻意的（顶栏 `moreMenu` 的注释里记了用户反馈"功能太多、不实用"），
+维持现状。**不建议**为了像素对齐把 5 枚图标摊开。
+
+### 2.7 类型选择（P2，S）
 
 **滴答**：`outlineView:typeSelectStringForTableColumn:item:` +
 `nextTypeSelectMatchFromItem:toItem:forString:` + `shouldTypeSelectForEvent:withCurrentSearchString:`
@@ -177,7 +196,7 @@ $__lazy_storage_$_actionButton  +  actionButtonClicked:  +  actionButtonHandler
 不必上 NSTableView 原生实现——列表已经是 SwiftUI 行，自己维护一个
 小状态机更可控，也避开 TextKit 焦点冲突。
 
-### 2.7 清单名就地改名（P2，S）
+### 2.8 清单名就地改名（P2，S）
 
 **滴答**：顶栏 `titleLabel`(119 宽) + `projectNameEditBackgroundView`(127×36)
 + `_updateTitleEditingBackground` —— 清单页点标题直接在原位变成输入框。
@@ -190,7 +209,7 @@ $__lazy_storage_$_actionButton  +  actionButtonClicked:  +  actionButtonHandler
 已含空名/重名/收集箱保护 + `activeList` 跟随改名）。注意要挡掉
 "智能清单 / 过滤器 / 标签 / 收集箱"这几种不该就地改名的标题。
 
-### 2.8 明确不做（写清楚原因，避免反复讨论）
+### 2.9 明确不做（写清楚原因，避免反复讨论）
 
 | 滴答能力 | 为什么不跟 |
 |---|---|
@@ -222,6 +241,9 @@ $__lazy_storage_$_actionButton  +  actionButtonClicked:  +  actionButtonHandler
 **第四批（P2，S）**
 8. 类型选择（打字跳转）。
 9. 清单名就地改名。
+
+快速添加条（§2.6）经比对**已经对齐**，不在任何一批里——别为了像素一致把
+5 枚图标摊开，那正是用户反馈"功能太多"而收掉的东西。
 
 ---
 
