@@ -27,8 +27,10 @@ struct QuillDocumentEditorView: NSViewRepresentable {
     func makeNSView(context: Context) -> QuillWebView {
         let view = QuillWebView()
         view.delegate = context.coordinator
+        view.usesContentHeight = contentSized
         context.coordinator.attach(view: view)
         view.loadBridge()
+        view.setGrows(contentSized)
         view.setToolbarVisible(toolbarVisible)
         return view
     }
@@ -36,6 +38,8 @@ struct QuillDocumentEditorView: NSViewRepresentable {
     func updateNSView(_ view: QuillWebView, context: Context) {
         context.coordinator.parent = self
         context.coordinator.syncDocumentIfNeeded()
+        view.usesContentHeight = contentSized
+        view.setGrows(contentSized)
         view.setToolbarVisible(toolbarVisible)
     }
 
@@ -157,6 +161,13 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
 
     weak var delegate: Delegate?
     private(set) var isBridgeReady = false
+    /// contentSized 宿主（笔记页）：编辑器随内容长高，滚动全部交给
+    /// 外层 SwiftUI ScrollView——内层 web 滚动与外层并存会让回车后
+    /// 光标上下跳动（2026-10-24 实测 bug），因此内层滚动在 CSS 里禁用。
+    var usesContentHeight = false {
+        didSet { invalidateIntrinsicContentSize() }
+    }
+    private var reportedContentHeight: CGFloat = 0
     /// 内核侧自增版本：deltaChanged 的 rev 必须 > loadedRevision 才上报
     /// （load 用 silent 不触发 text-change，但 bridge 会主动 emit 一次"回声"）。
     private var loadedRevision = 0
@@ -195,6 +206,14 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
         return webView.hitTest(convert(local, to: webView))
+    }
+
+    /// 内容自适应：内核上报的 root.scrollHeight 即编辑器理想高度，
+    /// SwiftUI ScrollView 依此排布并统一滚动。
+    override var intrinsicContentSize: NSSize {
+        usesContentHeight
+            ? NSSize(width: NSView.noIntrinsicMetric, height: max(reportedContentHeight, 56))
+            : NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
 
     @available(*, unavailable)
@@ -262,11 +281,17 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
         call("window.workfollowEditor.setToolbar(\(visible))")
     }
 
+    /// 内容自适应模式（笔记页）：内核挂 body.wf-grows（内层滚动禁用），
+    /// 高度经 intrinsicContentSize 交给外层 SwiftUI ScrollView 统一滚动。
+    func setGrows(_ grows: Bool) {
+        call("window.workfollowEditor.setGrows(\(grows))")
+    }
+
     func performDefaultTab() {
         call("window.workfollowEditor.tab()")
     }
 
-    func insertBlockEmbed(_ value: [JSONValue: JSONValue]...) {
+    private func insertBlockEmbed(_ value: [JSONValue: JSONValue]...) {
         // 占位：P3 打磨时接 NativeAttachment 存储管线。
     }
 
@@ -280,7 +305,15 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
         call("window.workfollowEditor.insertImage('\(base64)')")
     }
 
+    private var queuedScripts: [String] = []
+
     private func call(_ script: String) {
+        // 桥未就绪（资源解压/页面加载中）时排队，ready 后一并冲刷；
+        // 否则 makeNSView 阶段推送的 setGrows/setToolbar 会静默丢失。
+        guard isBridgeReady else {
+            queuedScripts.append(script)
+            return
+        }
         webView.evaluateJavaScript(script) { _, _ in }
     }
 
@@ -298,6 +331,9 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
             switch event_ {
             case "ready":
                 isBridgeReady = true
+                let queue = queuedScripts
+                queuedScripts.removeAll()
+                queue.forEach { webView.evaluateJavaScript($0) { _, _ in } }
                 if let pending = pendingDeltaJSON {
                     pendingDeltaJSON = nil
                     loadDelta(pending)
@@ -324,6 +360,8 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
                                     payload: body["diagram"] as? [String: Any] ?? [:])
             case "heightChanged":
                 let reportedHeight = (body["height"] as? Double).map { CGFloat($0) } ?? 0
+                reportedContentHeight = reportedHeight
+                if usesContentHeight { invalidateIntrinsicContentSize() }
                 delegate?.quillView(self, heightChanged: reportedHeight)
             default:
                 break

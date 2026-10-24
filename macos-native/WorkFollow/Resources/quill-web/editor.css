@@ -13,6 +13,18 @@ html, body {
 
 .ql-container { border: 0 !important; font-family: inherit; }
 
+/* 内容自适应高度（contentSized 宿主，body.wf-grows 由宿主开关）：
+   编辑器随内容长高、内部不滚动，滚动交给外层 SwiftUI ScrollView。
+   回车时若内层 web 滚动与外层并存，光标会上下跳动（2026-10-24 实测 bug）；
+   固定视口宿主（spike / 任务详情）不挂该类，保留 Quill 默认内滚。 */
+body.wf-grows { height: auto; overflow: hidden; }
+body.wf-grows .ql-container.ql-snow { height: auto; }
+body.wf-grows .ql-editor {
+  height: auto !important;
+  overflow-y: visible !important;
+  min-height: 56px;
+}
+
 /* ---------- 排版（滴答口径） ---------- */
 .ql-editor {
   font-size: 14px;

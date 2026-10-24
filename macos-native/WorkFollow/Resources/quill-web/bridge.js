@@ -104,6 +104,7 @@
   quill.on("text-change", function (delta, oldDelta, source) {
     if (source === "silent") return;
     emitDelta();
+    reportHeight();              // 高度随内容变化立即上报（不等 ResizeObserver 的下一拍）
     handleMarkdown();
     handleSlash(delta);
   });
@@ -267,6 +268,10 @@
       emitDelta();
     },
     focus: function () { quill.focus(); },
+    setGrows: function (grows) {
+      document.body.classList.toggle("wf-grows", !!grows);
+      reportHeight();
+    },
     setToolbar: function (visible) {
       toolbar.style.display = visible ? "flex" : "none";
       reportHeight();
