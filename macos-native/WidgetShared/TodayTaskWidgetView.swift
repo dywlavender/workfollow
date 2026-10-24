@@ -23,11 +23,11 @@ struct TodayTaskWidgetView: View {
                     }
                 }
                 Spacer(minLength: 2)
-                Link(destination: TaskWidgetLink.quickAdd) {
+                Button(intent: OpenWidgetQuickAddIntent()) {
                     Image(systemName: "plus").font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(accent).frame(width: 20, height: 20)
                         .background(accent.opacity(0.09), in: Circle())
-                }.accessibilityLabel("添加任务")
+                }.buttonStyle(.plain).accessibilityLabel("添加任务")
             }
             if snapshot == nil {
                 emptyState(symbol: "checklist", title: "把今天安排好", detail: "打开 WorkFollow 查看任务")
@@ -84,12 +84,17 @@ struct TodayTaskWidgetView: View {
         }
     }
     private func emptyState(symbol: String, title: String, detail: String) -> some View {
-        Link(destination: snapshot == nil ? TaskWidgetLink.today : TaskWidgetLink.quickAdd) {
-            VStack(alignment: .leading, spacing: 5) {
+        let label = VStack(alignment: .leading, spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 20, weight: .light)).foregroundStyle(accent)
                 Text(title).font(.system(size: 12, weight: .medium))
                 Text(detail).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(2)
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        return Group {
+            if snapshot == nil {
+                Link(destination: TaskWidgetLink.today) { label }
+            } else {
+                Button(intent: OpenWidgetQuickAddIntent()) { label }.buttonStyle(.plain)
+            }
         }
     }
 }

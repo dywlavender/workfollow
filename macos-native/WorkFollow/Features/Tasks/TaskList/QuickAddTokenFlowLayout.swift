@@ -77,11 +77,12 @@ struct QuickAddTextField: NSViewRepresentable {
                           onFocusChange: @escaping (Bool) -> Void) -> QuickAddFocusReportingField {
         let field = QuickAddFocusReportingField(string: text)
         field.identifier = NSUserInterfaceItemIdentifier("quick-add-title")
-        field.placeholderString = placeholder
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = font
+        // 字号先落位再铺占位符（applyPlaceholder 按 field.font 取字号）。
+        field.applyPlaceholder(placeholder, color: QuickAddBarStyle.placeholderNSColor)
         field.textColor = .labelColor
         field.usesSingleLineMode = true
         field.lineBreakMode = .byTruncatingTail
@@ -325,6 +326,17 @@ final class QuickAddFocusReportingField: NSTextField {
     override func mouseDown(with event: NSEvent) {
         onMouseDown?()
         super.mouseDown(with: event)
+    }
+
+    /// AppKit 默认的占位符灰偏深；滴答的占位是明确的中浅灰
+    /// （Flutter `hintStyle = textTertiary` ≈ 0x7F8D92）。用带颜色属性的
+    /// `placeholderAttributedString` 覆盖（macOS 上 NSTextField 没有
+    /// 可重写的占位符绘制方法，这是官方通道）。
+    func applyPlaceholder(_ text: String, color: NSColor) {
+        placeholderAttributedString = NSAttributedString(string: text, attributes: [
+            .foregroundColor: color,
+            .font: font ?? NSFont.systemFont(ofSize: 13)
+        ])
     }
 }
 

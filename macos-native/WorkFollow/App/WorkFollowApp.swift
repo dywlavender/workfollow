@@ -8,29 +8,57 @@ struct WorkFollowApp: App {
     @StateObject private var environment: AppEnvironment
     @StateObject private var quickAdd: GlobalQuickAddController
     @StateObject private var statusItem: StatusItemController
+    @StateObject private var windowLaunch: WidgetMainWindowLaunchPolicy
     @State private var mainWindowRailInset: CGFloat = 0
 
     init() {
         let environment = AppEnvironment()
-        FocusPresentationWindows.attachAppearance(environment)
-        FocusEndConfirmationPresenter.attach(to: environment.focusStore)
-        let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace)
+        let windowLaunch = WidgetMainWindowLaunchPolicy()
+        // 先把全部存储属性初始化完，才能碰 `self.`（属性包装器的 wrapped 访问
+        // 也算 self 访问；lifecycle 的接线放在最后）。
+        _windowLaunch = StateObject(wrappedValue: windowLaunch)
         _environment = StateObject(wrappedValue: environment)
+        let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace)
         _quickAdd = StateObject(wrappedValue: quickAdd)
         _statusItem = StateObject(wrappedValue: StatusItemController(quickAdd: quickAdd,
                                                                     focusStore: environment.focusStore,
                                                                     onOpenFocus: {
             environment.navigation.destination = .focus
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.windows.first { !($0 is NSPanel) && $0.isVisible }?.makeKeyAndOrderFront(nil)
+            NativeMainWindowPresenter.activate()
         }))
+        lifecycle.windowLaunch = windowLaunch
+        FocusPresentationWindows.attachAppearance(environment)
+        FocusEndConfirmationPresenter.attach(to: environment.focusStore)
         lifecycle.environment = environment
         lifecycle.resourceLinks.configure(route: { [weak environment] url in
             environment?.openResourceLink(url) ?? false
-        })
+        }, activate: { NativeMainWindowPresenter.activate() })
     }
 
     var body: some Scene {
+        configuredMainWindow
+
+        Settings {
+            SettingsShellView()
+                .environmentObject(environment)
+                .preferredColorScheme(environment.appearance.colorScheme)
+                .tint(WFColors.accent)
+        }
+        .handlesExternalEvents(matching: [])
+    }
+
+    private var configuredMainWindow: some Scene {
+        // SceneBuilder has no if/else. Its public availability erasure keeps
+        // both branches the same type without raising the macOS 14 minimum.
+        if #available(macOS 15, *) {
+            return SceneBuilder.buildOptional(SceneBuilder.buildLimitedAvailability(mainWindow
+                .defaultLaunchBehavior(windowLaunch.suppressInitialMainWindow ? .suppressed : .automatic)
+                .restorationBehavior(windowLaunch.startedForWidget ? .disabled : .automatic)))
+        }
+        return SceneBuilder.buildOptional(SceneBuilder.buildLimitedAvailability(mainWindow))
+    }
+
+    private var mainWindow: some Scene {
         Window("WorkFollow Native", id: "main") {
             RootShellView(workspace: environment.taskWorkspace,
                           navigation: environment.navigation)
@@ -40,7 +68,7 @@ struct WorkFollowApp: App {
                 .tint(WFColors.accent)
                 .frame(minWidth: WFMetrics.minimumWindow.width,
                        minHeight: WFMetrics.minimumWindow.height)
-                .background(WindowFramePersistence())
+                .background(WindowFramePersistence(launchPolicy: windowLaunch))
                 .background(MainWindowChromeConfiguration(railInset: $mainWindowRailInset))
                 .onAppear {
                     lifecycle.environment = environment
@@ -62,21 +90,18 @@ struct WorkFollowApp: App {
         .windowResizability(.contentMinSize)
         .handlesExternalEvents(matching: [])
         .commands { AppCommands(environment: environment, quickAdd: quickAdd) }
-
-        Settings {
-            SettingsShellView()
-                .environmentObject(environment)
-                .preferredColorScheme(environment.appearance.colorScheme)
-                .tint(WFColors.accent)
-        }
-        .handlesExternalEvents(matching: [])
     }
 }
 
 @MainActor
 final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
     weak var environment: AppEnvironment?
+    weak var windowLaunch: WidgetMainWindowLaunchPolicy?
     let resourceLinks = NativeResourceLinkReceiver()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        windowLaunch?.didFinishLaunching()
+    }
 
     func application(_ application: NSApplication, open urls: [URL]) {
         resourceLinks.receive(urls)
@@ -104,10 +129,16 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
 
 /// Observe the host window without replacing SwiftUI's window delegate.
 private struct WindowFramePersistence: NSViewRepresentable {
-    func makeNSView(context: Context) -> FrameView { FrameView() }
+    let launchPolicy: WidgetMainWindowLaunchPolicy
+    func makeNSView(context: Context) -> FrameView {
+        let view = FrameView()
+        view.launchPolicy = launchPolicy
+        return view
+    }
     func updateNSView(_ nsView: FrameView, context: Context) {}
 
     final class FrameView: NSView {
+        weak var launchPolicy: WidgetMainWindowLaunchPolicy?
         private var observers: [NSObjectProtocol] = []
         private var acceptanceMouseMonitor: Any?
         private weak var configuredWindow: NSWindow?
@@ -116,6 +147,7 @@ private struct WindowFramePersistence: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             guard let window, configuredWindow !== window else { return }
+            if #unavailable(macOS 15) { launchPolicy?.prepareLegacyMainWindow(window) }
             observers.forEach(NotificationCenter.default.removeObserver)
             observers.removeAll()
             if let acceptanceMouseMonitor { NSEvent.removeMonitor(acceptanceMouseMonitor) }

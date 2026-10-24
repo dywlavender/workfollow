@@ -36,6 +36,10 @@ enum WFColors {
     /// 中性表面上的强调色，不是列表选中。深色未实测，取 `menuSelected` 同族的灰。
     static let listSelection = themed(rgb(0xF2F2F2), rgb(0x363A42))
     static let hover = Color.primary.opacity(0.04)
+    /// 快速添加条未选中的底色（滴答/Flutter `tokens.canvas` = 0xFFF2F4F8）：
+    /// 带一点蓝调的极浅灰，比中性的 hover 更接近滴答那条浅浅的输入位。
+    /// 深色沿用 Flutter 暗色 canvas。
+    static let quickAddIdleFill = themed(rgb(0xF2F4F8), rgb(0x1B1D22))
     /// 右栏配置卡片的底色（滴答 ≈ #F7F8FA，暗色 ≈ #2A2A2C）。
     static let panelFill = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

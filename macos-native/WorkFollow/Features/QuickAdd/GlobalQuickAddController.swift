@@ -409,9 +409,11 @@ private struct GlobalQuickAddPanelView: View {
 
     private var inputRow: some View {
         HStack(spacing: WFSpace.sm) {
-            Image(systemName: "plus.circle.fill")
-                .font(WFType.detailTitle)
-                .foregroundStyle(WFColors.accent)
+            // 待办框唯一真源 QuickAddBarStyle：面板版加号同尺寸，颜色走强调色
+            // （Flutter 非列表样式用 accent），不再用放大的填充圆图标。
+            Image(systemName: "plus")
+                .font(.system(size: QuickAddBarStyle.iconSize))
+                .foregroundStyle(QuickAddBarStyle.panelIconColor)
             // 与列表快速添加条同一个 AppKit 桥：智能识别着色、Tab/上下键、粘贴保换行
             // 全部复用，面板只换字号（14 vs 13）。
             QuickAddTextField(

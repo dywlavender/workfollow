@@ -488,8 +488,10 @@ struct TaskListView: View {
     private func quickAddBar(in scope: TaskListScope) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: WFSpace.sm) {
+                // 待办框视觉走唯一真源 QuickAddBarStyle（滴答对齐：小而浅的加号）。
                 Image(systemName: "plus")
-                    .foregroundStyle(WFColors.secondaryText)
+                    .font(.system(size: QuickAddBarStyle.iconSize))
+                    .foregroundStyle(QuickAddBarStyle.iconColor)
                 QuickAddTextField(
                     text: $draft,
                     placeholder: "添加任务至“\(quickAddTargetName)”",
@@ -582,7 +584,7 @@ struct TaskListView: View {
                 } else {
                     Text("⌘N")
                         .font(WFType.caption)
-                        .foregroundStyle(WFColors.secondaryText)
+                        .foregroundStyle(QuickAddBarStyle.shortcutColor)
                 }
             }
             .frame(height: TaskListMetrics.quickAddHeight)
@@ -639,10 +641,10 @@ struct TaskListView: View {
             }
         }
         .padding(.horizontal, WFSpace.md)
-        // 滴答式两态：未选中是更灰一档的浅灰条、无描边；选中后底色提亮到
-        // 窗口底色、描边换「今天」同款强调色（WFColors.accent）。
+        // 滴答式两态：未选中是带蓝调的极浅灰条（QuickAddBarStyle.idleFill）、
+        // 无描边；选中后底色提亮到窗口底色、描边换「今天」同款强调色。
         .background(RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
-            .fill(quickAddExpanded ? WFColors.canvas : WFColors.hover))
+            .fill(quickAddExpanded ? WFColors.canvas : QuickAddBarStyle.idleFill))
         .overlay {
             if quickAddExpanded {
                 RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)

@@ -4,6 +4,59 @@ import XCTest
 
 @MainActor
 final class WidgetQuickAddTests: XCTestCase {
+    func testWidgetActionCarriesLaunchPurposeWithoutActivatingTheApp() {
+        let configuration = WidgetQuickAddLaunch.configuration()
+        XCTAssertEqual(configuration.arguments, [WidgetQuickAddLaunch.argument])
+        XCTAssertFalse(configuration.activates)
+        XCTAssertFalse(configuration.addsToRecentItems)
+        XCTAssertFalse(OpenWidgetQuickAddIntent.openAppWhenRun)
+    }
+
+    func testOpeningMainAfterCaptureReopensTheAppUntilTheMainSceneExists() {
+        var reopens = 0
+        NativeMainWindowPresenter.activate(reopen: { reopens += 1 })
+        XCTAssertEqual(reopens, 1)
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 320, height: 212),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.identifier = NSUserInterfaceItemIdentifier("WorkFollowNativeMain")
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        NativeMainWindowPresenter.activate(reopen: { reopens += 1 })
+        XCTAssertTrue(window.isVisible)
+        XCTAssertEqual(reopens, 1, "已有主窗口应直接复用")
+    }
+
+    func testWidgetLaunchSuppressesOnlyTheInitialMainScene() {
+        let launch = WidgetMainWindowLaunchPolicy(arguments: ["WorkFollow", WidgetQuickAddLaunch.argument])
+        XCTAssertTrue(launch.startedForWidget)
+        XCTAssertTrue(launch.suppressInitialMainWindow)
+        launch.didFinishLaunching()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.03))
+        XCTAssertFalse(launch.suppressInitialMainWindow, "启动后应恢复 Dock 和访达的普通打开行为")
+        let normal = WidgetMainWindowLaunchPolicy(arguments: ["WorkFollow"])
+        XCTAssertFalse(normal.startedForWidget)
+        XCTAssertFalse(normal.suppressInitialMainWindow)
+    }
+
+    func testLegacyMainWindowIsHiddenOnlyDuringWidgetStartup() {
+        let launch = WidgetMainWindowLaunchPolicy(arguments: [WidgetQuickAddLaunch.argument])
+        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 320, height: 212),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        launch.prepareLegacyMainWindow(window)
+        XCTAssertEqual(window.alphaValue, 0)
+        window.orderFront(nil)
+        launch.didFinishLaunching()
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertFalse(window.isVisible)
+        XCTAssertEqual(window.alphaValue, 1)
+        window.orderFront(nil)
+        launch.prepareLegacyMainWindow(window)
+        XCTAssertTrue(window.isVisible, "后续主动打开主窗口不能继续被隐藏")
+        XCTAssertEqual(window.alphaValue, 1)
+    }
+
     private func environment() throws -> (AppEnvironment, URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("widget-capture-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
