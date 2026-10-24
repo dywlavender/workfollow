@@ -98,11 +98,12 @@ final class PlanningOverlayGeometryTests: XCTestCase {
     // MARK: 尺寸契约
 
     func testOverlaySizesMatchTheFlutterSurfaces() {
-        // 编辑器 400×356（`TaskSurfaceMetrics.editorWidth` / `editorMinHeight`），
-        // 新建卡 320×(42+1+126+1+42)。
+        // 编辑器 400×356（`TaskSurfaceMetrics.editorWidth` / `editorMinHeight`）。
+        // 新建卡 2026-10-24 起按用户反馈整体调大（对齐滴答观感）：
+        // 360×(46+1+148+1+46) = 360×242，不再钉 Flutter 的 320×212。
         XCTAssertEqual(WFPlanningOverlayMetrics.editorWidth, 400)
         XCTAssertEqual(WFPlanningOverlayMetrics.editorHeight, 356)
-        XCTAssertEqual(WFPlanningOverlayMetrics.composerWidth, 320)
-        XCTAssertEqual(WFPlanningOverlayMetrics.composerHeight, 212)
+        XCTAssertEqual(WFPlanningOverlayMetrics.composerWidth, 360)
+        XCTAssertEqual(WFPlanningOverlayMetrics.composerHeight, 242)
     }
 }

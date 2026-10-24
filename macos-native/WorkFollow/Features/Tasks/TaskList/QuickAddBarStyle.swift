@@ -38,7 +38,8 @@ enum QuickAddBarStyle {
         guard hasDate else { return WFColors.tertiaryText }
         return overdue ? .red : WFColors.accent
     }
-    /// 卡片行值文字（清单名等）：常规字重、近黑——与滴答一致，
-    /// 不再用 semibold 抢重。
+    /// 卡片行值文字（清单名等）：比日期行再小一档的常规字重近黑
+    /// （滴答实测，不再抢重也不抢大）。
+    static let cardValueSize: CGFloat = 13
     static let cardValueWeight: Font.Weight = .regular
 }

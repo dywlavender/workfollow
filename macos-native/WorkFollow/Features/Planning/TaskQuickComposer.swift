@@ -161,10 +161,11 @@ struct TaskQuickComposer: View {
             } label: {
                 HStack(spacing: WFSpace.sm) {
                     Image(systemName: "tray")
-                        .font(.system(size: 14))
+                        .font(.system(size: 13))
                         .foregroundStyle(QuickAddBarStyle.iconColor)
                     Text(listName)
-                        .font(.system(size: 14, weight: QuickAddBarStyle.cardValueWeight))
+                        .font(.system(size: QuickAddBarStyle.cardValueSize,
+                                      weight: QuickAddBarStyle.cardValueWeight))
                         .foregroundStyle(WFColors.overlayText)
                 }
                 .padding(.horizontal, WFSpace.xs)

@@ -31,11 +31,12 @@ enum WFPlanningOverlayMetrics {
 
     /// 新建任务卡：`TaskSurfaceMetrics.composerWidth` /
     /// `composerMaxHeight` / `composerRowHeight` / `composerBodyHeight`。
-    /// 卡高不是 maxHeight 而是内容高：42 + 1 + 126 + 1 + 42 = 212。
-    static let composerWidth: CGFloat = 320
-    static let composerMaxHeight: CGFloat = 280
-    static let composerRowHeight: CGFloat = 42
-    static let composerBodyHeight: CGFloat = 126
+    /// 卡高不是 maxHeight 而是内容高。2026-10-24 按用户反馈整体调大：
+    /// 360 × (46×2 + 148 + 2) = 360 × 242。
+    static let composerWidth: CGFloat = 360
+    static let composerMaxHeight: CGFloat = 300
+    static let composerRowHeight: CGFloat = 46
+    static let composerBodyHeight: CGFloat = 148
     static let composerHeight: CGFloat =
         composerRowHeight * 2 + composerBodyHeight + WFMetrics.divider * 2
 
