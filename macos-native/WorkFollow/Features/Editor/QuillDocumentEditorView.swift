@@ -51,8 +51,12 @@ struct QuillDocumentEditorView: NSViewRepresentable {
     final class Coordinator: NSObject, QuillWebView.Delegate {
         var parent: QuillDocumentEditorView
         private weak var view: QuillWebView?
-        /// 最近一次已同步给内核 / 已从内核收回的 Delta 字符串（JSON）。
-        private var lastSyncedDeltaJSON = ""
+        /// 最近一次内核上报（loaded/deltaChanged 回声）解码后的文档。
+        /// 同步判定必须做**结构比较**：拿我方 JSON 编码串与 Quill 的规范化
+        /// 回声串做字符串比较恒不等（两边序列化形态不同），会形成
+        /// load → 回声 → 再 load 的 10ms 级死循环（2026-10-24 实测
+        /// 105% CPU、每分钟 784 轮全量视图重算）。
+        private var lastKernelDocument: NativeDocument?
 
         private var subscribers: [AnyCancellable] = []
 
@@ -73,11 +77,10 @@ struct QuillDocumentEditorView: NSViewRepresentable {
 
         func syncDocumentIfNeeded() {
             guard let view, view.isBridgeReady else { return }
+            if parent.document == lastKernelDocument { return }
             let delta = QuillDeltaCodec.delta(from: parent.document)
             guard let data = try? JSONEncoder().encode(delta),
-                  let json = String(data: data, encoding: .utf8),
-                  json != lastSyncedDeltaJSON else { return }
-            lastSyncedDeltaJSON = json
+                  let json = String(data: data, encoding: .utf8) else { return }
             view.loadDelta(json)
         }
 
@@ -88,10 +91,10 @@ struct QuillDocumentEditorView: NSViewRepresentable {
         }
 
         func quillView(_ view: QuillWebView, deltaChanged deltaJSON: String, plainText: String) {
-            lastSyncedDeltaJSON = deltaJSON
             guard let data = deltaJSON.data(using: .utf8),
                   let ops = try? JSONDecoder().decode([QuillDeltaOp].self, from: data) else { return }
             let document = QuillDeltaCodec.document(from: ops)
+            lastKernelDocument = document
             guard document != parent.document else { return }
             parent.onDocumentChange(document)
         }
@@ -165,9 +168,20 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
     /// 外层 SwiftUI ScrollView——内层 web 滚动与外层并存会让回车后
     /// 光标上下跳动（2026-10-24 实测 bug），因此内层滚动在 CSS 里禁用。
     var usesContentHeight = false {
-        didSet { invalidateIntrinsicContentSize() }
+        didSet {
+            // 只在真变化时失效：updateNSView 每次事务都会赋值同值，
+            // didSet 无条件 invalidate 会造成布局永不收敛（2026-10-24
+            // 实测 100% CPU 空转 + WebView 永不绘制）。
+            if oldValue != usesContentHeight {
+                invalidateIntrinsicContentSize()
+            }
+        }
     }
     private var reportedContentHeight: CGFloat = 0
+    /// 去重门闩：同值重发会经 JS reportHeight → heightChanged 绕回
+    /// invalidate，构成 Swift↔JS 双向死循环。
+    private var lastSentGrows: Bool?
+    private var lastSentToolbarVisible: Bool?
     /// 内核侧自增版本：deltaChanged 的 rev 必须 > loadedRevision 才上报
     /// （load 用 silent 不触发 text-change，但 bridge 会主动 emit 一次"回声"）。
     private var loadedRevision = 0
@@ -278,12 +292,16 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
 
     /// 滴答口径：工具条默认隐藏，Aa 开关展开（编辑器底部）。
     func setToolbarVisible(_ visible: Bool) {
+        guard lastSentToolbarVisible != visible else { return }
+        lastSentToolbarVisible = visible
         call("window.workfollowEditor.setToolbar(\(visible))")
     }
 
     /// 内容自适应模式（笔记页）：内核挂 body.wf-grows（内层滚动禁用），
     /// 高度经 intrinsicContentSize 交给外层 SwiftUI ScrollView 统一滚动。
     func setGrows(_ grows: Bool) {
+        guard lastSentGrows != grows else { return }
+        lastSentGrows = grows
         call("window.workfollowEditor.setGrows(\(grows))")
     }
 
@@ -360,8 +378,15 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
                                     payload: body["diagram"] as? [String: Any] ?? [:])
             case "heightChanged":
                 let reportedHeight = (body["height"] as? Double).map { CGFloat($0) } ?? 0
-                reportedContentHeight = reportedHeight
-                if usesContentHeight { invalidateIntrinsicContentSize() }
+                let clamped = max(reportedHeight, 56)
+                // 同值不失效：无效化风暴会让 SwiftUI 永远在重排，
+                // WebView 拿不到稳定帧也就永远不绘制。
+                if abs(clamped - reportedContentHeight) >= 0.5 {
+                    reportedContentHeight = clamped
+                    if usesContentHeight { invalidateIntrinsicContentSize() }
+                } else {
+                    reportedContentHeight = clamped
+                }
                 delegate?.quillView(self, heightChanged: reportedHeight)
             default:
                 break

@@ -269,11 +269,15 @@
     },
     focus: function () { quill.focus(); },
     setGrows: function (grows) {
-      document.body.classList.toggle("wf-grows", !!grows);
+      var next = !!grows;
+      if (document.body.classList.contains("wf-grows") === next) return;
+      document.body.classList.toggle("wf-grows", next);
       reportHeight();
     },
     setToolbar: function (visible) {
-      toolbar.style.display = visible ? "flex" : "none";
+      var next = visible ? "flex" : "none";
+      if (toolbar.style.display === next) return;
+      toolbar.style.display = next;
       reportHeight();
     },
     tab: function () {
@@ -408,10 +412,14 @@
     }
   });
 
-  // ---------- 高度上报 ----------
+  // ---------- 高度上报（同值去重：宿主侧同值 invalidate 会形成布局死循环） ----------
 
+  var lastPostedHeight = -1;
   function reportHeight() {
-    post({ event: "heightChanged", height: root.scrollHeight });
+    var height = root.scrollHeight;
+    if (height === lastPostedHeight) return;
+    lastPostedHeight = height;
+    post({ event: "heightChanged", height: height });
   }
   if (window.ResizeObserver) {
     new ResizeObserver(reportHeight).observe(root);
