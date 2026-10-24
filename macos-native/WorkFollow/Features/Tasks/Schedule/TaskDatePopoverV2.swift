@@ -57,6 +57,23 @@ private struct ScheduleClockInput: NSViewRepresentable {
     }
 }
 
+/// 行内时钟输入的统一外壳：52pt 固定宽（行内不跳动）+ 铺满值区域的
+/// 左对齐。外壳必须存在——`PropertyRowCanvas` 给编辑器宿主的 frame 是
+/// 整段值区域（约 200pt），SwiftUI 默认居中会把输入框悬浮在行中间，
+/// 与其它属性行「值紧跟图标左对齐」的画法错位（2026-10-24 用户截图
+/// 反馈的错位即此）。时间 / 结束时间两行与几何契约测试共用这一份。
+struct LeadingScheduleClockField: View {
+    @Binding var text: String
+    var requestsFocus: Bool
+    var onSubmit: () -> Void
+
+    var body: some View {
+        ScheduleClockInput(text: $text, requestsFocus: requestsFocus, onSubmit: onSubmit)
+            .frame(width: 52, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 /// TickTick 对齐的固定主面板 + 锚定子卡片日程编辑器。
 /// - 主面板 = tabs + 快捷日 + 日历 + 属性行 + 清除/确定；
 /// - 属性编辑属于独立子卡片：主面板所有行与Footer保持原位，
@@ -511,13 +528,8 @@ struct TaskDatePopoverV2: View {
     }
 
     /// 两行共用的 HH:mm 输入框（固定宽度，行内不跳动）。
-    /// 外层再包一个铺满值区域的 leading 框：宿主（`NSHostingView`）的
-    /// frame 是整段值区域，默认居中会把 52pt 的输入框悬浮在行中间，
-    /// 与其它属性行「值紧跟图标左对齐」的画法错位。
     private func clockField(_ property: ScheduleProperty, text: Binding<String>, submit: @escaping () -> Void) -> some View {
-        ScheduleClockInput(text: text, requestsFocus: inlineSheet == property, onSubmit: submit)
-            .frame(width: 52, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        LeadingScheduleClockField(text: text, requestsFocus: inlineSheet == property, onSubmit: submit)
     }
 
     /// 时间值在别处变化（列表点选、日历改天、清除）后同步两行的行内文本。
