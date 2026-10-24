@@ -15,7 +15,13 @@ enum PopupMetrics {
     static let formInset: CGFloat = 24
     static let formFooterInset: CGFloat = 16
     static let submenuIntent: TimeInterval = 0.22
+    /// 菜单宽度的默认值（含图标列 + 较长词条 + 子菜单箭头）。
     static let menuWidth: CGFloat = 224
+    /// 只有两三个短词条的菜单（如「更多属性」的提醒/重复）。
+    /// 实测内容宽 76pt；用 224 会空出 148pt，肉眼一眼看得出。
+    static let menuWidthTight: CGFloat = 132
+    /// 清单选择这类「图标 + 短名称 + 勾」的菜单。实测 4 项宽 136pt。
+    static let menuWidthCompact: CGFloat = 160
     static let menuRowHeight: CGFloat = 32
     static let menuInset: CGFloat = 6
     static let menuMaximumHeight: CGFloat = 384

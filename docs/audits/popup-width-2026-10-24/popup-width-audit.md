@@ -282,3 +282,94 @@ xcodebuild ... -only-testing:WorkFollowTests/PopupWidthThirdPassTests test 2>&1 
 `PopupStandardizationTests` 原先硬断言任务类型菜单宽 176，改为断言
 `PopupMetrics.taskMenuWidth`（现在是 144）。这是**逻辑上的必然变更**：
 宽度常量本身改了，契约测试应该跟着常量走，而不是钉死一个数字。
+
+
+---
+
+## 8. 用户截图反馈后的第二轮（2026-10-24）
+
+用户贴了两张图，指出「更多属性」和「清单」两个菜单太宽。回头量了才发现：
+**上一轮的量测方法漏掉了菜单类**——我用简化的探针行去量，没覆盖
+`BusinessMenu` 真正使用的行结构，所以「业务菜单 224」被判成"合适（余 46）"。
+实际是：
+
+| 菜单 | 自然宽 | 原宽 | 空白 |
+|---|---|---|---|
+| 更多属性（提醒 / 重复） | **76** | 224 | **148pt** |
+| 清单（图标 + 名称 + 勾） | **136** | 224 | **88pt** |
+
+### 8.1 根因不是"某个数字写大了"
+
+`BusinessMenu` 的 `width` 默认值是 `PopupMetrics.menuWidth = 224`，
+**20 个调用点全都没传宽度**。这个默认值是按「图标列 + 较长词条 + 子菜单箭头」
+定的，但大多数菜单只有两三个短词条，于是被一起撑成 224。
+
+一个个改数字治标不治本：菜单文案一改（换语言、加选项）就得重调一遍，
+而且 20 个调用点里漏掉任何一个就还是宽的。
+
+### 8.2 改成「打开前按内容量宽」
+
+`BusinessMenu` 的 `width` 改为 `CGFloat?`，`nil`（默认）= 按内容量：
+
+```swift
+private func prepareOpening() {
+    ...
+    measuredWidth = measureWidth()   // 打开前一次
+}
+```
+
+量法是在 `prepareOpening` 里用**独立的** `BusinessMenuController` 起一个离屏
+`NSHostingView` 量自然宽，再夹到 `[menuWidthTight, menuWidth]`。
+
+三个关键取舍：
+
+1. **必须在打开前量，不能靠面板事后改宽度。**
+   `AnchoredPropertyPanel` 的宿主设了 `sizingOptions = [.intrinsicContentSize]`，
+   开面板后再改宽会让 SwiftUI 重建整棵子树、每行的 `onAppear` 重跑，
+   把键盘高亮抢回「选中项」——`testKeyboardSelectionSkipsDisabledRows...`
+   就是这么挂掉的。
+2. **探针要用独立 controller。** 复用真 controller 会让探针里的
+   `BusinessMenuRow` 往同一个 `actions`/`order` 注册，污染真实菜单，
+   表现为子菜单测试找不到面板（`TaskContextPanelTests` 两个用例）。
+3. **有搜索框时按上限算。** 搜索框会铺满，量内容没有意义。
+
+### 8.3 结果
+
+| 菜单 | 自然宽 | 量后宽 | 余量 |
+|---|---|---|---|
+| 更多属性 | 76 | 132 | 56 |
+| 清单（4 项） | 136 | 136 | 0 |
+| 优先级（4 项 + 旗子） | 176 | 176 | 0 |
+| 排序（3 项） | 104 | 132 | 28 |
+| 分组与排序 | 120 | 132 | 12 |
+| 列表操作 | 132 | 132 | 0 |
+| 显示设置 | 140 | 140 | 0 |
+| 移动到清单（带搜索） | 200 | 224 | 24 |
+| 稍后提醒（4 项） | 110 | 132 | 22 |
+
+**20 个调用点、零改动**就全部落到合适区间——没有逐个传宽度。
+
+### 8.4 教训：上一轮的量测方法有系统性偏差
+
+上一轮 `PopupWidthInventoryTests` 里的 `MenuRowProbe` 是手写的简化行
+（`HStack { 图标, 文字, Spacer }` + `fixedSize`），它**不带 List 的选择态、
+不带 Toggle、不带子菜单箭头**，量出来的自然宽比真实内容小，于是
+224 显得"还合适"。
+
+这和第一轮踩过的坑是同一类：**用仿写的探针代替真实视图**。
+所以这一轮把「菜单宽度」的判定改成量真实 `BusinessMenuContent`，
+而不是量我自己拼的行。
+
+### 8.5 顺带修掉的一个漏网断言
+
+`BusinessMenuInteractionTests` 里「快速组合器优先级菜单宽度」还断言
+`taskMenuWidth`，但上一轮已把快速组合器改到 `priorityMenuWidth`（176）。
+构建能过、单跑会挂——上一轮提交时没跑这个类。现已改为
+`priorityMenuWidth` 并加了注释说明来由。
+
+### 8.6 两个既有失败（与本次无关）
+
+`TaskContextPanelTests` 有 2 个用例（`testOutsideClickDismisses...`、
+`testSubmenuUsesRootBounds...`）在**干净 HEAD 上单类跑同样失败**
+（`XCTUnwrap` 拿不到 `NSPanel`）。已用 stash 干净树复现确认是既有问题，
+本次不动。

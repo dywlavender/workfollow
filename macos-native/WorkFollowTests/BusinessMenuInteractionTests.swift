@@ -75,7 +75,8 @@ final class BusinessMenuInteractionTests: XCTestCase {
         let ownerFrame = owner.frame
         try open("排序", probe: probe, owner: owner)
         let menu = try panel("排序", below: owner)
-        XCTAssertEqual(menu.frame.width, PopupMetrics.menuWidth, accuracy: 0.5)
+        // 菜单按内容量宽：三个短词条自然宽 ~104，夹到紧凑下限 132，不再是 224。
+        XCTAssertEqual(menu.frame.width, PopupMetrics.menuWidthTight, accuracy: 0.5)
         XCTAssertGreaterThanOrEqual(menu.frame.height, 3 * PopupMetrics.menuRowHeight)
         XCTAssertLessThan(menu.frame.height, 150, "短菜单按内容测高")
         XCTAssertEqual(probe.rows.count, 3)
@@ -282,7 +283,9 @@ final class BusinessMenuInteractionTests: XCTestCase {
         defer { owner.close() }
         try open("优先级", probe: probe, owner: owner)
         let priority = try panel("优先级", below: owner)
-        XCTAssertEqual(priority.frame.width, PopupMetrics.taskMenuWidth, accuracy: 0.5)
+        // 快速组合器的「优先级」菜单用 priorityMenuWidth（上一轮把
+        // taskMenuWidth 拆成「短菜单 144」+「优先级 176」时漏改了这个断言）。
+        XCTAssertEqual(priority.frame.width, PopupMetrics.priorityMenuWidth, accuracy: 0.5)
         // Content measurement resizes the native menu on the next run-loop
         // turn. Wait for all options to fit before dispatching the click.
         let priorityHeight = CGFloat(TaskPriority.menuOrder.count) * PopupMetrics.menuRowHeight

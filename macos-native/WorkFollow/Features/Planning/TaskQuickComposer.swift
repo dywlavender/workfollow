@@ -154,7 +154,8 @@ struct TaskQuickComposer: View {
     /// 第三行：清单胶囊（左）与更多（右），高 42、左右内边距 10。
     private var listRow: some View {
         HStack(spacing: 0) {
-            BusinessMenu(title: "清单", search: workspace.availableListNames.count > 10 ? $listQuery : nil) {
+            BusinessMenu(width: PopupMetrics.menuWidthCompact, title: "清单",
+                         search: workspace.availableListNames.count > 10 ? $listQuery : nil) {
                 ForEach(workspace.availableListNames.filter { listQuery.isEmpty || $0.localizedStandardContains(listQuery) }, id: \.self) { name in
                     BusinessMenuOption(name, selected: name == listName, symbol: "tray") { listName = name; titleFocused = true }
                 }
@@ -180,7 +181,8 @@ struct TaskQuickComposer: View {
 
             // 原版的「更多属性」只有提醒与重复两项，都是接着打开同一个日程面板的
             // 对应页（`_openMore` → `_pickReminder` / `_pickRepeat`）。
-            BusinessMenu(title: "更多属性") {
+            // 只有提醒与重复两项，实测内容 76pt：给 224 会空出一大半。
+            BusinessMenu(width: PopupMetrics.menuWidthTight, title: "更多属性") {
                 Button("提醒") { datePage = .reminder }
                 Button("重复") { datePage = .recurrence }
             } label: {

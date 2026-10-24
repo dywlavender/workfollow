@@ -4,7 +4,13 @@ import SwiftUI
 /// Business menus share the property-panel window, focus and dismissal rules.
 /// The application menu bar and macOS-owned dialogs remain native.
 struct BusinessMenu<Label: View, Content: View>: View {
-    let width: CGFloat
+    /// 显式宽度；`nil` = 按内容量（打开前用离屏 `NSHostingView` 量一次）。
+    ///
+    /// 为什么在菜单这层量、而不是让 `AnchoredPropertyPanel` 自适应：面板宿主
+    /// 设了 `sizingOptions = [.intrinsicContentSize]`，开面板后再改宽度会让
+    /// SwiftUI 重建整棵子树、行的 `onAppear` 重跑，把键盘高亮抢走。在**打开前**
+    /// 把宽度定好，面板全程只 `setFrame` 一次，没有这个副作用。
+    let explicitWidth: CGFloat?
     let title: String
     let search: Binding<String>?
     let presentation: Binding<Bool>?
@@ -17,11 +23,36 @@ struct BusinessMenu<Label: View, Content: View>: View {
     @State private var presented = false
     @State private var identity = UUID()
 
-    init(width: CGFloat = PopupMetrics.menuWidth, title: String = "操作菜单", search: Binding<String>? = nil,
+    init(width: CGFloat? = nil, title: String = "操作菜单", search: Binding<String>? = nil,
          isPresented: Binding<Bool>? = nil,
          @ViewBuilder content: @escaping () -> Content, @ViewBuilder label: () -> Label) {
-        self.width = width; self.title = title; self.search = search; self.presentation = isPresented
+        self.explicitWidth = width; self.title = title; self.search = search
+        self.presentation = isPresented
         self.content = content; self.label = label()
+    }
+
+    /// 打开前定好的宽度：显式值优先，否则按内容量并夹在紧凑/上限之间。
+    @State private var measuredWidth: CGFloat?
+    private var resolvedWidth: CGFloat {
+        explicitWidth ?? measuredWidth ?? PopupMetrics.menuWidth
+    }
+    /// 量内容自然宽。`search` 存在时按上限算（搜索框会铺满）。
+    ///
+    /// 用一个**独立的** controller 做探针：复用真 controller 会让探针里的
+    /// `BusinessMenuRow` 往同一个 `actions`/`order` 里注册，污染真实菜单的
+    /// 行顺序与高亮（表现为子菜单测试找不到面板）。
+    private func measureWidth() -> CGFloat {
+        guard explicitWidth == nil else { return resolvedWidth }
+        if search != nil { return PopupMetrics.menuWidth }
+        let probeController = BusinessMenuController()
+        let probe = NSHostingView(rootView: AnyView(
+            BusinessMenuContent(controller: probeController, close: {}, dismissAll: {},
+                                maximumHeight: nil, content: content)
+        ))
+        probe.layoutSubtreeIfNeeded()
+        let natural = probe.fittingSize.width
+        guard natural > 0.5 else { return PopupMetrics.menuWidth }
+        return min(max(natural, PopupMetrics.menuWidthTight), PopupMetrics.menuWidth)
     }
 
     private var showing: Binding<Bool> {
@@ -58,7 +89,7 @@ struct BusinessMenu<Label: View, Content: View>: View {
         .background(PopupPresentingWindowReader(owner: presenter))
         .businessMenuTriggerProbe(title)
         .background {
-            AnchoredPropertyPanel(isPresented: showing, width: width,
+            AnchoredPropertyPanel(isPresented: showing, width: resolvedWidth,
                 placement: parent == nil ? .dropdown : .submenu,
                 focusPolicy: search == nil ? .preservePresenter : .panel, title: title) {
                 BusinessMenuContent(controller: controller, close: { showing.wrappedValue = false },
@@ -76,6 +107,7 @@ struct BusinessMenu<Label: View, Content: View>: View {
     private func prepareOpening() {
         PopupInteractionRegistry.shared.dismissOtherBranches(presentingFrom: presenter.window)
         controller.reset()
+        measuredWidth = measureWidth()
     }
     private func open() {
         guard isEnabled else { return }
@@ -85,11 +117,11 @@ struct BusinessMenu<Label: View, Content: View>: View {
 }
 
 extension BusinessMenu where Label == BusinessMenuTitleLabel {
-    init(_ title: String, width: CGFloat = PopupMetrics.menuWidth,
+    init(_ title: String, width: CGFloat? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self.init(width: width, title: title, content: content) { BusinessMenuTitleLabel(title: title) }
     }
-    init(_ title: String, systemImage: String, width: CGFloat = PopupMetrics.menuWidth,
+    init(_ title: String, systemImage: String, width: CGFloat? = nil,
          @ViewBuilder content: @escaping () -> Content) {
         self.init(width: width, title: title, content: content) { BusinessMenuTitleLabel(title: title, symbol: systemImage) }
     }
