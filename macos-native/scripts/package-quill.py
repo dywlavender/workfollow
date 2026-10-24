@@ -25,12 +25,20 @@ def main() -> None:
     if not (source / "quill.js").is_file() or not (source / "quill.snow.css").is_file():
         raise SystemExit("源目录需包含 quill.js 与 quill.snow.css")
 
+    web_dir = ROOT / "WorkFollow" / "Resources" / "quill-web"
+
     with zipfile.ZipFile(OUT, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for name in ("quill.js", "quill.snow.css"):
             path = source / name
             info = zipfile.ZipInfo(f"quill/{name}", date_time=FIXED_TIMESTAMP)
             info.external_attr = 0o644 << 16
             zf.writestr(info, path.read_bytes())
+        # 编辑器 Web 组件（bridge/index/css/js）随包统一打包。
+        for path in sorted(web_dir.iterdir()):
+            if path.is_file() and path.suffix in {".html", ".css", ".js"}:
+                info = zipfile.ZipInfo(path.name, date_time=FIXED_TIMESTAMP)
+                info.external_attr = 0o644 << 16
+                zf.writestr(info, path.read_bytes())
         license_text = urllib.request.urlopen(
             "https://raw.githubusercontent.com/slab/quill/main/LICENSE", timeout=30
         ).read()

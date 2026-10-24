@@ -14,21 +14,47 @@ final class QuillBridgeSpikeTests: XCTestCase {
     func testQuillRuntimeUnpacksAndIsVersioned() async throws {
         let cacheRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("quill-spike-\(UUID().uuidString)")
-        let bridge = try await QuillResources.prepare(bundle: .main, cacheRoot: cacheRoot)
-        // bridge 落在版本目录，quill 运行时在其旁边解压就位。
-        XCTAssertEqual(bridge.lastPathComponent, "bridge.html")
-        let runtimeJS = bridge.deletingLastPathComponent().appendingPathComponent("quill/quill.js")
+        let index = try await QuillResources.prepare(bundle: .main, cacheRoot: cacheRoot)
+        // 入口页落在版本目录，quill 运行时在其旁边解压就位。
+        XCTAssertEqual(index.lastPathComponent, "index.html")
+        let runtimeJS = index.deletingLastPathComponent().appendingPathComponent("quill/quill.js")
         let js = try String(contentsOf: runtimeJS, encoding: .utf8)
         XCTAssertTrue(js.hasPrefix("/*! For license information"), "解压出的应是 Quill 官方分发")
         try? FileManager.default.removeItem(at: cacheRoot)
     }
 
-    func testQuillBridgeHtmlShipsTheProtocol() throws {
-        let url = try XCTUnwrap(Bundle.main.url(forResource: "QuillBridge", withExtension: "html"))
-        let html = try String(contentsOf: url, encoding: .utf8)
+    /// P2 Web 组件随包完整性：入口页 + 全部模块 + 协议要素。
+    /// 运行时验证在真 app 进程（runner 无法承载 WebContent，见类注释）。
+    func testQuillWebComponentsShipTheFullAssembly() throws {
+        let html = try String(contentsOf: Bundle.main.url(forResource: "index", withExtension: "html")!, encoding: .utf8)
+        for needle in ["quill/quill.js", "blots.js", "toolbar.js", "slash-menu.js",
+                       "markdown.js", "bridge.js", "editor.css"] {
+            XCTAssertTrue(html.contains(needle), "入口页缺少模块引用：\(needle)")
+        }
+        func webSource(_ name: String) throws -> String {
+            try String(contentsOf: Bundle.main.url(forResource: name, withExtension: "js")!, encoding: .utf8)
+        }
+        let bridge = try webSource("bridge")
         for needle in ["workfollowQuill", "deltaChanged", "escapePressed", "heightChanged",
-                       "quill/quill.js", "quill/quill.snow.css"] {
-            XCTAssertTrue(html.contains(needle), "bridge 缺少协议要素：\(needle)")
+                       "requestAction", "WorkFollowSlashMenu", "WorkFollowMarkdown"] {
+            XCTAssertTrue(bridge.contains(needle), "bridge 缺少协议要素：\(needle)")
+        }
+        let toolbar = try webSource("toolbar")
+        // 滴答 19 钮 + drawio（保留项）：分组里的名字全集合。
+        for name in ["color", "bold", "italic", "underline", "strike", "highlight",
+                     "bullet", "ordered", "checklist", "blockquote", "code", "code-block",
+                     "image", "attachment", "link", "table", "divider", "time", "more", "diagram"] {
+            XCTAssertTrue(toolbar.contains("name: \"" + name + "\""), "工具条缺钮：\(name)")
+        }
+        let slash = try webSource("slash-menu")
+        for title in ["文本", "标题1", "标题2", "标题3", "无序列表", "有序列表", "清单",
+                      "引用", "代码块", "分割线", "图片", "附件", "表格", "流程图"] {
+            XCTAssertTrue(slash.contains(title), "斜杠菜单缺项：\(title)")
+        }
+        let markdown = try webSource("markdown")
+        // 滴答 8.0.80 口径的触发器要素。
+        for needle in ["#{1,6}", "-\\s\\[x\\]", "blockquote", "::", "matchInline", "isFenceLine"] {
+            XCTAssertTrue(markdown.contains(needle), "markdown 触发器缺要素：\(needle)")
         }
     }
 }

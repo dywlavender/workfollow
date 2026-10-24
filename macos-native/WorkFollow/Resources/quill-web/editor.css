@@ -1,0 +1,107 @@
+/* WorkFollow 编辑器（Quill 内核）的滴答观感层。
+   布局/间距按 2026-10-24 REA 取证（笔记工具条 28px 裸条、斜杠菜单卡片）。 */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.ql-container { border: 0 !important; font-family: inherit; }
+.ql-editor { font-size: 14px; line-height: 1.6; padding: 4px 0 8px; caret-color: #476bff; }
+.ql-editor.ql-blank::before {
+  left: 0; right: 0;
+  color: #858d9a;
+  font-style: normal;
+}
+
+/* ---------- 工具条：顶部固定裸条（无底色无描边，28px，竖线分组） ---------- */
+#wf-toolbar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 6px;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+#wf-toolbar::-webkit-scrollbar { display: none; }
+#wf-toolbar .wf-btn { min-width: 22px; padding: 0 3px; font-size: 12px; }
+#wf-toolbar .wf-btn {
+  border: 0; background: transparent; cursor: pointer;
+  min-width: 26px; height: 26px;
+  border-radius: 4px;
+  color: #5f6672;
+  font-size: 13px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+}
+#wf-toolbar .wf-btn:hover { background: rgba(0,0,0,0.055); }
+#wf-toolbar .wf-btn.active { color: #476bff; background: rgba(71,107,255,0.10); }
+#wf-toolbar .wf-btn .wf-letter { font-weight: 600; }
+#wf-toolbar .wf-btn[data-name="highlight"] .wf-letter {
+  background: #ffe98a; border-radius: 2px; padding: 0 5px; font-weight: 400;
+}
+#wf-toolbar .wf-sep {
+  width: 1px; height: 16px; margin: 0 5px;
+  background: rgba(0,0,0,0.10);
+}
+
+/* ---------- 斜杠菜单：光标锚定卡片 ---------- */
+#wf-slash {
+  position: fixed;
+  z-index: 30;
+  width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.16);
+  padding: 4px;
+  font-size: 13px;
+  color: #2b2f36;
+}
+#wf-slash .wf-slash-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 8px; border-radius: 5px; cursor: pointer;
+}
+#wf-slash .wf-slash-item.selected { background: rgba(71,107,255,0.10); }
+#wf-slash .wf-slash-glyph {
+  width: 20px; height: 20px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #5f6672; font-size: 12px; font-weight: 600;
+}
+#wf-slash .wf-slash-sep { height: 1px; margin: 3px 8px; background: rgba(0,0,0,0.07); }
+
+/* ---------- 块 embed 的静态观感（占位卡） ---------- */
+.wf-embed-divider {
+  height: 1px; background: rgba(0,0,0,0.14); margin: 10px 0;
+}
+.wf-embed-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; margin: 6px 0;
+  background: #f7f8fa; border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 6px; color: #5f6672; font-size: 13px;
+}
+.wf-embed-card img { max-width: 320px; max-height: 180px; display: block; }
+
+/* 深色模式（跟随系统） */
+@media (prefers-color-scheme: dark) {
+  .ql-editor { color: #e8eaed; }
+  .ql-editor.ql-blank::before { color: #6b7280; }
+  #wf-toolbar .wf-btn { color: #a8adb8; }
+  #wf-toolbar .wf-btn:hover { background: rgba(255,255,255,0.08); }
+  #wf-toolbar .wf-btn.active { color: #98a1ff; background: rgba(152,161,255,0.14); }
+  #wf-toolbar .wf-btn[data-name="highlight"] .wf-letter { background: #6b5d23; color: #e8eaed; }
+  #wf-toolbar .wf-sep { background: rgba(255,255,255,0.14); }
+  #wf-slash { background: #26282e; border-color: rgba(255,255,255,0.12); color: #e8eaed; }
+  #wf-slash .wf-slash-item.selected { background: rgba(152,161,255,0.16); }
+  #wf-slash .wf-slash-glyph { color: #a8adb8; }
+  #wf-slash .wf-slash-sep { background: rgba(255,255,255,0.08); }
+  .wf-embed-card { background: #2a2d33; border-color: rgba(255,255,255,0.10); color: #a8adb8; }
+  .wf-embed-divider { background: rgba(255,255,255,0.18); }
+}

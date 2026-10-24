@@ -43,7 +43,7 @@ final class QuillSpikeWindowController: NSWindowController, WKScriptMessageHandl
             do {
                 let bridge = try await QuillResources.prepare()
                 self.schemeHandler.directory = bridge.deletingLastPathComponent()
-                self.webView.load(URLRequest(url: URL(string: "\(QuillSchemeHandler.scheme)://editor/bridge.html")!))
+                self.webView.load(URLRequest(url: URL(string: "\(QuillSchemeHandler.scheme)://editor/index.html")!))
             } catch {
                 NSLog("[QuillSpike] 资源准备失败：\(error.localizedDescription)")
             }
