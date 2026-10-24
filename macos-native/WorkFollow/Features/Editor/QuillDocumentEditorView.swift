@@ -110,7 +110,7 @@ struct QuillDocumentEditorView: NSViewRepresentable {
                 NotificationCenter.default.post(name: .quillEditorRequestDiagram, object: view)
             default:
                 // attachment / link / time / table：P3 打磨批次接管线，先占位不静默失败。
-                FileLog.line("[QuillEditor] requestAction 未接管线：\(action)")
+                NSLog("[QuillEditor] requestAction 未接管线：\(action)")
             }
         }
 
@@ -226,6 +226,7 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
         self.probeObserver = NotificationCenter.default.addObserver(
             forName: .quillProbeInsert, object: nil, queue: .main
         ) { [weak self] _ in
+            self?.call("quill.focus()")
             self?.insertTextProbe("PROBE")
         }
         loadTask = _Concurrency.Task { [weak self] in
@@ -236,7 +237,7 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
                 self.webView.load(URLRequest(url:
                     URL(string: "\(QuillSchemeHandler.scheme)://editor/index.html")!))
             } catch {
-                FileLog.line("[QuillEditor] 资源准备失败：\(error.localizedDescription)")
+                NSLog("[QuillEditor] 资源准备失败：\(error.localizedDescription)")
             }
             _ = await MainActor.run {}
         }
@@ -254,11 +255,9 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
 
     func loadDelta(_ deltaJSON: String) {
         guard isBridgeReady else {
-            FileLog.line("loadDelta 排队（未就绪）")
             pendingDeltaJSON = deltaJSON
             return
         }
-        FileLog.line("loadDelta 下发：\(deltaJSON.prefix(60))")
         call("window.workfollowEditor.load(\(deltaJSON))")
     }
 
@@ -312,7 +311,6 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
                     loadedRevision = rev
                     lastObservedRevision = rev
                 }
-                FileLog.line("loaded rev=\(loadedRevision)")
             case "deltaChanged":
                 let rev = body["rev"] as? Int ?? 0
                 guard rev > lastObservedRevision else { break }   // load 回声
@@ -364,21 +362,6 @@ enum ImagePickPanel {
                 return
             }
             completion(data)
-        }
-    }
-}
-
-/// 桥接诊断日志（临时；P3 验收后移除）。/tmp/quill-editor.log
-enum FileLog {
-    static func line(_ text: String) {
-        let url = URL(fileURLWithPath: "/tmp/quill-editor.log")
-        let stamped = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium) + " " + text + "\n"
-        if let handle = try? FileHandle(forWritingTo: url) {
-            handle.seekToEndOfFile()
-            handle.write(stamped.data(using: .utf8)!)
-            try? handle.close()
-        } else {
-            try? stamped.write(to: url, atomically: true, encoding: .utf8)
         }
     }
 }
