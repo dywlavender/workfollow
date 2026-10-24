@@ -262,6 +262,44 @@
       quill.insertText(index, text, "user");
       quill.setSelection(index + text.length, 0, "user");
     },
+    // Swift 宿主的键盘直注通道（焦点攻坚终案：不走 contenteditable 焦点）。
+    injectKeyEvent: function (text, isShift) {
+      var selection = quill.getSelection();
+      var index = selection ? selection.index : quill.getLength() - 1;
+      if (text === "\n") { quill.insertText(index, "\n", "user"); quill.setSelection(index + 1, 0, "user"); return; }
+      quill.insertText(index, text, "user");
+      quill.setSelection(index + text.length, 0, "user");
+    },
+    backspace: function () {
+      var selection = quill.getSelection();
+      if (!selection) return;
+      if (selection.length > 0) {
+        quill.deleteText(selection.index, selection.length, "user");
+      } else if (selection.index > 0) {
+        quill.deleteText(selection.index - 1, 1, "user");
+        quill.setSelection(selection.index - 1, 0, "user");
+      }
+    },
+    arrow: function (keyCode) {
+      var selection = quill.getSelection();
+      if (!selection) { quill.setSelection(quill.getLength() - 1, 0, "user"); return; }
+      var index = selection.index;
+      var text = quill.getText();
+      switch (keyCode) {
+        case 123: index = Math.max(0, index - 1); break;               // left
+        case 124: index = Math.min(quill.getLength() - 1, index + 1); break;  // right
+        case 125:                                                   // down
+          var nl = text.indexOf("\n", index);
+          index = nl < 0 ? quill.getLength() - 1 : Math.min(nl + 1, quill.getLength() - 1);
+          break;
+        case 126:                                                   // up
+          var before = text.substring(0, index);
+          var lastNl = before.lastIndexOf("\n", before.length - 2);
+          index = lastNl < 0 ? 0 : lastNl + 1;
+          break;
+      }
+      quill.setSelection(index, 0, "user");
+    },
     insertImage: function (base64) {
       var selection = quill.getSelection();
       var index = selection ? selection.index : quill.getLength() - 1;

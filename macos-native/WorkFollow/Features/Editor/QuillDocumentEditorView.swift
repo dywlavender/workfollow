@@ -201,7 +201,8 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
         // 本视图内的 mouseDown，显式 makeFirstResponder。
         focusObserver = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .keyDown]) {
             [weak self] event in
-            guard let self, let window = event.window, window == self.webView.window else { return event }
+            guard let self else { return event }
+            guard let window = event.window, window == self.webView.window else { return event }
             switch event.type {
             case .leftMouseDown:
                 if self.webView.hitTest(event.locationInWindow) != nil {
@@ -209,15 +210,37 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
                 }
                 return event
             case .keyDown:
-                // SwiftUI responder 链有时吃掉 keyDown（P3 实测）：只要焦点
-                // 已在 webView（或鼠标悬在编辑器上），直接转投。
-                let mouseInEditor = self.window != nil &&
-                    NSMouseInRect(self.convert(NSEvent.mouseLocation, from: nil), self.bounds, self.isFlipped)
-                if window.firstResponder === self.webView || mouseInEditor {
-                    self.webView.keyDown(with: event)
-                    return nil      // 已消费
+                // SwiftUI 宿主下 WebContent 拿不到键盘焦点（P3 实测多法无效：
+                // makeFirstResponder/keyDown 转发/JS focus 都不产生 text-change）。
+                // 终极方案：鼠标悬在编辑器上时，把按键文本经 JS 直注内核。
+                // 屏幕坐标 → 窗口坐标 → 视图坐标（之前直接 convert(from: nil)
+                // 在屏幕坐标系里比较视图 bounds，恒不命中——焦点攻坚的真正元凶之一）。
+                let mouseInEditor: Bool = MainActor.assumeIsolated {
+                    guard let window = self.window else { return false }
+                    let windowPoint = window.convertFromScreen(NSRect(origin: NSEvent.mouseLocation, size: .zero)).origin
+                    let local = self.convert(windowPoint, from: nil)
+                    return NSMouseInRect(local, self.bounds, self.isFlipped)
                 }
-                return event
+                guard mouseInEditor, !event.isARepeat else { return event }
+                func inject(_ characters: String, shift: Bool) {
+                    MainActor.assumeIsolated {
+                        self.call("window.workfollowEditor.injectKeyEvent(\(String(reflecting: characters)), \(shift))")
+                    }
+                }
+                switch event.keyCode {
+                case 36: inject("\n", shift: event.modifierFlags.contains(.shift)); return nil
+                case 51: self.call("window.workfollowEditor.backspace()"); return nil
+                case 123, 124, 125, 126:
+                    self.call("window.workfollowEditor.arrow(\(event.keyCode))"); return nil
+                default:
+                    if let characters = event.characters, !characters.isEmpty,
+                       event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+                        .subtracting([.shift]).isEmpty {
+                        inject(characters, shift: event.modifierFlags.contains(.shift))
+                        return nil
+                    }
+                    return event
+                }
             default:
                 return event
             }
