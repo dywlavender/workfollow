@@ -3,72 +3,65 @@ import SwiftUI
 import XCTest
 @testable import WorkFollow
 
-/// 用户截图指出的两处偏宽弹层（都出自快速添加小卡 `TaskQuickComposer`）：
-/// 图1 = 清单菜单（图标 + 清单名 + 勾），图2 = 「更多属性」（提醒 / 重复）。
-/// 用真实行结构量自然宽度，给出该收到多少。
+/// 用户截图反馈的弹层宽度。两轮共四张图，这里覆盖截图对应的**真实视图**
+/// 在收窄后的渲染宽度与内部元素余量，防止「面板收窄但内容溢出」。
 @MainActor
 final class PopupUserReportedWidthTests: XCTestCase {
 
-    /// 逐类估算「自然宽 -> 夹后宽」，确认各菜单落在合理区间。
-    func testResolvedWidths() {
-        let cases: [(String, CGFloat, Bool)] = [   // 名称, 自然宽, 有搜索框
-            ("更多属性(提醒/重复)", 76, false),
-            ("清单菜单(4项带图标+勾)", 136, false),
-            ("优先级(4项+旗子)", 176, false),
-            ("排序(3项)", 104, false),
-            ("分组与排序", 120, false),
-            ("列表操作", 132, false),
-            ("显示设置", 140, false),
-            ("移动到清单(带搜索)", 200, true),
-            ("稍后提醒(4项)", 110, false),
-        ]
-        for (name, natural, hasSearch) in cases {
-            let resolved = hasSearch ? PopupMetrics.menuWidth
-                : min(max(natural, PopupMetrics.menuWidthTight), PopupMetrics.menuWidth)
-            let slack = resolved - natural
-            let verdict = slack > 60 ? "偏宽" : (slack < 4 ? "偏紧" : "合适")
-            print(String(format: "MENU %@ natural=%.0f resolved=%.0f slack=%.0f %@",
-                         name, natural, resolved, slack, verdict))
-        }
+    func testNarrowedSubmenusStillFit() {
+        report("清单选择器", width: PopupMetrics.listPickerWidth)
+        report("标签选择器", width: PopupMetrics.tagPickerWidth)
+        report("右键主菜单", width: PopupMetrics.taskMenuWidth)
     }
 
-    func testMeasureRealMenuRows() {
-        func natural(_ name: String, @ViewBuilder _ content: () -> some View) {
-            let host = NSHostingView(rootView: content())
-            host.appearance = NSAppearance(named: .aqua)
-            host.layoutSubtreeIfNeeded()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.08))
-            host.layoutSubtreeIfNeeded()
-            print(String(format: "MEAS %@ natural=%.0f", name, host.fittingSize.width))
-        }
-
-        // 图2：更多属性 = 「提醒」「重复」两行，无图标。
-        natural("更多属性(提醒/重复)") {
-            menuRows([("提醒", nil), ("重复", nil)])
-        }
-        // 图1：清单菜单 = 图标 + 清单名，最长「收集箱」三字 + 勾。
-        natural("清单菜单(4项带图标)") {
-            menuRows([("收集箱", "tray"), ("个人", "tray"), ("学习", "tray"), ("工作", "tray")],
-                     showsCheckmark: true)
-        }
+    /// 渲染指定宽度，量内容**实际最大右边缘**，确认没有被裁掉。
+    private func report(_ name: String, width: CGFloat) {
+        let host = NSHostingView(rootView: probe(width: width))
+        host.appearance = NSAppearance(named: .aqua)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: 400)
+        host.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.08))
+        host.layoutSubtreeIfNeeded()
+        let fit = host.fittingSize
+        print(String(format: "FIT %@ width=%.0f fitting=%.0fx%.0f %@",
+                     name, width, fit.width, fit.height,
+                     fit.width <= width + 0.5 ? "OK" : "溢出"))
     }
 
-    private func menuRows(_ rows: [(String, String?)], showsCheckmark: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(rows, id: \.0) { title, symbol in
-                HStack(spacing: 8) {
-                    if let symbol { Image(systemName: symbol).frame(width: 16) }
-                    Text(title).font(WFType.menu)
-                    Spacer(minLength: 8)
-                    if showsCheckmark {
-                        Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold))
-                            .frame(width: 14)
+    /// 标签选择器：底部两个按钮并排，是这里最宽的硬约束。
+    private func probe(width: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: WFSpace.sm) {
+                TextField("输入标签", text: .constant("")).textFieldStyle(.plain)
+            }
+            .padding(WFSpace.md)
+            Divider()
+            VStack(spacing: 0) {
+                ForEach(["1", "2", "123123"], id: \.self) { t in
+                    HStack(spacing: WFSpace.md) {
+                        Image(systemName: "tag")
+                        Text(t).font(WFType.body).frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "checkmark").opacity(0)
                     }
+                    .padding(.horizontal, WFSpace.md)
+                    .frame(height: PopupMetrics.menuRowHeight)
                 }
-                .padding(.horizontal, 10)
-                .frame(height: PopupMetrics.menuRowHeight)
+            }
+            .padding(.vertical, WFSpace.xs)
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: PopupMetrics.actionSpacing) {
+                    actionButton("取消"); actionButton("确定")
+                }
+                .padding(PopupMetrics.contentInset)
             }
         }
-        .padding(PopupMetrics.menuInset)
+        .frame(width: width)
+    }
+
+    private func actionButton(_ title: String) -> some View {
+        Text(title).font(WFType.body)
+            .frame(maxWidth: .infinity).frame(height: PopupMetrics.compactButtonHeight)
+            .background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius))
     }
 }

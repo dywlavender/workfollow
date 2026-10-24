@@ -373,3 +373,66 @@ private func prepareOpening() {
 `testSubmenuUsesRootBounds...`）在**干净 HEAD 上单类跑同样失败**
 （`XCTUnwrap` 拿不到 `NSPanel`）。已用 stash 干净树复现确认是既有问题，
 本次不动。
+
+
+---
+
+## 9. 第三轮：任务右键菜单的子菜单（2026-10-24）
+
+用户又贴了两张图：任务右键菜单展开后的「移动到」和「标签」两个子菜单。
+
+| 子菜单 | 自然宽 | 原宽 | 空白 |
+|---|---|---|---|
+| 移动到清单（4 个清单 + 搜索框） | **132** | 224 | **92pt** |
+| 标签选择器（输入行 + 列表 + 底部按钮） | **127** | 264 | **137pt** |
+| 右键主菜单本身（左侧那列） | 145 | 144 | 刚好，不动 |
+
+### 9.1 为什么上一轮的自动量宽没覆盖到
+
+上一轮改的是 `BusinessMenu` 的宽度解析，但这两处**不走 `BusinessMenu`**——
+它们是任务右键菜单里直接挂的 `AnchoredPropertyPanel`，而且内容自己带
+`.frame(width:)`：
+
+- `TaskContextListPicker`：`.frame(width: PopupMetrics.menuWidth)`（224）
+- `TaskTagPickerPopover`：`.frame(width: PopupMetrics.tagPickerWidth, height:)`（264）
+
+面板宽度和内容宽度是**两个独立写死的值**，都要改。
+
+### 9.2 这两个为什么没做成自适应
+
+自动量宽对它们不适用：内容里有「铺满型」元素——
+清单选择器的搜索行、标签选择器的底部两个 `maxWidth: .infinity` 按钮。
+量出来就是面板宽，没有"自然宽"可言。这类只能给一个**够用但不浪费**的定值。
+
+### 9.3 取值
+
+- `listPickerWidth = 172`：实测自然宽 132，留 40 给更长的清单名。
+- `tagPickerWidth` 264 → **184**：底部按钮并排是硬约束。184 下每个按钮
+  约 74pt（`(184 - 12间距 - 24内边距×2) / 2`），够放「取消」「确定」。
+  再窄按钮文字会挤。
+
+### 9.4 同一批里没收窄的
+
+- **「预计专注」280 / 「添加分组」280**：是**表单**（文本输入框 + 校验行
+  + 按钮栏），不是菜单。输入框需要可用宽度，按菜单行口径收窄会难受。
+- **「任务专注」144**：已是短菜单口径，合适。
+- **右键主菜单本身 144**：实测内容 145，刚好。
+
+### 9.5 验证
+
+`PopupUserReportedWidthTests` 用**真实结构**（含底部按钮栏、搜索行）
+在收窄后重新渲染，确认 `fittingSize.width <= 面板宽`——不溢出：
+
+```
+FIT 清单选择器 width=172 fitting=172 OK
+FIT 标签选择器 width=184 fitting=184 OK
+FIT 右键主菜单 width=144 fitting=144 OK
+```
+
+### 9.6 又一个漏网断言
+
+`TaskContextPanelTests` 里「移动到清单子菜单宽度」还断言 `menuWidth`(224)。
+已改为 `listPickerWidth` 并注明来由。
+
+`TaskContextPanelTests` 仍有 2 个既有失败（`XCTUnwrap` 取不到 `NSPanel`），
+干净 HEAD 上同样失败，与本次无关。

@@ -102,7 +102,9 @@ final class TaskContextPanelTests: XCTestCase {
         let original = menu.frame
         try click(try XCTUnwrap(probe.rows[.action("移动到")]), in: menu)
         let lists = try InspectorPanelTestSupport.panel(title: "移动到清单", below: owner)
-        XCTAssertEqual(lists.frame.width, PopupMetrics.menuWidth, accuracy: 0.5)
+        // 清单子菜单用专用的 listPickerWidth（实测内容自然宽 132pt），
+        // 不再借用 menuWidth(224)——那个口径是按长词条 + 子菜单箭头定的。
+        XCTAssertEqual(lists.frame.width, PopupMetrics.listPickerWidth, accuracy: 0.5)
         XCTAssertLessThan(lists.frame.height, 230, "少量清单按内容收高")
         try savePreview("move-lists", of: lists)
         try enter("工作", placeholder: "搜索", in: lists)

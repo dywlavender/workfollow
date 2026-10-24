@@ -36,7 +36,13 @@ enum PopupMetrics {
     static let priorityMenuWidth: CGFloat = 176
     static let taskActionsWidth: CGFloat = 208
     static let noteInfoWidth: CGFloat = 220
-    static let tagPickerWidth: CGFloat = 264
+    /// 标签选择器。实测真实结构（输入行 + 列表行 + 底部两个按钮）自然宽 127pt，
+    /// 原 264 空出 137pt。底部按钮是 `maxWidth: .infinity` 的并排布局，
+    /// 收得太窄按钮文字会挤，184 给每个按钮约 74pt。
+    static let tagPickerWidth: CGFloat = 184
+    /// 「移动到清单」子菜单（图标 + 清单名 + 勾，含搜索行）。实测自然宽 132pt。
+    /// 与 `menuWidth` 分开：那个是「图标 + 长词条 + 子菜单箭头」的口径。
+    static let listPickerWidth: CGFloat = 172
     static let parentPickerWidth: CGFloat = 280
     static let focusEstimateWidth: CGFloat = 280
     static let relationPickerWidth: CGFloat = 320

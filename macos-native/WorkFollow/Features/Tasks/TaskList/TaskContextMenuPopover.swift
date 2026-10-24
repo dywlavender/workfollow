@@ -270,7 +270,7 @@ struct TaskContextMenuPopover: View {
                     .onHover { hoverRow(.group, entering: $0) }
                     .background(AnchoredPropertyPanel(
                         isPresented: submenuBinding(for: .group),
-                        width: PopupMetrics.menuWidth, placement: .submenu, title: "移动到分组"
+                        width: PopupMetrics.listPickerWidth, placement: .submenu, title: "移动到分组"
                     ) {
                         TaskContextSectionPicker(workspace: workspace, listName: task.list.name,
                             selected: task.sectionID,
@@ -293,7 +293,7 @@ struct TaskContextMenuPopover: View {
                     .onHover { hoverRow(.list, entering: $0) }
                     .background(AnchoredPropertyPanel(
                         isPresented: submenuBinding(for: .list),
-                        width: PopupMetrics.menuWidth, placement: .submenu,
+                        width: PopupMetrics.listPickerWidth, placement: .submenu,
                         focusPolicy: .panel, title: "移动到清单"
                     ) {
                         // 「分组是清单里面的二级菜单」：清单行再往右展开第三级面板，
@@ -665,7 +665,7 @@ private struct TaskContextListPicker: View {
                 }
             }
         }
-        .frame(width: PopupMetrics.menuWidth)
+        .frame(width: PopupMetrics.listPickerWidth)
         .coordinateSpace(name: "task-context-submenu")
         .onAppear { DispatchQueue.main.async { searchFocused = true } }
         .onChange(of: query) { _, _ in sectionHost = nil; controller.reset() }
@@ -712,7 +712,7 @@ private struct TaskContextListChoice: View {
         .background(AnchoredPropertyPanel(
             isPresented: Binding(get: { offersSections && sectionHost == name },
                 set: { if !$0, sectionHost == name { sectionHost = nil } }),
-            width: PopupMetrics.menuWidth, placement: .submenu, title: "移动到分组") {
+            width: PopupMetrics.listPickerWidth, placement: .submenu, title: "移动到分组") {
             TaskContextSectionPicker(workspace: workspace, listName: name,
                 selected: currentSectionID, onCancel: { sectionHost = nil },
                 onSelect: { onPick(name, $0) })
@@ -761,7 +761,7 @@ private struct TaskContextSectionPicker: View {
                     })
                 })
         }
-        .frame(width: PopupMetrics.menuWidth)
+        .frame(width: PopupMetrics.listPickerWidth)
         .coordinateSpace(name: "task-context-submenu")
         .onExitCommand(perform: onCancel)
     }
