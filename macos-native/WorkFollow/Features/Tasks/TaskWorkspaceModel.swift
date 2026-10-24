@@ -758,6 +758,7 @@ final class TaskWorkspaceModel: ObservableObject {
         // （滴答 `focusOnTaskTitle`）。快速添加不传这个标记——它的标题来自用户输入，
         // 抢焦点只会打断连续录入。
         if focusTitle, let id = result.taskID { pendingTitleEditorID = id }
+        if let id = result.taskID { highlightCreated([id]); reportPlacementChange(before: nil, id: id) }
         return result
     }
 
@@ -813,6 +814,7 @@ final class TaskWorkspaceModel: ObservableObject {
                                          tags: tags, document: document)
         didMutate(result)
         if let id = result.taskID { select(id) }
+        if let id = result.taskID { highlightCreated([id]); reportPlacementChange(before: nil, id: id) }
         return result
     }
 

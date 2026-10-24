@@ -283,6 +283,15 @@ final class BusinessMenuInteractionTests: XCTestCase {
         try open("优先级", probe: probe, owner: owner)
         let priority = try panel("优先级", below: owner)
         XCTAssertEqual(priority.frame.width, PopupMetrics.taskMenuWidth, accuracy: 0.5)
+        // Content measurement resizes the native menu on the next run-loop
+        // turn. Wait for all options to fit before dispatching the click.
+        let priorityHeight = CGFloat(TaskPriority.menuOrder.count) * PopupMetrics.menuRowHeight
+            + CGFloat(TaskPriority.menuOrder.count - 1) * 2 + PopupMetrics.menuInset * 2
+        let deadline = Date().addingTimeInterval(1)
+        while priority.frame.height < priorityHeight - 0.5, Date() < deadline {
+            InspectorPanelTestSupport.settle(owner, duration: 0.02)
+        }
+        XCTAssertEqual(priority.frame.height, priorityHeight, accuracy: 0.5)
         try click(probe.rows[0].rect, in: priority)
         try open("清单", probe: probe, owner: owner)
         let list = try panel("清单", below: owner)

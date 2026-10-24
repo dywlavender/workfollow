@@ -124,6 +124,7 @@ final class CommandPaletteTests: XCTestCase {
             let id = workspace.createTask(title: "work", in: .inbox).taskID!
             _ = workspace.moveToList(id, TaskList(name: "工作"))
             workspace.activeTag = "old-filter"
+            workspace.activeFilterID = UUID()
             let navigation = AppNavigation()
             navigation.destination = .today
 
@@ -131,6 +132,7 @@ final class CommandPaletteTests: XCTestCase {
             XCTAssertEqual(navigation.destination, .allTasks)
             XCTAssertEqual(workspace.activeList, "工作")
             XCTAssertNil(workspace.activeTag)
+            XCTAssertNil(workspace.activeFilterID)
             XCTAssertEqual(workspace.selectedTaskID, id)
             XCTAssertEqual(navigation.taskSelectionToPreserveOnNextNavigation, id)
         }

@@ -54,6 +54,12 @@ final class WorkspaceContinuityTests: XCTestCase {
         environment.openTask(id)
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(workspace.selectedTaskID, id, "显式链接优先于页面记忆")
+        _ = workspace.moveToList(id, TaskList(name: "工作"))
+        workspace.activeList = "工作"
+        environment.navigate(to: .notes); InspectorPanelTestSupport.settle(window)
+        environment.navigate(to: .allTasks); InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(workspace.activeList, "工作")
+        XCTAssertEqual(workspace.selectedTaskID, id)
     }
 
     func testReturnMemoryDoesNotReopenDeletedTask() throws {

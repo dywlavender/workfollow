@@ -156,6 +156,7 @@ enum CommandPaletteProjection {
               task.skippedAt == nil, !task.isAbandoned, !task.isConverted else { return false }
         workspace.activeList = nil
         workspace.activeTag = nil
+        workspace.openFilter(nil)
         let listName = task.list.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let destination: NativeDestination
         if listName == TaskList.inbox.name {
@@ -176,10 +177,10 @@ enum CommandPaletteProjection {
                          taskWorkspace: TaskWorkspaceModel,
                          navigation: AppNavigation) -> Bool {
         guard workspace.notes.contains(where: { $0.id == id && $0.deletedAt == nil }) else { return false }
+        navigation.destination = .notes
         taskWorkspace.activeList = nil
         taskWorkspace.activeTag = nil
         taskWorkspace.select(nil)
-        navigation.destination = .notes
         workspace.selectedID = id
         return true
     }

@@ -94,7 +94,7 @@ struct RootShellView: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $environment.commandPalettePresented) {
-            CommandPaletteView(navigation: navigation, session: environment.searchSession)
+            CommandPaletteView(navigation: navigation, session: environment.searchSession, workspace: workspace, notes: environment.notesWorkspace)
                 .environmentObject(environment)
         }
         .safeAreaInset(edge: .bottom) {

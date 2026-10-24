@@ -18,7 +18,10 @@ extension AppEnvironment {
             taskWorkspace.select(nil)
             switch destination {
             case .today: navigate(to: .today)
-            case .weekPlan: navigate(to: .weekPlan)
+            case .weekPlan:
+                weeklyPlanning.goCurrent()
+                weeklyPlanning.listName = nil
+                navigate(to: .weekPlan)
             case .quickAdd: break // Presented independently above.
             }
             return true

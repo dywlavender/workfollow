@@ -151,14 +151,17 @@ struct BusinessPicker<Value: Hashable>: View {
                     Text("没有匹配项").font(WFType.supporting).foregroundStyle(WFColors.secondaryText).padding(10)
                 }
             } label: {
+                // 触发按钮按内容收紧（值 + 箭头相邻）：此前中间的 `Spacer`
+                // 会把胶囊撑到行宽，选中值贴最左、箭头甩最右，看起来不像
+                // 正常下拉框。需要占满宽度的场合由调用方自行 `.frame(width:)`。
                 HStack(spacing: 8) {
                     Text(selectedTitle).lineLimit(1).truncationMode(.middle)
-                    Spacer(minLength: 0)
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(WFColors.secondaryText)
                 }
                 .font(WFType.body).foregroundStyle(WFColors.text)
                 .padding(.horizontal, 8).frame(minHeight: 28)
+                .fixedSize(horizontal: true, vertical: false)
                 .background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius))
                 .contentShape(Rectangle())
             }

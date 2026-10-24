@@ -67,7 +67,32 @@ final class WorkspaceSearchSession: ObservableObject {
         return true
     }
 
-    func entries(workspace: TaskWorkspaceModel, notes: [Note], destination: NativeDestination) -> [CommandPaletteEntry] {
+    private struct ResultStamp: Equatable {
+        var query: String
+        var showAll: Bool
+        var content: Content
+        var status: Status
+        var list: String?
+        var sourceList: String?
+        var taskRevision: Int
+        var noteRevision: Int
+        var dateRevision: Int
+        var destination: NativeDestination
+        var recent: [Recent]
+    }
+    private var cachedResults: (ResultStamp, [CommandPaletteEntry])?
+    private(set) var projectionBuildCount = 0
+    func entries(workspace: TaskWorkspaceModel, notes: NotesWorkspaceModel, destination: NativeDestination) -> [CommandPaletteEntry] {
+        let stamp = ResultStamp(query: query, showAll: showAll, content: content, status: status, list: list,
+            sourceList: workspace.activeList, taskRevision: workspace.revision, noteRevision: notes.revision,
+            dateRevision: workspace.dateRevision, destination: destination, recent: recent)
+        if let cachedResults, cachedResults.0 == stamp { return cachedResults.1 }
+        let result = buildEntries(workspace: workspace, notes: notes.notes, destination: destination)
+        projectionBuildCount += 1
+        cachedResults = (stamp, result)
+        return result
+    }
+    private func buildEntries(workspace: TaskWorkspaceModel, notes: [Note], destination: NativeDestination) -> [CommandPaletteEntry] {
         let tasks = workspace.allTasks.filter {
             (!showAll || list == nil || $0.list.name == list)
                 && (!showAll || status == .all || (status == .completed ? $0.status == .completed : !$0.isClosed))

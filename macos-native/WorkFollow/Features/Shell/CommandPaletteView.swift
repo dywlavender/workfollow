@@ -4,6 +4,8 @@ struct CommandPaletteView: View {
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     @ObservedObject var session: WorkspaceSearchSession
+    @ObservedObject var workspace: TaskWorkspaceModel
+    @ObservedObject var notes: NotesWorkspaceModel
     private var query: String { session.query }
     private var selectedIndex: Int {
         get { session.selectedIndex }
@@ -11,8 +13,11 @@ struct CommandPaletteView: View {
     }
     @FocusState private var focused: Bool
 
+    private var filterIdentity: [String] {
+        [session.content.rawValue, session.status.rawValue, session.list ?? "", String(session.showAll)]
+    }
     private var entries: [CommandPaletteEntry] {
-        session.entries(workspace: environment.taskWorkspace, notes: environment.notesWorkspace.notes,
+        session.entries(workspace: workspace, notes: notes,
                         destination: navigation.destination)
     }
 
@@ -91,6 +96,9 @@ struct CommandPaletteView: View {
                     if entries.indices.contains(index) { proxy.scrollTo(entries[index].id) }
                 }
                 .onChange(of: query) { _, _ in
+                    if let first = entries.first { proxy.scrollTo(first.id, anchor: .top) }
+                }
+                .onChange(of: filterIdentity) { _, _ in
                     if let first = entries.first { proxy.scrollTo(first.id, anchor: .top) }
                 }
             }
