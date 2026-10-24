@@ -92,15 +92,16 @@ struct TaskQuickComposer: View {
                 datePage = .main
             } label: {
                 HStack(spacing: WFSpace.sm) {
+                    // 图标与文字同色走三态：无日期灰、有日期蓝、过期红（滴答实测）。
                     Image(systemName: "calendar")
                         .font(.system(size: 14))
-                        .foregroundStyle(QuickAddBarStyle.iconColor)
+                        .foregroundStyle(QuickAddBarStyle.cardDateColor(
+                            hasDate: schedule.dueAt != nil, overdue: scheduleOverdue))
                     Text(scheduleLabel)
                         .font(.system(size: 14))
                         .lineLimit(1)
-                        .foregroundStyle(schedule.dueAt == nil
-                                         ? WFColors.overlayTertiaryText
-                                         : WFColors.accent)
+                        .foregroundStyle(QuickAddBarStyle.cardDateColor(
+                            hasDate: schedule.dueAt != nil, overdue: scheduleOverdue))
                 }
                 .padding(.horizontal, WFSpace.xs)
                 .padding(.vertical, WFSpace.inline)
@@ -137,9 +138,9 @@ struct TaskQuickComposer: View {
     private var titleField: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("", text: $title, prompt: Text("准备做什么？")
-            .foregroundStyle(QuickAddBarStyle.placeholderColor))
+            .foregroundStyle(QuickAddBarStyle.cardPlaceholderColor))
             .textFieldStyle(.plain)
-            .font(.system(size: 18))
+            .font(.system(size: QuickAddBarStyle.cardInputSize))
             .foregroundStyle(WFColors.overlayText)
             .focused($titleFocused)
             .onSubmit(submit)
@@ -163,7 +164,7 @@ struct TaskQuickComposer: View {
                         .font(.system(size: 14))
                         .foregroundStyle(QuickAddBarStyle.iconColor)
                     Text(listName)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 14, weight: QuickAddBarStyle.cardValueWeight))
                         .foregroundStyle(WFColors.overlayText)
                 }
                 .padding(.horizontal, WFSpace.xs)
@@ -239,6 +240,13 @@ struct TaskQuickComposer: View {
     }
 
     private static let draftTaskID = UUID(uuidString: "00000000-0000-0000-0000-00000000ADD1")!
+
+    /// 过期判定与列表日期徽标同口径：开始日早于今天才变红（“今天”仍是蓝）。
+    private var scheduleOverdue: Bool {
+        guard let due = schedule.dueAt else { return false }
+        return workspace.calendar.startOfDay(for: due)
+            < workspace.calendar.startOfDay(for: workspace.clock())
+    }
 
     private var scheduleLabel: String {
         guard overridden, let due = schedule.dueAt else { return "设置日期" }

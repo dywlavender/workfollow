@@ -24,4 +24,21 @@ enum QuickAddBarStyle {
     static let shortcutColor = WFColors.tertiaryText
     /// 未选中的条底。
     static let idleFill = WFColors.quickAddIdleFill
+
+    // MARK: 小创建卡（日历 / 四象限 / 桌面小组件共用）
+
+    /// 卡片标题输入的字号：比行标签（14）大一档、比旧值 18 收一档，
+    /// 对齐滴答卡片实测（~16pt）。
+    static let cardInputSize: CGFloat = 16
+    /// 卡片占位灰比列表条再浅半档（滴答卡片 ≈ #AAAAAA）。
+    static let cardPlaceholderColor = WFColors.tertiaryText
+    /// 卡片日期行三态：无日期灰、有日期「今天」同款蓝、过期红。
+    /// 图标与文字共用这一份（滴答实测：有日期时日历图标跟着变蓝）。
+    static func cardDateColor(hasDate: Bool, overdue: Bool) -> Color {
+        guard hasDate else { return WFColors.tertiaryText }
+        return overdue ? .red : WFColors.accent
+    }
+    /// 卡片行值文字（清单名等）：常规字重、近黑——与滴答一致，
+    /// 不再用 semibold 抢重。
+    static let cardValueWeight: Font.Weight = .regular
 }
