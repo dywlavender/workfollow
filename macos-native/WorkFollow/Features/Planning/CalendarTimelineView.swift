@@ -556,6 +556,8 @@ private struct CalendarTimeBlock: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { anchorSink.rect = anchor.rect; onOpen() }
+        // 与列表行同理：窗口未激活时，第一次点击也要直接打开任务。
+        .modifier(TaskRowActivationPolicy())
         .gesture(DragGesture(minimumDistance: 5).onChanged { value in
             focused = true; _ = gestureSession.beginIfNeeded()
             guard !gestureSession.isCancelled else { return }

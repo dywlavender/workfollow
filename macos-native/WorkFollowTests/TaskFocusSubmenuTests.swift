@@ -65,7 +65,7 @@ final class TaskFocusSubmenuTests: XCTestCase {
         let submenu = try InspectorPanelTestSupport.panel(
             title: InspectorPanelTestSupport.focusSubmenuTitle, below: more)
         XCTAssertTrue(submenu.parent === more, "Focus is a child of the action panel")
-        XCTAssertEqual(submenu.frame.width, 176, accuracy: 0.5)
+        XCTAssertEqual(submenu.frame.width, PopupMetrics.taskMenuWidth, accuracy: 0.5)
         XCTAssertEqual(submenu.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .aqua)
         XCTAssertEqual(more.frame, originalFrame, "The focus child cannot resize or move More")
 

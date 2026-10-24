@@ -61,7 +61,7 @@ final class WorkspaceSearchSession: ObservableObject {
         }
         environment.commandPalettePresented = false
         if entry.kind == .task || entry.kind == .note {
-            environment.feedback.show(FeedbackEvent(kind: .info, message: "已打开「" + entry.title + "」",
+            environment.feedback.show(FeedbackEvent(kind: .navigation, message: "已打开「" + entry.title + "」",
                 destinationTitle: "返回搜索", destinationAction: { [weak environment] in environment?.commandPalettePresented = true }))
         }
         return true

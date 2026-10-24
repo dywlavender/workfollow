@@ -493,6 +493,11 @@ final class AppEnvironment: ObservableObject {
             }
             return
         }
+        // 切换页面即离开筛选器语境：否则从保存过滤器点去「已完成 / 已放弃」，
+        // 目标页仍带着旧过滤条件，整页会空成 0 条。
+        if taskWorkspace.activeFilterID != nil {
+            taskWorkspace.openFilter(nil)
+        }
         navigation.destination = destination
     }
 

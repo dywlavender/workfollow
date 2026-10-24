@@ -84,7 +84,7 @@ final class TaskTagPickerInteractionTests: XCTestCase {
             try InspectorPanelTestSupport.clickButton(containing: "标签", in: more)
             XCTAssertFalse(more.isVisible)
             let picker = try InspectorPanelTestSupport.actionPanel(in: window)
-            XCTAssertEqual(picker.frame.width, 264, accuracy: 1)
+            XCTAssertEqual(picker.frame.width, PopupMetrics.tagPickerWidth, accuracy: 1)
             XCTAssertGreaterThanOrEqual(picker.frame.height, 180)
             XCTAssertLessThanOrEqual(picker.frame.height, 320)
         }

@@ -7,6 +7,9 @@ enum FeedbackKind: Int {
     case info = 20
     case success = 40
     case completion = 60
+    /// 带「返回 / 查看」去向的导航提示：优先级高于普通成功提示，
+    /// 否则刚批量添加的 toast 会把「返回搜索」这类入口整个吞掉。
+    case navigation = 70
     case undoable = 80
     case error = 100
 

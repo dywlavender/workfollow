@@ -105,7 +105,7 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
         try click(.tags, in: parent, state: fixture.state)
         settle(fixture)
         var child = try XCTUnwrap(childPanel(in: parent))
-        XCTAssertEqual(child.frame.width, 264, accuracy: 0.5)
+        XCTAssertEqual(child.frame.width, PopupMetrics.tagPickerWidth, accuracy: 0.5)
         XCTAssertEqual(parent.frame, originalFrame)
         XCTAssertTrue(child.firstResponder is NSTextView, "Tag search must receive initial keyboard focus, not Confirm")
 

@@ -74,6 +74,9 @@ struct PlanningOverlayLayer<Content: View>: View {
                     .frame(width: proxy.size.width, height: proxy.size.height)
                     .contentShape(PlanningOverlayDismissRegion(taskHitRects: taskHitRects), eoFill: true)
                     .onTapGesture(perform: onDismiss)
+                    // 非 key 窗口（测试宿主/激活中的窗口）里，第一次点击默认只用于
+                    // 激活窗口，SwiftUI 手势收不到；浮层的空白关闭必须拿到这一拍。
+                    .modifier(TaskRowActivationPolicy())
                 if let rect {
                     WFOverlayCard(radius: radius) { content }
                         .frame(width: rect.width, height: rect.height)

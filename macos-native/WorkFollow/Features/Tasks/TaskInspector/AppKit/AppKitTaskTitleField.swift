@@ -43,6 +43,9 @@ struct AppKitTaskTitleField: NSViewRepresentable {
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         field.stringValue = text
         field.setAccessibilityLabel("任务标题")
+        field.onBeginEditing = { [weak coordinator = context.coordinator] in
+            coordinator?.noteEditingBegan()
+        }
         return field
     }
 
@@ -86,14 +89,24 @@ struct AppKitTaskTitleField: NSViewRepresentable {
 
         init(_ parent: AppKitTaskTitleField) { self.parent = parent }
 
+        /// 非 key 窗口的点击会先把焦点交给字段、再发事件；这一拍 AppKit 不一定
+        /// 补 `controlTextDidBeginEditing`。若状态仍停在 false，下一轮
+        /// `syncFirstResponder` 会把刚拿到的焦点当成“外部要求结束编辑”清掉。
+        func noteEditingBegan() {
+            guard !parent.isEditing else { return }
+            DispatchQueue.main.async { [parent] in
+                guard !parent.isEditing else { return }
+                parent.isEditing = true
+            }
+        }
+
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             if parent.text != field.stringValue { parent.text = field.stringValue }
         }
 
         func controlTextDidBeginEditing(_ notification: Notification) {
-            guard !parent.isEditing else { return }
-            DispatchQueue.main.async { [parent] in parent.isEditing = true }
+            noteEditingBegan()
         }
 
         func controlTextDidEndEditing(_ notification: Notification) {
@@ -137,6 +150,23 @@ struct AppKitTaskTitleField: NSViewRepresentable {
 /// 宽度固定、高度随文字换行的 `NSTextField`。
 /// 默认 `NSTextField` 的 intrinsic 高度只按单行算，长标题会被裁掉。
 final class HeightTrackingTextField: NSTextField {
+    var onBeginEditing: (() -> Void)?
+
+    /// 与列表行标题一致：非 key 窗口的第一次点击也要落进输入框。
+    /// 默认 NSTextField 会把这一拍只用于激活窗口，标题看着点了却不进编辑。
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted, currentEditor() != nil { onBeginEditing?() }
+        return accepted
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        if currentEditor() != nil { onBeginEditing?() }
+    }
+
     override var intrinsicContentSize: NSSize {
         guard bounds.width > 0, let cell else { return super.intrinsicContentSize }
         let measured = cell.cellSize(forBounds: NSRect(x: 0, y: 0,

@@ -98,8 +98,9 @@ struct RootShellView: View {
                 .environmentObject(environment)
         }
         .safeAreaInset(edge: .bottom) {
-            // 反馈 HUD 挂载在底部居中：空场不占布局，有内容时也不遮挡点击。
             VStack(spacing: 0) {
+                // HUD 放在安全区内：有提示时把页面顶上去，不浮在底栏按钮上抢点击
+                // （摘要页「撤销采用」等）。交互本身由 FeedbackCenter 的优先级保证。
                 FeedbackHostView(center: environment.feedback)
                 if let error = environment.storageError {
                     // 保存失败不是"看一眼就好"：重试成功后提示自己消失。
