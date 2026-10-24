@@ -519,6 +519,37 @@ final class TaskWorkspaceModel: ObservableObject {
         if selectedTask?.deletedAt != nil { select(nil) }
     }
 
+    /// 拖顶栏进度条 → 把有序子任务里前 k 条设成完成、其余取消完成。
+    ///
+    /// 一次拖动必须只算**一步撤销**：走 `store.transaction` 把整组状态变更压成一个
+    /// 快照，而不是逐条调 `complete`/`restore`（那样撤销要按 N 次）。
+    func adjustSubtaskCompletion(_ orderedIDs: [UUID], completedCount: Int) {
+        guard !orderedIDs.isEmpty else { return }
+        let target = min(max(completedCount, 0), orderedIDs.count)
+        let doneSet = Set(orderedIDs.prefix(target))
+        var changed = false
+        store.transaction {
+            for id in orderedIDs {
+                guard let current = store.task(id), !current.isConverted else { continue }
+                let shouldComplete = doneSet.contains(id)
+                if shouldComplete, current.status != .completed {
+                    // `actions.complete` 负责重复规则的下一次展开等副作用，
+                    // 不能在事务里绕过它手写 status。
+                    _ = actions.complete(id)
+                    changed = true
+                } else if !shouldComplete, current.status == .completed {
+                    _ = actions.restore(id)
+                    changed = true
+                }
+            }
+        }
+        guard changed else { return }
+        revision += 1
+        report(FeedbackEvent(kind: .undoable,
+                             message: "子任务进度 \(target)/\(orderedIDs.count)",
+                             actionTitle: "撤销", action: undoStep()))
+    }
+
     /// 批量合并（滴答对齐,用户实机验证:所选任务全部变成子任务,父任务新建）。
     /// 返回新父任务 ID;少于 2 条可选时返回 nil,面板据此置灰瓦片。
     @discardableResult

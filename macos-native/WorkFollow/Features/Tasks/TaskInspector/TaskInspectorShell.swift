@@ -146,7 +146,10 @@ struct TaskInspectorShell: View {
         // 子任务进度条（TI2-07）：贴在顶栏下沿，不改变 Header 高度/内容几何。
         .overlay(alignment: .bottom) {
             if let progress = headerProgress(task) {
-                TaskInspectorProgressBar(progress: progress)
+                TaskInspectorProgressBar(progress: progress,
+                                         onAdjust: progress.isAdjustable
+                                            ? { adjustSubtaskProgress(task.id, to: $0) }
+                                            : nil)
                     .inspectorRenderAnchor(.progressBar)
             }
         }
@@ -629,7 +632,18 @@ struct TaskInspectorShell: View {
             if checked { done += 1 }
         }
         guard total > 0 else { return nil }
-        return TaskInspectorSubtaskProgress(done: done, total: total)
+        // 清单形态只读：这份进度来自正文检查项，拖动会与正文编辑抢同一份状态。
+        return TaskInspectorSubtaskProgress(done: done, total: total, isAdjustable: false)
+    }
+
+    /// 拖动进度条 → 按层级顺序勾选前 k 条子任务、取消其余。
+    ///
+    /// 一次拖动只产生一步撤销：`adjustSubtaskCompletion` 把整组勾选/取消压成一个事务。
+    private func adjustSubtaskProgress(_ parentID: UUID, to targetDone: Int) {
+        let children = editorChildren(parentID)
+        guard !children.isEmpty else { return }
+        let target = min(max(targetDone, 0), children.count)
+        workspace.adjustSubtaskCompletion(children.map(\.id), completedCount: target)
     }
 
     /// 顶栏次要日期（滴答 `secondaryDateLabel`）：只在任务已有截止日期时渲染，逾期红字。

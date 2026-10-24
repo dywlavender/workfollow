@@ -202,7 +202,7 @@
 | TI2-04 | 子任务拖拽排序 / 折叠持久化 / 分页 | `pasteboardWriterForItem:` 等 + `containsCollapsedSubtasks` + `TTSubtasksLoadmoreCell` | NSOutlineView 无 drag/drop；折叠是临时 UI 态；一次全渲染 | 缺 | **P0（拖拽）/P1（其余）** | M |
 | TI2-05 | 任务形态（任务/笔记/清单）与清单模式逐项操作 | `kindButton` + `updateKind:` + `CheckItemCell`（完成/提醒/删除/拖拽） | 只有文本；检查项是段落类型，无逐项按钮 | 缺 | **05a P0 / 05b P1** | M / L |
 | TI2-06 | 标题 Return 行为 | `focusOnContentIfNeeded`（推断：Return 进正文） | Return = 结束编辑（`AppKitTaskTitleField.swift:105`） | 差异 | P1 | S |
-| TI2-07 | 顶栏进度条 | `progressView` + `expectedProgress` + 可改 | 无；只有列表行的 `subtaskProgress` 文本 | 缺 | P1 | M |
+| TI2-07 | 顶栏进度条 | `progressView` + `expectedProgress` + 可改 | 已做（§15）：顶栏下沿进度条可拖（改子任务完成度）、清单形态只读；仍无 `expectedProgress` 参照线 | 部分 | P1 | M |
 | TI2-08 | 输入期补全与链接菜单 | `shouldShowQuickTag/List`、`hideLinkHoverMenu` | `#` 标签、`~` 清单补全已做（§14）；仍无 `*`/`!`/`@` 与链接悬停菜单 | 部分 | P1 | M |
 | TI2-09 | 评论内联化 | 底栏 `showAddCommentView:` + 展开/收起 + 回复/编辑/附件 | 正文流折叠区、一级回复、编辑已做（§14）；无附件/表情 | 部分 | P1 | M |
 | TI2-10 | 专注三入口位置 | 底栏/摘要区 `StartPomoFocus` / `StartStopWatchFocus` / `SetFocusEstimate` | 更多菜单二级 + 更多菜单项 | 差异 | P1 | S |
@@ -396,7 +396,7 @@
 | TI2-16 | **已完成** | ① 标题级别 H4–H6：命令 + 工具条 H 选择器补到六级（`md_header4..6`），徽标 `H₄–H₆`、面板高 264；② 工具条尾部「更多」溢出菜单（`md_more` / `moreButtonClicked:`）：段落 3 项 + 行内 6 项 + 时间/链接/附件；Slash 仍保持实测的 12 项 | `HeadingLevelTests` 3 项 + `DocumentToolbarOverflowTests` 2 项 + `DocumentProfileTests` 契约更新 |
 | TI2-11 | **已完成** | 补「打印」（`TaskPrintService`：标题/属性/正文按块排版/子任务 ☐☑ 清单，`NSPrintOperation` 走系统面板）；顶层菜单恢复滴答 15 项顺序 | `TaskPrintServiceTests` 2 项（完整稿 / 空正文）+ `TaskMoreMenuRoundTwoTests` 顺序断言更新 |
 | TI2-21 | **已完成** | 行首块手柄：空行「+」、标题 H 角标、正文六点手柄共用同一条沟槽命中区，点开都是块类型菜单（Slash 空查询态）；列表/检查项/引用/代码行不接管（`openBlockMenu` 取代 `openEmptyBlockMenu`，检查项勾选不受影响） | `DocumentBlockMenuTests` 4 项 + `DocumentDecorationRenderTests` 手柄渲染 1 项（原"沟槽为空"守卫反转） |
-| TI2-07 | **部分完成** | 顶栏下沿 2pt **只读**子任务进度条（`TaskInspectorSubtaskProgress` 解析 "2/5"，`fraction` 进度）；不改 Header 高度。**未做**：可拖动 / `expectedProgress` 参照线 | `TaskInspectorProgressBarTests` 3 项（解析 / 比例 / 有无子任务的显隐） |
+| TI2-07 | **基本完成** | 顶栏下沿 2pt 子任务进度条；§15 起**可拖**（拖动 = 按比例勾选/取消子任务，一步撤销），清单形态只读。**未做**：`expectedProgress` 参照线（没有数据源） | `TaskInspectorProgressBarTests` 3 项 + `ProgressBarInteractionTests` 9 项 |
 | TI2-12 | **已完成** | 子任务行迷你标记：重复 / 提醒 / 描述 / 附件（数据源与列表行同构 `TaskSecondaryMetadata`，标签不重复显示；cell 复用时清空，不会留下上一行的图标） | `SubtaskRowMetadataTests` 2 项（空任务无标记 / 顺序 + 复用清空） |
 | TI2-09 | **基本完成** | ① 底栏评论条数角标；② **评论内联化**：正文流里出现「评论 n」折叠区，展开是列表（内容 + 时间 + 悬停删除）+ 原位输入框（回车/发送），底栏 💬 展开收起；删除浮层面板 `TaskCommentPanel`。**未做**：回复、编辑、评论附件、表情 | `TaskCommentBadgeTests` 1 项 + `TaskCommentSectionTests` 2 项（有评论才出现/删完收起、计数随 store） |
 | TI2-10 | **已完成** | 「预计专注」从顶层「更多」移入「开始专注」子菜单（番茄 / 正计时 / 设置预计专注同属 focus 出口），焦点面板仍锚在「更多」按钮上 | `TaskFocusSubmenuTests.testEstimateEntryLivesInFocusSubmenuAndOpensTheEstimatePanel` |
@@ -520,6 +520,28 @@
   （`movabsq $-0x1f00000000000000` 载 `0xE1` 高位 + `movl $0x7e` + `bridgeToObjectiveC`），
   其余四个同构，只有立即数不同。
 - 仍未做：`*` 日期、`!` 优先级、`@` 提及三种补全（见第 10 节）。
+
+## 15. 优化批次四（2026-10-24）
+
+最后一项：顶栏进度条从只读升级为可拖（TI2-07）。
+
+| # | 项 | 改动 | 测试 |
+|---|---|---|---|
+| 1 | 进度条可交互 | 滴答的 `TTTaskDetailProgressView` 有 `isProgressChangable` + `progressChangedHandler` + `expectedProgress`，并重写了 `mouseDown:` / `mouseMoved:` / `updateTrackingAreas` —— 确实可拖。**关键判断**：它没有"手动百分比"字段，进度就是子任务完成度，所以拖动等价于"按比例勾选/取消勾选子任务"，不需要给 `Task` 加新字段（这也是前几批把它当成"要动存储"而推迟的原因，那个顾虑其实不成立）。本地：`TaskInspectorSubtaskProgress` 加 `isAdjustable` 与纯函数 `targetDone(for:)`（比例 → 条数，夹紧 + 可选步进吸附）；`TaskInspectorProgressBar` 加 `DragGesture(minimumDistance: 0)`（拖动中只改显示、松手才写，避免撤销碎成 N 步）+ `NSCursor.resizeLeftRight` 悬停反馈 + `accessibilityAdjustableAction`；命中区上下各放宽 4pt，不改变 Header 几何。清单形态仍是**只读**——那份进度来自正文检查项，拖动会与正文编辑抢同一份状态 | `ProgressBarInteractionTests` 9 项（比例换算 2 / 只读口径 / 非法串解析 / 前缀完成与恢复 / 归零 / 一步撤销 / 同值 no-op / 视图锚点） |
+
+写回口径：
+
+- 新增 `TaskWorkspaceModel.adjustSubtaskCompletion(_:completedCount:)`：整组变更包在
+  `store.transaction` 里，**一次拖动 = 一步撤销**（逐条调 `complete`/`restore` 会让
+  撤销要按 N 次）。已完成但不在目标前缀内的会被恢复，反之补完成。
+- 勾选仍走 `actions.complete(id)` 而不是手写 `status`：重复规则的下一次展开等副作用
+  都在那里，绕过它会让重复任务少展开一期。
+
+口径：
+
+- **不动存储**：没有新增字段，`Task` 的快照格式不变。
+- 回归（进度/检视器/子任务/工作区）**47 项 0 失败**；`InspectorWalkthroughTests` 走查通过。
+- 本批新增 9 个测试方法。
 
 ## 附录：证据索引
 
