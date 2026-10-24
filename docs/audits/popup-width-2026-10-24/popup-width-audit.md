@@ -265,7 +265,19 @@ xcodebuild ... -only-testing:WorkFollowTests/PopupWidthThirdPassTests test 2>&1 
 判定规则统一是一条纯函数：`余量 > 60` 偏宽 / `4~60` 合适 / `< 4` 偏紧。
 「撑满型」与「等宽型」按结构判读，不按数字判读——这两类的余量没有优化含义。
 
-### 7.5 一处契约测试同步
+### 7.5 本次改动落在哪
+
+代码随 `11182e1` 一起入库（那次提交同时含一个日期面板的对齐修复，
+提交标题只写了后者）。为便于追溯，改动清单如下：
+
+| 类型 | 文件 |
+|---|---|
+| 常量与规则 | `Infrastructure/Presentation/PopupMetrics.swift`（+10 常量、`taskMenuWidth` 拆分、`popupSlackWide/Tight` 阈值） |
+| 宽度修正 | `TaskTagEditorView` 420→320、`ListActivitySheet` 360→300、`AdvancedFilterRuleEditor` 264→208、`TaskInspectorShell` 优先级菜单走新常量、`FocusOverviewPane` 190→160 |
+| 裸字面量收编 | `CountdownEditorView`(240/350/360/380)、`FocusTimerPane`(360)、`FocusRecordEditor`(440)、`LinkHoverMenu`(226)、`TagCompletionPanel`(160)、`MoveTargetPickerCard`(230)、`QuickAddPropertiesPopover`(250×3)、`TaskNoteInfoPanel`(220)、`TemplateEducationView`(380)、`TaskListView`(230) |
+| 量测代码 | `PopupWidthInventoryTests` / `PopupWidthCoverageTests`（含 SecondPass / ThirdPass 两个类） |
+
+### 7.6 一处契约测试同步
 
 `PopupStandardizationTests` 原先硬断言任务类型菜单宽 176，改为断言
 `PopupMetrics.taskMenuWidth`（现在是 144）。这是**逻辑上的必然变更**：
