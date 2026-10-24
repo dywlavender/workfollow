@@ -52,7 +52,10 @@ struct TaskInspectorShell: View {
             if let task = workspace.selectedTask {
                 headerBar(task)
                 Divider()
-                reminderSummaryRow(task)
+                // 未设置提醒时整行不出现（用户反馈：多余）；有提醒才摘要。
+                if !ReminderSchedule.fireDates(for: task, calendar: workspace.calendar).isEmpty {
+                    reminderSummaryRow(task)
+                }
                 GeometryReader { viewport in
                     ScrollView {
                         inspectorContent(task)
