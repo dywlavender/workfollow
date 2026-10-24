@@ -197,53 +197,18 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
     required init?(coder: NSCoder) { fatalError("not intended") }
 
     func loadBridge() {
-        // SwiftUI 宿主下 WKWebView 点击不总能夺焦（P3 实测）：本地监听
-        // 本视图内的 mouseDown，显式 makeFirstResponder。
-        focusObserver = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .keyDown]) {
+        // SwiftUI 宿主下 WKWebView 点击不总能夺焦：本地监听本视图内的
+        // mouseDown，显式 makeFirstResponder。键盘输入走自然路径
+        // （2026-10-24 CGEvent/HID 实测：真实键盘分发直达 WebContent，
+        // 拦截注入通道反而破坏 IME 组合输入，已移除）。
+        focusObserver = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) {
             [weak self] event in
             guard let self else { return event }
             guard let window = event.window, window == self.webView.window else { return event }
-            switch event.type {
-            case .leftMouseDown:
-                if self.webView.hitTest(event.locationInWindow) != nil {
-                    window.makeFirstResponder(self.webView)
-                }
-                return event
-            case .keyDown:
-                // SwiftUI 宿主下 WebContent 拿不到键盘焦点（P3 实测多法无效：
-                // makeFirstResponder/keyDown 转发/JS focus 都不产生 text-change）。
-                // 终极方案：鼠标悬在编辑器上时，把按键文本经 JS 直注内核。
-                // 屏幕坐标 → 窗口坐标 → 视图坐标（之前直接 convert(from: nil)
-                // 在屏幕坐标系里比较视图 bounds，恒不命中——焦点攻坚的真正元凶之一）。
-                let mouseInEditor: Bool = MainActor.assumeIsolated {
-                    guard let window = self.window else { return false }
-                    let windowPoint = window.convertFromScreen(NSRect(origin: NSEvent.mouseLocation, size: .zero)).origin
-                    let local = self.convert(windowPoint, from: nil)
-                    return NSMouseInRect(local, self.bounds, self.isFlipped)
-                }
-                guard mouseInEditor, !event.isARepeat else { return event }
-                func inject(_ characters: String, shift: Bool) {
-                    MainActor.assumeIsolated {
-                        self.call("window.workfollowEditor.injectKeyEvent(\(String(reflecting: characters)), \(shift))")
-                    }
-                }
-                switch event.keyCode {
-                case 36: inject("\n", shift: event.modifierFlags.contains(.shift)); return nil
-                case 51: self.call("window.workfollowEditor.backspace()"); return nil
-                case 123, 124, 125, 126:
-                    self.call("window.workfollowEditor.arrow(\(event.keyCode))"); return nil
-                default:
-                    if let characters = event.characters, !characters.isEmpty,
-                       event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-                        .subtracting([.shift]).isEmpty {
-                        inject(characters, shift: event.modifierFlags.contains(.shift))
-                        return nil
-                    }
-                    return event
-                }
-            default:
-                return event
+            if self.webView.hitTest(event.locationInWindow) != nil {
+                window.makeFirstResponder(self.webView)
             }
+            return event
         }
         // P3 诊断探针：Debug 菜单触发，绕过键盘验证 delta 上报链。
         self.probeObserver = NotificationCenter.default.addObserver(

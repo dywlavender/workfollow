@@ -69,3 +69,11 @@ firstResponder 链分发到 WKWebView。真实键盘（与 CGEvent 同路径）�
 - `injectKeyEvent` 直注通道与 focusObserver 兜底保留（无害，处理
   Enter/Backspace/方向键之外的极端场景）。
 - P4（任务详情/摘要卡切 Quill）解除阻塞。
+
+### 终局补充 2：拦截器移除（同日晚）
+
+第二轮验证（鼠标移出编辑区再输入）："AT99"+"XYZ" 全部经**自然路径**到达
+（首字符 N 为点击后焦点切换瞬间的一次性丢失）。结论升级：自然键盘路径
+完全可用，P3 的 keyDown 拦截注入通道不仅多余，还会劫持鼠标悬停时的
+按键、破坏中文 IME 组合输入——已从 `loadBridge()` 移除
+（mouseDown 夺焦辅助保留）。`injectKeyEvent` JS API 保留不再有调用方。
