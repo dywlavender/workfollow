@@ -8,26 +8,47 @@ struct CalendarDisplayOptions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("日历显示设置").font(.title3.weight(.semibold))
-            Form {
-                Toggle("显示已完成任务", isOn: value(\.showCompleted))
-                Toggle("显示未来重复周期", isOn: value(\.showFutureOccurrences))
-                Toggle("显示子任务", isOn: value(\.showSubtasks))
-                Toggle("显示安排任务面板", isOn: value(\.showArrangePane))
-                BusinessPicker("每周开始于", selection: value(\.firstWeekday), options:
-                    (1...7).map { BusinessChoice($0, CalendarWeekHeaderLabels.all[$0 - 1]) })
-                BusinessPicker("任务颜色", selection: value(\.colorSource), options:
-                    CalendarColorSource.allCases.map { BusinessChoice($0, $0.label) })
-                Slider(value: value(\.hourHeight), in: CalendarDisplaySizing.hourHeightRange, step: 4) { Text("时间轴缩放") }
-                Slider(value: value(\.allDayHeight), in: CalendarDisplaySizing.allDayHeightRange, step: 20) { Text("全天区域高度") }
-                Section("清单范围 · 未选择时显示全部") {
-                    ForEach(lists, id: \.self) { name in Toggle(name, isOn: selected(name, in: \.listNames)) }
-                }
-                if !tags.isEmpty {
-                    Section("标签范围 · 未选择时显示全部") {
-                        ForEach(tags, id: \.self) { tag in Toggle(tag, isOn: selected(tag, in: \.tagNames)) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: WFSpace.lg) {
+                    WFFormSection {
+                        WFFormToggleRow("显示已完成任务", isOn: value(\.showCompleted))
+                        WFFormToggleRow("显示未来重复周期", isOn: value(\.showFutureOccurrences))
+                        WFFormToggleRow("显示子任务", isOn: value(\.showSubtasks))
+                        WFFormToggleRow("显示安排任务面板", isOn: value(\.showArrangePane))
+                        WFFormRow("每周开始于") {
+                            BusinessPicker("", selection: value(\.firstWeekday), options:
+                                (1...7).map { BusinessChoice($0, CalendarWeekHeaderLabels.all[$0 - 1]) })
+                                .labelsHidden()
+                        }
+                        WFFormRow("任务颜色") {
+                            BusinessPicker("", selection: value(\.colorSource), options:
+                                CalendarColorSource.allCases.map { BusinessChoice($0, $0.label) })
+                                .labelsHidden()
+                        }
+                        WFFormRow("时间轴缩放") {
+                            Slider(value: value(\.hourHeight), in: CalendarDisplaySizing.hourHeightRange, step: 4)
+                                .frame(width: 200)
+                        }
+                        WFFormRow("全天区域高度", showsDivider: false) {
+                            Slider(value: value(\.allDayHeight), in: CalendarDisplaySizing.allDayHeightRange, step: 20)
+                                .frame(width: 200)
+                        }
+                    }
+                    WFFormSection("清单范围 · 未选择时显示全部") {
+                        ForEach(lists, id: \.self) { name in
+                            WFFormToggleRow(name, isOn: selected(name, in: \.listNames))
+                        }
+                    }
+                    if !tags.isEmpty {
+                        WFFormSection("标签范围 · 未选择时显示全部") {
+                            ForEach(tags, id: \.self) { tag in
+                                WFFormToggleRow(tag, isOn: selected(tag, in: \.tagNames), showsDivider: false)
+                            }
+                        }
                     }
                 }
-            }.formStyle(.grouped)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack { Spacer(); Button("完成") { dismiss() }.keyboardShortcut(.defaultAction) }
         }.padding(20).frame(width: 440, height: 600)
     }

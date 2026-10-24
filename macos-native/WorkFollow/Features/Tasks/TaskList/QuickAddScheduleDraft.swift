@@ -8,7 +8,7 @@ import Foundation
 ///
 /// 原本它与已废弃的 `QuickAddSchedulePopover` 同处一个文件；那个视图已无调用点
 /// （日程面板统一走 `TaskDatePopoverV2`），所以这里把仍在使用的草稿类型单独留下。
-struct QuickAddScheduleDraft: Equatable {
+struct QuickAddScheduleDraft: Equatable, Codable {
     var dueAt: Date?
     var dueEndAt: Date?
     var hasTime: Bool

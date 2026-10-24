@@ -3,19 +3,17 @@ import SwiftUI
 struct CommandPaletteView: View {
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
-    @State private var query = ""
-    @State private var selectedIndex = 0
+    @ObservedObject var session: WorkspaceSearchSession
+    private var query: String { session.query }
+    private var selectedIndex: Int {
+        get { session.selectedIndex }
+        nonmutating set { session.selectedIndex = newValue }
+    }
     @FocusState private var focused: Bool
 
     private var entries: [CommandPaletteEntry] {
-        CommandPaletteProjection.entries(
-            query: query,
-            tasks: environment.taskWorkspace.allTasks,
-            notes: environment.notesWorkspace.notes,
-            creationList: environment.taskWorkspace.activeList ?? TaskList.inbox.name,
-            schedulesForToday: navigation.destination == .today,
-            now: environment.taskWorkspace.clock(),
-            calendar: environment.taskWorkspace.calendar)
+        session.entries(workspace: environment.taskWorkspace, notes: environment.notesWorkspace.notes,
+                        destination: navigation.destination)
     }
 
     var body: some View {
@@ -23,7 +21,7 @@ struct CommandPaletteView: View {
             HStack(spacing: WFSpace.md) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(WFColors.secondaryText)
-                TextField("搜索任务、笔记或命令…", text: $query)
+                TextField("搜索任务、笔记或命令…", text: $session.query)
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .onKeyPress(keys: [.return], phases: .down) { key in
@@ -43,11 +41,15 @@ struct CommandPaletteView: View {
             }
             .padding(WFSpace.lg)
 
+            if session.showAll { filters }
             Divider()
 
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: WFSpace.xs) {
+                        if entries.isEmpty {
+                            Text("没有符合条件的结果").font(WFType.body).foregroundStyle(WFColors.secondaryText).padding(24)
+                        }
                         ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                             Button { run(entry) } label: {
                                 HStack(spacing: WFSpace.md) {
@@ -79,7 +81,7 @@ struct CommandPaletteView: View {
                                             in: RoundedRectangle(cornerRadius: WFMetrics.corner))
                                 .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(.plain).workflowActionAnchor("search." + entry.id)
                             .padding(.horizontal, WFSpace.sm)
                         }
                     }
@@ -95,6 +97,15 @@ struct CommandPaletteView: View {
 
             Divider()
 
+            HStack {
+                Button(session.showAll ? "返回快捷搜索" : "查看全部结果") {
+                    session.showAll.toggle(); selectedIndex = 0
+                }.buttonStyle(.borderless)
+                Spacer()
+                if session.showAll {
+                    Text("\(entries.count) 条结果").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                }
+            }.padding(.horizontal, WFSpace.lg).padding(.vertical, WFSpace.sm)
             // 底部快捷键提示条（Flutter 命令面板对齐）。
             HStack(spacing: WFSpace.sm) {
                 Text("↑↓ 选择 · ↵ 打开 · ⌘↵ 新建 · esc 关闭")
@@ -110,10 +121,37 @@ struct CommandPaletteView: View {
             .padding(.vertical, WFSpace.sm)
             .background(WFColors.canvas)
         }
-        .frame(minWidth: 320, idealWidth: 500, maxWidth: 560,
-               minHeight: 300, idealHeight: 420, maxHeight: 520)
+        .background(WFColors.content)
+        .frame(width: session.showAll ? 700 : 540, height: session.showAll ? 580 : 420)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in selectedIndex = 0 }
+        .onChange(of: session.content) { _, _ in selectedIndex = 0 }
+        .onChange(of: session.status) { _, _ in selectedIndex = 0 }
+        .onChange(of: session.list) { _, _ in selectedIndex = 0 }
+    }
+
+    private var filters: some View {
+        HStack {
+            BusinessMenu(session.content.rawValue) {
+                BusinessMenuChoices(selection: $session.content, options: WorkspaceSearchSession.Content.allCases.map {
+                    BusinessChoice($0, $0.rawValue)
+                })
+            }
+            if session.content != .notes {
+                BusinessMenu(session.list ?? "所有清单") {
+                    BusinessMenuChoices(selection: $session.list, options:
+                        [BusinessChoice<String?>(nil, "所有清单")] + environment.taskWorkspace.availableListNames.map {
+                            BusinessChoice<String?>($0, $0)
+                        })
+                }
+                BusinessMenu(session.status.rawValue) {
+                    BusinessMenuChoices(selection: $session.status, options: WorkspaceSearchSession.Status.allCases.map {
+                        BusinessChoice($0, $0.rawValue)
+                    })
+                }
+            }
+            Spacer()
+        }.buttonStyle(.borderless).padding(.horizontal, WFSpace.lg).padding(.bottom, WFSpace.sm)
     }
 
     private func moveSelection(_ offset: Int) -> KeyPress.Result {
@@ -128,7 +166,10 @@ struct CommandPaletteView: View {
     }
 
     private func createFromQuery() {
-        guard let entry = entries.first(where: { $0.kind == .createTask }) else { return }
+        let values = CommandPaletteProjection.entries(query: query, tasks: [], notes: [],
+            creationList: environment.taskWorkspace.activeList ?? TaskList.inbox.name,
+            schedulesForToday: navigation.destination == .today)
+        guard let entry = values.first(where: { $0.kind == .createTask }) else { return }
         run(entry)
     }
 
@@ -146,22 +187,6 @@ struct CommandPaletteView: View {
     }
 
     private func run(_ entry: CommandPaletteEntry) {
-        switch entry.action {
-        case let .createTask(title):
-            guard CommandPaletteProjection.createTask(
-                title, workspace: environment.taskWorkspace, navigation: navigation).taskID != nil else { return }
-        case let .openTask(id):
-            guard CommandPaletteProjection.openTask(
-                id, workspace: environment.taskWorkspace, navigation: navigation) else { return }
-        case let .openNote(id):
-            guard CommandPaletteProjection.openNote(
-                id, workspace: environment.notesWorkspace,
-                taskWorkspace: environment.taskWorkspace, navigation: navigation) else { return }
-        case let .navigate(destination):
-            environment.navigate(to: destination)
-        case .toggleAppearance:
-            environment.appearance = CommandPaletteProjection.nextAppearance(after: environment.appearance)
-        }
-        environment.commandPalettePresented = false
+        session.open(entry, environment: environment, navigation: navigation)
     }
 }

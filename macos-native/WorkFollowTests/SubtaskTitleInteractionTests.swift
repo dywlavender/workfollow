@@ -69,9 +69,16 @@ final class SubtaskTitleInteractionTests: XCTestCase {
             let field = try title(id)
             try InspectorPanelTestSupport.click(field.bounds, in: field, window: window)
             XCTAssertEqual(workspace.selectedTaskID, parent, "单击子任务标题应留在父任务详情")
+            // 点击会触发失焦保存引起的行重建，field editor 就位晚一拍：
+            // 轮询等 firstResponder 落到标题编辑器，而不是立刻解包。
+            try InspectorPanelTestSupport.waitUntil(
+                "必须从实际标题点击进入编辑，包含失焦保存引起的行重建") {
+                descendants(host).compactMap { $0 as? SubtaskTitleField }
+                    .contains { window.firstResponder === $0.currentEditor() as? NSTextView }
+            }
             let current = try title(id)
             let editor = try XCTUnwrap(current.currentEditor() as? NSTextView,
-                                      "必须从实际标题点击进入编辑，包含失焦保存引起的行重建")
+                                        "必须从实际标题点击进入编辑，包含失焦保存引起的行重建")
             XCTAssertTrue(window.firstResponder === editor)
             return editor
         }

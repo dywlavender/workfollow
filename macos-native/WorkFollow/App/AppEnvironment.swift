@@ -41,6 +41,7 @@ final class AppEnvironment: ObservableObject {
     let viewPreferences: TaskViewPreferenceStore
     /// 全应用唯一的瞬态结果通道：任务动作经 workspace.feedbackSink 上报到这里。
     let feedback: FeedbackCenter
+    let searchSession = WorkspaceSearchSession()
     private let moduleStores: [ModuleStoreFlushable]
     @Published private(set) var storageError: String?
     @Published var sidebarVisible = true
@@ -107,10 +108,17 @@ final class AppEnvironment: ObservableObject {
         viewPreferences = TaskViewPreferenceStore()
         taskWorkspace.attachFilterStore(filterStore)
         taskWorkspace.feedbackSink = feedback
+
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
         moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences, reminders, systemCalendar, systemReminders]
+        taskWorkspace.placementFeedback = { [weak self] before, after, count in
+            guard let self else { return false }
+            return TaskPlacementFeedback.present(before: before, after: after, count: count,
+                destination: self.navigation.destination, workspace: self.taskWorkspace,
+                center: self.feedback, open: { [weak self] in self?.openTask($0) })
+        }
         reminders.onOpen = { [weak self] delivery in
             switch delivery.kind {
             case .task: self?.openCalendarTask(.init(taskID: delivery.sourceID, occurrence: delivery.occurrence))
@@ -212,6 +220,12 @@ final class AppEnvironment: ObservableObject {
             guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
             if changes.affectsReminders || changes.entries.contains(where: { !$0.changedFields.isDisjoint(with: [.priority, .parentID]) }) { self.calendarNeedsSync = true }
             self.persistence.schedule(changes: changes)
+        }.store(in: &subscriptions)
+        taskWorkspace.$selectedTaskID.compactMap { $0 }.sink { [weak self] id in
+            self?.searchSession.recordTask(id)
+        }.store(in: &subscriptions)
+        notesWorkspace.$selectedID.compactMap { $0 }.sink { [weak self] id in
+            self?.searchSession.recordNote(id)
         }.store(in: &subscriptions)
         notesWorkspace.persistenceChanges.sink { [weak self] changes in
             guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
@@ -319,7 +333,7 @@ final class AppEnvironment: ObservableObject {
     /// 时只做跳转，不打断当前计时。
     func startFocus(for taskID: UUID) {
         guard let resolvedID = taskWorkspace.resolveTaskForAction(taskID) else { return }
-        navigation.taskSelectionToPreserveOnNextNavigation = resolvedID
+        navigation.taskSelectionToPreserveOnNextNavigation = navigation.destination == .focus ? nil : resolvedID
         taskWorkspace.select(resolvedID)
         navigation.destination = .focus
         _ = focusStore.start(taskID: resolvedID)
@@ -331,7 +345,7 @@ final class AppEnvironment: ObservableObject {
         taskWorkspace.activeList = taskWorkspace.isListArchived(task.list.name) ? task.list.name : nil
         taskWorkspace.activeTag = nil
         taskWorkspace.activeFilterID = nil
-        navigation.taskSelectionToPreserveOnNextNavigation = taskID
+        navigation.taskSelectionToPreserveOnNextNavigation = navigation.destination == .allTasks ? nil : taskID
         taskWorkspace.select(taskID)
         navigation.destination = .allTasks
     }
@@ -470,15 +484,16 @@ final class AppEnvironment: ObservableObject {
     }
 
     func navigate(to destination: NativeDestination) {
-        if destination == .weekPlan {
-            weeklyPlanning.goCurrent()
-            weeklyPlanning.listName = nil
+        if navigation.destination == destination {
+            if destination == .allTasks {
+                taskWorkspace.openFilter(nil)
+                taskWorkspace.activeList = nil
+                taskWorkspace.activeTag = nil
+                taskWorkspace.select(nil)
+            }
+            return
         }
-        taskWorkspace.openFilter(nil)
-        if taskWorkspace.activeList != nil { taskWorkspace.activeList = nil }
-        if taskWorkspace.activeTag != nil { taskWorkspace.activeTag = nil }
-        if navigation.destination != destination { navigation.destination = destination }
-        taskWorkspace.select(nil)
+        navigation.destination = destination
     }
 
     @discardableResult

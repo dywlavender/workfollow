@@ -96,7 +96,13 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
             let fixture = try Fixture(mode: mode)
             defer { fixture.close() }
             try fixture.click(fixture.firstFrame)
-            XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.first, mode.label)
+            // 点击后选中态与浮层编辑器都是异步就位：轮询等待而不是立刻断言。
+            try InspectorPanelTestSupport.waitUntil("\(mode.label)视图应一次点击选中甲") {
+                fixture.workspace.selectedTaskID == fixture.first
+            }
+            try InspectorPanelTestSupport.waitUntil("\(mode.label)视图浮层编辑器应就位") {
+                fixture.editor != nil
+            }
             let editor = try XCTUnwrap(fixture.editor)
             if let bitmap = fixture.host.bitmapImageRepForCachingDisplay(in: fixture.host.bounds) {
                 fixture.host.cacheDisplay(in: fixture.host.bounds, to: bitmap)
@@ -108,7 +114,9 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
             defer { subscription.cancel() }
 
             try fixture.click(fixture.secondFrame)
-            XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.second, "\(mode.label)视图应一次点击切到乙")
+            try InspectorPanelTestSupport.waitUntil("\(mode.label)视图应一次点击切到乙") {
+                fixture.workspace.selectedTaskID == fixture.second
+            }
             XCTAssertEqual(changes, [fixture.second], "任务间切换不应先清空选中项")
             XCTAssertEqual(fixture.editor?.documentIdentity, fixture.second)
             XCTAssertEqual(fixture.editor?.string, "乙的正文")
@@ -121,8 +129,12 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
             XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.first)
             XCTAssertEqual(fixture.editor?.string, "甲的正文")
             try InspectorPanelTestSupport.click(CGRect(x: 1180, y: 875, width: 10, height: 10), in: fixture.host, window: fixture.window)
-            XCTAssertNil(fixture.workspace.selectedTaskID, "点击空白区域关闭详情")
-            XCTAssertNil(fixture.editor)
+            try InspectorPanelTestSupport.waitUntil("点击空白区域关闭详情") {
+                fixture.workspace.selectedTaskID == nil
+            }
+            try InspectorPanelTestSupport.waitUntil("浮层编辑器应随空白点击撤下") {
+                fixture.editor == nil
+            }
         }
     }
 

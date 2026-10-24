@@ -92,6 +92,16 @@ struct TaskInspectorShell: View {
         }
         .onDisappear { dismissTransientPanels() }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
+        // 新建的空任务自动聚焦标题（TI2-22）。放到下一拍：`select()` 会先把
+        // `titleEditing` 复位成 false，同一拍里置 true 会被那次复位吃掉。
+        .onChange(of: workspace.pendingTitleEditorID) { _, _ in
+            guard let id = workspace.consumePendingTitleEditor() else { return }
+            DispatchQueue.main.async {
+                guard workspace.selectedTaskID == id else { return }
+                titleEditing = true
+            }
+        }
+        .onAppear { focusPendingTitleIfNeeded() }
         .onExitCommand {
             _ = handleEscape()
         }
@@ -468,7 +478,9 @@ struct TaskInspectorShell: View {
             }
             AppKitTaskTitleField(text: $presentation.titleDraft,
                                  isEditing: $titleEditing,
-                                 placeholder: task.parentID == nil ? "任务标题" : "准备做什么？")
+                                 placeholder: task.parentID == nil ? "任务标题" : "准备做什么？",
+                                 // 标题 Return → 正文（TI2-22，滴答 `focusOnContentIfNeeded`）。
+                                 onSubmit: { editorHandle.focusEditor() })
                 .id(task.id)
                 .inspectorRenderAnchor(.title)
                 .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
@@ -837,6 +849,13 @@ struct TaskInspectorShell: View {
     private func openDocumentLink(_ link: String) -> Bool {
         guard let url = URL(string: link) else { return false }
         return environment.openResourceLink(url)
+    }
+
+    /// 详情先出现、`pendingTitleEditorID` 早已置位的顺序（切换目的地后重建视图）
+    /// 也要能接上焦点。
+    private func focusPendingTitleIfNeeded() {
+        guard let id = workspace.consumePendingTitleEditor(), workspace.selectedTaskID == id else { return }
+        DispatchQueue.main.async { titleEditing = true }
     }
 
     private func beginPendingChildEditing() {

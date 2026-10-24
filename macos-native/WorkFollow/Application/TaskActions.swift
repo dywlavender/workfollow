@@ -152,6 +152,50 @@ final class TaskActions {
         return changedRoots
     }
 
+    /// A weekly capture and its membership are one undo operation. Explicit
+    /// dates stay explicit; only undated entries join the selected week.
+    func createWeeklyCaptures(_ drafts: [QuickCaptureDraft], weekOf: Date) -> [UUID] {
+        var ids: [UUID] = []
+        store.transaction {
+            ids = createCaptures(drafts)
+            let undated = Set(ids.filter { store.task($0)?.schedule.dueAt == nil })
+            _ = planTasks(undated, weekOf: weekOf)
+        }
+        return ids
+    }
+
+    /// Each task retains its own time, duration and reminder offsets. Moving
+    /// a batch is one transaction, including its weekly history.
+    func arrangeWeeklyTasks(_ ids: Set<UUID>, on day: Date?, weekOf: Date) -> Int {
+        let candidates = store.tasks.filter { ids.contains($0.id) && !$0.isClosed && !$0.isConverted
+            && $0.deletedAt == nil && $0.skippedAt == nil && !store.archivedListNames.contains($0.list.name) }
+        var changed = 0
+        store.transaction {
+            for task in candidates {
+                var schedule = task.schedule
+                var reminder = task.reminderAt
+                if let day {
+                    let start = task.schedule.dueAt ?? calendar.startOfDay(for: day)
+                    let distance = calendar.dateComponents([.day], from: calendar.startOfDay(for: start),
+                        to: calendar.startOfDay(for: day)).day ?? 0
+                    schedule.dueAt = TaskDateDraft.movingDay(start, to: day, calendar: calendar)
+                    schedule.dueEndAt = ScheduleSemantics.shifted(task.schedule.dueEndAt, byDays: distance, calendar: calendar)
+                    reminder = ScheduleSemantics.shifted(reminder, byDays: distance, calendar: calendar)
+                } else {
+                    schedule.dueAt = nil; schedule.dueEndAt = nil; schedule.hasTime = false
+                }
+                if schedule != task.schedule || reminder != task.reminderAt {
+                    _ = saveTiming(task.id, schedule: schedule, reminder: reminder, frequency: task.recurrence,
+                                   recurrenceRule: task.recurrenceRule, reminderOffsets: task.reminderOffsets)
+                    changed += 1
+                }
+            }
+            let planned = planTasks(Set(candidates.map(\.id)), weekOf: weekOf)
+            changed = max(changed, planned)
+        }
+        return changed
+    }
+
     @discardableResult
     func captureWeekPlan(weekOf: Date) -> Bool {
         let projection = WeeklyPlanProjection(weekStart: SummaryReviewBuilder.weekStart(of: weekOf, calendar: calendar), calendar: calendar)

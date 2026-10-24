@@ -63,7 +63,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
 
     @Published private(set) var isEnabled: Bool
     let composer: GlobalQuickAddComposer
-    let draft = GlobalQuickAddDraft()
+    let draft: GlobalQuickAddDraft
 
     private let defaults: UserDefaults
     private var panel: NSPanel?
@@ -73,6 +73,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
     init(workspace: TaskWorkspaceModel, defaults: UserDefaults = .standard) {
         self.composer = GlobalQuickAddComposer(workspace: workspace)
         self.defaults = defaults
+        self.draft = GlobalQuickAddDraft(defaults: defaults)
         self.isEnabled = defaults.bool(forKey: Self.enabledDefaultsKey)
         super.init()
         if isEnabled { registerHotKey() }

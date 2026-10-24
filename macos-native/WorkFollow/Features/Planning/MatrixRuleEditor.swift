@@ -19,48 +19,85 @@ struct MatrixRuleEditor: View {
                 Text("匹配 \(matches) 项任务").foregroundStyle(WFColors.secondaryText)
             }
             ScrollView {
-                Form {
-                    TextField("名称", text: $value.title)
-                    BusinessPicker("颜色", selection: $value.colorIndex, options:
-                        [BusinessChoice(0, "红色", symbol: "circle.fill", color: WFColors.danger),
-                         BusinessChoice(1, "黄色", symbol: "circle.fill", color: WFColors.warning),
-                         BusinessChoice(2, "蓝色", symbol: "circle.fill", color: WFColors.accent),
-                         BusinessChoice(3, "绿色", symbol: "circle.fill", color: .green)])
-                    BusinessPicker("排序", selection: $value.sort, options: MatrixSort.allCases.map { BusinessChoice($0, $0.title) })
-                    BusinessPicker("分组", selection: $value.grouping, options: MatrixGrouping.allCases.map { BusinessChoice($0, $0.title) })
-                    Section("优先级 · 未选择时不限") {
-                        HStack {
+                VStack(alignment: .leading, spacing: WFSpace.lg) {
+                    WFFormSection {
+                        WFFormRow("名称") {
+                            TextField("名称", text: $value.title)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 220)
+                        }
+                        WFFormRow("颜色") {
+                            BusinessPicker("", selection: $value.colorIndex, options:
+                                [BusinessChoice(0, "红色", symbol: "circle.fill", color: WFColors.danger),
+                                 BusinessChoice(1, "黄色", symbol: "circle.fill", color: WFColors.warning),
+                                 BusinessChoice(2, "蓝色", symbol: "circle.fill", color: WFColors.accent),
+                                 BusinessChoice(3, "绿色", symbol: "circle.fill", color: .green)])
+                                .labelsHidden()
+                        }
+                        WFFormRow("排序") {
+                            BusinessPicker("", selection: $value.sort, options: MatrixSort.allCases.map { BusinessChoice($0, $0.title) })
+                                .labelsHidden()
+                        }
+                        WFFormRow("分组", showsDivider: false) {
+                            BusinessPicker("", selection: $value.grouping, options: MatrixGrouping.allCases.map { BusinessChoice($0, $0.title) })
+                                .labelsHidden()
+                        }
+                    }
+                    WFFormSection("优先级 · 未选择时不限") {
+                        HStack(spacing: WFSpace.lg) {
                             ForEach(TaskPriority.menuOrder, id: \.self) { priority in
                                 Toggle(priority.shortTitle, isOn: membership(priority, in: $value.rule.priorities))
                                     .toggleStyle(.checkbox)
                             }
                         }
+                        .font(WFType.body)
+                        .padding(.horizontal, WFSpace.md)
                     }
-                    Section("日期条件") {
-                        BusinessPicker("判断依据", selection: $value.rule.date.basis, options:
-                            MatrixDateBasis.allCases.map { BusinessChoice($0, $0.title) })
-                        BusinessPicker("范围", selection: $value.rule.date.kind, options:
-                            MatrixDateKind.allCases.map { BusinessChoice($0, $0.title) })
+                    WFFormSection("日期条件") {
+                        WFFormRow("判断依据") {
+                            BusinessPicker("", selection: $value.rule.date.basis, options:
+                                MatrixDateBasis.allCases.map { BusinessChoice($0, $0.title) })
+                                .labelsHidden()
+                        }
+                        WFFormRow("范围") {
+                            BusinessPicker("", selection: $value.rule.date.kind, options:
+                                MatrixDateKind.allCases.map { BusinessChoice($0, $0.title) })
+                                .labelsHidden()
+                        }
                         if value.rule.date.kind == .nextDays || value.rule.date.kind == .afterDays {
-                            Stepper("\(value.rule.date.days) 天", value: $value.rule.date.days, in: 0...365)
+                            WFFormRow("天数") {
+                                Stepper("\(value.rule.date.days) 天", value: $value.rule.date.days, in: 0...365)
+                            }
                         }
-                        if value.rule.date.kind == .nextDays { Toggle("包含逾期任务", isOn: $value.rule.date.includeOverdue) }
+                        if value.rule.date.kind == .nextDays {
+                            WFFormToggleRow("包含逾期任务", isOn: $value.rule.date.includeOverdue)
+                        }
                         if value.rule.date.kind == .dateRange {
-                            DatePicker("开始", selection: optionalDate($value.rule.date.rangeStart), displayedComponents: .date)
-                            DatePicker("结束", selection: optionalDate($value.rule.date.rangeEnd), displayedComponents: .date)
+                            WFFormRow("开始") {
+                                DatePicker("", selection: optionalDate($value.rule.date.rangeStart), displayedComponents: .date)
+                                    .labelsHidden()
+                            }
+                            WFFormRow("结束") {
+                                DatePicker("", selection: optionalDate($value.rule.date.rangeEnd), displayedComponents: .date)
+                                    .labelsHidden()
+                            }
                         }
                     }
-                    Section("清单范围 · 未选择时不限") {
-                        ForEach(lists, id: \.self) { name in Toggle(name, isOn: membership(name, in: $value.rule.listNames)) }
+                    WFFormSection("清单范围 · 未选择时不限") {
+                        ForEach(lists, id: \.self) { name in
+                            WFFormToggleRow(name, isOn: membership(name, in: $value.rule.listNames))
+                        }
                     }
                     if !tags.isEmpty {
-                        Section("标签条件 · 未选择时不限") {
-                            ForEach(tags, id: \.self) { tag in Toggle(tag, isOn: membership(tag, in: $value.rule.tagNames)) }
-                            Toggle("同时包含所有选中标签", isOn: $value.rule.requiresAllTags)
+                        WFFormSection("标签条件 · 未选择时不限") {
+                            ForEach(tags, id: \.self) { tag in
+                                WFFormToggleRow(tag, isOn: membership(tag, in: $value.rule.tagNames))
+                            }
+                            WFFormToggleRow("同时包含所有选中标签", isOn: $value.rule.requiresAllTags, showsDivider: false)
                         }
                     }
                 }
-                .formStyle(.grouped)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             Text("同一任务命中多条规则时，按 I → II → III → IV 归属；移动象限位置不改变匹配顺序。")
                 .font(.caption).foregroundStyle(WFColors.secondaryText)

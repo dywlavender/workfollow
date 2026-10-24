@@ -8,7 +8,7 @@ struct FeedbackHostView: View {
     var body: some View {
         ZStack {
             if let presentation = center.presentation {
-                FeedbackToastView(event: presentation.event, onAction: { center.undo() })
+                FeedbackToastView(event: presentation.event, onAction: { center.undo() }, onDestination: { center.openDestination() })
                     .id(presentation.id)
                     // 打勾的安静动效：短淡入 + 自底部轻移，无弹簧。
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -25,6 +25,7 @@ struct FeedbackHostView: View {
 private struct FeedbackToastView: View {
     let event: FeedbackEvent
     let onAction: () -> Void
+    let onDestination: () -> Void
 
     /// 文案上限：超过即截断，短文案不被撑出一条死面。
     private static let messageWidthCap: CGFloat = 360
@@ -58,6 +59,9 @@ private struct FeedbackToastView: View {
                 .allowsTightening(true)
                 .truncationMode(.tail)
                 .frame(maxWidth: messageWidthCap, alignment: .leading)
+            if let title = event.destinationTitle {
+                Button(title, action: onDestination).buttonStyle(.plain).workflowActionAnchor("feedback.destination").foregroundStyle(WFColors.accent)
+            }
             if event.actionTitle != nil {
                 Button(action: onAction) {
                     Image(systemName: "arrow.uturn.backward")

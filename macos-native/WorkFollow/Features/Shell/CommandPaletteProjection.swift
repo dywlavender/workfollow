@@ -29,7 +29,9 @@ enum CommandPaletteProjection {
                         creationList: String,
                         schedulesForToday: Bool,
                         now: Date = Date(),
-                        calendar: Calendar = .current) -> [CommandPaletteEntry] {
+                        calendar: Calendar = .current,
+                        taskLimit: Int = 7, noteLimit: Int = 5,
+                        includeAllWhenEmpty: Bool = false) -> [CommandPaletteEntry] {
         let commands = commandEntries()
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -42,7 +44,7 @@ enum CommandPaletteProjection {
             symbol: "plus",
             action: .createTask(query))
 
-        guard !query.isEmpty else { return [create] + commands }
+        if query.isEmpty && !includeAllWhenEmpty { return [create] + commands }
 
         let loweredQuery = query.lowercased()
         let taskResults = tasks
@@ -57,7 +59,7 @@ enum CommandPaletteProjection {
                 let rhs = relevance(query: loweredQuery, title: right.element.title,
                     metadata: right.element.list.name + " " + right.element.tags.joined(separator: " "))
                 return lhs == rhs ? left.offset < right.offset : lhs < rhs
-            }.prefix(7).map(\.element)
+            }.prefix(taskLimit).map(\.element)
             .map { task in
                 let time = taskTimeLabel(for: task, now: now, calendar: calendar) ?? "未安排"
                 return CommandPaletteEntry(
@@ -81,7 +83,7 @@ enum CommandPaletteProjection {
                 let lhs = relevance(query: loweredQuery, title: left.element.title, metadata: left.element.folder)
                 let rhs = relevance(query: loweredQuery, title: right.element.title, metadata: right.element.folder)
                 return lhs == rhs ? left.offset < right.offset : lhs < rhs
-            }.prefix(5).map(\.element)
+            }.prefix(noteLimit).map(\.element)
             .map { note in
                 CommandPaletteEntry(
                     id: "note-\(note.id.uuidString)",
@@ -204,7 +206,9 @@ enum CommandPaletteProjection {
             priority: .none,
             tags: [],
             reminder: nil,
-            repeatFrequency: .never)
+            repeatFrequency: .never,
+            // 空查询创建 = 标题还没起过，直接把焦点给标题（滴答 `focusOnTaskTitle`）。
+            focusTitle: title.isEmpty)
     }
 
     private static func commandEntries() -> [CommandPaletteEntry] {

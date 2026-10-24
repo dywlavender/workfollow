@@ -53,14 +53,17 @@ enum SummaryPiError: LocalizedError {
 struct SummaryPiOptimizer {
     var executable: String = "/opt/homebrew/bin/pi"
     var timeout: TimeInterval = 90
+    var model: String = ""
 
     func optimize(text: String, options: SummaryAIOptions) async throws -> String {
+        let control = SummaryProcessControl()
         let prompt = Self.prompt(text: text, options: options)
         return try await withTaskCancellationHandler {
-            try await _Concurrency.Task.detached(priority: .userInitiated) {
-                try Self.run(executable: executable, prompt: prompt, timeout: timeout)
+            try _Concurrency.Task.checkCancellation()
+            return try await _Concurrency.Task.detached(priority: .userInitiated) {
+                try Self.run(executable: executable, model: model, prompt: prompt, timeout: timeout, control: control)
             }.value
-        } onCancel: {}
+        } onCancel: { control.cancel() }
     }
 
     static func prompt(text: String, options: SummaryAIOptions) -> String {
@@ -97,7 +100,7 @@ struct SummaryPiOptimizer {
         return lines.joined(separator: "\n")
     }
 
-    private static func run(executable: String, prompt: String, timeout: TimeInterval) throws -> String {
+    private static func run(executable: String, model: String, prompt: String, timeout: TimeInterval, control: SummaryProcessControl) throws -> String {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
             throw SummaryPiError.unavailable
         }
@@ -106,32 +109,42 @@ struct SummaryPiOptimizer {
         child.arguments = ["--print", "--no-session", "--no-tools", "--no-extensions",
                            "--no-skills", "--no-prompt-templates", "--no-context-files",
                            "--offline", prompt]
+        if !model.isEmpty { child.arguments! += ["--model", model] }
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
         child.environment = env
 
-        let stdout = Pipe()
-        let stderr = Pipe()
-        child.standardOutput = stdout
-        child.standardError = stderr
-
-        do {
-            try child.run()
-        } catch {
-            throw SummaryPiError.failed(error.localizedDescription)
-        }
-
+        // Files keep a longer response from blocking the child on a full pipe.
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("summary-ai-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outputURL = directory.appendingPathComponent("output")
+        let errorURL = directory.appendingPathComponent("error")
+        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        FileManager.default.createFile(atPath: errorURL.path, contents: nil)
+        let outputHandle = try FileHandle(forWritingTo: outputURL)
+        let errorHandle = try FileHandle(forWritingTo: errorURL)
+        defer { try? outputHandle.close(); try? errorHandle.close() }
+        child.standardOutput = outputHandle; child.standardError = errorHandle
+        do { try control.start(child) }
+        catch is CancellationError { throw CancellationError() }
+        catch { throw SummaryPiError.failed(error.localizedDescription) }
         let deadline = Date().addingTimeInterval(timeout)
-        while child.isRunning && Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.1)
+        while child.isRunning && Date() < deadline && !control.isCancelled {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        if control.isCancelled {
+            if child.isRunning { child.terminate() }
+            child.waitUntilExit()
+            throw CancellationError()
         }
         if child.isRunning {
-            child.terminate()
+            child.terminate(); child.waitUntilExit()
             throw SummaryPiError.timedOut
         }
-
-        let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        let errorText = String(decoding: stderr.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        child.waitUntilExit()
+        let output = String(decoding: try Data(contentsOf: outputURL), as: UTF8.self)
+        let errorText = String(decoding: try Data(contentsOf: errorURL), as: UTF8.self)
         guard child.terminationStatus == 0 else {
             let message = errorText.trimmingCharacters(in: .whitespacesAndNewlines)
             throw SummaryPiError.failed(message.isEmpty ? "pi 退出码 \(child.terminationStatus)" : message)
@@ -139,5 +152,25 @@ struct SummaryPiOptimizer {
         let result = output.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !result.isEmpty else { throw SummaryPiError.emptyResult }
         return result
+    }
+}
+
+private final class SummaryProcessControl: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+    var isCancelled: Bool { lock.withLock { cancelled } }
+    func start(_ process: Process) throws {
+        try lock.withLock {
+            guard !cancelled else { throw CancellationError() }
+            try process.run()
+            self.process = process
+        }
+    }
+    func cancel() {
+        lock.withLock {
+            cancelled = true
+            if let process, process.isRunning { process.terminate() }
+        }
     }
 }

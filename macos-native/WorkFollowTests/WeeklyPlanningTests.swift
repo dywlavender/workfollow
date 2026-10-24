@@ -41,6 +41,45 @@ final class WeeklyPlanningTests: XCTestCase {
         XCTAssertEqual(model.task(for: id)?.weeklyPlanning, added.weeklyPlanning)
     }
 
+    func testParsedWeeklyCaptureRetainsTagsAndUndatedMembershipInOneUndo() throws {
+        let model = workspace()
+        let ids = model.submitWeeklyCapture(QuickCaptureSession(text: "本周方案 #工作 !!"), weekOf: day(19), list: "工作")
+        let added = try XCTUnwrap(ids.first.flatMap(model.task(for:)))
+        XCTAssertNil(added.schedule.dueAt)
+        XCTAssertEqual(added.weeklyPlanning?.currentWeek, "2026-10-19")
+        XCTAssertEqual(added.tags, ["工作"])
+        XCTAssertEqual(added.priority, .medium)
+        model.undo()
+        XCTAssertNil(model.task(for: added.id))
+    }
+
+    func testWeeklyBatchArrangementAndUnscheduledDropPreserveTimingAndUndoTogether() throws {
+        var timed = task("评审", due: day(20, hour: 10))
+        timed.schedule.dueEndAt = day(20, hour: 12)
+        timed.schedule.deadlineAt = day(23, hour: 18)
+        timed.reminderAt = day(20, hour: 9)
+        timed.reminderOffsets = [-10]
+        let undated = task("方案")
+        let model = workspace([timed, undated])
+        _ = model.planTasks([timed.id, undated.id], weekOf: day(19))
+        let before = model.allTasks
+        XCTAssertEqual(model.arrangeWeeklyTasks([timed.id, undated.id], on: day(22), weekOf: day(19)), 2)
+        let moved = try XCTUnwrap(model.task(for: timed.id))
+        XCTAssertEqual(moved.schedule.dueAt, day(22, hour: 10))
+        XCTAssertEqual(moved.schedule.dueEndAt, day(22, hour: 12))
+        XCTAssertEqual(moved.reminderAt, day(22, hour: 9))
+        XCTAssertEqual(moved.schedule.deadlineAt, timed.schedule.deadlineAt)
+        XCTAssertEqual(moved.reminderOffsets, [-10])
+        model.undo()
+        XCTAssertEqual(model.allTasks, before)
+        model.redo()
+        _ = model.arrangeWeeklyTasks([timed.id], on: nil, weekOf: day(19))
+        XCTAssertNil(model.task(for: timed.id)?.schedule.dueAt)
+        XCTAssertEqual(model.task(for: timed.id)?.weeklyPlanning?.currentWeek, "2026-10-19")
+        model.undo()
+        XCTAssertEqual(model.task(for: timed.id)?.schedule, moved.schedule)
+    }
+
     func testSelectiveCarryKeepsIdentitiesTimingAndHistoryAndIsOneUndo() throws {
         var first = task("第一项", due: day(20, hour: 10))
         first.schedule.dueEndAt = day(20, hour: 12)

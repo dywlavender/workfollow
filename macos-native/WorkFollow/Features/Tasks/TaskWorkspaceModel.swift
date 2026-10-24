@@ -81,6 +81,29 @@ final class TaskWorkspaceModel: ObservableObject {
     private let actions: TaskActions
     /// 反馈出口（A3 HUD 反馈迁移），由 AppEnvironment 注入；为 nil 时动作照常执行、只是不弹 HUD。
     weak var feedbackSink: FeedbackCenter?
+    var placementFeedback: ((Task?, Task, Int) -> Bool)?
+    /// 新建（标题还没起过的）任务后要自动聚焦标题的任务 id（滴答 `focusOnTaskTitle`）。
+    /// 与 `pendingChildTitleEditorID` 分开：那个是"在子任务树里开一行新行"，
+    /// 这个是"整条任务刚建出来、等用户命名"。
+    @Published private(set) var pendingTitleEditorID: UUID?
+    @Published private(set) var recentlyCreatedTaskIDs: Set<UUID> = []
+    private var creationHighlight: _Concurrency.Task<Void, Never>?
+
+    @discardableResult
+    private func reportPlacementChange(before: Task?, id: UUID?, count: Int = 1) -> Bool {
+        guard let id, let after = task(for: id) else { return false }
+        return placementFeedback?(before, after, count) ?? false
+    }
+
+    private func highlightCreated(_ ids: [UUID]) {
+        creationHighlight?.cancel()
+        recentlyCreatedTaskIDs = Set(ids)
+        creationHighlight = _Concurrency.Task { [weak self] in
+            try? await _Concurrency.Task.sleep(for: .seconds(2))
+            guard !_Concurrency.Task.isCancelled else { return }
+            self?.recentlyCreatedTaskIDs = []
+        }
+    }
     private var filterStore: FilterStore?
     private var filterCancellable: AnyCancellable?
     private var activityCancellable: AnyCancellable?
@@ -692,13 +715,18 @@ final class TaskWorkspaceModel: ObservableObject {
                      tags: [String], reminder: Date?, reminderOffsets: [Int]? = nil,
                      repeatFrequency: TaskRepeat,
                      recurrenceRule: RecurrenceRule? = nil,
-                     document: NativeDocument = .empty, selectCreatedTask: Bool = true) -> TaskActionResult {
+                     document: NativeDocument = .empty, selectCreatedTask: Bool = true,
+                     focusTitle: Bool = false) -> TaskActionResult {
         let result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
                                          tags: tags, reminder: reminder, reminderOffsets: reminderOffsets,
                                          frequency: repeatFrequency,
                                          recurrenceRule: recurrenceRule, document: document)
         didMutate(result)
         if selectCreatedTask, let id = result.taskID { select(id) }
+        // 标题还没被用户起过的创建（命令面板空查询落「无标题」）直接把焦点给标题
+        // （滴答 `focusOnTaskTitle`）。快速添加不传这个标记——它的标题来自用户输入，
+        // 抢焦点只会打断连续录入。
+        if focusTitle, let id = result.taskID { pendingTitleEditorID = id }
         return result
     }
 
@@ -721,6 +749,27 @@ final class TaskWorkspaceModel: ObservableObject {
         return count
     }
 
+    @discardableResult
+    func submitWeeklyCapture(_ session: QuickCaptureSession, weekOf: Date, list: String?) -> [UUID] {
+        let drafts = session.drafts(now: clock(), calendar: calendar, knownLists: Set(availableListNames),
+            contextList: list, contextTag: nil, defaultDueAt: nil)
+        let ids = actions.createWeeklyCaptures(drafts, weekOf: weekOf)
+        if !ids.isEmpty { revision += 1; highlightCreated(ids) }
+        return ids
+    }
+
+    @discardableResult
+    func arrangeWeeklyTasks(_ ids: Set<UUID>, on day: Date?, weekOf: Date) -> Int {
+        let count = actions.arrangeWeeklyTasks(ids, on: day, weekOf: weekOf)
+        if count > 0 {
+            revision += 1
+            report(FeedbackEvent(kind: .undoable, message: day.map {
+                "已安排 \(count) 项到" + ScheduleDisplay.dateText($0, hasTime: false, now: clock(), calendar: calendar, style: .compact)
+            } ?? "已将 \(count) 项移至待安排日期", actionTitle: "撤销", action: undoStep()))
+        }
+        return count
+    }
+
     func captureWeekPlan(weekOf: Date) {
         if actions.captureWeekPlan(weekOf: weekOf) { revision += 1 }
     }
@@ -737,12 +786,17 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
-    func submitCapture(_ session: QuickCaptureSession, defaultDueAt: Date? = nil) -> [UUID] {
+    func submitCapture(_ session: QuickCaptureSession, defaultDueAt: Date? = nil, selectCreatedTask: Bool = true) -> [UUID] {
         let drafts = session.drafts(now: clock(), calendar: calendar, knownLists: Set(availableListNames),
             contextList: activeList.flatMap { isListArchived($0) ? nil : $0 },
             contextTag: activeTag, defaultDueAt: defaultDueAt)
         let ids = actions.createCaptures(drafts)
-        if let last = ids.last { didMutate(.success(last)); select(last) }
+        if let last = ids.last {
+            didMutate(.success(last))
+            if selectCreatedTask { select(last) }
+            highlightCreated(ids)
+            reportPlacementChange(before: nil, id: last, count: ids.count)
+        }
         return ids
     }
 
@@ -814,7 +868,11 @@ final class TaskWorkspaceModel: ObservableObject {
                 for id in ids { _ = actions.setTaskSection(id, sectionID: sectionID) }
             }
         }
-        if let last = ids.last { didMutate(.success(last)); select(last) }
+        if let last = ids.last {
+            didMutate(.success(last)); select(last)
+            highlightCreated(ids)
+            reportPlacementChange(before: nil, id: last, count: ids.count)
+        }
         return ids.last
     }
 
@@ -861,8 +919,10 @@ final class TaskWorkspaceModel: ObservableObject {
     func updateAttributes(_ id: UUID, priority: TaskPriority? = nil,
                           schedule: TaskSchedule? = nil, list: TaskList? = nil,
                           tags: [String]? = nil) -> TaskActionResult {
+        let before = self.task(for: id)
         let result = withMaterializedTask(id) { actions.updateAttributes($0, priority: priority, schedule: schedule, list: list, tags: tags) }
         didMutate(result)
+        reportPlacementChange(before: before, id: result.taskID)
         return result
     }
 
@@ -940,19 +1000,24 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     func saveTiming(_ id: UUID, schedule: TaskSchedule, reminder: Date?, frequency: TaskRepeat,
                     recurrenceRule: RecurrenceRule? = nil, reminderOffsets: [Int]? = nil) {
+        let before = self.task(for: id)
         let result = withMaterializedTask(id) { actions.saveTiming($0, schedule: schedule, reminder: reminder,
                                         frequency: frequency, recurrenceRule: recurrenceRule,
                                         reminderOffsets: reminderOffsets) }
         didMutate(result)
+        reportPlacementChange(before: before, id: result.taskID)
     }
     /// 日程写入的唯一入口：宿主产出 `SchedulePlan`，不再逐字段拆参数。
     @discardableResult
     func saveSchedule(_ plan: SchedulePlan, to target: ScheduleTarget) -> TaskActionResult {
+        let before: Task?
+        if case .task(let id) = target { before = task(for: id) } else { before = nil }
         let result: TaskActionResult
         if case .task(let id) = target, let selectedOccurrence, selectedOccurrence.task.id == id, store.task(id) == nil {
             result = actions.saveOccurrenceSchedule(plan, occurrence: selectedOccurrence, scope: .onlyThis)
         } else { result = actions.saveSchedule(plan, to: target) }
         didMutate(result)
+        if before != nil { reportPlacementChange(before: before, id: result.taskID) }
         return result
     }
     var deletedTasks: [Task] {
@@ -1252,6 +1317,11 @@ final class TaskWorkspaceModel: ObservableObject {
         return pendingChildTitleEditorID
     }
 
+    func consumePendingTitleEditor() -> UUID? {
+        defer { pendingTitleEditorID = nil }
+        return pendingTitleEditorID
+    }
+
     @discardableResult
     func complete(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.complete($0) }
@@ -1294,9 +1364,11 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList) -> TaskActionResult {
-        let listBefore = task(for: id)?.list.name
+        let before = self.task(for: id)
+        let listBefore = before?.list.name
         let result = withMaterializedTask(id) { actions.moveToList($0, list) }
         didMutate(result)
+        if reportPlacementChange(before: before, id: result.taskID) { return result }
         if result.taskID != nil, listBefore != list.name {
             report(FeedbackEvent(kind: .undoable,
                                  message: "已移动到「\(task(for: id)?.list.name ?? list.name)」",
@@ -1317,9 +1389,11 @@ final class TaskWorkspaceModel: ObservableObject {
     /// 反馈文案把分组带上，否则跟单纯换清单的提示长得一样，看不出区别。
     @discardableResult
     func moveToList(_ id: UUID, _ list: TaskList, sectionID: String?) -> TaskActionResult {
-        let listBefore = task(for: id)?.list.name
+        let before = self.task(for: id)
+        let listBefore = before?.list.name
         let result = withMaterializedTask(id) { actions.moveToList($0, list, sectionID: sectionID) }
         didMutate(result)
+        if reportPlacementChange(before: before, id: result.taskID) { return result }
         if result.taskID != nil {
             let destination = task(for: id)?.list.name ?? list.name
             let sectionTitle = sectionID.flatMap { sid in
@@ -1354,8 +1428,10 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
+        let before = self.task(for: id)
         let result = withMaterializedTask(id) { actions.setSchedule($0, schedule) }
         didMutate(result)
+        reportPlacementChange(before: before, id: result.taskID)
         return result
     }
 
@@ -1480,10 +1556,12 @@ final class TaskWorkspaceModel: ObservableObject {
         schedule.dueAt = nil
         schedule.hasTime = false
         schedule.dueEndAt = nil
+        let before = self.task(for: id)
         let result = withMaterializedTask(id) { actions.saveTiming($0, schedule: schedule, reminder: task.reminderAt,
                                         frequency: task.recurrence,
                                         recurrenceRule: task.recurrenceRule) }
         didMutate(result)
+        reportPlacementChange(before: before, id: result.taskID)
         return result
     }
 
@@ -1494,9 +1572,11 @@ final class TaskWorkspaceModel: ObservableObject {
         schedule.dueAt = nil
         schedule.hasTime = false
         schedule.dueEndAt = nil
+        let before = self.task(for: id)
         let result = withMaterializedTask(id) { actions.saveTiming($0, schedule: schedule, reminder: nil,
                                         frequency: .never, recurrenceRule: nil) }
         didMutate(result)
+        reportPlacementChange(before: before, id: result.taskID)
         return result
     }
 

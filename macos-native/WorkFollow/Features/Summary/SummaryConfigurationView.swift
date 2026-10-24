@@ -20,6 +20,8 @@ struct SummaryConfigurationView: View {
     let onTemplate: (TaskTemplate?) -> Void
     let onSaveTemplate: () -> Void
     let onGenerateAI: () -> Void
+    var onCancelAI: () -> Void = {}
+    var onConfigureAI: () -> Void = {}
     @State private var activePopover: Control?
 
     enum Control: String {
@@ -162,7 +164,11 @@ struct SummaryConfigurationView: View {
             }
             Text("根据所选日期的任务与复盘整理简洁摘要，先预览再采用。")
                 .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).fixedSize(horizontal: false, vertical: true)
-            if let aiError { Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).fixedSize(horizontal: false, vertical: true) }
+            if let aiError {
+                Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).fixedSize(horizontal: false, vertical: true)
+                Button("AI 接入设置…", action: onConfigureAI).buttonStyle(.borderless)
+            }
+            if aiRunning { Button("取消生成", action: onCancelAI).buttonStyle(.borderless) }
             Button(action: onGenerateAI) {
                 HStack(spacing: 8) {
                     if aiRunning { ProgressView().controlSize(.small).tint(.white) }

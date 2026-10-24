@@ -73,7 +73,21 @@ struct AppCommands: Commands {
                 }
             }
             Button("完成当前任务") { completeSelected() }
+                .disabled(!hasSelectedTask)
             Button("清除当前日期") { clearSelectedDate() }
+                .disabled(!hasSelectedTask)
+                .keyboardShortcut("0", modifiers: [.command, .shift])
+            // 滴答同款三档快设日期（滴答用 ⌘1/2/3；这里 ⌘1/2 已是视图导航，
+            // 挪到 ⌘⇧ 档，语义不变：选中任务后一键改期）。
+            Button("设为今天") { setDayOffset(0) }
+                .disabled(!hasSelectedTask)
+                .keyboardShortcut("1", modifiers: [.command, .shift])
+            Button("设为明天") { setDayOffset(1) }
+                .disabled(!hasSelectedTask)
+                .keyboardShortcut("2", modifiers: [.command, .shift])
+            Button("设为下周") { setNextWeek() }
+                .disabled(!hasSelectedTask)
+                .keyboardShortcut("3", modifiers: [.command, .shift])
             Divider()
             Button("设为高优先级") { setPriority(.high) }
             Button("设为中优先级") { setPriority(.medium) }
@@ -115,13 +129,17 @@ struct AppCommands: Commands {
     }
 
     private func routeHistory(redo: Bool) {
-        if let manager = textUndoManager {
+        if let editor = NSApp.keyWindow?.firstResponder as? NativeTextView {
+            if redo { editor.redo(nil) } else { editor.undo(nil) }
+        } else if let manager = textUndoManager {
             if redo { manager.redo() } else { manager.undo() }
         } else if redo { environment.taskWorkspace.redo() }
         else { environment.taskWorkspace.undo() }
     }
 
     // MARK: 任务菜单动作
+
+    private var hasSelectedTask: Bool { environment.taskWorkspace.selectedTaskID != nil }
 
     private func completeSelected() {
         guard let id = environment.taskWorkspace.selectedTaskID,
@@ -132,6 +150,23 @@ struct AppCommands: Commands {
     private func clearSelectedDate() {
         guard let id = environment.taskWorkspace.selectedTaskID else { return }
         _ = environment.taskWorkspace.clearDueDate(id)
+    }
+
+    private func setDayOffset(_ offset: Int) {
+        guard let id = environment.taskWorkspace.selectedTaskID else { return }
+        _ = environment.taskWorkspace.moveDueDate(id, to: environment.taskWorkspace.dateFromToday(offset))
+    }
+
+    /// 「下周」= 下周一（跨年也由 yearForWeekOfYear 兜住）。
+    private func setNextWeek() {
+        guard let id = environment.taskWorkspace.selectedTaskID else { return }
+        let calendar = environment.taskWorkspace.calendar
+        var comps = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear],
+                                            from: environment.taskWorkspace.clock())
+        comps.weekOfYear = (comps.weekOfYear ?? 0) + 1
+        comps.weekday = 2
+        guard let nextMonday = calendar.date(from: comps) else { return }
+        _ = environment.taskWorkspace.moveDueDate(id, to: nextMonday)
     }
 
     private func setPriority(_ priority: TaskPriority) {

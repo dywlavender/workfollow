@@ -46,7 +46,7 @@ final class NoteFeatureTests: XCTestCase {
 
     func testNoteSlashMatchesFlutterSharedDocumentCommands() {
         let profile = DocumentProfile(noteSlash: true)
-        XCTAssertEqual(profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件"])
+        XCTAssertEqual(profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件", "流程图（draw.io）"])
         XCTAssertFalse(profile.taskSlash)
         XCTAssertTrue(profile.compactSlash)
     }

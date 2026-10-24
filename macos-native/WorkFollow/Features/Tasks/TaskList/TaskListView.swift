@@ -7,6 +7,7 @@ private struct TaskOutlineRowState: Equatable {
     let hasChildren: Bool
     let expanded: Bool
     let selected: Bool
+    let recentlyCreated: Bool
     let showsListBadge: Bool
     let hidesDetails: Bool
     let hiddenFields: [TaskRowDetailField]
@@ -51,6 +52,26 @@ struct TaskListView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var draft = ""
+    @State private var restoredCaptureDraft = false
+    private var captureStorageKey: String { "listQuickAddDraft.v1." + navigation.destination.rawValue }
+    private var capturePersistenceValue: GlobalQuickAddDraft.Snapshot {
+        .init(text: draft, description: descriptionDraft, dismissedTokens: dismissedQuickAddTokens,
+            schedule: quickAddScheduleOverride, priority: quickAddPriorityOverride,
+            list: quickAddListOverride, tags: quickAddTagsOverride, attachments: quickAddAttachments)
+    }
+    private func saveCaptureDraft() {
+        guard restoredCaptureDraft else { return }
+        GlobalQuickAddDraft(storageKey: captureStorageKey).replace(with: capturePersistenceValue)
+    }
+    private func restoreCaptureDraft() {
+        guard !restoredCaptureDraft else { return }
+        let saved = GlobalQuickAddDraft(storageKey: captureStorageKey)
+        draft = saved.text; descriptionDraft = saved.description
+        quickAddScheduleOverride = saved.schedule; quickAddPriorityOverride = saved.priority
+        quickAddListOverride = saved.list; quickAddTagsOverride = saved.tags
+        dismissedQuickAddTokens = saved.dismissedTokens; quickAddAttachments = saved.attachments
+        restoredCaptureDraft = true
+    }
     @State private var showNavigation = false
     @State private var showTemplatePicker = false
     /// 清单动态弹层（事件模型与任务动态共用 `TaskActivityStore`）。
@@ -197,6 +218,8 @@ struct TaskListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
             quickAddTagsOverride = QuickAddPropertiesOverrides.renamedTags(quickAddTagsOverride, notification: notification)
         }
+        .onAppear { restoreCaptureDraft() }
+        .onChange(of: capturePersistenceValue) { _, _ in saveCaptureDraft() }
         .onChange(of: environment.quickAddRequest) { _, _ in quickAddFocused = true }
         .onChange(of: draft) { _, _ in
             // 文本一变，「已被忽略」和候选高亮都作废：候选列表要按新的查询重开。
@@ -889,6 +912,7 @@ struct TaskListView: View {
         descriptionDraft = ""
         descriptionFocused = false
         candidate.reset()
+        saveCaptureDraft()
     }
 
     @ViewBuilder
@@ -1133,6 +1157,7 @@ struct TaskListView: View {
                     let state = TaskOutlineRowState(task: node.task, depth: node.depth,
                         hasChildren: node.hasChildren, expanded: node.expanded,
                         selected: workspace.selectedTaskID == node.task.id || workspace.bulkSelection.contains(node.task.id),
+                        recentlyCreated: workspace.recentlyCreatedTaskIDs.contains(node.task.id),
                         showsListBadge: showsListBadge,
                         hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                         hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
@@ -1210,6 +1235,7 @@ struct TaskListView: View {
                 hasChildren: node.hasChildren,
                 expanded: node.expanded,
                 selected: isSelected,
+                recentlyCreated: workspace.recentlyCreatedTaskIDs.contains(node.task.id),
                 showsListBadge: showsListBadge,
                 hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                 hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
@@ -1304,7 +1330,7 @@ struct TaskListView: View {
             dismissedTokenIDs: dismissedQuickAddTokens, scheduleOverride: quickAddScheduleOverride,
             priorityOverride: quickAddPriorityOverride, listOverride: quickAddListOverride,
             tagsOverride: quickAddTagsOverride)
-        let createdIDs = workspace.submitCapture(capture, defaultDueAt: quickAddDefaultDue(for: scope))
+        let createdIDs = workspace.submitCapture(capture, defaultDueAt: quickAddDefaultDue(for: scope), selectCreatedTask: false)
 
         // Keep the draft available if creation is rejected; Flutter follows
         // the same rule and only resets after TaskCreator reports success.
@@ -1331,6 +1357,7 @@ struct TaskRowView: View {
     let hasChildren: Bool
     let expanded: Bool
     let selected: Bool
+    var recentlyCreated: Bool = false
     var showsListBadge: Bool = true
     /// 隐藏详细 / 详细行里被关掉的字段（滴答「显示设置」）。
     var hidesDetails: Bool = false
@@ -1349,6 +1376,10 @@ struct TaskRowView: View {
     @State private var pointer = TaskRowPointerState()
     @State private var showDatePopover = false
     @State private var contextDateAnchor: CGRect?
+    /// 完成瞬间的划线扫过：0 → 1 划入，之后淡出（不是常驻划线——
+    /// Flutter / 滴答的完成态都只置灰，这里只补「划一下」的手势反馈）。
+    @State private var strikeSweep: CGFloat = 0
+    @State private var strikeOpacity: Double = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: WFSpace.sm) {
@@ -1408,6 +1439,17 @@ struct TaskRowView: View {
                 }
             }
             .frame(maxWidth: .infinity, minHeight: WFMetrics.rowContentMinHeight, alignment: .topLeading)
+            .overlay(alignment: .leading) {
+                // 完成反馈的划线：横穿标题中线扫过一遍，随后淡出。
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(WFColors.taskCompletedTitle)
+                        .frame(width: geo.size.width * strikeSweep, height: 1.25)
+                        .position(x: geo.size.width * strikeSweep / 2, y: 9)
+                }
+                .opacity(strikeOpacity)
+                .allowsHitTesting(false)
+            }
         }
         .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
         // 对齐 Flutter rowVerticalPadding = 11：内容顶对齐，勾选框贴标题首行。
@@ -1417,12 +1459,23 @@ struct TaskRowView: View {
         // 选中底色用中性灰（`listSelection`，滴答实测 #F2F2F2），不用强调色。
         // 原来这里还叠一圈蓝色焦点环（`accent` 35%）：底色变灰之后它是最显眼的
         // 一块蓝，用户选择直接去掉——滴答的选中行也没有任何描边。
-        .background(TaskRowHoverBackground(selected: selected, pointer: pointer))
+        .background(TaskRowHoverBackground(selected: selected || recentlyCreated, pointer: pointer))
         // 整行可点（对齐 Flutter GestureDetector opaque）：标题旁的留白、行内
         // 空隙、元数据区点下去也能选中打开编辑栏；行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())
         .gesture(selectionGesture)
         .modifier(TaskRowActivationPolicy())
+        // 完成反馈（对齐滴答）：提示音 + 划线扫过。恢复不播——滴答恢复是静默的。
+        .onChange(of: task.status == .completed) { _, completed in
+            guard completed, !task.isAbandoned else { return }
+            TaskCompletionFeedback.play()
+            strikeSweep = 0
+            strikeOpacity = 1
+            withAnimation(.easeOut(duration: 0.26)) { strikeSweep = 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+                withAnimation(.easeIn(duration: 0.25)) { strikeOpacity = 0 }
+            }
+        }
         .taskTreeRenderAnchor(task.id, .row)
         .overlay(alignment: .topLeading) {
             if allowsReordering {
@@ -1528,8 +1581,20 @@ enum TaskRowPriority {
 /// 描边按优先级着色；完成后中性灰填充，白勾，不再使用强调色。
 struct TaskRowCompletionBox: View {
     let task: Task
+    /// 勾选瞬间对勾从 0.4 弹到 1（spring）；初始 true，已完成的行首次渲染就是全尺寸。
+    @State private var checkPop = true
 
     var body: some View {
+        content
+            .onChange(of: task.isClosed) { _, closed in
+                guard closed, !task.isAbandoned else { return }
+                checkPop = false
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { checkPop = true }
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if task.isAbandoned {
             Image(systemName: "circle.slash")
                 .font(.system(size: 15))
@@ -1542,6 +1607,7 @@ struct TaskRowCompletionBox: View {
                     Image(systemName: "checkmark")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.white)
+                        .scaleEffect(checkPop ? 1 : 0.4)
                 }
                 .frame(width: 14.58, height: 14.58)
                 .frame(width: 18, height: 18, alignment: .leading)
@@ -1681,12 +1747,17 @@ private struct TaskRowMetadataTrail: View {
 
     private var dateBadge: some View {
         Button { onOpenDate() } label: {
-            Text(TaskListViewDefaults.scheduleLabel(
-                dueAt: task.schedule.dueAt ?? Date(),
-                hasTime: task.schedule.hasTime,
-                now: workspace.clock(),
-                calendar: workspace.calendar))
-                .lineLimit(1)
+            HStack(spacing: 3) {
+                // 滴答行内日期徽标带 16px 日历小图标，扫读时先认图标再看文字。
+                Image(systemName: "calendar")
+                    .font(.system(size: 10, weight: .regular))
+                Text(TaskListViewDefaults.scheduleLabel(
+                    dueAt: task.schedule.dueAt ?? Date(),
+                    hasTime: task.schedule.hasTime,
+                    now: workspace.clock(),
+                    calendar: workspace.calendar))
+                    .lineLimit(1)
+            }
         }
         .buttonStyle(.plain)
         .foregroundStyle(task.isClosed ? muted : badgeColor)

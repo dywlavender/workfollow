@@ -268,81 +268,84 @@ struct SettingsDataView: View {
     private var repository: NativePreviewRepository { NativePreviewRepository() }
 
     var body: some View {
-        Form {
-            Section("存储位置") {
-                directoryRow(title: "数据目录", url: dataDirectory)
-                if attachmentDirectoryExists {
-                    directoryRow(title: "附件目录", url: attachmentDirectory)
-                }
-                inventoryRows
-                HStack {
-                    Button {
-                        refresh()
-                    } label: {
-                        Label("刷新", systemImage: "arrow.clockwise")
+        ScrollView {
+            VStack(alignment: .leading, spacing: WFSpace.lg) {
+                WFFormSection("存储位置") {
+                    directoryRow(title: "数据目录", url: dataDirectory)
+                    if attachmentDirectoryExists {
+                        directoryRow(title: "附件目录", url: attachmentDirectory)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    Spacer()
-                }
-                feedbackLine(.copiedPath)
-            }
-            Section("导入与导出") {
-                HStack {
-                    Button {
-                        pickImportFile()
-                    } label: {
-                        Label("导入…（打勾备份）", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(importBusy)
-
-                    Button {
-                        runMigrationExport()
-                    } label: {
-                        Label("导出全部数据…", systemImage: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(importBusy)
-                }
-                if let pendingImport {
-                    importPreview(pendingImport)
-                }
-                Text("导出文件包含任务、笔记、清单和本地附件（base64 内嵌），可在打勾个人版与本机之间互相迁移。")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.tertiaryText)
-                HStack {
-                    Button("导出工作区快照…") { runExport() }
+                    inventoryRows
+                    HStack {
+                        Button {
+                            refresh()
+                        } label: {
+                            Label("刷新", systemImage: "arrow.clockwise")
+                        }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                    Text("旧入口：导出工作区与模块记录，不含附件。")
+                        Spacer()
+                    }
+                    feedbackLine(.copiedPath)
+                }
+                WFFormSection("导入与导出") {
+                    HStack {
+                        Button {
+                            pickImportFile()
+                        } label: {
+                            Label("导入…（打勾备份）", systemImage: "square.and.arrow.down")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(importBusy)
+
+                        Button {
+                            runMigrationExport()
+                        } label: {
+                            Label("导出全部数据…", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(importBusy)
+                    }
+                    if let pendingImport {
+                        importPreview(pendingImport)
+                    }
+                    Text("导出文件包含任务、笔记、清单和本地附件（base64 内嵌），可在打勾个人版与本机之间互相迁移。")
                         .font(WFType.supporting)
                         .foregroundStyle(WFColors.tertiaryText)
+                    HStack {
+                        Button("导出工作区快照…") { runExport() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        Text("旧入口：导出工作区与模块记录，不含附件。")
+                            .font(WFType.supporting)
+                            .foregroundStyle(WFColors.tertiaryText)
+                    }
+                    feedbackLine(.export)
+                    feedbackLine(.importData)
                 }
-                feedbackLine(.export)
-                feedbackLine(.importData)
-            }
-            Section("备份") {
-                HStack(alignment: .firstTextBaseline) {
-                    Button("立即备份") { runBackup() }
-                        .buttonStyle(.bordered)
-                        .disabled(importBusy)
-                    Button("恢复备份…") { openRestoreSheet() }
-                        .buttonStyle(.bordered)
-                        .disabled(importBusy)
-                    Spacer()
-                    Text(backupSummaryText)
+                WFFormSection("备份") {
+                    HStack(alignment: .firstTextBaseline) {
+                        Button("立即备份") { runBackup() }
+                            .buttonStyle(.bordered)
+                            .disabled(importBusy)
+                        Button("恢复备份…") { openRestoreSheet() }
+                            .buttonStyle(.bordered)
+                            .disabled(importBusy)
+                        Spacer()
+                        Text(backupSummaryText)
+                            .font(WFType.supporting)
+                            .foregroundStyle(WFColors.secondaryText)
+                    }
+                    Text("每天首次修改会自动备份工作区数据库，保留最近 7 天；恢复前会先备份当前内容。")
                         .font(WFType.supporting)
-                        .foregroundStyle(WFColors.secondaryText)
+                        .foregroundStyle(WFColors.tertiaryText)
+                    feedbackLine(.backup)
+                    feedbackLine(.restore)
                 }
-                Text("每天首次修改会自动备份工作区数据库，保留最近 7 天；恢复前会先备份当前内容。")
-                    .font(WFType.supporting)
-                    .foregroundStyle(WFColors.tertiaryText)
-                feedbackLine(.backup)
-                feedbackLine(.restore)
             }
+            .padding(WFSpace.lg)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
         .safeAreaInset(edge: .bottom) {
             Text("数据仅保存在本机。导入或恢复备份后需重启应用才会重新加载；执行前都会先自动备份当前内容。")
                 .font(WFType.supporting)

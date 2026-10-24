@@ -13,6 +13,13 @@ final class TaskListRefreshTests: XCTestCase {
         let window: NSWindow
 
         init(initialTitle: String? = nil) throws {
+            workspace.feedbackSink = environment.feedback
+            workspace.placementFeedback = { [weak workspace, weak environment, weak navigation] before, after, count in
+                guard let workspace, let environment, let navigation else { return false }
+                return TaskPlacementFeedback.present(before: before, after: after, count: count,
+                    destination: navigation.destination, workspace: workspace, center: environment.feedback,
+                    open: { CommandPaletteProjection.openTask($0, workspace: workspace, navigation: navigation) })
+            }
             if let initialTitle {
                 _ = workspace.createTask(title: initialTitle, in: .today)
             }
@@ -22,7 +29,7 @@ final class TaskListRefreshTests: XCTestCase {
             window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1280, height: 800)
         }
 
-        func add(_ title: String) throws -> UUID {
+        func add(_ title: String, expectedTitle: String? = nil) throws -> UUID {
             let previousIDs = Set(workspace.allTasks.map(\.id))
             let field = try XCTUnwrap(find(QuickAddFocusReportingField.self, in: host))
             field.onMouseDown?()
@@ -37,7 +44,7 @@ final class TaskListRefreshTests: XCTestCase {
             InspectorPanelTestSupport.settle(window)
             let created = try XCTUnwrap(workspace.allTasks.first { !previousIDs.contains($0.id) },
                 "回车后任务标题：\(workspace.allTasks.map(\.title))，输入框：\(field.stringValue)")
-            XCTAssertEqual(created.title, title)
+            XCTAssertEqual(created.title, expectedTitle ?? title)
             return created.id
         }
 
@@ -95,6 +102,35 @@ final class TaskListRefreshTests: XCTestCase {
         XCTAssertEqual(try fixture.renderedTitle(for: id), "空态录入验收")
         XCTAssertEqual(try fixture.outline().enclosingScrollView?.contentView.bounds.minY, 0,
                        "空列表的底部留白不能成为滚动锚点，将新增任务推到可视区上方")
+    }
+
+    func testCaptureOutsideTodayExplainsDestinationWithoutStealingInputFocus() throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let id = try fixture.add("明天 外出评审", expectedTitle: "外出评审")
+        XCTAssertEqual(fixture.navigation.destination, .today)
+        XCTAssertFalse(fixture.workspace.groups(for: .today).flatMap(\.tasks).contains { $0.id == id })
+        XCTAssertTrue(fixture.environment.feedback.presentation?.event.message.contains("明天") == true)
+        XCTAssertEqual(fixture.environment.feedback.presentation?.event.destinationTitle, "查看")
+        XCTAssertTrue(fixture.window.firstResponder is NSTextView)
+        fixture.environment.feedback.openDestination()
+        InspectorPanelTestSupport.settle(fixture.window)
+        XCTAssertEqual(fixture.workspace.selectedTaskID, id)
+        XCTAssertNil(fixture.environment.feedback.presentation)
+    }
+
+    func testRescheduleOutOfTodayExplainsAndUndoRestoresTask() throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let id = try fixture.add("评审")
+        let original = try XCTUnwrap(fixture.workspace.task(for: id)?.schedule)
+        _ = fixture.workspace.setDueDate(id, fixture.workspace.dateFromToday(1))
+        XCTAssertTrue(fixture.environment.feedback.presentation?.event.message.contains("明天") == true)
+        XCTAssertEqual(fixture.environment.feedback.presentation?.event.actionTitle, "撤销")
+        fixture.environment.feedback.undo()
+        InspectorPanelTestSupport.settle(fixture.window)
+        XCTAssertEqual(fixture.workspace.task(for: id)?.schedule, original)
+        XCTAssertEqual(try fixture.renderedTitle(for: id), "评审")
     }
 
     func testShrinkingScrolledOutlineKeepsRemainingRowVisible() throws {

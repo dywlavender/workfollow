@@ -61,6 +61,39 @@ final class SummaryPiOptimizerTests: XCTestCase {
         }
     }
 
+    func testCancellationStopsTheOwnedGenerationProcess() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("summary-cancel-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let script = folder.appendingPathComponent("fake-pi")
+        try "#!/usr/bin/env python3\nimport pathlib, time\npathlib.Path(__file__).with_name('started').write_text('ready')\ntime.sleep(10)\nprint('late result')\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        var optimizer = SummaryPiOptimizer(); optimizer.executable = script.path
+        let work = _Concurrency.Task { try await optimizer.optimize(text: "任务事实", options: .weeklyReview) }
+        let deadline = Date().addingTimeInterval(3)
+        while !FileManager.default.fileExists(atPath: folder.appendingPathComponent("started").path) && Date() < deadline {
+            try await _Concurrency.Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folder.appendingPathComponent("started").path))
+        let cancelledAt = Date()
+        work.cancel()
+        do { _ = try await work.value; XCTFail("取消后不应交付草稿") }
+        catch is CancellationError { }
+        XCTAssertLessThan(Date().timeIntervalSince(cancelledAt), 2)
+    }
+
+    func testLongModelOutputDoesNotBlockOnPipeCapacity() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("summary-output-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let script = folder.appendingPathComponent("fake-pi")
+        try "#!/usr/bin/env python3\nprint('x' * 100000)\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        var optimizer = SummaryPiOptimizer(); optimizer.executable = script.path; optimizer.timeout = 3
+        let text = try await optimizer.optimize(text: "任务事实", options: .weeklyReview)
+        XCTAssertEqual(text.count, 100000)
+    }
+
     func testOptimizerCallsPiWhenEnabled() async throws {
         guard ProcessInfo.processInfo.environment["SUMMARY_AI_INTEGRATION"] == "1" else {
             throw XCTSkip("Enable SUMMARY_AI_INTEGRATION=1 to call the real model")

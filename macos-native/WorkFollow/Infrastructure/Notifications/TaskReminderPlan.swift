@@ -19,9 +19,22 @@ struct ReminderDecision: Codable, Equatable {
 }
 
 struct TaskReminderPreferences: Codable, Equatable {
+    /// 本机提醒总开关（任务详情「提醒来源」用）。旧存档没有这个键 → 默认开，
+    /// 既有 soundEnabled 等字段维持原来的解码行为不变。
+    var enabled = true
     var soundEnabled = true
     var bell = "Glass"
     var snoozeMinutes = 10
+
+    enum CodingKeys: String, CodingKey { case enabled, soundEnabled, bell, snoozeMinutes }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        soundEnabled = try container.decode(Bool.self, forKey: .soundEnabled)
+        bell = try container.decode(String.self, forKey: .bell)
+        snoozeMinutes = try container.decode(Int.self, forKey: .snoozeMinutes)
+    }
 }
 
 @MainActor

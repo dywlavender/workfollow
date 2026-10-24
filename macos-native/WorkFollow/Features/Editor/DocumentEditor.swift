@@ -49,6 +49,18 @@ final class DocumentEditorHandle: ObservableObject {
         coordinator.prepareForDocumentChange(in: textView)
     }
 
+    @discardableResult
+    func replaceDocument(_ document: NativeDocument,
+                         commit: @escaping (NativeDocument) -> Void,
+                         inverseCommit: @escaping (NativeDocument) -> Void) -> Bool {
+        prepareForDocumentChange()
+        guard let textView, let storage = textView.textStorage else { return false }
+        let accepted = textView.replaceDocumentContent(DocumentTextCodec.render(document),
+            range: NSRange(location: 0, length: storage.length), selection: NSRange(location: 0, length: 0),
+            commit: commit, inverseCommit: inverseCommit)
+        return accepted
+    }
+
     func format(_ command: DocumentFormatCommand) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)

@@ -102,13 +102,13 @@ struct DialogFooter<Status: View>: View {
                     Text(cancelTitle).frame(minWidth: buttonWidth - 24)
                 }
                 .buttonStyle(.bordered).keyboardShortcut(.cancelAction)
-                .accessibilityIdentifier(cancelIdentifier)
+                .accessibilityIdentifier(cancelIdentifier).workflowActionAnchor(cancelIdentifier)
                 .dialogActionAnchor(false)
                 Button(action: onSubmit) {
                     Text(primaryTitle).frame(minWidth: buttonWidth - 24)
                 }
                 .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                .disabled(!canSubmit).accessibilityIdentifier(primaryIdentifier)
+                .disabled(!canSubmit).accessibilityIdentifier(primaryIdentifier).workflowActionAnchor(primaryIdentifier)
                 .dialogActionAnchor(true)
             }
             .controlSize(.regular)

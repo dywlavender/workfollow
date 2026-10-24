@@ -13,6 +13,9 @@ struct AppKitTaskTitleField: NSViewRepresentable {
     @Binding var text: String
     @Binding var isEditing: Bool
     let placeholder: String
+    /// Return 的落点：标题编辑结束后把焦点交给正文（滴答 `focusOnContentIfNeeded`）。
+    /// nil 时保持旧行为（只结束编辑）。
+    var onSubmit: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -94,10 +97,23 @@ struct AppKitTaskTitleField: NSViewRepresentable {
 
         func control(_ control: NSControl, textView: NSTextView,
                      doCommandBy commandSelector: Selector) -> Bool {
-            // Return 结束标题编辑（与替换前 SwiftUI 的 `.onSubmit` 一致），
-            // Esc 同样结束；换行不再由 Return 承担，长标题靠软换行显示。
-            if commandSelector == #selector(NSResponder.insertNewline(_:))
-                || commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            // Return：结束标题编辑，并把焦点接力给正文（滴答 `focusOnContentIfNeeded`）。
+            // 有 `onSubmit` 时不再 `makeFirstResponder(nil)`——那会先把焦点交给窗口，
+            // 下一拍再抢回正文，中间闪一下且可能被 SwiftUI 更新打断。
+            // Esc 只结束编辑，不接力。
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                DispatchQueue.main.async { [parent] in
+                    let submit = parent.onSubmit
+                    parent.isEditing = false
+                    if let submit {
+                        submit()
+                    } else {
+                        control.window?.makeFirstResponder(nil)
+                    }
+                }
+                return true
+            }
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
                 DispatchQueue.main.async { [parent] in
                     parent.isEditing = false
                     control.window?.makeFirstResponder(nil)

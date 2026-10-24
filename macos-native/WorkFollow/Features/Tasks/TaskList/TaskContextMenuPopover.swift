@@ -178,6 +178,23 @@ struct TaskContextMenuPopover: View {
                 .help("选择日期")
                 .accessibilityLabel("选择日期")
                 .taskContextMenuAnchor(.customDate)
+                // 第五个快选钮「清除日期」：Flutter `clearDate` / 滴答日期行第 5 钮。
+                // 图标对齐 Flutter 的 event_busy（带斜杠的日历）；没有日期就禁用。
+                Button {
+                    apply { _ = workspace.clearDueDate(task.id) }
+                } label: {
+                    Image(systemName: "calendar.badge.xmark")
+                        .font(.system(size: 18))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: WFMetrics.controlHeight + 4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(task.schedule.dueAt == nil)
+                .foregroundStyle(WFColors.text)
+                .help("清除日期")
+                .accessibilityLabel("清除日期")
+                .taskContextMenuAnchor(.clearDate)
             }
             .foregroundStyle(WFColors.text)
             .padding(.horizontal, WFSpace.sm)
@@ -503,7 +520,7 @@ struct TaskContextMenuPopover: View {
 }
 
 enum TaskContextMenuAnchor: Hashable {
-    case date(Int), customDate, priority(TaskPriority), action(String)
+    case date(Int), customDate, clearDate, priority(TaskPriority), action(String)
 }
 struct TaskContextMenuFrames: PreferenceKey {
     static let defaultValue: [TaskContextMenuAnchor: CGRect] = [:]

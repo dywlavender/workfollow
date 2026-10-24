@@ -11,8 +11,10 @@ struct RootShellView: View {
     @Environment(\.colorScheme) private var colorScheme
     #if DEBUG
     @Environment(\.popupContentObservation) private var popupObservation
+    @Environment(\.workflowActionObservation) private var workflowObservation
     #endif
     @StateObject private var pageCache = WorkspacePageCache()
+    @StateObject private var selectionMemory = WorkspaceSelectionMemory()
     private var pageKey: String {
         if navigation.destination.isNotes { return "notes" }
         return navigation.destination.rawValue
@@ -48,7 +50,7 @@ struct RootShellView: View {
             .environment(\.colorScheme, colorScheme)
             .disabled(environment.storageNeedsReload)
         #if DEBUG
-        return AnyView(content.environment(\.popupContentObservation, popupObservation).tint(WFColors.accent))
+        return AnyView(content.environment(\.popupContentObservation, popupObservation).environment(\.workflowActionObservation, workflowObservation).tint(WFColors.accent))
         #else
         return AnyView(content.tint(WFColors.accent))
         #endif
@@ -82,23 +84,17 @@ struct RootShellView: View {
             }
             .background(WFColors.content)
             .disabled(environment.storageNeedsReload)
-            .onChange(of: navigation.destination) { _, destination in
-                let routedTaskID = navigation.taskSelectionToPreserveOnNextNavigation
+            .onAppear {
+                selectionMemory.connect(workspace: workspace, notes: environment.notesWorkspace, navigation: navigation)
+            }
+            .onChange(of: navigation.destination) { _, _ in
                 navigation.taskSelectionToPreserveOnNextNavigation = nil
-                if routedTaskID != workspace.selectedTaskID { workspace.select(nil) }
                 workspace.clearBulkSelection()
-
-                if !destination.isNotes && environment.notesWorkspace.selectedID != nil {
-                    environment.notesWorkspace.selectedID = nil
-                } else if let selected = environment.notesWorkspace.selected,
-                          (selected.deletedAt != nil) != (destination == .notesTrash) {
-                    environment.notesWorkspace.selectedID = nil
-                }
             }
         }
         .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $environment.commandPalettePresented) {
-            CommandPaletteView(navigation: navigation)
+            CommandPaletteView(navigation: navigation, session: environment.searchSession)
                 .environmentObject(environment)
         }
         .safeAreaInset(edge: .bottom) {

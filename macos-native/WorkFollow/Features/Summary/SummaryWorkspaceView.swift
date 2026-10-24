@@ -30,6 +30,12 @@ struct SummaryWorkspaceView: View {
     @State private var selectedCarry: Set<UUID> = []
     @State private var aiRunning = false
     @State private var aiError: String?
+    @State private var aiJob: _Concurrency.Task<Void, Never>?
+    @State private var aiGeneration = UUID()
+    @State private var showsAISetup = false
+    @State private var selectedDraftSections: Set<Int> = []
+    @State private var adoptedDocument: NativeDocument?
+    @State private var adoptionAvailable = false
     @State private var copied = false
     @State private var journalMode = false
     @State private var journalDay: Date
@@ -119,8 +125,9 @@ struct SummaryWorkspaceView: View {
         }
         .background(WFColors.content)
         .onAppear { loadWeekly(); loadJournal() }
-        .onDisappear { saveWeekly(); saveJournal() }
+        .onDisappear { cancelAI(); saveWeekly(); saveJournal() }
         .onChange(of: selection) { _, _ in
+            cancelAI(); adoptionAvailable = false
             guard environment.navigation.destination == .summary else { return }
             editorHandle.prepareForDocumentChange()
             saveWeekly()
@@ -137,11 +144,18 @@ struct SummaryWorkspaceView: View {
         .onReceive(environment.focusStore.$historyRevision.dropFirst()) { _ in
             DispatchQueue.main.async { refreshFocus() }
         }
-        .onChange(of: journalMode) { _, _ in saveWeekly(); saveJournal() }
+        .onChange(of: environment.navigation.destination) { _, destination in
+            if destination != .summary { cancelAI() }
+        }
+        .onChange(of: journalMode) { _, _ in cancelAI(); saveWeekly(); saveJournal() }
         .onChange(of: journalDay) { _, _ in saveJournal(); loadJournal() }
         .onChange(of: journalText) { _, _ in saveJournal() }
-        .onChange(of: document) { _, _ in copied = false }
+        .onChange(of: document) { _, updated in
+            copied = false
+            if adoptedDocument != updated { adoptionAvailable = false }
+        }
         .sheet(item: $preview) { draft in previewSheet(draft) }
+        .sheet(isPresented: $showsAISetup) { aiSetupSheet }
         .sheet(isPresented: $showsHistory) { historySheet }
         .sheet(isPresented: $showsSources) {
             VStack(spacing: 0) {
@@ -194,7 +208,8 @@ struct SummaryWorkspaceView: View {
                     } else { options = .standard; showLatestDraft() }
                 }
             }, onSaveTemplate: { afterConfiguration { beginSaveTemplate() } },
-            onGenerateAI: { afterConfiguration { _Concurrency.Task { await generateAI() } } })
+            onGenerateAI: { afterConfiguration { startAI() } },
+            onCancelAI: cancelAI, onConfigureAI: { afterConfiguration { showsAISetup = true } })
     }
 
     private func pageHeader(showsInspector: Bool) -> some View {
@@ -227,6 +242,20 @@ struct SummaryWorkspaceView: View {
 
     private func weeklyEditor(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if aiRunning {
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("AI 正在整理草稿…").font(WFType.supporting)
+                    Spacer()
+                    Button("取消生成", action: cancelAI).buttonStyle(.borderless)
+                }
+            } else if let aiError {
+                HStack {
+                    Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).lineLimit(2)
+                    Spacer()
+                    Button("AI 接入设置…") { showsAISetup = true }.buttonStyle(.borderless)
+                }
+            }
             VStack(spacing: 0) {
                 DocumentFormatToolbarView(handle: editorHandle, maxWidth: .infinity, embedded: true)
                     .padding(.horizontal, 10)
@@ -255,6 +284,11 @@ struct SummaryWorkspaceView: View {
                 footerAction("周计划", symbol: "calendar", compact: compact) { openPlan(at: range.start) }
                 footerAction("任务与结转", symbol: "checklist", compact: compact) { showsSources = true }
                 footerAction("更新摘要", symbol: "arrow.clockwise", compact: compact) { showLatestDraft() }
+                if adoptionAvailable {
+                    footerAction("撤销采用", symbol: "arrow.uturn.backward", compact: compact) {
+                        editorHandle.textView?.undo(nil)
+                    }
+                }
                 Spacer(minLength: 0)
                 footerAction("保存为", symbol: "square.and.arrow.down", compact: compact, action: beginSaveTemplate)
                 footerAction(copied ? "已复制" : "复制", symbol: copied ? "checkmark" : "doc.on.clipboard", compact: compact) {
@@ -273,7 +307,7 @@ struct SummaryWorkspaceView: View {
         Button(action: action) {
             if compact { Image(systemName: symbol).frame(width: 22, height: 24) }
             else { Label(title, systemImage: symbol).font(WFType.supporting) }
-        }.help(title).accessibilityLabel(title)
+        }.help(title).accessibilityLabel(title).workflowActionAnchor("summary.footer." + title)
     }
 
     private func beginSaveTemplate() {
@@ -413,29 +447,92 @@ struct SummaryWorkspaceView: View {
     }
 
     private func previewSheet(_ draft: DraftPreview) -> some View {
-        VStack(spacing: 0) {
+        let review = SummaryDraftReview(original: document, candidate: draft.document)
+        return VStack(spacing: 0) {
             DialogHeader(title: draft.title)
             Divider()
-            VStack(alignment: .leading, spacing: 16) {
-                Text("采用后替换当前正文；取消会保留现有总结。更新任务摘要会保留手写复盘。")
-                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("选择要采用的段落，未选内容保留原文。任务依据可从“任务与结转”核对。")
+                        .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    Spacer()
+                    Button("全选改动") { selectedDraftSections = review.changedIDs }.buttonStyle(.borderless)
+                }
                 ScrollView {
-                    Text(draft.document.plainText).textSelection(.enabled).font(WFType.body)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(review.sections) { section in
+                            VStack(alignment: .leading, spacing: 8) {
+                                if section.changed {
+                                    Toggle(section.title, isOn: Binding(get: { selectedDraftSections.contains(section.id) }, set: { selected in
+                                        if selected { selectedDraftSections.insert(section.id) } else { selectedDraftSections.remove(section.id) }
+                                    })).toggleStyle(.checkbox).font(WFType.section)
+                                    HStack(alignment: .top, spacing: 16) {
+                                        previewColumn("原文", blocks: section.before)
+                                        previewColumn("草稿", blocks: section.after)
+                                    }
+                                } else {
+                                    Text(section.title + " · 保留原文").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                                }
+                            }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(WFColors.panelFill, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
                 }
             }.padding(PopupMetrics.formInset)
-            DialogFooter(primaryTitle: "采用草稿", canSubmit: draft.selection == selection,
-                         onCancel: { preview = nil }, onSubmit: {
-                guard draft.selection == selection else { preview = nil; return }
-                editorHandle.prepareForDocumentChange()
-                document = draft.document
-                options = draft.options
-                appliedOptions = draft.options
-                editorID = UUID()
-                saveWeekly()
-                preview = nil
-            }) { EmptyView() }
-        }.frame(width: 640, height: 570)
+            DialogFooter(primaryTitle: "采用所选", canSubmit: draft.selection == selection && !selectedDraftSections.isEmpty, primaryIdentifier: "summary.preview.adopt",
+                onCancel: { preview = nil }, onSubmit: {
+                    guard draft.selection == selection else { preview = nil; return }
+                    let next = review.applying(selectedDraftSections)
+                    let previousDocument = document
+                    let previousOptions = appliedOptions
+                    let nextOptions = selectedDraftSections == review.changedIDs ? draft.options : appliedOptions
+                    let accepted = editorHandle.replaceDocument(next, commit: { updated in
+                        document = updated; options = nextOptions; appliedOptions = nextOptions
+                        adoptedDocument = updated; adoptionAvailable = true; saveWeekly(updated)
+                    }, inverseCommit: { _ in
+                        // TextKit may coalesce adjacent runs. Restore the saved
+                        // structured blocks together with the replayed text.
+                        document = previousDocument; options = previousOptions; appliedOptions = previousOptions
+                        adoptionAvailable = false; saveWeekly(previousDocument)
+                    })
+                    if accepted {
+                        preview = nil
+                        DispatchQueue.main.async { editorHandle.focusEditor() }
+                    }
+                }) { Text("\(selectedDraftSections.count) 处改动") }
+        }.background(WFColors.content).frame(width: 700, height: 590)
+            .onAppear { selectedDraftSections = review.changedIDs }
+    }
+
+    private func previewColumn(_ title: String, blocks: [DocumentBlock]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            Text(blocks.isEmpty ? "（空）" : blocks.map(\.plainText).joined(separator: "\n"))
+                .font(WFType.body).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var aiSetupSheet: some View {
+        VStack(spacing: 0) {
+            DialogHeader(title: "AI 接入设置")
+            VStack(alignment: .leading, spacing: 12) {
+                Text("摘要与会议共用本机 Pi 和文字模型。模型的登录信息由 Pi 管理。")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                Text("Pi 程序").font(WFType.supporting)
+                TextField("Pi 可执行文件路径", text: Binding(
+                    get: { environment.meetingStore.configuration.executable },
+                    set: { environment.meetingStore.configuration.executable = $0 }))
+                    .textFieldStyle(.roundedBorder)
+                Text("文字模型").font(WFType.supporting)
+                TextField("留空使用 Pi 当前文字模型", text: Binding(
+                    get: { environment.meetingStore.configuration.minutesModel ?? "" },
+                    set: { environment.meetingStore.configuration.minutesModel = $0 }))
+                    .textFieldStyle(.roundedBorder)
+                Text("若提示登录或认证失败，请先在本机 Pi 完成登录，再返回重试。")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            }.padding(PopupMetrics.formInset)
+            DialogCloseFooter { showsAISetup = false }
+        }.frame(width: 460)
     }
 
     private func showLatestDraft() {
@@ -444,27 +541,42 @@ struct SummaryWorkspaceView: View {
                                document: builder.document(for: report, options: options, preserving: document), options: options)
     }
 
-    private func generateAI() async {
-        guard !aiRunning else { return }
+    private func cancelAI() {
+        aiGeneration = UUID()
+        aiJob?.cancel(); aiJob = nil; aiRunning = false
+    }
+    private func startAI() {
+        cancelAI()
+        let generation = UUID(); aiGeneration = generation
+        aiJob = _Concurrency.Task { await generateAI(generation: generation) }
+    }
+    private func generateAI(generation: UUID) async {
         editorHandle.prepareForDocumentChange()
         let target = selection
         let requestedOptions = options
+        let original = document
         let source = builder.document(for: report, options: requestedOptions, preserving: document)
         let title = range.title(calendar: workspace.calendar)
         var aiOptions = SummaryAIOptions.weeklyReview
         aiOptions.isWeeklyPeriod = range.kind == .week
         aiRunning = true; aiError = nil
-        defer { aiRunning = false }
+        defer { if aiGeneration == generation { aiRunning = false; aiJob = nil } }
         do {
-            let text = try await SummaryPiOptimizer().optimize(text: source.plainText, options: aiOptions)
-            guard target == selection, !journalMode, environment.navigation.destination == .summary else { return }
-            guard requestedOptions == options else {
-                aiError = "筛选或显示设置已更改，请按当前条件重新生成。"
+            var optimizer = SummaryPiOptimizer()
+            optimizer.executable = environment.meetingStore.configuration.executable
+            optimizer.model = environment.meetingStore.configuration.resolvedMinutesModel
+            let text = try await optimizer.optimize(text: source.plainText, options: aiOptions)
+            try _Concurrency.Task.checkCancellation()
+            guard aiGeneration == generation, target == selection, !journalMode,
+                  environment.navigation.destination == .summary else { return }
+            guard requestedOptions == options, document == original else {
+                aiError = "正文或筛选已更改，请按当前内容重新生成。"
                 return
             }
             preview = DraftPreview(title: "AI 草稿预览", selection: target,
                 document: WeeklyReportBuilder.aiDocument(text: text, title: title), options: requestedOptions)
-        } catch { if target == selection { aiError = error.localizedDescription } }
+        } catch is CancellationError { }
+        catch { if aiGeneration == generation && target == selection { aiError = error.localizedDescription } }
     }
 
     private func loadWeekly() {

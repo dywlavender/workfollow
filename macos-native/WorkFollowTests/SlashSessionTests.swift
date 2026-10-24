@@ -139,8 +139,8 @@ final class SlashSessionTests: XCTestCase {
             XCTAssertTrue(window.firstResponder === editor)
             XCTAssertEqual(editor.frame, editorFrame, "Slash cannot push editor layout")
             XCTAssertEqual(panel.frame.width, 160, accuracy: 0.5)
-            // 放开嵌套（2026-10-17）：父/子均 12 行，各 3 条分节细线。
-            XCTAssertEqual(panel.frame.height, 443, accuracy: 0.5)
+            // 放开嵌套（2026-10-17）：父/子 13 行（draw.io 流程图入列），各 3 条分节细线。
+            XCTAssertEqual(panel.frame.height, 477, accuracy: 0.5)
             if hover { XCTAssertEqual(editor.slashSession?.selectedIndex, 4) }
             let caret = editor.firstRect(forCharacterRange: editor.selectedRange(), actualRange: nil)
             if nearBottom {
@@ -197,7 +197,7 @@ final class SlashSessionTests: XCTestCase {
         editor.insertText("正文 ", replacementRange: NSRange(location: 0, length: 0))
         editor.insertText("/", replacementRange: editor.selectedRange())
         XCTAssertNotNil(editor.slashSession)
-        XCTAssertEqual(editor.profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件"])
+        XCTAssertEqual(editor.profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件", "流程图（draw.io）"])
         editor.insertText("a", replacementRange: editor.selectedRange())
         XCTAssertNil(editor.slashSession)
         XCTAssertEqual(editor.string, "正文 /a")
@@ -393,7 +393,7 @@ final class SlashSessionTests: XCTestCase {
     func testSlashGlyphMappingFollowsThePaletteOrder() {
         XCTAssertEqual(DocumentProfile(taskSlash: true).slashCommands.map { SlashGlyphKind.forCommand($0.id) },
                        [.heading(1), .heading(2), .heading(3), .bullet, .ordered, .checklist,
-                        .quote, .divider, .symbol("paperclip")])
+                        .quote, .divider, .symbol("paperclip"), .symbol("point.3.connected.trianglepath.dotted")])
         XCTAssertEqual(SlashGlyphKind.forCommand("task.child"), .nestedItems)
         XCTAssertEqual(SlashGlyphKind.forCommand("task.tags"), .labelTag)
         XCTAssertEqual(SlashGlyphKind.forCommand("task.relation"), .linkedCards)

@@ -42,11 +42,13 @@ struct FeedbackEvent {
     var coalescedMessage: ((Int) -> String)? = nil
     /// 覆盖默认档位的停留时长。
     var duration: TimeInterval? = nil
+    var destinationTitle: String? = nil
+    var destinationAction: (() -> Void)? = nil
 
     /// HUD 停留多久。有可撤销动作时停留更久：撤销入口在用户伸手时消失比没有更糟。
     var hold: TimeInterval {
         if let duration { return duration }
-        if action != nil { return FeedbackTiming.undoHold }
+        if action != nil || destinationAction != nil { return FeedbackTiming.undoHold }
         switch kind {
         case .error: return FeedbackTiming.errorHold
         case .completion: return FeedbackTiming.completionHold
@@ -135,6 +137,12 @@ final class FeedbackCenter: ObservableObject {
         dismiss()
         action()
         show(FeedbackEvent(kind: .success, message: "已撤销"))
+    }
+
+    func openDestination() {
+        guard let action = presentation?.event.destinationAction else { return }
+        dismiss()
+        action()
     }
 
     private func restartHold() {

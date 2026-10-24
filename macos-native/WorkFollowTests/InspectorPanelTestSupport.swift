@@ -70,9 +70,35 @@ enum InspectorPanelTestSupport {
         try panel(title: actionPanelTitle, below: owner)
     }
 
-    static func panel(title: String, below root: NSWindow) throws -> NSPanel {
-        try XCTUnwrap(descendants(of: root).first { $0.title == title && $0.isVisible } as? NSPanel,
-                      "No visible ‘\(title)’ panel below ‘\(root.title)’")
+    static func panel(title: String, below root: NSWindow,
+                      file: StaticString = #filePath, line: UInt = #line) throws -> NSPanel {
+        // 子面板由 SwiftUI 挂到 childWindows 是异步的：先轮询再断言，
+        // 否则快一步的用例会在面板就位前失败（闪失败来源之一）。
+        let deadline = Date().addingTimeInterval(1.0)
+        while Date() < deadline {
+            if let hit = descendants(of: root).first(where: { $0.title == title && $0.isVisible }) as? NSPanel {
+                return hit
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        return try XCTUnwrap(descendants(of: root).first { $0.title == title && $0.isVisible } as? NSPanel,
+                             "No visible ‘\(title)’ panel below ‘\(root.title)’", file: file, line: line)
+    }
+
+    /// 轮询等待条件成立（每 20ms 跑一拍 RunLoop），超时以 `message` 失败。
+    /// 用于「点击后 SwiftUI 状态/NSView 异步就位」的断言，替代固定时长的 settle。
+    static func waitUntil(_ message: @autoclosure () -> String = "Condition not met in time",
+                          timeout: TimeInterval = 1.0,
+                          file: StaticString = #filePath, line: UInt = #line,
+                          _ condition: () -> Bool) throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        if !condition() {
+            XCTFail(message(), file: file, line: line)
+        }
     }
 
     static func visibleWindows(below root: NSWindow) -> [NSWindow] {
