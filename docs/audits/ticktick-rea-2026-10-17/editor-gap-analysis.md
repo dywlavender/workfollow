@@ -203,8 +203,8 @@
 | TI2-05 | 任务形态（任务/笔记/清单）与清单模式逐项操作 | `kindButton` + `updateKind:` + `CheckItemCell`（完成/提醒/删除/拖拽） | 只有文本；检查项是段落类型，无逐项按钮 | 缺 | **05a P0 / 05b P1** | M / L |
 | TI2-06 | 标题 Return 行为 | `focusOnContentIfNeeded`（推断：Return 进正文） | Return = 结束编辑（`AppKitTaskTitleField.swift:105`） | 差异 | P1 | S |
 | TI2-07 | 顶栏进度条 | `progressView` + `expectedProgress` + 可改 | 无；只有列表行的 `subtaskProgress` 文本 | 缺 | P1 | M |
-| TI2-08 | 输入期补全与链接菜单 | `shouldShowQuickTag/List`、`hideLinkHoverMenu` | 仅 Slash；无 `#`/清单补全、无链接悬停菜单 | 缺 | P1 | M |
-| TI2-09 | 评论内联化 | 底栏 `showAddCommentView:` + 展开/收起 + 回复/编辑/附件 | 浮层面板、纯文本 | 差异 | P1 | M |
+| TI2-08 | 输入期补全与链接菜单 | `shouldShowQuickTag/List`、`hideLinkHoverMenu` | `#` 标签、`~` 清单补全已做（§14）；仍无 `*`/`!`/`@` 与链接悬停菜单 | 部分 | P1 | M |
+| TI2-09 | 评论内联化 | 底栏 `showAddCommentView:` + 展开/收起 + 回复/编辑/附件 | 正文流折叠区、一级回复、编辑已做（§14）；无附件/表情 | 部分 | P1 | M |
 | TI2-10 | 专注三入口位置 | 底栏/摘要区 `StartPomoFocus` / `StartStopWatchFocus` / `SetFocusEstimate` | 更多菜单二级 + 更多菜单项 | 差异 | P1 | S |
 | TI2-11 | 更多菜单对齐 | 15 项；无「设置预计专注」；有「打印」 | 15 项；多「设置预计专注」；缺「打印」 | 差异 | P1 | S |
 | TI2-12 | 子任务行信息密度 | tags / mini icons / 右箭头 | 仅日期 | 缺 | P1 | S–M |
@@ -218,7 +218,7 @@
 | TI2-19 | 动态 WebView | `TTTaskDetailActivitiesCell` + WebView | 原生列表 | 有意不同 | 不做 | — |
 | TI2-20 | Notion / 模板推广行 | `TTTaskDetailNotionBlockCell`、`PresetTaskActionCell` | 无 | 生态集成 | 不做 | — |
 | TI2-21 | 行首块手柄 + 竖排块类型菜单 | `leadingButtonClicked:` / `refreshLeadingIcon` + `md_vertical_*` 一组资源 | 装饰层只有列表标记与活动行 H 角标/「+」，**无手柄、无块菜单**（`grep 拖拽/折叠` 在 Editor 无命中） | 缺 | P1 | M |
-| TI2-22 | 焦点接力（新建/切任务聚焦标题、标题→正文） | `focusOnTaskTitle` / `focusOnContentIfNeeded` / `focusOnView` | `titleEditing` 没有程序化置 true 的入口（`TaskInspectorShell.swift:15`，只能靠用户点进字段）；标题 Return 只结束编辑 | 缺 | P1 | S |
+| TI2-22 | 焦点接力（新建/切任务聚焦标题、标题→正文） | `focusOnTaskTitle` / `focusOnContentIfNeeded` / `focusOnView` | 已做（§14）：标题 Return → 正文；空查询新建自动进标题编辑。切任务聚焦标题未做 | 部分 | P1 | S |
 | TI2-23 | 格式快捷键（⌘B/⌘I/⌘U） | 未取得证据 | 编辑栏自身未注册任何 ⌘ 组合；格式只能点工具条或输入 Markdown | 待实测 | P2 | S |
 
 ---
@@ -447,11 +447,11 @@
 
 | 项 | 为什么这轮不做 |
 |---|---|
-| TI2-08 清单候选（`shouldShowQuickList`） | 触发字符与候选来源没有运行证据；猜一个触发器不如不做 |
+| ~~TI2-08 清单候选（`shouldShowQuickList`）~~ | **已完成（第 14 节）**：`prefixSymbal` getter 反汇编出立即数 `0x7e` = `~`；候选源是未归档清单、`blockedListIDs` 排除当前清单 |
 | TI2-13 草稿恢复 | workspace 写入是即时的，落盘 debounce 仅 0.4s（`WorkspaceSnapshotDebouncer`），丢失窗口过小；草稿日志+恢复提示是新的产品决策 |
 | TI2-14 沉浸书写 | 需要"单编辑器实例"的架构（主详情与沉浸窗口同时挂两个编辑器会互写同一文档）；应先做 detach 编辑器的所有权模型 |
 | TI2-18 多选面板 | 已有 `TaskBatchPanelView` 在早前批量轮对齐过（属性行 + 动作瓦片），逐项比对价值低于其余项 |
-| TI2-09 回复/编辑/评论附件 | 本地评论是单机单用户，回复语义缺失；附件/表情需要新的存储与渲染 |
+| ~~TI2-09 回复/编辑~~ · TI2-09 评论附件/表情 | 回复与编辑已完成（第 14 节，评论表加 `parentID`/`editedAt` 两个可选字段）；**附件与表情仍未做**——需要新的附件引用模型与 rich comment 渲染，价值低于剩余项 |
 
 ## 12. 优化批次一（2026-10-24）
 
@@ -491,6 +491,35 @@
 - 四项都不改存储格式：着色只写绘制属性，富文本压回既有 `DocumentMark`，预览窗只读。
 - 回归（分组）：编辑器/文档/笔记 **106 项 1 失败**，失败项 `NoteFeatureTests.testNoteSlashMatchesFlutterSharedDocumentCommands` 在干净 HEAD 上同样失败——checkpoint `310a966` 给笔记 Slash 加了「流程图（draw.io）」但没更新该断言，属并行会话在途改动；`InspectorWalkthroughTests` 走查通过。
 - 本批新增 19 个测试方法。
+
+## 14. 优化批次三（2026-10-24）
+
+前两批是"不碰存储 + 纯修 bug"；这批第一次动**领域模型**（评论加两个可选字段），
+其余三项仍是纯 UI/行为。
+
+| # | 项 | 改动 | 测试 |
+|---|---|---|---|
+| 1 | 评论回复与编辑 | 滴答的 `TTTaskDetailCommentCell` 有 `replyOrRemoveButton` + `editButton`，另有 `TTCommentEditViewController.nib`（本地化键 `Reply`=回复、`edit_comment`=编辑评论）。本地 `TaskComment` 原先只有 `id/taskID/text/createdAt`，无法表达回复。加两个**可选**字段 `parentID` / `editedAt`（`decodeIfPresent`，旧存档缺键回落 nil，不改既有记录）。列表按一级缩进呈现回复、父评论删除时连回复一起删（避免孤儿）、编辑只改正文并记 `editedAt`、`createdAt` 不动以保持列表顺序。回复只对顶层开放——滴答的回复是一级缩进，不做嵌套回复 | `CommentThreadAndEditTests` 9 项（回复归属 / 顶层过滤 / 编辑与标记 / 空文本拒绝 / 父删子随 / 往返持久化 / 旧存档解码 / 视图展开渲染） |
+| 2 | 焦点接力（TI2-22） | 标题字段的 Return 原先与 Esc 一样只 `makeFirstResponder(nil)`。改为 `onSubmit` 回调：Return 结束标题编辑并把焦点交给正文（滴答 `focusOnContentIfNeeded`），Esc 保持只结束、不接力。另补"新建即命名"：命令面板空查询落「无标题」时带 `focusTitle` 标记，详情消费 `pendingTitleEditorID` 后自动进入标题编辑（滴答 `focusOnTaskTitle`）；快速添加等"标题已经来自用户输入"的路径不传标记，避免抢焦点打断连续录入 | `FocusRelayTests` 4 项（Return 落点 / Esc 不接力 / 空查询建任务请求焦点且只消费一次 / 有标题不抢焦点） |
+| 3 | `~` 清单补全（TI2-08 剩余项） | **这是第 10 节明确延后的那项，本轮补上了证据**：`TTListCandidatePopover.prefixSymbal` 的 getter 反汇编是 `movl $0x7e, %edi` → `bridgeToObjectiveC`（把 U+007E `~` 桥成 NSString），即触发字符是 `~`。同法得到同族其余四个：标签 `#`(0x23)、日期 `*`(0x2a)、优先级 `!`(0x21)、提及 `@`(0x40)。`TTListCandidatePopover` 另有 `blockedListIDs`（排除不可选清单）、`defaultList`、`matchCandidatesWith:`。本地把标签补全的会话泛化为 `kind: .tag | .list` 共用一条链路（同一时刻只有一个面板），清单候选排除当前清单、选中后 `~清单 ` 落文本 + `moveToList` 回写。只做 `#`/`~`：另外三种的候选源与插入语义（尤其 `*` 日期、`!` 优先级插入什么文本）没有证据，不猜 | `DocumentTagCompletionTests` 由 6 项扩到 11 项（`~` 触发与提交回写 / 两种前缀各自成会话 / 无候选不触发 / 行内前缀不触发 / 大小写不敏感过滤） |
+
+口径：
+
+- 本批只有评论表新增两个**可选**字段；`TaskComment` 的自定义 `init(from:)` 走
+  `decodeIfPresent`，旧 JSON 缺键即 nil，与既有记录完全兼容（有解码用例守着）。
+- 清单补全的插入文本只影响正文显示，真正的效果是 `moveToList`；用户若把 `~清单 `
+  当普通文字留着也不影响数据（正文与清单本来就是两份状态）。
+- 回归（分组）：评论 / 检视器 / 命令面板 / 编辑器 **65 项 0 失败**；
+  `InspectorWalkthroughTests` 走查通过。
+- 本批新增 18 个测试方法（评论 9、焦点 4、清单 5）。
+
+同批的证据补充（不改代码）：
+
+- 候选浮层前缀字符表已补进第 9 节证据索引；`TTListCandidatePopover` 的
+  `prefixSymbal` 反汇编在 `otool -tvV` 输出里是连续三条指令
+  （`movabsq $-0x1f00000000000000` 载 `0xE1` 高位 + `movl $0x7e` + `bridgeToObjectiveC`），
+  其余四个同构，只有立即数不同。
+- 仍未做：`*` 日期、`!` 优先级、`@` 提及三种补全（见第 10 节）。
 
 ## 附录：证据索引
 

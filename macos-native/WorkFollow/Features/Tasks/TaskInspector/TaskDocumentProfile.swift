@@ -9,6 +9,9 @@ struct TaskEditorHostActions {
     /// `#` 标签补全：候选来自工作区已有标签，选中后把标签挂到任务上。
     var availableTags: () -> [String] = { [] }
     var addTag: (String) -> Void = { _ in }
+    /// `~` 清单补全：候选是未归档清单，选中后把任务移进该清单。
+    var availableLists: () -> [String] = { [] }
+    var moveToList: (String) -> Void = { _ in }
     /// 粘贴文件成附件（TI2-03 剩余项）。
     var pasteFiles: ([URL]) -> Void = { _ in }
 }
@@ -29,6 +32,8 @@ enum TaskDocumentProfile {
                                       blockMenuCommands: DocumentProfile.standardBlockMenuCommands)
         profile.tagCandidates = host.availableTags
         profile.onTagInserted = host.addTag
+        profile.listCandidates = host.availableLists
+        profile.onListInserted = host.moveToList
         profile.onPasteFiles = host.pasteFiles
         return profile
     }

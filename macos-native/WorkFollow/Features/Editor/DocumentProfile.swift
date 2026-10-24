@@ -60,6 +60,10 @@ struct DocumentProfile {
     /// `#` 标签补全（TI2-08）：宿主提供候选与"已插入"回调；默认空 = 不启用。
     var tagCandidates: () -> [String] = { [] }
     var onTagInserted: (String) -> Void = { _ in }
+    /// `~` 清单补全：滴答 `shouldShowQuickList` + `TTListCandidatePopover`
+    /// （`prefixSymbal` 立即数 `0x7e`）。默认空 = 不启用。
+    var listCandidates: () -> [String] = { [] }
+    var onListInserted: (String) -> Void = { _ in }
     /// 粘贴文件（TI2-03 剩余项）：宿主负责落盘成附件；默认不处理。
     var onPasteFiles: (([URL]) -> Void)?
     // Explicit host policy. Nil preserves profiles constructed by older callers.

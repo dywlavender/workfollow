@@ -77,14 +77,76 @@ final class DocumentTagCompletionTests: XCTestCase {
         XCTAssertNil(view.tagSession)
     }
 
+    // MARK: - 清单补全（TI2-08 剩余项）
+
+    func testTildeOpensListCandidatesAndCommitsMove() throws {
+        let (view, window) = try makeView(tags: [], lists: ["收集箱", "工作", "学习"])
+        defer { view.dismissTagCompletion(); window.close() }
+        var moved: [String] = []
+        view.profile.onListInserted = { moved.append($0) }
+
+        type("正文 ~", into: view)
+        let session = try XCTUnwrap(view.tagSession, "~ 后应出现清单候选")
+        XCTAssertEqual(session.kind, .list)
+        XCTAssertEqual(session.candidates, ["收集箱", "工作", "学习"])
+
+        type("学", into: view)
+        XCTAssertEqual(view.tagSession?.candidates, ["学习"])
+        view.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+
+        XCTAssertEqual(view.string, "正文 ~学习 ", "落成的清单带 ~ 前缀与尾随空格")
+        XCTAssertEqual(moved, ["学习"], "选中清单要回写宿主，把任务移过去")
+        XCTAssertNil(view.tagSession)
+    }
+
+    func testHashAndTildeSessionsDoNotCollide() throws {
+        let (view, window) = try makeView(tags: ["工作"], lists: ["学习"])
+        defer { view.dismissTagCompletion(); window.close() }
+
+        type("#", into: view)
+        XCTAssertEqual(view.tagSession?.kind, .tag)
+        view.dismissTagCompletion()
+        // 清掉面板，在行首重新输入 `~`。
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        view.insertText("\n", replacementRange: view.selectedRange())
+        type("~", into: view)
+        XCTAssertEqual(view.tagSession?.kind, .list, "两种前缀各自成会话")
+        XCTAssertEqual(view.tagSession?.candidates, ["学习"])
+    }
+
+    func testTildeWithoutCandidatesDoesNotTrigger() throws {
+        let (view, window) = try makeView(tags: ["工作"], lists: [])
+        defer { window.close() }
+
+        type("正文 ~", into: view)
+        XCTAssertNil(view.tagSession, "没有清单候选就不出面板")
+    }
+
+    func testTildeInsideTextDoesNotTrigger() throws {
+        let (view, window) = try makeView(tags: [], lists: ["学习"])
+        defer { window.close() }
+
+        type("a~学", into: view)
+        XCTAssertNil(view.tagSession, "`a~` 不是清单边界")
+    }
+
+    func testListCompletionFiltersCaseInsensitively() throws {
+        let (view, window) = try makeView(tags: [], lists: ["Work", "Personal"])
+        defer { view.dismissTagCompletion(); window.close() }
+
+        type("~w", into: view)
+        XCTAssertEqual(view.tagSession?.candidates, ["Work"])
+    }
+
     // MARK: - Helpers
 
-    private func makeView(tags: [String],
+    private func makeView(tags: [String], lists: [String] = [],
                           blocks: [DocumentBlock] = [DocumentBlock(kind: .paragraph, runs: [])])
     throws -> (NativeTextView, NSWindow) {
         let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 200), textContainer: nil)
         var profile = DocumentProfile()
         profile.tagCandidates = { tags }
+        profile.listCandidates = { lists }
         view.profile = profile
         let window = NSWindow(contentRect: view.frame, styleMask: [.borderless],
                               backing: .buffered, defer: false)

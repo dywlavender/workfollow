@@ -989,6 +989,15 @@ struct TaskInspectorShell: View {
                         guard !current.tags.contains(tag) else { return }
                         workspace.setTags(task.id, current.tags + [tag])
                     },
+                    availableLists: {
+                        // 当前清单排除在外：候选里列出"已经在的清单"没有意义。
+                        workspace.availableListNames.filter { $0 != task.list.name }
+                    },
+                    moveToList: { name in
+                        guard let current = workspace.task(for: task.id) else { return }
+                        guard current.list.name != name else { return }
+                        workspace.moveToList(task.id, TaskList(name: name))
+                    },
                     pasteFiles: { urls in
                         guard let imported = try? NativeAttachmentFiles.importFiles(urls),
                               !imported.isEmpty else { return }
