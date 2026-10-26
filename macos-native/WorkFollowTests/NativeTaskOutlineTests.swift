@@ -11,10 +11,11 @@ final class NativeTaskOutlineTests: XCTestCase {
         let window = InspectorPanelTestSupport.ownerWindow(for: scroll, width: 400, height: 800)
         defer { window.close() }
         let rows = (0..<100).map { index in
-            NativeTaskOutline.Row(id: "probe-\(index)", state: index, layout: 65) {
+            NativeTaskOutline.Row(id: "probe-\(index)", state: index, layout: 65, height: 65) {
                 VStack(alignment: .leading) {
                     TaskRowTitleField(title: "Task \(index)", color: .primary,
-                                      onSelect: {}, onEditingEnded: {}, onCommit: { _ in })
+                                      onEditingRequested: {}, onEditingBegan: {},
+                                      onEditingEnded: {}, onCommit: { _ in })
                     Text("Preview").lineLimit(1)
                 }.frame(height: 65)
             }
@@ -87,7 +88,8 @@ final class NativeTaskOutlineTests: XCTestCase {
         func rows(tall: Bool) -> [NativeTaskOutline.Row] {
             (0..<30).map { index in
                 let height = tall && index == 20 ? 82 : 50
-                return NativeTaskOutline.Row(id: "row-\(index)", state: height, layout: height) {
+                return NativeTaskOutline.Row(id: "row-\(index)", state: height, layout: height,
+                                             height: CGFloat(height)) {
                     Text("Task \(index)").frame(height: CGFloat(height))
                 }
             }
@@ -124,7 +126,8 @@ final class NativeTaskOutlineTests: XCTestCase {
         defer { window.close() }
         func row(_ color: Color) -> NativeTaskOutline.Row {
             .init(id: "task", state: color, layout: 50) {
-                TaskRowTitleField(title: "Saved title", color: color, onSelect: {},
+                TaskRowTitleField(title: "Saved title", color: color,
+                                  onEditingRequested: {}, onEditingBegan: {},
                                   onEditingEnded: {}, onCommit: { _ in })
                     .frame(height: 50)
             }
@@ -152,8 +155,8 @@ final class NativeTaskOutlineTests: XCTestCase {
         window.isReleasedWhenClosed = false
         window.contentView = scroll
         defer { window.close() }
-        let rows = [NativeTaskOutline.Row(id: "short") { Text("Task").frame(height: 50) },
-                    NativeTaskOutline.Row(id: "tall") { Text("Preview").frame(height: 82) }]
+        let rows = [NativeTaskOutline.Row(id: "short", height: 50) { Text("Task").frame(height: 50) },
+                    NativeTaskOutline.Row(id: "tall", height: 82) { Text("Preview").frame(height: 82) }]
         coordinator.update(rows, in: scroll)
         settle(scroll)
         let outline = try XCTUnwrap(coordinator.outline)
@@ -163,7 +166,7 @@ final class NativeTaskOutlineTests: XCTestCase {
         XCTAssertEqual(outline.rect(ofRow: 1).height, 82, accuracy: 1)
         XCTAssertEqual(cell.host.frame.minX, WFSpace.md, accuracy: 1)
 
-        coordinator.update([.init(id: "short") { Text("Selected task").frame(height: 50) }, rows[1]], in: scroll)
+        coordinator.update([.init(id: "short", height: 50) { Text("Selected task").frame(height: 50) }, rows[1]], in: scroll)
         settle(scroll)
         XCTAssertTrue(coordinator.items[0] === item)
         XCTAssertTrue(outline.view(atColumn: 0, row: 0, makeIfNecessary: false) === cell)

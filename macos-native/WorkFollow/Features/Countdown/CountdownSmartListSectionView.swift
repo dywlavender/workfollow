@@ -16,7 +16,7 @@ import SwiftUI
 /// 它不是任务，不可完成。
 ///
 /// 标题样式与任务组头共用同一套 token（`WFType.sectionSemibold` + 条数 +
-/// `TaskListMetrics.groupHeaderHeight`），免得同一屏出现两种组头。
+/// `TaskListMetrics.sectionHeaderHeight`），免得同一屏出现两种组头。
 struct CountdownSmartListSectionView: View {
     let section: CountdownSmartListSection
     let collapsed: Bool
@@ -43,18 +43,18 @@ struct CountdownSmartListSectionView: View {
                     .frame(width: TaskListMetrics.groupChevronSize,
                            height: TaskListMetrics.groupChevronSize)
                 Text(CountdownSmartListSection.title).font(WFType.sectionSemibold)
-                Text("\(section.count)").font(WFType.supporting)
+                Text("\(section.count)").font(.system(size: 11))
                     .foregroundStyle(WFColors.secondaryText)
                 Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity, minHeight: TaskListMetrics.groupHeaderHeight,
+            .frame(maxWidth: .infinity, minHeight: TaskListMetrics.sectionHeaderHeight,
                    alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(CountdownSmartListSection.title) \(section.count)")
         .padding(.horizontal, WFSpace.sm)
-        .frame(height: TaskListMetrics.groupHeaderHeight)
+        .frame(height: TaskListMetrics.sectionHeaderHeight)
     }
 }
 

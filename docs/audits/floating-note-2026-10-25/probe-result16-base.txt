@@ -1,0 +1,3 @@
+[base] 1-boot(本app在前): MAIN不在屏上 [main=#-1 note=#-1 pdf=#5 n=36] active=true key=MAIN mainW=MAIN
+[base] 2-before-click(PDF应在最前): MAIN在PDF之上(把PDF盖住=BAD) [main=#6 note=#2 pdf=#16 n=37] active=false key=nil mainW=nil
+[base] 3-after-click: MAIN在PDF之上(把PDF盖住=BAD) [main=#6 note=#2 pdf=#16 n=37] active=false key=nil mainW=nil

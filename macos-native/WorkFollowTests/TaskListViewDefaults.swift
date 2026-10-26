@@ -67,9 +67,9 @@ final class TaskListViewDefaultsTests: XCTestCase {
     /// 这里只锁住"已完成组没有文字动作"这一条历史口径，其余在
     /// `TaskGroupHeaderActionsTests` 里逐 kind 断言。
     func testCompletedGroupCarriesNoTrailingAction() {
-        let completed = TaskGroupHeaderActions.resolve(kind: .completed, sectionID: nil, day: nil,
-                                                       taskCount: 3, today: now)
-        XCTAssertNil(completed.primary)
+        let completed = TaskGroupHeaderActions.resolve(kind: .completed, sectionID: nil,
+                                                       taskCount: 3)
+        XCTAssertFalse(completed.showsPostpone)
     }
 
     func testReminderMetadataIncludesRelativeAndLegacyReminders() {
@@ -110,10 +110,13 @@ final class TaskListViewDefaultsTests: XCTestCase {
         XCTAssertNil(TaskListViewDefaults.subtaskProgress(parentID: UUID(), tasks: children))
     }
 
-    func testTaskRowHeightContractIs50PointsWithExistingVerticalPadding() {
+    func testTaskRowHeightContractUsesDedicatedListMetricsBelowGlobalRowHeight() {
+        // 全局 rowHeight 仍给看板等其它面用；任务列表的 40pt 独立在 TaskListMetrics。
         XCTAssertEqual(WFMetrics.rowHeight, 50)
         XCTAssertEqual(WFMetrics.rowVerticalPadding, 11)
         XCTAssertEqual(WFMetrics.rowContentMinHeight, 28)
+        XCTAssertEqual(TaskListMetrics.baseRowHeight, 40)
+        XCTAssertEqual(TaskListMetrics.rowVerticalPadding, 10)
     }
 
     private func makeTask(_ title: String, parentID: UUID?, status: TaskStatus = .active,

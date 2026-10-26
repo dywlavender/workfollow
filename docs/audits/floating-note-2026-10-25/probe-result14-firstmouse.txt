@@ -1,0 +1,3 @@
+[firstmouse] before-click: appActive=false key=nil firstResponder=Optional(probe14.FirstMouse) selectedRange={340, 0}
+[firstmouse] posted click at screen (1020.0, 650.0)
+[firstmouse] after-click:  appActive=false key=nil firstResponder=Optional(probe14.FirstMouse) selectedRange={340, 0} acceptsFirstMouse=true

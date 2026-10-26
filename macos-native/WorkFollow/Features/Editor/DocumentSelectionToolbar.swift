@@ -35,6 +35,7 @@ struct DocumentSelectionToolbarView: View {
     }
 
     var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 2) {
             ForEach(actions) { action in
                 Button {
@@ -50,7 +51,7 @@ struct DocumentSelectionToolbarView: View {
                 .foregroundStyle(WFColors.accent)
                 .help(action.title).accessibilityLabel(action.title)
             }
-            Divider().frame(height: 16)
+            if !actions.isEmpty { Divider().frame(height: 16) }
             ForEach(inlineCommands, id: \.id) { command in
                 Button { onFormat(command) } label: {
                     Image(systemName: command.descriptor.toolbarSymbol)
@@ -71,12 +72,22 @@ struct DocumentSelectionToolbarView: View {
         }
         .font(.system(size: 13))
         .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        }
+        .frame(idealWidth: preferredWidth)
+        .frame(height: 34)
+        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .coordinateSpace(name: "editor-selection-toolbar")
     }
 
+    private var preferredWidth: CGFloat {
+        let actionWidth = actions.reduce(CGFloat(0)) { total, action in
+            total + (action.displayTitle as NSString).size(withAttributes: [
+                .font: NSFont.systemFont(ofSize: 13)
+            ]).width + 30
+        }
+        return actionWidth + CGFloat(inlineCommands.count + 1) * 26 + 24
+    }
 }
 
 /// 笔记与任务正文共用的浮动格式工具条（迁移自 Flutter DocumentEditorToolbar 的全集）。
@@ -94,15 +105,12 @@ struct DocumentFormatToolbarView: View {
     /// retain the existing floating surface.
     var embedded = false
 
-    /// 悬停提示与按钮矩形（见 `DocumentToolbarTooltip`）：提示和两个小面板都由工具条
-    /// 这一层统一画在**上方**（`ScrollView` 会裁掉越界内容，按钮自己画不出来），
-    /// 所以每个按钮要把它自己的矩形报上来。
+    /// Tooltip coordinates stay outside the horizontal scroller. Picker sizes
+    /// use those same real button frames before their existing child host opens.
     @StateObject private var overlay = ToolbarTooltipState()
     /// 当前开着的小面板（标题级别 / 插入时间）。
     @State private var openPicker: DocumentToolbarPicker?
-    /// 指针在不在工具条上、在不在面板上——两者都不在就收起面板。
-    @State private var toolbarHovered = false
-    @State private var pickerHovered = false
+    @State private var pickerSize: CGSize?
 
     private static let headingCommands = EditorCommandCatalog.headingPickerIDs.compactMap(EditorCommandCatalog.format)
 
@@ -155,6 +163,8 @@ struct DocumentFormatToolbarView: View {
                               action: { togglePicker(.heading) }) {
                     Text("H").font(.system(size: 16))
                 }
+                .background { pickerPresenter(.heading) }
+                .editorPopupTriggerFrame("heading")
                 formatButton("format.bold")
                 // 「A」底下永远垫一块高亮色（原版 `label: 'A', highlight: true`）。
                 ToolbarButton(title: highlightCommand.descriptor.formatToolbarTitle,
@@ -183,6 +193,8 @@ struct DocumentFormatToolbarView: View {
                               action: { togglePicker(.time) }) {
                     Image(systemName: "clock.arrow.circlepath")
                 }
+                .background { pickerPresenter(.time) }
+                .editorPopupTriggerFrame("time")
                 toolbarDivider
                 ToolbarButton(title: "链接", active: false, state: overlay,
                               action: { handle.editLink() }) {
@@ -227,26 +239,22 @@ struct DocumentFormatToolbarView: View {
         .shadow(color: embedded ? .clear : WFColors.overlayShadow,
                 radius: DocumentFormatToolbarMetrics.shadowRadius,
                 y: DocumentFormatToolbarMetrics.shadowOffset)
-        .onHover { inside in
-            toolbarHovered = inside
-            dismissPickerIfPointerLeft()
-        }
-        // 提示与面板的坐标基准：都画在 `ScrollView` 之外，才不会被横向滚动裁掉。
+        // Tooltips stay outside the scroller; picker content has its own child window.
         .coordinateSpace(name: DocumentToolbarTooltip.space)
         .overlay(alignment: .topLeading) {
             GeometryReader { proxy in
                 ZStack(alignment: .topLeading) {
-                    if openPicker == nil { tooltipLayer }
-                    pickerLayer(containerWidth: proxy.size.width)
+                    if openPicker == nil { tooltipLayer(containerWidth: proxy.size.width) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
-        .animation(.easeOut(duration: 0.08), value: overlay.hovered)
-        // Register only while a child picker is open; scoped to this toolbar's window.
         .background {
-            if openPicker != nil {
-                PopupEscapeRouter(depth: 2) { openPicker = nil }
+            if let picker = openPicker, let frame = overlay.frames[picker.tooltipTitle] {
+                EditorToolbarPopupCapacity(anchor: frame,
+                    requestedSize: CGSize(width: picker.width, height: picker.height)) { size in
+                    if pickerSize != size { pickerSize = size }
+                }
             }
         }
     }
@@ -261,35 +269,36 @@ struct DocumentFormatToolbarView: View {
 
     /// 提示画在工具条**上方**：卡的中心落在被悬停控件的横中线上，底边离工具条顶 6pt。
     @ViewBuilder
-    private var tooltipLayer: some View {
+    private func tooltipLayer(containerWidth: CGFloat) -> some View {
         if let title = overlay.hovered, let frame = overlay.frames[title] {
-            ToolbarTooltipCard(title: title)
-                .position(x: frame.midX,
+            let width = min(DocumentToolbarTooltip.width(for: title), containerWidth)
+            ToolbarTooltipCard(title: title, maximumWidth: width)
+                .frame(width: width)
+                .position(x: EditorPopupGeometry.tooltipX(anchor: frame, width: width,
+                                                          containerWidth: containerWidth) + width / 2,
                           y: -(DocumentToolbarTooltip.cardHeight / 2 + DocumentToolbarTooltip.gap))
-                .transition(.opacity)
         }
     }
 
-    /// 面板画在工具条**上方**：标题贴按钮左缘、时间贴按钮右缘，宽度固定 150/222。
-    /// 面板底边与工具条顶之间那 6pt 也算面板的悬停区（"桥"），指针从按钮走到面板
-    /// 不会中途落到缝里被收起。
+    /// Existing panel ownership preserves the body selection, follows the
+    /// window and closes on outside click/Escape instead of pointer departure.
     @ViewBuilder
-    private func pickerLayer(containerWidth: CGFloat) -> some View {
-        if let picker = openPicker, let frame = overlay.frames[picker.tooltipTitle] {
-            let originX = picker.originX(anchor: frame, containerWidth: containerWidth)
-            let blockHeight = picker.height + DocumentToolbarTooltip.gap
-            VStack(spacing: 0) {
+    private func pickerPresenter(_ picker: DocumentToolbarPicker) -> some View {
+        if openPicker == picker, let size = pickerSize, size.width > 0, size.height > 0 {
+            AnchoredPropertyPanel(isPresented: Binding(
+                get: { openPicker == picker },
+                set: { if !$0 { openPicker = nil } }),
+                width: size.width,
+                horizontalOutset: picker.alignedToEnd
+                    ? max(0, size.width - DocumentFormatToolbarMetrics.controlWidth) : 0,
+                prefersAbove: true, placement: .verticalInOwner,
+                focusPolicy: .preservePresenter,
+                title: picker == .heading ? "正文标题格式" : "正文插入时间") {
                 DocumentToolbarPickerCard(picker: picker,
                                           selectedIndex: picker == .heading ? headingIndex : nil,
-                                          onPick: { pick(picker, index: $0) })
-                Color.clear.frame(height: DocumentToolbarTooltip.gap)
+                                          onPick: { pick(picker, index: $0) },
+                                          viewportHeight: size.height)
             }
-            .frame(width: picker.width)
-            .onHover { inside in
-                pickerHovered = inside
-                dismissPickerIfPointerLeft()
-            }
-            .position(x: originX + picker.width / 2, y: -blockHeight / 2)
         }
     }
 
@@ -300,12 +309,14 @@ struct DocumentFormatToolbarView: View {
 
     /// 当前段落是不是标题。正文不算——原版判的是 `headingLevel != null`。
     private var headingActive: Bool {
-        [DocumentBlockKind.heading(1), .heading(2), .heading(3)]
+        (1...6).map(DocumentBlockKind.heading)
             .contains { handle.style.isBlock($0) }
     }
 
     private func togglePicker(_ picker: DocumentToolbarPicker) {
+        pickerSize = nil
         openPicker = openPicker == picker ? nil : picker
+        if openPicker != nil { handle.focusEditor() }
     }
 
     private func pick(_ picker: DocumentToolbarPicker, index: Int) {
@@ -315,13 +326,6 @@ struct DocumentFormatToolbarView: View {
         case .time:
             handle.insertTime(format: DocumentToolbarPicker.timeFormats[index])
         }
-        openPicker = nil
-    }
-
-    /// 指针既不在工具条上、也不在面板上就收起面板。原版是"点面板外面"收起；这里没有
-    /// 覆盖整个窗口的遮罩，所以用指针离开收起（把指针移开即等于离开）。
-    private func dismissPickerIfPointerLeft() {
-        guard openPicker != nil, !toolbarHovered, !pickerHovered else { return }
         openPicker = nil
     }
 

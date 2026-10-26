@@ -24,10 +24,22 @@ struct TaskWidgetItem: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// The host resolves countdown rules for each prepared timeline day. The widget
+/// only renders these entries; countdowns never become completion commands.
+struct TaskWidgetCountdownItem: Codable, Equatable, Identifiable, Sendable {
+    var id: UUID
+    var title: String
+    var symbol: String
+    var displayDate: Date
+    var relativeLabel: String
+}
+
 struct TaskWidgetSnapshot: Codable, Equatable, Sendable {
     var version = 1
     var updatedAt: Date
     var tasks: [TaskWidgetItem]
+    // Optional so snapshots from the installed task-only widget remain readable.
+    var countdowns: [TaskWidgetCountdownItem]? = nil
 
     static let empty = Self(updatedAt: .distantPast, tasks: [])
 
@@ -61,7 +73,8 @@ struct TaskWidgetSnapshot: Codable, Equatable, Sendable {
         let weekIDs = Set(weekTasks.map(\.id))
         return TaskWidgetDay(date: day, remaining: remaining, completedCount: completedCount,
             overdueCount: remaining.filter { $0.isOverdue(on: day, calendar: calendar) }.count,
-            weekRemainingCount: weekTasks.filter { $0.parentID.map { !weekIDs.contains($0) } ?? true }.count)
+            weekRemainingCount: weekTasks.filter { $0.parentID.map { !weekIDs.contains($0) } ?? true }.count,
+            countdowns: (countdowns ?? []).filter { calendar.isDate($0.displayDate, inSameDayAs: day) })
     }
 }
 
@@ -71,13 +84,17 @@ struct TaskWidgetDay: Equatable, Sendable {
     let completedCount: Int
     let overdueCount: Int
     let weekRemainingCount: Int
+    let countdowns: [TaskWidgetCountdownItem]
+
+    var entryCount: Int { remaining.count + countdowns.count }
 }
 
 enum TaskWidgetLink {
-    enum Destination { case today, quickAdd, weekPlan }
+    enum Destination { case today, quickAdd, weekPlan, countdowns }
     static let today = URL(string: "workfollow://widget/today")!
     static let quickAdd = URL(string: "workfollow://widget/add")!
     static let weekPlan = URL(string: "workfollow://widget/week")!
+    static let countdowns = URL(string: "workfollow://widget/countdowns")!
     static func destination(for url: URL) -> Destination? {
         guard url.scheme == "workfollow", url.host == "widget", url.query == nil,
               url.fragment == nil else { return nil }
@@ -85,6 +102,7 @@ enum TaskWidgetLink {
         case "/today": return .today
         case "/add": return .quickAdd
         case "/week": return .weekPlan
+        case "/countdowns": return .countdowns
         default: return nil
         }
     }

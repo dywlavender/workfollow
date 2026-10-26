@@ -103,13 +103,13 @@ final class DocumentListMarkerAlignmentTests: XCTestCase {
         XCTAssertEqual(ordered[1].end - reference, 9, accuracy: 1.5, "编号右缘 ≈ +9（滴答 x28.5）")
         XCTAssertEqual(ordered[2].start - reference, 15, accuracy: 1.5, "列表文字 ≈ +15")
 
-        // 复选款：复选框左缘走同一左缘约定（本轮未单独取自滴答截图，锁的是与其余
-        // 标记一致的左缘——本轮它刚从"右对齐到文字左侧"挪过来）。
+        // 复选款：17pt 命中区里画 15pt 可见框（滴答截图实测），左缘与其余标记一致，
+        // 文字比普通列表再多让 8pt。
         let checklist = bands[3].segments
         XCTAssertGreaterThanOrEqual(checklist.count, 2, "复选行应是「复选框 + 文字」")
         XCTAssertEqual(checklist[0].start - reference, 0, accuracy: 1.5, "复选框左缘与文字左缘对齐")
-        XCTAssertEqual(checklist[0].end - checklist[0].start, 13, accuracy: 1.5, "复选框约 13pt 宽（12.96）")
-        XCTAssertEqual(checklist.last!.start - reference, 15, accuracy: 1.5, "复选文字 ≈ +15")
+        XCTAssertEqual(checklist[0].end - checklist[0].start, 15, accuracy: 1.5, "复选框可见框 15pt 宽")
+        XCTAssertEqual(checklist.last!.start - reference, 23, accuracy: 1.5, "复选文字 ≈ +23")
 
         // 引用：竖条 2pt 宽，落在文字左缘右侧 3pt。
         let quote = bands[4].segments

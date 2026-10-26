@@ -8,6 +8,9 @@ enum TaskGroupKind: Equatable { case pinned, overdue, today, day, upcoming, late
 enum TaskListSortMode: String, CaseIterable, Codable {
     case manual, due, priority, title, createdAt, modified
 
+    /// 菜单顺序单独声明：枚举声明顺序服务于代码，不能反过来绑死 UI。
+    static let menuOrder: [TaskListSortMode] = [.manual, .due, .priority, .title, .createdAt, .modified]
+
     var title: String {
         switch self {
         case .manual: "手动排序"

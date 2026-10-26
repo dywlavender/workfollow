@@ -121,7 +121,7 @@ final class DeferredDocumentTests: XCTestCase {
         let lazyNote = try XCTUnwrap(environment.notesWorkspace.notes.first)
         XCTAssertTrue(lazyNote.hasPreservedRichContent)
         XCTAssertEqual(environment.originalContentReadCount, 0)
-        let convertedID = try XCTUnwrap(environment.convertTaskToNote(original.id))
+        let convertedID = try XCTUnwrap(environment.moveTaskToNoteLibrary(original.id))
         XCTAssertEqual(environment.notesWorkspace.notes.first { $0.id == convertedID }?.document, original.document)
         let copyID = try XCTUnwrap(environment.notesWorkspace.createPlainTextCopy(note.id))
         XCTAssertEqual(environment.notesWorkspace.notes.first { $0.id == copyID }?.document.plainText, note.document.plainText)
@@ -173,7 +173,7 @@ final class DeferredDocumentTests: XCTestCase {
         XCTAssertTrue(snapshot.notes[0].hasPreservedRichContent)
         XCTAssertEqual(repository.originalContentReadCount, 0)
         XCTAssertEqual(try db.rows("SELECT document FROM task_documents").first?[0], payload)
-        XCTAssertEqual(try db.rows("PRAGMA user_version").first?[0], Data("2".utf8))
+        XCTAssertEqual(try db.rows("PRAGMA user_version").first?[0], Data("3".utf8))
         XCTAssertEqual(snapshot.tasks[0].document, original.document)
         XCTAssertEqual(snapshot.notes[0].originalContentJson, note.originalContentJson)
     }

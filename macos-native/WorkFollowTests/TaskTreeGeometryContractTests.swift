@@ -36,13 +36,13 @@ final class TaskTreeGeometryContractTests: XCTestCase {
         let rootBox = try XCTUnwrap(frames[.init(taskID: root, part: .checkbox)])
         let childBox = try XCTUnwrap(frames[.init(taskID: child, part: .checkbox)])
         XCTAssertEqual(parentBox.minX, rootBox.minX, accuracy: 0.5)
-        XCTAssertEqual(parentBox.minX, 32, accuracy: 0.5)
-        XCTAssertEqual(childBox.minX - parentBox.minX, 24, accuracy: 0.5)
+        XCTAssertEqual(parentBox.minX, 31, accuracy: 0.5)
+        XCTAssertEqual(childBox.minX - parentBox.minX, 21, accuracy: 0.5)
         for id in [parent, root, child] {
             let gutter = try XCTUnwrap(frames[.init(taskID: id, part: .disclosure)])
             let box = try XCTUnwrap(frames[.init(taskID: id, part: .checkbox)])
-            XCTAssertEqual(gutter.width, 22, accuracy: 0.5)
-            XCTAssertEqual(box.minX - gutter.maxX, 2, accuracy: 0.5)
+            XCTAssertEqual(gutter.width, 15, accuracy: 0.5)
+            XCTAssertEqual(box.minX - gutter.maxX, 0, accuracy: 0.5)
         }
     }
 

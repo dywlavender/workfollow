@@ -67,6 +67,7 @@ extension NativeTextView {
             panel.isOpaque = false
             panel.becomesKeyOnlyIfNeeded = true
             panel.appearance = window.effectiveAppearance
+            EditorPopupWindowLevel.apply(to: panel, owner: window)
             window.addChildWindow(panel, ordered: .above)
             linkHoverPanel = panel
         }
@@ -79,14 +80,12 @@ extension NativeTextView {
         } else {
             panel.contentView = NSHostingView(rootView: content)
         }
-        let size = NSSize(width: 232, height: 30)
+        let size = NSSize(width: PopupMetrics.linkHoverMenuWidth, height: 30)
         let screenLine = window.convertToScreen(convert(line, to: nil))
-        let bounds = (window.screen ?? NSScreen.main)?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let x = min(max(screenLine.minX, bounds.minX + 8), bounds.maxX - size.width - 8)
-        let below = screenLine.minY - size.height - 4
-        let y = below >= bounds.minY + 8 ? below : min(screenLine.maxY + 4, bounds.maxY - size.height - 8)
-        panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
+        let frame = EditorPopupGeometry.frame(anchor: screenLine, size: size,
+                                              bounds: EditorPopupGeometry.bounds(in: window))
+        guard !frame.isEmpty else { hideLinkHoverMenu(); return }
+        panel.setFrame(frame, display: true)
         panel.orderFront(nil)
     }
 
@@ -112,7 +111,7 @@ private struct LinkHoverMenuView: View {
             button("移除", symbol: "link.badge.minus", action: onRemove)
         }
         .padding(3)
-        .frame(width: PopupMetrics.linkHoverMenuWidth)
+        .frame(idealWidth: PopupMetrics.linkHoverMenuWidth, maxWidth: .infinity)
         .background(WFColors.overlay)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder))

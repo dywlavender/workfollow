@@ -22,12 +22,9 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
             #"moreAction("任务动态", symbol: "list.bullet.rectangle")"#,
             #"moreAction("保存为模板", symbol: "doc.badge.plus")"#,
             #"moreAction("创建副本", symbol: "square.on.square")"#,
-            #"moreAction("复制链接", symbol: "link")"#,
-            // 2026-10-17 按滴答实测补入：滴答「…」菜单第 12 项为「打开便签」，
-            // 本地已有 StickyNoteWindowController 能力，不再作为"已移除入口"。
-            #"moreAction("打开便签", symbol: "note")"#,
-            #"moreAction("转换为笔记", symbol: "doc.text")"#,
-            #"moreAction("打印", symbol: "printer")"#,
+            #"moreAction(task.kind == .note ? "转换为任务" : "转换为笔记", symbol: "doc.text")"#,
+            // 本工程比滴答唯一多出的一项；与编辑器斜杠菜单共用同一命令。
+            #"moreAction("流程图", symbol: "point.3.connected.trianglepath.dotted")"#,
             #"moreAction("删除", symbol: "trash")"#
         ]
 
@@ -40,8 +37,10 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
             cursor = range.upperBound
         }
 
-        // 「打印」已补（TI2-11，TaskPrintService）；仍不应出现的入口见下。
-        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "设置预计专注"] {
+        // 2026-10-25 按用户要求对齐滴答：「打印」「复制链接」从菜单移除；
+        // 「插入本周摘要」不是滴答项，也去掉，本工程只额外保留「流程图」。
+        for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "设置预计专注",
+                             "打印", "复制链接", "插入本周摘要", "打开便签"] {
             XCTAssertFalse(menu.contains(removedEntry), "Unexpected more menu entry: \(removedEntry)")
         }
     }

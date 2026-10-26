@@ -160,7 +160,7 @@ struct TaskContextMenuPopover: View {
                 .foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.md)
                 .padding(.top, WFSpace.md)
-            HStack(spacing: WFSpace.xs) {
+            HStack(spacing: 12) {
                 dateAction("今天", symbol: "sun.max", offset: 0)
                 dateAction("明天", symbol: "sunrise", offset: 1)
                 dateAction("+7", symbol: "calendar", offset: 7)
@@ -169,9 +169,8 @@ struct TaskContextMenuPopover: View {
                     onCustomDate()
                 } label: {
                     Image(systemName: "calendar")
-                        .font(.system(size: 18))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: WFMetrics.controlHeight + 4)
+                        .font(.system(size: 19))
+                        .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -184,9 +183,8 @@ struct TaskContextMenuPopover: View {
                     apply { _ = workspace.clearDueDate(task.id) }
                 } label: {
                     Image(systemName: "calendar.badge.xmark")
-                        .font(.system(size: 18))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: WFMetrics.controlHeight + 4)
+                        .font(.system(size: 19))
+                        .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -198,12 +196,13 @@ struct TaskContextMenuPopover: View {
             }
             .foregroundStyle(WFColors.text)
             .padding(.horizontal, WFSpace.sm)
+            .padding(.vertical, 12)
             if task.recurrence != .never {
                 Button {
                     perform { workspace.skip(task.id) }
                 } label: {
                     menuRow("跳过此周期", symbol: "forward.end")
-                        .padding(.horizontal, 16).frame(height: PopupMetrics.menuRowHeight)
+                        .padding(.horizontal, 16).frame(height: 34)
                 }
                 .buttonStyle(.plain)
                 .disabled(task.isClosed || RecurrenceEngine.next(for: task, now: workspace.clock(), calendar: workspace.calendar) == nil)
@@ -214,19 +213,20 @@ struct TaskContextMenuPopover: View {
                 .font(WFType.supporting)
                 .foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.md)
-                .padding(.top, WFSpace.sm)
-            HStack(spacing: WFSpace.xs) {
+                .padding(.top, 4)
+            HStack(spacing: 26) {
                 priorityAction(.high, color: WFColors.flagHigh)
                 priorityAction(.medium, color: WFColors.flagMedium)
                 priorityAction(.low, color: WFColors.accent)
                 priorityAction(.none, color: WFColors.secondaryText)
             }
             .padding(.horizontal, WFSpace.sm)
+            .padding(.vertical, 12)
 
             Divider().padding(.top, WFSpace.xs)
             BusinessMenuContent(controller: menuController, close: { isPresented = false },
                 dismissAll: {}, maximumHeight: nil) {
-            VStack(spacing: 2) {
+            VStack(spacing: 0) {
                 // 放开嵌套（2026-10-17）：子任务右键同样可添加子任务（孙任务）。
                 actionRow("添加子任务", symbol: "task.subtask") {
                     perform { _ = workspace.requestChildTitleEditor(for: task.id) }
@@ -346,7 +346,7 @@ struct TaskContextMenuPopover: View {
             focusRow
             Divider().padding(.vertical, 2)
 
-            VStack(spacing: 2) {
+            VStack(spacing: 0) {
                 actionRow("创建副本", symbol: "square.on.square") {
                     perform { workspace.duplicate(task.id) }
                 }
@@ -360,8 +360,9 @@ struct TaskContextMenuPopover: View {
                 actionRow("打开便签", symbol: "task.sticky") {
                     perform { StickyNoteWindowController.shared.open(taskID: task.id) }
                 }
-                actionRow("转换为笔记", symbol: "task.note") {
-                    perform { _ = environment.convertTaskToNote(task.id) }
+                actionRow(task.kind == .note ? "转换为任务" : "转换为笔记", symbol: "task.note") {
+                    if task.kind == .note { perform { _ = workspace.setKind(task.id, .text) } }
+                    else { perform { _ = environment.convertTaskToNote(task.id) } }
                 }
                 actionRow("删除", symbol: "trash") {
                     perform { _ = workspace.delete(task.id) }
@@ -390,9 +391,8 @@ struct TaskContextMenuPopover: View {
             apply { _ = workspace.moveDueDate(task.id, to: workspace.dateFromToday(offset)) }
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 18))
-                .frame(maxWidth: .infinity)
-                .frame(height: WFMetrics.controlHeight + 4)
+                .font(.system(size: 19))
+                .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -453,13 +453,11 @@ struct TaskContextMenuPopover: View {
             apply { _ = workspace.setPriority(task.id, priority) }
         } label: {
             Image(systemName: priority == .none ? "flag" : "flag.fill")
-                .font(.system(size: 18))
+                .font(.system(size: 19))
                 .foregroundStyle(color)
                 .frame(width: 32, height: 32)
                 .background(task.priority == priority ? WFColors.selection : .clear,
                             in: RoundedRectangle(cornerRadius: WFMetrics.corner))
-                .frame(maxWidth: .infinity)
-                .frame(height: WFMetrics.controlHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -482,16 +480,19 @@ struct TaskContextMenuPopover: View {
 
     private func menuRow(_ title: String, symbol: String,
                          trailing: String? = nil, destructive: Bool = false) -> some View {
+        // 滴答右键菜单：文本行 34pt、图标 20pt、文字 13pt。
         HStack(spacing: 8) {
-            TaskContextMenuSymbol(name: symbol).frame(width: 16, height: 16)
+            TaskContextMenuSymbol(name: symbol).frame(width: 20, height: 20)
             Text(title).frame(maxWidth: .infinity, alignment: .leading)
             if let trailing {
                 Image(systemName: trailing).font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(WFColors.secondaryText)
             }
         }
-        .font(WFType.body)
+        .font(.system(size: 13))
         .foregroundStyle(destructive ? Color.red : WFColors.text)
+        .frame(minHeight: PopupMetrics.menuRowHeight)
+        .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .taskContextMenuAnchor(.action(title))
     }

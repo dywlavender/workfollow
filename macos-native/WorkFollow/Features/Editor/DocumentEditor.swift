@@ -98,6 +98,18 @@ final class DocumentEditorHandle: ObservableObject {
         textView.window?.makeFirstResponder(textView)
     }
 
+    func revealChecklistLine(_ line: Int) {
+        textView?.revealChecklistLine(line)
+        refreshStyle()
+    }
+
+    /// 窗口失去 key（例如用户去滚 PDF）时，中文输入法可能还停在组合串；
+    /// 先把未上屏内容提交给模型，避免切回来时丢字。
+    func flushPendingComposition() {
+        guard let textView, let coordinator else { return }
+        coordinator.flushPendingComposition(in: textView)
+    }
+
     func focusEnd() {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
@@ -162,6 +174,14 @@ enum DocumentEditorGeometry {
         max(decorationMinInset, visibleMinX + decorationMarkerOffset)
     }
     static let listTextIndent: CGFloat = 16
+    /// 检查项文字缩进：滴答的 17pt 勾选框 + 约 6pt 间距，比圆点/编号多让 8pt。
+    static let checklistTextIndent: CGFloat = 24
+    /// 检查项行间距：行内文字约 17pt，再加 12pt 留白，行距接近滴答的 30pt。
+    /// 滴答截图实测相邻检查项节距 ≈ 37pt：18pt 行盒 + 19pt 段间距。
+    static let checklistRowSpacing: CGFloat = 19
+    /// 行间分隔线在留白中的位置（留白的一半）。
+    static let checklistSeparatorOffset: CGFloat = checklistRowSpacing / 2
+    static let listIndentStep: CGFloat = 20
     static let quoteTextIndent: CGFloat = 16
     /// 列表标记左缘的光学补偿：滴答的圆点墨迹与正文文字墨迹齐平（都在 x19），
     /// 而首字形起点比它的墨迹早约 1pt（字形自带左侧边距），所以几何起点再补 1pt。
@@ -224,7 +244,8 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
         textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
             block.runs.allSatisfy { $0.text.isEmpty } ? block.kind : nil
-        })
+        }, indentLevel: document.blocks.last?.indentLevel ?? 0,
+           listStart: document.blocks.last?.listStart)
         context.coordinator.didLoadDocument(in: textView, reparseInline: true)
         textView.onEscape = onEscape
         textView.onEditingChanged = onEditingChanged
@@ -247,6 +268,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
+        CompactScrollStyle.apply(to: scrollView)
         scrollView.focusRingType = .none
         scrollView.documentView = textView
         return scrollView

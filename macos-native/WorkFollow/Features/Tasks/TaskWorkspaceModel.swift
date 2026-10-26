@@ -2,6 +2,11 @@ import Combine
 import AppKit
 import Foundation
 
+struct ChecklistRevealRequest: Equatable {
+    let taskID: UUID
+    let blockID: UUID
+}
+
 /// Presentation adapter: owns view-only selection/expansion state and routes
 /// every mutation through TaskActions and every list shape through projections.
 @MainActor
@@ -86,6 +91,8 @@ final class TaskWorkspaceModel: ObservableObject {
     /// 与 `pendingChildTitleEditorID` 分开：那个是"在子任务树里开一行新行"，
     /// 这个是"整条任务刚建出来、等用户命名"。
     @Published private(set) var pendingTitleEditorID: UUID?
+    /// 项提醒通知点开后，等详情栏就绪再滚动到块的高亮请求。
+    @Published private(set) var pendingChecklistReveal: ChecklistRevealRequest?
     @Published private(set) var recentlyCreatedTaskIDs: Set<UUID> = []
     private var creationHighlight: _Concurrency.Task<Void, Never>?
 
@@ -519,37 +526,6 @@ final class TaskWorkspaceModel: ObservableObject {
         if selectedTask?.deletedAt != nil { select(nil) }
     }
 
-    /// 拖顶栏进度条 → 把有序子任务里前 k 条设成完成、其余取消完成。
-    ///
-    /// 一次拖动必须只算**一步撤销**：走 `store.transaction` 把整组状态变更压成一个
-    /// 快照，而不是逐条调 `complete`/`restore`（那样撤销要按 N 次）。
-    func adjustSubtaskCompletion(_ orderedIDs: [UUID], completedCount: Int) {
-        guard !orderedIDs.isEmpty else { return }
-        let target = min(max(completedCount, 0), orderedIDs.count)
-        let doneSet = Set(orderedIDs.prefix(target))
-        var changed = false
-        store.transaction {
-            for id in orderedIDs {
-                guard let current = store.task(id), !current.isConverted else { continue }
-                let shouldComplete = doneSet.contains(id)
-                if shouldComplete, current.status != .completed {
-                    // `actions.complete` 负责重复规则的下一次展开等副作用，
-                    // 不能在事务里绕过它手写 status。
-                    _ = actions.complete(id)
-                    changed = true
-                } else if !shouldComplete, current.status == .completed {
-                    _ = actions.restore(id)
-                    changed = true
-                }
-            }
-        }
-        guard changed else { return }
-        revision += 1
-        report(FeedbackEvent(kind: .undoable,
-                             message: "子任务进度 \(target)/\(orderedIDs.count)",
-                             actionTitle: "撤销", action: undoStep()))
-    }
-
     /// 批量合并（滴答对齐,用户实机验证:所选任务全部变成子任务,父任务新建）。
     /// 返回新父任务 ID;少于 2 条可选时返回 nil,面板据此置灰瓦片。
     @discardableResult
@@ -565,11 +541,17 @@ final class TaskWorkspaceModel: ObservableObject {
         return parentID
     }
 
-    /// The application prepares all note snapshots, then commits their task
-    /// relations together with matching undo/redo callbacks in one history step.
+    /// Normal conversion keeps the selected items in the same task collection.
     @discardableResult
     func convertBulkToNotes(environment: AppEnvironment) -> Int {
         let converted = environment.convertTasksToNotes(bulkSelection)
+        if !converted.isEmpty { clearBulkSelection() }
+        return converted.count
+    }
+
+    @discardableResult
+    func convertBulkToTasks() -> Int {
+        let converted = setKinds(bulkSelection, .text)
         if !converted.isEmpty { clearBulkSelection() }
         return converted.count
     }
@@ -943,6 +925,14 @@ final class TaskWorkspaceModel: ObservableObject {
         }
         return subtaskProgressCache[parentID]
     }
+    /// 清单进度优先于子任务进度；只读延迟文档摘要，不水合正文。
+    func checklistProgress(for task: Task) -> String? {
+        guard task.kind == .checklist,
+              let summary = task.document.checklistSummary,
+              summary.total > 0 else { return nil }
+        return "\(summary.done)/\(summary.total)"
+    }
+
     var canUndo: Bool { _ = revision; return store.canUndo }
     func undo() { actions.undo(); revision += 1; if selectedTask == nil { select(nil) } }
     var canRedo: Bool { _ = revision; return store.canRedo }
@@ -1355,10 +1345,23 @@ final class TaskWorkspaceModel: ObservableObject {
         return pendingTitleEditorID
     }
 
+    func requestChecklistReveal(taskID: UUID, blockID: UUID) {
+        pendingChecklistReveal = ChecklistRevealRequest(taskID: taskID, blockID: blockID)
+    }
+
+    func consumeChecklistReveal(for taskID: UUID) -> UUID? {
+        guard pendingChecklistReveal?.taskID == taskID else { return nil }
+        defer { pendingChecklistReveal = nil }
+        return pendingChecklistReveal?.blockID
+    }
+
     @discardableResult
     func complete(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.complete($0) }
         didMutate(result, scope: scope)
+        if case .failure(let error) = result {
+            reportChecklistStatusFailure(error)
+        }
         if result.taskID != nil {
             report(FeedbackEvent(kind: .completion, message: "已完成\(quotedTitle(id))",
                                  actionTitle: "撤销", action: undoStep(), sound: .completion,
@@ -1372,6 +1375,9 @@ final class TaskWorkspaceModel: ObservableObject {
     func restore(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.restore($0) }
         didMutate(result, scope: scope)
+        if case .failure(let error) = result {
+            reportChecklistStatusFailure(error)
+        }
         if result.taskID != nil {
             report(FeedbackEvent(kind: .completion, message: "已恢复\(quotedTitle(id))",
                                  actionTitle: "撤销", action: undoStep()))
@@ -1489,12 +1495,48 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// 检查项行内铃铛读的元数据。行号与文档块顺序一致。
+    func checklistItemMeta(_ id: UUID, line: Int) -> ChecklistItemMeta? {
+        guard let task = task(for: id),
+              let document = try? task.document.materialized(),
+              document.blocks.indices.contains(line),
+              case .checklist = document.blocks[line].kind else { return nil }
+        return document.blocks[line].checklist
+    }
+
+    @discardableResult
+    func setChecklistItemReminder(_ id: UUID, line: Int, at date: Date?) -> TaskActionResult {
+        guard let task = task(for: id),
+              var document = try? task.document.materialized(),
+              document.blocks.indices.contains(line),
+              case .checklist = document.blocks[line].kind else { return .failure(.missingTask) }
+        var meta = document.blocks[line].checklist ?? ChecklistItemMeta()
+        guard meta.reminderAt != date else { return .success(id) }
+        meta.reminderAt = date
+        if date != nil { meta.allDay = false }
+        document.blocks[line].checklist = meta
+        let result = withMaterializedTask(id) { actions.setDocument($0, document) }
+        didMutate(result)
+        return result
+    }
+
     /// 任务形态切换（TI2-05b），内容映射见 `TaskActions.document(_:convertingTo:)`。
     @discardableResult
     func setKind(_ id: UUID, _ kind: TaskKind) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.setKind($0, kind) }
         didMutate(result)
         return result
+    }
+
+    @discardableResult
+    func setKinds(_ ids: Set<UUID>, _ kind: TaskKind) -> [UUID] {
+        let changed = actions.setKinds(ids, kind)
+        guard !changed.isEmpty else { return [] }
+        revision += 1
+        report(FeedbackEvent(kind: .undoable,
+                             message: "已将 \(changed.count) 项转换为\(kind == .note ? "笔记" : "任务")",
+                             actionTitle: "撤销", action: undoStep()))
+        return changed
     }
 
     /// 合并子任务到正文（底栏 mergeButton）：子任务标题并入正文后软删子任务。
@@ -1759,6 +1801,18 @@ final class TaskWorkspaceModel: ObservableObject {
            !TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar)
             .contains(where: { $0.id == selectedTaskID }) {
             select(nil)
+        }
+    }
+
+    /// 完成/恢复被清单项守卫拦下时，用户需要知道原因而不是点不动。
+    private func reportChecklistStatusFailure(_ error: TaskActionError) {
+        switch error {
+        case .checklistItemsIncomplete:
+            report(FeedbackEvent(kind: .error, message: "还有未完成的检查事项，勾选完才能完成"))
+        case .checklistItemsCompleted:
+            report(FeedbackEvent(kind: .error, message: "检查事项仍全部勾选，先取消一项再恢复"))
+        default:
+            break
         }
     }
 

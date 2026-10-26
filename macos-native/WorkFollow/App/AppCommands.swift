@@ -10,6 +10,8 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("新建任务") { environment.newTask() }
                 .keyboardShortcut("n", modifiers: .command)
+            Button("新建悬浮笔记") { environment.newFloatingNote() }
+                .keyboardShortcut("n", modifiers: [.command, .option])
         }
         CommandGroup(replacing: .undoRedo) {
             Button("撤销") { routeHistory(redo: false) }

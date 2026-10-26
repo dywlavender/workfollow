@@ -127,7 +127,13 @@ extension NativeTextView {
 
         isApplyingTypedMarkdownInput = true
         defer { isApplyingTypedMarkdownInput = false }
-        convertTypedMarkdownPrefix(paragraphStart: paragraph.location, markerRange: headRange, to: kind)
+        let attributes = storage.attributes(at: paragraph.location, effectiveRange: nil)
+        let whitespace = head.prefix { $0 == " " || $0 == "\t" }
+        let spaces = whitespace.reduce(0) { $0 + ($1 == "\t" ? 2 : 1) }
+        let indent = current.isList ? attributes[DocumentTextCodec.indentKey] as? Int ?? 0 : spaces / 2
+        let ordinal = kind == .ordered ? Int(head.drop(while: { $0.isWhitespace }).prefix(while: { $0.isNumber })) : nil
+        convertTypedMarkdownPrefix(paragraphStart: paragraph.location, markerRange: headRange, to: kind,
+                                   indentLevel: kind.isList ? indent : nil, listStart: ordinal)
         return true
     }
 
@@ -198,7 +204,8 @@ extension NativeTextView {
     /// 与斜杠面板同一条执行路径：先删触发串，再按"设值"语义应用段落类型；
     /// 两步进同一撤销分组，一次撤销回到标记敲下之前。
     private func convertTypedMarkdownPrefix(paragraphStart: Int, markerRange: NSRange,
-                                            to kind: DocumentBlockKind) {
+                                            to kind: DocumentBlockKind, indentLevel: Int? = nil,
+                                            listStart: Int? = nil) {
         // 只借 `block` 走 applyFormat 的设值分支；H4–H6 没有对应的工具条命令，
         // 所以这里构造一个描述符而不是去目录里找。
         let command = DocumentFormatCommand(id: "format.markdown", title: "Markdown",
@@ -207,6 +214,7 @@ extension NativeTextView {
         undoManager?.beginUndoGrouping()
         insertText("", replacementRange: markerRange)
         applyFormat(command, lineStart: paragraphStart)
+        if let indentLevel { setCurrentListMetadata(indentLevel: indentLevel, listStart: listStart) }
         undoManager?.endUndoGrouping()
         breakUndoCoalescing()
     }

@@ -10,6 +10,9 @@ enum TaskKind: String, Codable, CaseIterable, Equatable {
     case note
     case checklist
 
+    /// 类型菜单顺序单独声明，不和代码里的 case 顺序耦合。
+    static let menuOrder: [TaskKind] = [.text, .note, .checklist]
+
     var title: String {
         switch self {
         case .text: "任务"

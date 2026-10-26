@@ -50,6 +50,17 @@ enum QuillDeltaCodec {
 
     private static func lineAttributes(of block: DocumentBlock) -> [String: JSONValue] {
         var attributes: [String: JSONValue] = ["wf-block-id": .string(block.id.uuidString)]
+        if block.indentLevel > 0 { attributes["indent"] = .number(Double(block.indentLevel)) }
+        if let start = block.listStart { attributes["wf-list-start"] = .number(Double(start)) }
+        if let checklist = block.checklist {
+            if let completedAt = checklist.completedAt {
+                attributes["wf-checklist-completed-at"] = .number(Self.milliseconds(completedAt))
+            }
+            if let reminderAt = checklist.reminderAt {
+                attributes["wf-checklist-reminder-at"] = .number(Self.milliseconds(reminderAt))
+            }
+            if checklist.allDay { attributes["wf-checklist-all-day"] = .bool(true) }
+        }
         switch block.kind {
         case .paragraph, .divider: break
         case .heading(let level): attributes["header"] = .number(Double(level))
@@ -125,7 +136,10 @@ enum QuillDeltaCodec {
             if currentRuns.isEmpty { currentRuns = [DocumentRun(text: "")] }
             blocks.append(DocumentBlock(id: blockID(from: attributes),
                                         kind: blockKind(from: attributes),
-                                        runs: currentRuns))
+                                        runs: currentRuns,
+                                        indentLevel: attributes["indent"]?.intValue ?? 0,
+                                        listStart: attributes["wf-list-start"]?.intValue,
+                                        checklist: checklistMeta(from: attributes)))
             currentRuns = []
         }
 
@@ -156,8 +170,15 @@ enum QuillDeltaCodec {
                     default:
                         currentRuns.append(DocumentRun(text: "[\(type)]"))
                     }
-                } else if embed["image"] != nil {
-                    currentRuns.append(DocumentRun(text: "[图片]"))
+                } else if let source = embed["image"]?.stringValue,
+                          source.hasPrefix("data:image/") {
+                    // Quill's standard image embed predates our custom block
+                    // embed. Preserve its inline bytes when opening old notes.
+                    let attachment = NativeAttachment(id: UUID(), name: "图片",
+                                                      storedName: source)
+                    currentRuns.append(DocumentRun(text: "\u{FFFC}", attachment: attachment))
+                } else if let source = embed["image"]?.stringValue {
+                    currentRuns.append(DocumentRun(text: "图片", marks: [.link(source)]))
                 } else {
                     currentRuns.append(DocumentRun(text: "[块]"))
                 }
@@ -225,5 +246,19 @@ enum QuillDeltaCodec {
 
     private static func blockID(from attributes: [String: JSONValue]) -> UUID {
         attributes["wf-block-id"]?.stringValue.flatMap(UUID.init(uuidString:)) ?? UUID()
+    }
+
+    private static func milliseconds(_ date: Date) -> Double {
+        (date.timeIntervalSince1970 * 1000).rounded()
+    }
+
+    private static func checklistMeta(from attributes: [String: JSONValue]) -> ChecklistItemMeta? {
+        let completedAt = attributes["wf-checklist-completed-at"]?.doubleValue
+            .map { Date(timeIntervalSince1970: $0 / 1000) }
+        let reminderAt = attributes["wf-checklist-reminder-at"]?.doubleValue
+            .map { Date(timeIntervalSince1970: $0 / 1000) }
+        let allDay = attributes["wf-checklist-all-day"]?.boolValue == true
+        guard completedAt != nil || reminderAt != nil else { return nil }
+        return ChecklistItemMeta(completedAt: completedAt, reminderAt: reminderAt, allDay: allDay)
     }
 }

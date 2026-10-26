@@ -121,7 +121,13 @@ final class AppEnvironment: ObservableObject {
         }
         reminders.onOpen = { [weak self] delivery in
             switch delivery.kind {
-            case .task: self?.openCalendarTask(.init(taskID: delivery.sourceID, occurrence: delivery.occurrence))
+            case .task:
+                self?.openCalendarTask(.init(taskID: delivery.sourceID, occurrence: delivery.occurrence))
+            case .checklistItem:
+                _ = self?.openCalendarTask(.init(taskID: delivery.sourceID, occurrence: delivery.occurrence))
+                if let blockID = delivery.checklistItemID {
+                    self?.taskWorkspace.requestChecklistReveal(taskID: delivery.sourceID, blockID: blockID)
+                }
             case .countdown: self?.navigation.destination = .countdown
             case .test: break
             }
@@ -286,7 +292,7 @@ final class AppEnvironment: ObservableObject {
             let channel = isolated ? TaskWidgetChannel(directory: directory.appendingPathComponent("widgets"))
                 : try? TaskWidgetChannel.shared()
             if let channel {
-                taskWidget = TaskWidgetBridge(channel: channel, workspace: taskWorkspace,
+                taskWidget = TaskWidgetBridge(channel: channel, workspace: taskWorkspace, countdowns: countdownStore,
                     canProcess: { [weak self] in
                         guard let self else { return false }
                         return !self.loadFailed && !self.storageNeedsReload && !self.storageReplacementPending
@@ -483,6 +489,12 @@ final class AppEnvironment: ObservableObject {
         quickAddRequest += 1
     }
 
+    /// 新建一篇笔记并直接在置顶浮窗里编辑；主页面列表选中项不变。
+    @discardableResult
+    func newFloatingNote(folder: String? = nil) -> UUID? {
+        FloatingNoteWindowController.shared.openNewFloatingNote(folder: folder)
+    }
+
     func navigate(to destination: NativeDestination) {
         if navigation.destination == destination {
             if destination == .allTasks {
@@ -503,6 +515,20 @@ final class AppEnvironment: ObservableObject {
 
     @discardableResult
     func convertTaskToNote(_ id: UUID) -> UUID? {
+        guard let task = taskWorkspace.task(for: id), task.deletedAt == nil,
+              task.skippedAt == nil, !task.isConverted else { return nil }
+        return taskWorkspace.setKind(id, .note).taskID
+    }
+
+    @discardableResult
+    func convertTasksToNotes(_ ids: Set<UUID>) -> [UUID] {
+        taskWorkspace.setKinds(ids, .note)
+    }
+
+    /// Explicit archival into the independent note library. Normal task
+    /// conversion uses the in-place kind command above.
+    @discardableResult
+    func moveTaskToNoteLibrary(_ id: UUID) -> UUID? {
         guard let task = taskWorkspace.task(for: id), !task.isConverted else { return nil }
         let children = taskWorkspace.allTasks
             .filter { $0.parentID == id && $0.deletedAt == nil && $0.skippedAt == nil }
@@ -527,7 +553,7 @@ final class AppEnvironment: ObservableObject {
     /// Prepare notes in task order, then save the entire conversion with one
     /// paired undo/redo operation. A selected child travels with its parent.
     @discardableResult
-    func convertTasksToNotes(_ ids: Set<UUID>) -> [UUID] {
+    func moveTasksToNoteLibrary(_ ids: Set<UUID>) -> [UUID] {
         let selected = taskWorkspace.allTasks.filter {
             ids.contains($0.id) && $0.deletedAt == nil && $0.skippedAt == nil && !$0.isConverted
         }

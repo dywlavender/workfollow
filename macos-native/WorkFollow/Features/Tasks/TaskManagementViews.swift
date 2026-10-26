@@ -42,6 +42,8 @@ struct TaskCollectionsView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
+    var collapsed: Bool = false
+    var onToggleSection: () -> Void = {}
     /// 折叠的文件夹（视图内状态；本轮不持久化——登记在案）。
     @State private var collapsedFolders: Set<String> = []
     @State private var archivedExpanded = true
@@ -50,31 +52,35 @@ struct TaskCollectionsView: View {
 
     var body: some View {
         // 行间不再额外放宽：滴答导航行步长就是行高 38（连续行 y=45/83/121）。
-        // 分组标题自带上下内边距，去掉 spacing 不会贴行。
+        // 分组间隔由侧栏统一提供的 32pt 间隔行负责。
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("清单", trailing: newListBox)
-            ForEach(workspace.listTree) { node in
-                switch node {
-                case .list(let name):
-                    // 顶层空档：落这里 = 排序 + **移出文件夹**（滴答的归属只有拖拽一条路）。
-                    insertionStrip(before: name, clearsFolder: true)
-                    SidebarListRowView(workspace: workspace, name: name) { openList(name) }
-                case .folder(let folder, let lists):
-                    // 文件夹前的空档落在"文件夹第一个成员"位置 → 仍属文件夹内，别误删归属。
-                    insertionStrip(before: lists.first, clearsFolder: false)
-                    folderRow(folder, count: lists.count)
-                    if !collapsedFolders.contains(folder) {
-                        ForEach(lists, id: \.self) { name in
-                            insertionStrip(before: name, clearsFolder: false)
-                            SidebarListRowView(workspace: workspace, name: name) { openList(name) }
-                                .padding(.leading, Self.folderIndent)
+            SidebarSectionHeader(title: "清单", collapsed: collapsed, toggle: onToggleSection) {
+                newListBox.fixedSize()
+            }
+            if !collapsed {
+                ForEach(workspace.listTree) { node in
+                    switch node {
+                    case .list(let name):
+                        // 顶层空档：落这里 = 排序 + **移出文件夹**（滴答的归属只有拖拽一条路）。
+                        insertionStrip(before: name, clearsFolder: true)
+                        SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+                    case .folder(let folder, let lists):
+                        // 文件夹前的空档落在"文件夹第一个成员"位置 → 仍属文件夹内，别误删归属。
+                        insertionStrip(before: lists.first, clearsFolder: false)
+                        folderRow(folder, count: lists.count)
+                        if !collapsedFolders.contains(folder) {
+                            ForEach(lists, id: \.self) { name in
+                                insertionStrip(before: name, clearsFolder: false)
+                                SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+                                    .padding(.leading, Self.folderIndent)
+                            }
                         }
                     }
                 }
-            }
-            insertionStrip(before: nil, clearsFolder: true)
-            if !workspace.archivedListNames.isEmpty {
-                archivedLists
+                insertionStrip(before: nil, clearsFolder: true)
+                if !workspace.archivedListNames.isEmpty {
+                    archivedLists
+                }
             }
         }.buttonStyle(.plain).font(WFType.navigation)
     }
@@ -173,23 +179,6 @@ struct TaskCollectionsView: View {
                 _ = workspace.dissolveListFolder(folder)
             }
         }
-    }
-
-    /// 滴答式分组标题：小号灰字，"清单"标题右侧带新建按钮。
-    private func sectionHeader(_ title: String) -> some View {
-        sectionHeader(title, trailing: EmptyView())
-    }
-
-    private func sectionHeader<Trailing: View>(_ title: String,
-                                               trailing: Trailing) -> some View {
-        HStack(spacing: WFSpace.xs) {
-            Text(title).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-            Spacer(minLength: 0)
-            trailing
-        }
-        .padding(.horizontal, WFSpace.sm)
-        .padding(.top, WFSpace.lg)
-        .padding(.bottom, WFSpace.xs)
     }
 
     /// 滴答桌面端是「光标覆盖"清单"区 → 点 +」：一个入口，两种新建（清单 / 文件夹）。

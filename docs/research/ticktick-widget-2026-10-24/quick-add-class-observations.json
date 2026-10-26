@@ -1,0 +1,77 @@
+{
+  "kind": "Apple otool Objective-C metadata observation; not REA Evidence",
+  "classes": [
+    {
+      "class": "_TtC8TickTick17TTQuickAddPopover",
+      "superclass": "superclass 0x0 _OBJC_CLASS_$_NSObject",
+      "metadata_context": [
+        "0000000101251f58 0x1012f3e20",
+        "    isa        0x1013692e8",
+        "    superclass 0x0 _OBJC_CLASS_$_NSObject",
+        "    cache      0x0 __objc_empty_cache",
+        "    vtable     0x0",
+        "    data       0x1012f3dc2 Swift class",
+        "        flags          0x184 RO_HAS_CXX_STRUCTORS",
+        "        instanceStart  8",
+        "        instanceSize   56",
+        "        reserved       0x0",
+        "        ivarLayout     0x0",
+        "        name           0x1010873d0 _TtC8TickTick17TTQuickAddPopover"
+      ]
+    },
+    {
+      "class": "_TtC8TickTick17TTQuickAddPopover",
+      "superclass": "superclass 0x0 _OBJC_METACLASS_$_NSObject",
+      "metadata_context": [
+        "Meta Class",
+        "    isa        0x0 _OBJC_METACLASS_$_NSObject",
+        "    superclass 0x0 _OBJC_METACLASS_$_NSObject",
+        "    cache      0x0 __objc_empty_cache",
+        "    vtable     0x0",
+        "    data       0x101276360",
+        "        flags          0x81 RO_META",
+        "        instanceStart  40",
+        "        instanceSize   40",
+        "        reserved       0x0",
+        "        ivarLayout     0x0",
+        "        name           0x1010873d0 _TtC8TickTick17TTQuickAddPopover"
+      ]
+    },
+    {
+      "class": "_TtC8TickTick18TTAddTaskBarWindow",
+      "superclass": "superclass 0x0 _OBJC_CLASS_$_NSPanel",
+      "metadata_context": [
+        "0000000101252cc8 0x10132d088",
+        "    isa        0x10137bdb0",
+        "    superclass 0x0 _OBJC_CLASS_$_NSPanel",
+        "    cache      0x0 __objc_empty_cache",
+        "    vtable     0x0",
+        "    data       0x10132d02a Swift class",
+        "        flags          0x184 RO_HAS_CXX_STRUCTORS",
+        "        instanceStart  8",
+        "        instanceSize   16",
+        "        reserved       0x0",
+        "        ivarLayout     0x0",
+        "        name           0x10108c840 _TtC8TickTick18TTAddTaskBarWindow"
+      ]
+    },
+    {
+      "class": "_TtC8TickTick18TTAddTaskBarWindow",
+      "superclass": "superclass 0x0 _OBJC_METACLASS_$_NSPanel",
+      "metadata_context": [
+        "Meta Class",
+        "    isa        0x0 _OBJC_METACLASS_$_NSObject",
+        "    superclass 0x0 _OBJC_METACLASS_$_NSPanel",
+        "    cache      0x0 __objc_empty_cache",
+        "    vtable     0x0",
+        "    data       0x10129f628",
+        "        flags          0x81 RO_META",
+        "        instanceStart  40",
+        "        instanceSize   40",
+        "        reserved       0x0",
+        "        ivarLayout     0x0",
+        "        name           0x10108c840 _TtC8TickTick18TTAddTaskBarWindow"
+      ]
+    }
+  ]
+}

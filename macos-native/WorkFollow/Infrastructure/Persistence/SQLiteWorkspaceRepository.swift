@@ -29,7 +29,7 @@ final class SQLiteWorkspaceRepository {
         let db = try SQLiteDatabase(url: url)
         let version = try db.rows("PRAGMA user_version").first?.first.flatMap { $0 }
             .flatMap { String(data: $0, encoding: .utf8) }.flatMap(Int.init) ?? 0
-        guard version <= 2 else { throw incompatible() }
+        guard version <= 3 else { throw incompatible() }
         if version == 0 {
             try db.transaction {
                 try db.execute("CREATE TABLE IF NOT EXISTS workspace_state (key TEXT PRIMARY KEY, value BLOB NOT NULL)")
@@ -50,18 +50,30 @@ final class SQLiteWorkspaceRepository {
                 try db.execute("ALTER TABLE notes ADD COLUMN document_summary BLOB")
                 try db.execute("ALTER TABLE task_documents ADD COLUMN plain_text TEXT")
                 try db.execute("ALTER TABLE note_documents ADD COLUMN plain_text TEXT")
-                for (table, documents) in [("tasks", "task_documents"), ("notes", "note_documents")] {
-                    for row in try db.rows("SELECT id,document,\(documents == "note_documents" ? "original_content" : "NULL") FROM \(documents)") {
-                        let document = try decoder.decode(NativeDocument.self, from: row[1]!)
-                        let id = String(data: row[0]!, encoding: .utf8)!
-                        try db.execute("UPDATE \(table) SET document_summary=? WHERE id=?", [.blob(try encoder.encode(DocumentSummary(document, hasOriginalContent: table == "notes" ? row[2] != nil : nil))), .text(id)])
-                        try db.execute("UPDATE \(documents) SET plain_text=? WHERE id=?", [.text(document.plainText), .text(id)])
-                    }
-                }
+                try rebuildDocumentSummaries(db)
                 try db.execute("PRAGMA user_version=2")
             }
         }
+        if version < 3 {
+            // 清单摘要（total/done/reminders）是 v3 新增字段；旧摘要解码为 nil，
+            // 所以升级时按正文重算一次，之后随每次文档保存增量更新。
+            try db.transaction {
+                try rebuildDocumentSummaries(db)
+                try db.execute("PRAGMA user_version=3")
+            }
+        }
         return db
+    }
+
+    private func rebuildDocumentSummaries(_ db: SQLiteDatabase) throws {
+        for (table, documents) in [("tasks", "task_documents"), ("notes", "note_documents")] {
+            for row in try db.rows("SELECT id,document,\(documents == "note_documents" ? "original_content" : "NULL") FROM \(documents)") {
+                let document = try decoder.decode(NativeDocument.self, from: row[1]!)
+                let id = String(data: row[0]!, encoding: .utf8)!
+                try db.execute("UPDATE \(table) SET document_summary=? WHERE id=?", [.blob(try encoder.encode(DocumentSummary(document, hasOriginalContent: table == "notes" ? row[2] != nil : nil))), .text(id)])
+                try db.execute("UPDATE \(documents) SET plain_text=? WHERE id=?", [.text(document.plainText), .text(id)])
+            }
+        }
     }
 
     private func incompatible() -> NSError {

@@ -6,8 +6,6 @@ enum InspectorRenderAnchor: Hashable {
     case scheduleChip
     /// 顶栏次要日期（任务已有截止日期时才渲染）。
     case deadlineLabel
-    /// 顶栏下沿的子任务进度条（有子任务才渲染）。
-    case progressBar
     case reminder, repeatControl, priority, breadcrumb, title, emptyContent
     case document, childSection, addChild
     /// 子任务折叠提示「已折叠 N 项」（有折叠才渲染）。
@@ -19,13 +17,14 @@ enum InspectorRenderAnchor: Hashable {
     case commentBadge
     /// 内联评论区（TI2-09）。
     case commentSection
-    /// 顶栏「在独立窗口打开」（TI2-17）。
+    /// 任务／笔记顶栏的公共「打开便签」入口。
     case detach
     /// 顶栏「笔记信息」（TI2-15）。
     case noteInfo
     /// 顶栏「任务类型」（TI2-05b）。
     case kind
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
+    case noteConversionMenuRow
     case focusPomodoro, focusStopwatch, focusEstimate, focusEstimateClear
 }
 struct InspectorFramesKey: PreferenceKey {

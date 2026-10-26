@@ -126,29 +126,4 @@ final class EditorPolishBatchTests: XCTestCase {
         XCTAssertEqual(SubtaskFoldSummary.hiddenCount(under: b, children: children, collapsed: [d]), 0)
     }
 
-    // MARK: - 更多菜单高度
-
-    func testMoreMenuHeightFollowsRowCount() {
-        let tall = TaskInspectorMetrics.moreMenuHeight(rowCount: 16, dividerCount: 1, screenHeight: 900)
-        let short = TaskInspectorMetrics.moreMenuHeight(rowCount: 6, dividerCount: 1, screenHeight: 900)
-        XCTAssertLessThan(short, tall, "行少的菜单不能再留一大片空白")
-        XCTAssertEqual(tall, 16 * 32 + 15 * 2 + 9 + 16)
-        // 屏幕不够高时夹到可用高度，不会把菜单推出屏幕。
-        XCTAssertLessThanOrEqual(TaskInspectorMetrics.moreMenuHeight(rowCount: 40, dividerCount: 3,
-                                                                     screenHeight: 400), 400)
-    }
-
-    func testMoreMenuHasNoHardCodedHeight() throws {
-        let source = try String(contentsOfFile: Self.inspectorSourcePath, encoding: .utf8)
-        XCTAssertFalse(source.contains("height: 490"), "「更多」菜单高度必须按行数算")
-        XCTAssertTrue(source.contains("height: moreMenuHeight"))
-    }
-
-    private static var inspectorSourcePath: String {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("WorkFollow/Features/Tasks/TaskInspector/TaskInspectorShell.swift")
-            .path
-    }
 }

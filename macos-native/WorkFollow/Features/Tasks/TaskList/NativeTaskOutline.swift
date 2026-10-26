@@ -91,6 +91,7 @@ struct NativeTaskOutline: NSViewRepresentable {
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
+        CompactScrollStyle.apply(to: scroll)
         scroll.wantsLayer = true
 
         let outline = OutlineView()
@@ -100,7 +101,9 @@ struct NativeTaskOutline: NSViewRepresentable {
         outline.backgroundColor = .clear
         outline.intercellSpacing = .zero
         outline.rowHeight = WFMetrics.rowHeight
-        outline.usesAutomaticRowHeights = true
+        // 行高由 `Row.height`（TaskListMetrics 契约）唯一决定；自动行高会按
+        // SwiftUI 固有尺寸测出 48 这类非契约值，还会在标签行更新时测到旧高度。
+        outline.usesAutomaticRowHeights = false
         outline.selectionHighlightStyle = .none
         outline.allowsEmptySelection = true
         outline.allowsTypeSelect = false

@@ -425,6 +425,20 @@
     new ResizeObserver(reportHeight).observe(root);
   }
 
+  // Growing hosts forward the original native wheel event to their parent.
+  // Cache popup hit regions only when the popup changes, never per wheel tick.
+  function reportScrollRegions() {
+    var menu = document.getElementById("wf-slash");
+    var regions = [];
+    if (menu && window.WorkFollowSlashMenu.isOpen()) {
+      var rect = menu.getBoundingClientRect();
+      regions.push({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+    }
+    post({ event: "scrollRegionsChanged", regions: regions });
+  }
+  document.addEventListener("wf-scroll-regions-changed", reportScrollRegions);
+  window.addEventListener("resize", reportScrollRegions);
+
   // SwiftUI 宿主下点击夺焦保底：WKWebView 的 mouseDown 不总是触发
   // firstResponder 变更（实测缺陷），这里显式 focus 编辑器。
   editorHost.addEventListener("mousedown", function () {

@@ -280,6 +280,19 @@ final class TaskViewPreferencesTests: XCTestCase {
                        "有内容时显示 = 没内容就不出现")
     }
 
+    func testVisibilityMenuOrderMatchesTickTick() {
+        XCTAssertEqual(SmartListVisibility.menuOrder, [.automatic, .visible, .hidden],
+                       "滴答顺序：有内容时显示 → 显示 → 隐藏")
+    }
+
+    /// 菜单顺序必须是独立契约：枚举声明顺序变了不能悄悄改 UI 顺序。
+    func testTaskMenuOrdersAreExplicit() {
+        XCTAssertEqual(TaskListSortMode.menuOrder,
+                       [.manual, .due, .priority, .title, .createdAt, .modified])
+        XCTAssertEqual(TaskKind.menuOrder, [.text, .note, .checklist])
+        XCTAssertEqual(TaskRowDetailField.menuOrder, [.date, .list, .priority, .tags, .indicators])
+    }
+
     func testVisibilityDefaultsToVisibleAndInboxIsNotConfigurable() {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("TaskViewPreferencesTests-\(UUID().uuidString)", isDirectory: true)
@@ -303,12 +316,57 @@ final class TaskViewPreferencesTests: XCTestCase {
         let decoded = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self,
                                                from: Data(old.utf8))
         XCTAssertTrue(decoded.smartListVisibility.isEmpty, "旧档案缺键 → 空字典（= 全部显示）")
+        XCTAssertTrue(decoded.collapsedSidebarSections.isEmpty, "旧档案缺键 → 侧栏分组全部展开")
+        XCTAssertTrue(decoded.sidebarSectionVisibility.isEmpty, "旧档案缺键 → 侧栏分组全部显示")
         XCTAssertEqual(decoded.preferences["scope:allTasks"]?.sortMode, .due, "其余字段照旧")
 
-        let archive = TaskViewPreferenceStore.Archive(smartListVisibility: ["today": .automatic])
+        let archive = TaskViewPreferenceStore.Archive(smartListVisibility: ["today": .automatic],
+                                                      sidebarSectionVisibility: ["tags": .hidden])
         let data = try JSONEncoder().encode(archive)
         let roundTrip = try JSONDecoder().decode(TaskViewPreferenceStore.Archive.self, from: data)
         XCTAssertEqual(roundTrip.smartListVisibility["today"], .automatic)
+        XCTAssertEqual(roundTrip.sidebarSectionVisibility["tags"], .hidden)
+    }
+
+    // MARK: - 侧栏分组折叠
+
+    func testSidebarSectionsDefaultExpandedAndPersistCollapse() async throws {
+        let directory = temporaryDirectory()
+        let store = TaskViewPreferenceStore(directory: directory)
+        for section in SidebarSectionID.allCases {
+            XCTAssertFalse(store.isSidebarSectionCollapsed(section), "默认展开：\(section.rawValue)")
+        }
+
+        store.setSidebarSectionCollapsed(.filters, true)
+        store.setSidebarSectionCollapsed(.tags, true)
+        XCTAssertTrue(store.isSidebarSectionCollapsed(.filters))
+        XCTAssertTrue(store.isSidebarSectionCollapsed(.tags))
+        XCTAssertFalse(store.isSidebarSectionCollapsed(.collections))
+
+        let reloaded = try await awaitFlush(store, directory: directory)
+        XCTAssertTrue(reloaded.isSidebarSectionCollapsed(.filters), "折叠状态随档案持久化")
+        XCTAssertTrue(reloaded.isSidebarSectionCollapsed(.tags))
+
+        reloaded.setSidebarSectionCollapsed(.filters, false)
+        XCTAssertFalse(reloaded.isSidebarSectionCollapsed(.filters))
+        XCTAssertFalse(reloaded.collapsedSidebarSections.contains("filters"), "展开后删键，不留垃圾")
+    }
+
+    func testSidebarSectionVisibilityDefaultsToVisibleAndPersists() async throws {
+        let directory = temporaryDirectory()
+        let store = TaskViewPreferenceStore(directory: directory)
+        XCTAssertEqual(store.visibility(for: .tags), .visible, "未设过 = 显示")
+
+        store.setVisibility(.hidden, for: .tags)
+        XCTAssertEqual(store.visibility(for: .tags), .hidden)
+
+        let reloaded = try await awaitFlush(store, directory: directory)
+        XCTAssertEqual(reloaded.visibility(for: .tags), .hidden, "分组显示状态随档案持久化")
+
+        reloaded.setVisibility(.automatic, for: .tags)
+        XCTAssertEqual(reloaded.visibility(for: .tags), .automatic)
+        reloaded.setVisibility(.visible, for: .tags)
+        XCTAssertTrue(reloaded.sidebarSectionVisibility.isEmpty, "回到默认删键，不留垃圾")
     }
 
     // MARK: - 显示设置（隐藏已完成 / 隐藏详细 / 详细行字段开关）

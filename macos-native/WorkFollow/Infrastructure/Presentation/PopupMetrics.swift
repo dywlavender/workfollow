@@ -22,7 +22,11 @@ enum PopupMetrics {
     static let menuWidthTight: CGFloat = 132
     /// 清单选择这类「图标 + 短名称 + 勾」的菜单。实测 4 项宽 136pt。
     static let menuWidthCompact: CGFloat = 160
-    static let menuRowHeight: CGFloat = 32
+    /// 显示状态（有内容时显示 / 显示 / 隐藏）一类短菜单：160 会把长项截成
+    /// 「有内…显示」，176 刚好放下且比 224 明显收窄（滴答实测 ≈160–190）。
+    static let menuWidthNarrow: CGFloat = 176
+    /// 滴答右键菜单实测行高 34（图标 20 + 上下留白），全站菜单行共用。
+    static let menuRowHeight: CGFloat = 34
     static let menuInset: CGFloat = 6
     static let menuMaximumHeight: CGFloat = 384
 
@@ -34,7 +38,9 @@ enum PopupMetrics {
     static let taskMenuWidth: CGFloat = 144
     /// 优先级菜单：标题 + 无/低/中/高 + 旗子，比短菜单宽一档。
     static let priorityMenuWidth: CGFloat = 176
-    static let taskActionsWidth: CGFloat = 208
+    /// 「⋯ 更多操作」菜单：实测内容最右墨迹 152pt，208 空出 56pt 显得太宽；
+    /// 收到 176，保留约 24pt 右侧余量，且仍容得下「开始专注」行尾箭头。
+    static let taskActionsWidth: CGFloat = 176
     static let noteInfoWidth: CGFloat = 220
     /// 标签选择器。实测真实结构（输入行 + 列表行 + 底部两个按钮）自然宽 127pt，
     /// 原 264 空出 137pt。底部按钮是 `maxWidth: .infinity` 的并排布局，

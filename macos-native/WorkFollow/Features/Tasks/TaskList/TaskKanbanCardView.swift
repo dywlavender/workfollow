@@ -43,11 +43,17 @@ private struct TaskKanbanTaskRow: View {
     @State private var hovering = false
     @State private var showDatePopover = false
     @State private var contextDateAnchor: CGRect?
+    @AppStorage(TaskDateDisplayMode.defaultsKey) private var dateDisplayRaw =
+        TaskDateDisplayMode.taskTime.rawValue
 
     private var task: Task { node.task }
+    private var dateDisplay: TaskDateDisplayMode {
+        TaskDateDisplayMode(rawValue: dateDisplayRaw) ?? .taskTime
+    }
 
     private var details: TaskKanbanCardDetails {
         .init(task: task, subtaskProgress: workspace.subtaskProgress(for: task.id),
+              checklistProgress: workspace.checklistProgress(for: task),
               showsListBadge: showsListBadge, hidesDetails: hidesDetails, hiddenFields: hiddenFields)
     }
 
@@ -197,7 +203,8 @@ private struct TaskKanbanTaskRow: View {
                     showDatePopover = true
                 } label: {
                     Text(TaskDateLabel.text(due, hasTime: task.schedule.hasTime,
-                                            now: workspace.clock(), calendar: workspace.calendar))
+                                            now: workspace.clock(), calendar: workspace.calendar,
+                                            display: dateDisplay))
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)

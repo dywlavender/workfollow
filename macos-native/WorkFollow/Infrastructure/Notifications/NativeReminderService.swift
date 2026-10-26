@@ -96,6 +96,15 @@ final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var missed: [ReminderDelivery] = []
     let state: TaskReminderStateStore
     let notifications = NotificationCoordinator()
+
+    /// 检查项提醒面板底部的授权提示。提醒本身始终写入文档，未授权只影响弹窗。
+    var checklistReminderNotice: String? {
+        switch authorization {
+        case .denied: return "系统通知未授权，提醒会保存，但到点不会弹出通知。"
+        case .notDetermined: return "尚未授权通知；授权后提醒才会弹出。"
+        default: return nil
+        }
+    }
     weak var countdownStore: CountdownStore?
     var onOpen: ((ReminderDelivery) -> Void)?
     private let client: TaskNotificationClient
@@ -196,7 +205,7 @@ final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
             timer?.invalidate(); timer = nil
             return
         }
-        let desired = deliveries.filter { $0.fireDate > now }.prefix(256).map {
+        let desired = Self.capped(deliveries.filter { $0.fireDate > now }).map {
             ScheduledTaskNotification(delivery: $0, sound: state.snapshot.preferences.soundEnabled,
                                       bell: state.snapshot.preferences.bell)
         }
@@ -218,6 +227,19 @@ final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
         pendingCount = successful.count
         coverageEnd = successful.map { $0.delivery.fireDate }.max()
         schedulePresentation()
+    }
+
+    /// 256 是单个通知队列的经验上限。容量裁剪按标识前缀分组计算：
+    /// 检查项提醒再多也不能把任务提醒挤出队列，反之亦然。
+    private static func capped(_ deliveries: [ReminderDelivery], limit: Int = 256) -> [ReminderDelivery] {
+        var counts: [String: Int] = [:]
+        return deliveries.filter { delivery in
+            let prefix = delivery.identifierPrefix
+            let count = counts[prefix, default: 0]
+            guard count < limit else { return false }
+            counts[prefix] = count + 1
+            return true
+        }
     }
 
     func handle(_ delivery: ReminderDelivery, snoozeMinutes: Int?) async {

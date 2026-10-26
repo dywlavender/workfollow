@@ -13,10 +13,14 @@ final class TaskRowPointerState: ObservableObject {
 struct TaskRowHoverBackground: NSViewRepresentable {
     let selected: Bool
     let pointer: TaskRowPointerState
+    /// 可视底色相对整行左右各内缩多少；追踪区域仍覆盖整行，
+    /// 这样鼠标移到左侧 14pt 拖拽柄上时高亮/柄不会消失。
+    var horizontalInset: CGFloat = 0
 
     func makeNSView(context: Context) -> TaskRowHoverView { TaskRowHoverView() }
     func updateNSView(_ view: TaskRowHoverView, context: Context) {
         view.onHover = { pointer.update($0) }
+        view.horizontalInset = horizontalInset
         view.setSelected(selected)
     }
 }
@@ -28,16 +32,34 @@ final class TaskRowHoverView: NSView {
     private var selected = false
     private(set) var hovered = false
     var onHover: ((Bool) -> Void)?
+    /// 用 mask 把可视底色内缩，但 view（以及它的追踪区域）仍覆盖整行：
+    /// 鼠标移到左侧 14pt 拖拽柄上时底色和柄都不会消失。
+    private let insetMask = CALayer()
+    var horizontalInset: CGFloat = 0 {
+        didSet { if horizontalInset != oldValue { needsLayout = true } }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         wantsLayer = true
         layer?.cornerRadius = WFMetrics.corner
+        layer?.masksToBounds = true
+        insetMask.backgroundColor = NSColor.white.cgColor
+        insetMask.cornerRadius = WFMetrics.corner
+        layer?.mask = insetMask
         paint()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override var isOpaque: Bool { false }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        insetMask.frame = bounds.insetBy(dx: horizontalInset, dy: 0)
+        CATransaction.commit()
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -90,7 +112,7 @@ struct TaskRowReorderHandle: View {
         Image(systemName: "line.3.horizontal")
             .font(.system(size: 10, weight: .regular))
             .foregroundStyle(WFColors.secondaryText)
-            .frame(width: 16, height: 18)
+            .frame(width: 14, height: 14)
             .contentShape(Rectangle())
             .opacity(pointer.inside || hovering ? 1 : 0)
             .onHover { hovering = $0 }

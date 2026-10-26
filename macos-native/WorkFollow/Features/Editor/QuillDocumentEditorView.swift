@@ -190,6 +190,8 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
     private var pendingDeltaJSON: String?
     private var probeObserver: NSObjectProtocol?
     private var focusObserver: Any?
+    private var scrollObserver: Any?
+    private var internalScrollRegions: [NSRect] = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -241,11 +243,17 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
         focusObserver = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) {
             [weak self] event in
             guard let self else { return event }
-            guard let window = event.window, window == self.webView.window else { return event }
-            if self.webView.hitTest(event.locationInWindow) != nil {
+            guard let window = event.window else { return event }
+            if EditorHostScrollRouting.contains(event, in: self) {
                 window.makeFirstResponder(self.webView)
             }
             return event
+        }
+        scrollObserver = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self else { return event }
+            let forwarded = EditorHostScrollRouting.forward(event, over: self,
+                enabled: self.usesContentHeight, internalScrollRegions: self.internalScrollRegions)
+            return forwarded ? nil : event
         }
         // P3 诊断探针：Debug 菜单触发，绕过键盘验证 delta 上报链。
         self.probeObserver = NotificationCenter.default.addObserver(
@@ -271,6 +279,9 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
     func teardown() {
         if let probeObserver { NotificationCenter.default.removeObserver(probeObserver) }
         if let focusObserver { NSEvent.removeMonitor(focusObserver) }
+        if let scrollObserver { NSEvent.removeMonitor(scrollObserver) }
+        focusObserver = nil
+        scrollObserver = nil
         loadTask?.cancel()
         webView.stopLoading()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "quill")
@@ -388,6 +399,11 @@ final class QuillWebView: NSView, WKScriptMessageHandler, WKNavigationDelegate {
                     reportedContentHeight = clamped
                 }
                 delegate?.quillView(self, heightChanged: reportedHeight)
+            case "scrollRegionsChanged":
+                internalScrollRegions = (body["regions"] as? [[String: Double]] ?? []).map {
+                    NSRect(x: $0["x"] ?? 0, y: $0["y"] ?? 0,
+                           width: $0["width"] ?? 0, height: $0["height"] ?? 0)
+                }
             default:
                 break
             }

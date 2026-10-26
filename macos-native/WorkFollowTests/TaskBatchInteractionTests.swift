@@ -84,7 +84,7 @@ final class TaskBatchInteractionTests: XCTestCase {
         XCTAssertFalse(workspace.canUndo)
     }
 
-    func testBatchPanelConversionUndoRedoRestoresAllNotesAndOriginalTaskIDs() throws {
+    func testBatchPanelConversionPreservesTaskIdentityAndUndoesTogether() throws {
         var first = task("交付复盘")
         first.document = NativeDocument(plainText: "保留复盘正文")
         let child = task("记录验收结果", parentID: first.id)
@@ -92,6 +92,7 @@ final class TaskBatchInteractionTests: XCTestCase {
         second.tags = ["工作"]
         let environment = try environment(tasks: [first, child, second])
         let workspace = environment.taskWorkspace
+        let destination = environment.navigation.destination
         workspace.setBulkSelection(in: [first.id, child.id, second.id])
         let before = workspace.allTasks
         var actions: [String: CGRect] = [:]
@@ -101,28 +102,31 @@ final class TaskBatchInteractionTests: XCTestCase {
                                              in: try XCTUnwrap(window.contentView), window: window)
 
         XCTAssertTrue(workspace.bulkSelection.isEmpty)
-        XCTAssertEqual(environment.navigation.destination, .notes)
-        let firstNoteID = try XCTUnwrap(workspace.task(for: first.id)?.convertedNoteID)
-        let secondNoteID = try XCTUnwrap(workspace.task(for: second.id)?.convertedNoteID)
-        let notes = environment.notesWorkspace.notes
-        XCTAssertEqual(Set(notes.map(\.id)), [firstNoteID, secondNoteID],
-                       "所选子任务随父任务进入清单项，不额外创建一份笔记")
-        XCTAssertEqual(notes.first { $0.id == firstNoteID }?.document.plainText,
-                       "保留复盘正文\n记录验收结果")
-        XCTAssertEqual(notes.first { $0.id == secondNoteID }?.document.plainText
-            .trimmingCharacters(in: .whitespacesAndNewlines), "#工作")
-        XCTAssertNotNil(workspace.task(for: child.id)?.deletedAt)
+        XCTAssertEqual(environment.navigation.destination, destination)
+        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty)
+        for original in before {
+            let changed = try XCTUnwrap(workspace.task(for: original.id))
+            XCTAssertEqual(changed.kind, .note)
+            XCTAssertEqual(changed.parentID, original.parentID)
+            XCTAssertEqual(changed.document, original.document)
+            XCTAssertEqual(changed.tags, original.tags)
+            XCTAssertNil(changed.deletedAt)
+            XCTAssertNil(changed.convertedNoteID)
+        }
         let after = workspace.allTasks
 
         workspace.undo()
         XCTAssertEqual(workspace.allTasks, before)
-        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty, "一次撤销移除整批笔记")
         XCTAssertFalse(workspace.canUndo, "转换没有留下隐藏的逐项历史")
         workspace.redo()
         XCTAssertEqual(workspace.allTasks, after)
-        XCTAssertEqual(Set(environment.notesWorkspace.notes.map(\.id)), [firstNoteID, secondNoteID])
-        for note in notes {
-            XCTAssertEqual(environment.notesWorkspace.notes.first { $0.id == note.id }, note)
-        }
+        workspace.setBulkSelection(in: [first.id, child.id, second.id])
+        InspectorPanelTestSupport.settle(window)
+        try InspectorPanelTestSupport.click(try XCTUnwrap(actions["转换为任务"]),
+                                             in: try XCTUnwrap(window.contentView), window: window)
+        XCTAssertTrue(workspace.bulkSelection.isEmpty)
+        XCTAssertTrue(workspace.allTasks.allSatisfy { $0.kind == .text })
+        workspace.undo()
+        XCTAssertEqual(workspace.allTasks, after)
     }
 }

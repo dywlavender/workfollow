@@ -174,8 +174,67 @@ private struct RailCalendarGlyph: View {
     }
 }
 
-/// 对齐滴答清单的侧栏：智能清单（右侧灰计数）→ 中段清单/过滤器/标签 →
-/// 底部固定"已完成 / 垃圾桶"，行高 32 的紧凑密度。
+/// 侧栏分组头：38pt 行、行首折叠箭头、右侧悬停动作。
+/// 箭头从容器 8pt 内边距处起画，标题落在 19pt（与滴答实测一致）。
+struct SidebarSectionHeader<Trailing: View>: View {
+    let title: String
+    let collapsed: Bool
+    let toggle: () -> Void
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: toggle) {
+                HStack(spacing: 2) {
+                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(WFColors.tertiaryText)
+                        .frame(width: 9)
+                    Text(title)
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.secondaryText)
+                    Spacer(minLength: 0)
+                }
+                .frame(height: NavigationMetrics.rowHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title + (collapsed ? "，已收起" : "，已展开"))
+            trailing
+        }
+        .padding(.trailing, WFSpace.sm)
+        .frame(height: NavigationMetrics.rowHeight)
+    }
+}
+
+/// 分组空态提示卡：滴答的整行灰底卡（文字两侧各 10pt）。
+struct SidebarHintCard: View {
+    let text: String
+    var minHeight: CGFloat = 0
+
+    var body: some View {
+        Text(text)
+            .font(WFType.supporting)
+            .foregroundStyle(WFColors.tertiaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(minHeight: minHeight, alignment: .leading)
+            .background(WFColors.panelFill, in: RoundedRectangle(cornerRadius: 8))
+            .padding(.bottom, 6)
+    }
+}
+
+/// 分组间隔：分隔线上下各 10pt。整栏只在两处使用（清单前、已完成前）。
+private struct SidebarGroupGap: View {
+    var body: some View {
+        Divider().padding(.vertical, 10)
+    }
+}
+
+/// 对齐滴答清单的侧栏：整栏一个滚动列表，智能清单、三个可折叠分组和底部清单
+/// 一起滚；分组头是列表里的普通行，不吸顶，也不画侧栏滚动条。
 struct NavigationColumnView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
@@ -202,26 +261,7 @@ struct NavigationColumnView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if navigation.destination.isTaskList {
-                ForEach(visibleSmartLists) { destination in
-                    if SmartListVisibility.isConfigurable(destination) {
-                        destinationRow(destination)
-                            .businessContextMenu { visibilityMenu(for: destination) }
-                    } else {
-                        destinationRow(destination)
-                    }
-                }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        TaskCollectionsView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
-                        if let filterStore {
-                            TaskFiltersSectionView(workspace: workspace, filterStore: filterStore,
-                                                   navigation: navigation, onNavigate: onNavigate)
-                        }
-                        TaskTagsSectionView(workspace: workspace, navigation: navigation, onNavigate: onNavigate)
-                    }
-                }
-                Divider().padding(.vertical, WFSpace.xs)
-                ForEach(bottomLists) { destinationRow($0) }
+                taskSidebar
             } else if navigation.destination.isNotes {
                 NotesNavigationSection(notes: environment.notesWorkspace, navigation: navigation, onNavigate: onNavigate)
             } else {
@@ -238,6 +278,54 @@ struct NavigationColumnView: View {
         .background(WFColors.content)
     }
 
+    /// 滴答口径的单滚动列表：智能清单 → 32pt 间隔 → 清单/过滤器/标签 →
+    /// 32pt 间隔 → 已完成/已放弃/垃圾桶。分组头随列表一起滚。
+    private var taskSidebar: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(visibleSmartLists) { destination in
+                    if SmartListVisibility.isConfigurable(destination) {
+                        destinationRow(destination)
+                            .businessContextMenu(width: PopupMetrics.menuWidthNarrow) {
+                                visibilityMenu(for: destination)
+                            }
+                    } else {
+                        destinationRow(destination)
+                    }
+                }
+                SidebarGroupGap()
+                TaskCollectionsView(workspace: workspace, navigation: navigation, onNavigate: onNavigate,
+                                    collapsed: isSectionCollapsed(.collections),
+                                    onToggleSection: { toggleSection(.collections) })
+                if let filterStore {
+                    TaskFiltersSectionView(workspace: workspace, filterStore: filterStore,
+                                           navigation: navigation, onNavigate: onNavigate,
+                                           collapsed: isSectionCollapsed(.filters),
+                                           onToggleSection: { toggleSection(.filters) })
+                }
+                TaskTagsSectionView(workspace: workspace, navigation: navigation, onNavigate: onNavigate,
+                                    sectionCollapsed: isSectionCollapsed(.tags),
+                                    onToggleSection: { toggleSection(.tags) },
+                                    sectionVisibility: environment.viewPreferences.visibility(for: .tags),
+                                    onSetSectionVisibility: {
+                                        environment.viewPreferences.setVisibility($0, for: .tags)
+                                    })
+                SidebarGroupGap()
+                ForEach(bottomLists) { destinationRow($0) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func isSectionCollapsed(_ section: SidebarSectionID) -> Bool {
+        environment.viewPreferences.isSidebarSectionCollapsed(section)
+    }
+
+    private func toggleSection(_ section: SidebarSectionID) {
+        environment.viewPreferences.setSidebarSectionCollapsed(section, !isSectionCollapsed(section))
+    }
+
     /// 按"显示状态"过滤后的智能清单：隐藏 → 不出现；有内容时显示 → 未完成数为 0 时不出现。
     private var visibleSmartLists: [NativeDestination] {
         smartLists.filter { destination in
@@ -252,7 +340,7 @@ struct NavigationColumnView: View {
         BusinessMenuChoices(selection: Binding(
             get: { environment.viewPreferences.visibility(for: destination) },
             set: { environment.viewPreferences.setVisibility($0, for: destination) }),
-            options: SmartListVisibility.allCases.map { BusinessChoice($0, $0.title) })
+            options: SmartListVisibility.menuOrder.map { BusinessChoice($0, $0.title) })
     }
 
     private func destinationRow(_ destination: NativeDestination) -> some View {
@@ -331,6 +419,7 @@ private struct NotesNavigationSection: View {
                             }
                     }
                 }
+                .compactScrollbars()
             }
             Divider().padding(.vertical, WFSpace.xs)
             row("垃圾桶", symbol: "trash", folder: nil, trash: true)
@@ -375,29 +464,36 @@ private struct TaskFiltersSectionView: View {
     @ObservedObject var filterStore: FilterStore
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
+    var collapsed: Bool = false
+    var onToggleSection: () -> Void = {}
     @EnvironmentObject private var environment: AppEnvironment
     @State private var editorRequest: FilterEditorRequest?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("过滤器")
-            ForEach(filterStore.filters) { filter in
-                filterRow(filter)
-            }
-            Button {
-                editorRequest = FilterEditorRequest(filter: nil)
-            } label: {
-                HStack(spacing: 0) {
-                    Image(systemName: "plus").font(.system(size: 13)).frame(width: 12)
-                    Text("新建过滤器").lineLimit(1)
+            SidebarSectionHeader(title: "过滤器", collapsed: collapsed, toggle: onToggleSection) {
+                Button {
+                    editorRequest = FilterEditorRequest(filter: nil)
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 12))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
                 }
-                .foregroundStyle(WFColors.secondaryText)
-                .padding(.horizontal, WFSpace.sm)
-                .frame(height: NavigationMetrics.rowHeight)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .fixedSize()
+                .help("新建过滤器")
+                .accessibilityLabel("新建过滤器")
             }
-            .help("新建过滤器")
+            if !collapsed {
+                if filterStore.filters.isEmpty {
+                    SidebarHintCard(text: "根据清单、时间、优先级、标签等过滤出特定的任务", minHeight: 54)
+                } else {
+                    ForEach(filterStore.filters) { filter in
+                        filterRow(filter)
+                    }
+                }
+            }
         }
         .buttonStyle(.plain)
         .font(WFType.navigation)
@@ -405,16 +501,6 @@ private struct TaskFiltersSectionView: View {
             FilterEditorView(store: filterStore, workspace: workspace,
                              initial: request.filter) { editorRequest = nil }
         }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(WFType.supporting)
-            .foregroundStyle(WFColors.secondaryText)
-            .padding(.horizontal, WFSpace.sm)
-            .padding(.top, WFSpace.lg)
-            .padding(.bottom, WFSpace.xs)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func filterRow(_ filter: SavedFilter) -> some View {
@@ -428,15 +514,16 @@ private struct TaskFiltersSectionView: View {
                 onNavigate()
             }
         } label: {
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.system(size: 13))
-                    .frame(width: 12)
+                    .frame(width: 22)
                 Text(filter.name).lineLimit(1)
                 Spacer(minLength: WFSpace.xs)
             }
             .foregroundStyle(WFColors.text)
-            .padding(.horizontal, WFSpace.sm)
+            .padding(.leading, 11)
+            .padding(.trailing, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
             .background(selected ? WFColors.listSelection : .clear,
                         in: RoundedRectangle(cornerRadius: WFMetrics.corner))

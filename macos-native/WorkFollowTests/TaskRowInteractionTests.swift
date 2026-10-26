@@ -103,6 +103,10 @@ final class TaskRowInteractionTests: XCTestCase {
         func click(_ frame: CGRect) throws {
             try InspectorPanelTestSupport.click(frame, in: host, window: window)
         }
+
+        func doubleClick(_ frame: CGRect) throws {
+            try InspectorPanelTestSupport.doubleClick(frame, in: host, window: window)
+        }
     }
 
     private func fixture(completed: Bool = false, modifierRouting: Bool = false,
@@ -136,17 +140,25 @@ final class TaskRowInteractionTests: XCTestCase {
         return Fixture(workspace: workspace, window: window, host: host, probe: probe, id: id)
     }
 
-    func testSingleTitleClickEditsAndReturnCommitsWhileEscapeCancels() throws {
+    func testSingleTitleClickSelectsAndStartsInlineEditing() throws {
         let fixture = try fixture()
         defer { fixture.window.close() }
         try fixture.click(try fixture.frame(.title))
-        let editor = try XCTUnwrap(fixture.window.firstResponder as? NSTextView)
         XCTAssertEqual(fixture.probe.selections, 1)
+        XCTAssertNotNil(fixture.window.firstResponder as? NSTextView,
+                        "单击标题应直接进入行内编辑")
+    }
+
+    func testDoubleClickTitleEditsAndReturnCommitsWhileEscapeCancels() throws {
+        let fixture = try fixture()
+        defer { fixture.window.close() }
+        try fixture.doubleClick(try fixture.frame(.title))
+        let editor = try XCTUnwrap(fixture.window.firstResponder as? NSTextView)
         editor.selectAll(nil)
         editor.insertText("新的行内标题", replacementRange: editor.selectedRange())
         editor.doCommand(by: #selector(NSResponder.insertNewline(_:)))
         XCTAssertEqual(fixture.workspace.task(for: fixture.id)?.title, "新的行内标题")
-        try fixture.click(try fixture.frame(.title))
+        try fixture.doubleClick(try fixture.frame(.title))
         let nextEditor = try XCTUnwrap(fixture.window.firstResponder as? NSTextView)
         nextEditor.selectAll(nil)
         nextEditor.insertText("放弃这次修改", replacementRange: nextEditor.selectedRange())
@@ -183,7 +195,7 @@ final class TaskRowInteractionTests: XCTestCase {
         XCTAssertEqual(workspace.selectedTaskID, child)
     }
 
-    func testFullListTitleClickKeepsFieldEditorFocusAndCommits() throws {
+    func testFullListTitleSingleClickKeepsFieldEditorFocusAndCommits() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try XCTUnwrap(workspace.createTask(title: "完整列表标题", in: .inbox).taskID)
         let navigation = AppNavigation()
@@ -320,19 +332,23 @@ final class TaskRowInteractionTests: XCTestCase {
         }
     }
 
-    func testTitlePreviewAndPaddingEachSelectExactlyOnceAcrossThirtyClicks() throws {
-        let fixture = try fixture()
-        defer { fixture.window.close() }
-        let row = try fixture.frame(.row)
-        let targets = [try fixture.frame(.title), try fixture.frame(.preview),
-                       CGRect(x: row.minX + 2, y: row.minY + 2, width: 2, height: 2)]
-        for n in 0..<30 {
-            try fixture.click(targets[n % targets.count])
-            XCTAssertEqual(fixture.probe.selections, n + 1)
-            if fixture.probe.selections != n + 1 { break }
+    func testTitlePreviewAndPaddingEachEnterTitleEditingWithoutDuplicateSelection() throws {
+        for part: TaskTreeRenderPart in [.title, .preview, .row] {
+            let fixture = try fixture()
+            defer { fixture.window.close() }
+            let frame = try fixture.frame(part)
+            let target = part == .row
+                ? CGRect(x: frame.minX + 2, y: frame.minY + 2, width: 2, height: 2) : frame
+            try fixture.click(target)
+            XCTAssertEqual(fixture.probe.selections, 1)
+            let editor = try XCTUnwrap(fixture.window.firstResponder as? NSTextView)
+            XCTAssertEqual(editor.selectedRange().length, 0)
+            if part != .title {
+                XCTAssertEqual(editor.selectedRange().location, editor.string.utf16.count)
+            }
+            XCTAssertEqual(fixture.probe.completions, 0)
+            XCTAssertEqual(fixture.probe.expansions, 0)
         }
-        XCTAssertEqual(fixture.probe.completions, 0)
-        XCTAssertEqual(fixture.probe.expansions, 0)
     }
 
     func testCompletionAndDisclosureDoNotAlsoSelectRow() throws {

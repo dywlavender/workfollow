@@ -1,0 +1,9 @@
+STEP boot | active=true key=NA-PANEL mainKey=false panelKey=true panelVisible=true mainIsFront=false
+TOPLAYOUT #0 Window Server layer=2147483630  | #1 Window Server layer=24 Menubar | #2 程序坞 layer=20  | #3 WindowManager layer=0  | #4 WindowManager layer=0  | #5 ChatGPT layer=0 
+STEP after-deactivate | active=false key=nil mainKey=false panelKey=false panelVisible=true mainIsFront=true
+STEP orderFront-inactive | active=false key=nil mainKey=false panelKey=false panelVisible=true mainIsFront=true
+STEP makeKey-inactive | active=true key=NA-PANEL mainKey=false panelKey=true panelVisible=true mainIsFront=true
+STEP normalPanel-makeKey-inactive | active=false key=nil mainKey=false panelKey=false panelVisible=true mainIsFront=true
+TOPLAYOUT #0 Window Server layer=2147483630  | #1 Window Server layer=24 Menubar | #2 程序坞 layer=20  | #3 Probe layer=3 NORMAL-PANEL | #4 Probe layer=3 NA-PANEL | #5 WindowManager layer=0  | #6 WindowManager layer=0  | #7 ChatGPT layer=0 
+STEP after-activate | active=true key=NORMAL-PANEL mainKey=false panelKey=false panelVisible=true mainIsFront=true
+TOPLAYOUT #0 Window Server layer=2147483630  | #1 Window Server layer=24 Menubar | #2 程序坞 layer=20  | #3 Probe layer=3 NORMAL-PANEL | #4 Probe layer=3 NA-PANEL | #5 WindowManager layer=0  | #6 WindowManager layer=0  | #7 Probe layer=0 MAIN

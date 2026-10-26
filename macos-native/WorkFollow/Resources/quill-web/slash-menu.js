@@ -97,6 +97,7 @@
     var y = caretRect.bottom + 6;
     menu.style.left = Math.min(x, window.innerWidth - menu.offsetWidth - 8) + "px";
     menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 8) + "px";
+    document.dispatchEvent(new Event("wf-scroll-regions-changed"));
   }
 
   function close() {
@@ -106,6 +107,7 @@
       state.items = [];
     }
     state.slashIndex = null;
+    document.dispatchEvent(new Event("wf-scroll-regions-changed"));
   }
 
   function isOpen() {

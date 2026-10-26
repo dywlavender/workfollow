@@ -28,7 +28,12 @@ final class NativeTextView: NSTextView {
     /// 链接悬停菜单（TI2-08）：当前悬停的链接范围与浮层。
     var hoveredLinkRange: NSRange?
     var linkHoverPanel: NSPanel?
+    /// 检查项提醒面板（行尾铃铛点开）。
+    var checklistReminderPanel: ChecklistItemReminderPanel?
+    /// 鼠标悬停的检查项行号；行尾铃铛/删除跟随悬停行显示（滴答 `TTHoverableImageView`）。
+    var hoveredChecklistLine: Int?
     private var linkTrackingArea: NSTrackingArea?
+    private var lastBoundsOrigin: NSPoint?
     /// 斜杠面板"跟着滚动与窗口变化走"用的通知观察者（见 `startFollowingSlash`）。
     var slashObservers: [Any] = []
     /// 文末那个"一个字符都没有"的空段落当前的待定段落类型。
@@ -42,17 +47,30 @@ final class NativeTextView: NSTextView {
     /// 主循环装饰看不见它；列表标记的常驻绘制靠这个级别——光标不在行上时
     /// 项目符号/复选框也要显示。
     var displayedTrailingBlock: DocumentBlockKind?
+    var displayedTrailingIndentLevel = 0
+    var displayedTrailingListStart: Int?
+    var trailingIndentLevel: Int {
+        pendingTrailingBlock != nil
+            ? (typingAttributes[DocumentTextCodec.indentKey] as? Int ?? 0) : displayedTrailingIndentLevel
+    }
+    var trailingListStart: Int? {
+        pendingTrailingBlock != nil
+            ? typingAttributes[DocumentTextCodec.listStartKey] as? Int : displayedTrailingListStart
+    }
     /// 输入期 Markdown 转换（块级/分割线/行内）的重入护栏：`applyFormat` 的
     /// 替换文本可能再次以触发字符结尾，不能让触发逻辑在替换过程中二次进入。
     var isApplyingTypedMarkdownInput = false
 
     /// 绑定文档时把模型里的文末级别带回输入属性（由协调器调用），这样切走再回来
     /// 接着在文末输入时，字号与级别都还在。
-    func seedTrailingParagraphKind(_ kind: DocumentBlockKind?) {
+    func seedTrailingParagraphKind(_ kind: DocumentBlockKind?, indentLevel: Int = 0, listStart: Int? = nil) {
         pendingTrailingBlock = kind
         displayedTrailingBlock = kind
+        displayedTrailingIndentLevel = indentLevel
+        displayedTrailingListStart = listStart
         guard let kind else { return }
-        typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [])
+        typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [],
+            indentLevel: indentLevel, listStart: listStart)
     }
     var selectionPanel: NSPanel?
     var documentIdentity = UUID()
@@ -80,10 +98,15 @@ final class NativeTextView: NSTextView {
         diagramEditor = nil
         dismissSlash()
         dismissSelectionToolbar()
+        dismissChecklistReminderPanel()
         lastSelectionToolbarRange = NSRange(location: NSNotFound, length: 0)
         selectionAfterUndoRedo = nil
         pendingTrailingBlock = nil
         displayedTrailingBlock = nil
+        displayedTrailingIndentLevel = 0
+        displayedTrailingListStart = nil
+        hoveredChecklistLine = nil
+        lastBoundsOrigin = nil
         needsHostCaretReveal = false
         documentCommandCommit = nil
         hasHostDocumentCommands = false
@@ -415,8 +438,9 @@ final class NativeTextView: NSTextView {
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        guard isEditable else { hideLinkHoverMenu(); return }
         let point = convert(event.locationInWindow, from: nil)
+        updateChecklistHover(at: point)
+        guard isEditable else { hideLinkHoverMenu(); return }
         guard let range = linkRange(at: point) else { hideLinkHoverMenu(); return }
         guard range != hoveredLinkRange || linkHoverPanel == nil else { return }
         hoveredLinkRange = range
@@ -426,12 +450,68 @@ final class NativeTextView: NSTextView {
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         hideLinkHoverMenu()
+        updateChecklistHover(at: nil)
+    }
+
+    /// 悬停行的铃铛/删除是行级控件，不改变光标；只在清单任务里启用。
+    func updateChecklistHover(at point: NSPoint?) {
+        let target = point.flatMap { checklistHoverTarget(at: $0) }
+        let line = profile.checklistRemindersEnabled ? target?.line : nil
+        let overCheckbox = point.map { point in
+            target.map { checklistMarkerRect(for: $0).contains(point) } ?? false
+        } ?? false
+        let overGutter = point.map { blockMenuTarget(at: $0) != nil } ?? false
+        // 检查项是整行操作（勾选/提醒/删除），鼠标用箭头而不是文本 I-beam。
+        // 笔记里的检查项没有行尾控件，只把复选框本身和行首沟槽标成可点。
+        if line != nil || overCheckbox || overGutter {
+            NSCursor.arrow.set()
+        } else if isEditable {
+            NSCursor.iBeam.set()
+        }
+        guard hoveredChecklistLine != line else { return }
+        hoveredChecklistLine = line
+        decorationOverlay?.needsDisplay = true
+        needsDisplay = true
+    }
+
+    private struct ChecklistHoverTarget {
+        let line: Int
+        let firstLine: NSRect
+    }
+
+    /// 光标下的字符所在行决定命中；行首矩形只用于复选框位置。
+    /// 这样长检查项换行后的第二视觉行也仍属于同一项。
+    private func checklistHoverTarget(at point: NSPoint) -> ChecklistHoverTarget? {
+        guard isEditable, let storage = textStorage, storage.length > 0 else { return nil }
+        let offset = min(characterIndexForInsertion(at: point), storage.length - 1)
+        let paragraph = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
+        guard let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                            effectiveRange: nil) as? String,
+              token == "checklist" || token == "checked",
+              let characterRect = viewRect(forCharacterAt: offset) else { return nil }
+        guard point.y >= characterRect.minY - DocumentEditorGeometry.checklistRowSpacing / 2,
+              point.y <= characterRect.maxY + DocumentEditorGeometry.checklistRowSpacing / 2 else { return nil }
+        let firstLine = viewRect(forCharacterAt: paragraph.location) ?? characterRect
+        return ChecklistHoverTarget(line: checklistLineIndex(for: paragraph.location),
+                                    firstLine: firstLine)
+    }
+
+    private func checklistMarkerRect(for target: ChecklistHoverTarget) -> NSRect {
+        NSRect(x: target.firstLine.minX - 28, y: target.firstLine.minY,
+               width: 28, height: target.firstLine.height)
+    }
+
+    private func updateChecklistHoverFromMouse() {
+        guard let window, window.isKeyWindow else { updateChecklistHover(at: nil); return }
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        updateChecklistHover(at: bounds.contains(point) ? point : nil)
     }
 
     override func mouseDown(with event: NSEvent) {
         dismissSlash()
         dismissTagCompletion()
         hideLinkHoverMenu()
+        dismissChecklistReminderPanel()
         if openBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
         // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
         // 共享文档样式上，不分面）。
@@ -448,9 +528,16 @@ final class NativeTextView: NSTextView {
                     deleteChecklistItem(at: paragraph)
                     return
                 }
+                if profile.checklistRemindersEnabled,
+                   checklistReminderHitRect(centerY: caret.midY).contains(point) {
+                    presentChecklistReminderPanel(
+                        lineIndex: checklistLineIndex(for: paragraph.location),
+                        centerY: caret.midY)
+                    return
+                }
                 let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
                 if marker.contains(point) {
-                    window.makeFirstResponder(self)
+                    // 勾选是行内动作：不抢焦点、不移动插入点，避免视图滚回顶部。
                     toggleNoteChecklist(at: paragraph.location)
                     return
                 }
@@ -463,7 +550,6 @@ final class NativeTextView: NSTextView {
                let caret = viewRect(forCharacterAt: storage.length) {
                 let marker = NSRect(x: caret.minX - 28, y: caret.minY, width: 28, height: caret.height)
                 if marker.contains(point) {
-                    window.makeFirstResponder(self)
                     setTrailingChecklist(checked: !checked)
                     return
                 }
@@ -481,9 +567,158 @@ final class NativeTextView: NSTextView {
     @discardableResult
     // MARK: 检查项整项操作（TI2-05a）
 
-    /// 活动检查项行尾的删除按钮矩形（与 `drawChecklistDeleteGlyph` 共用同一几何）。
+    /// 检查项行尾的删除按钮矩形（与 `drawChecklistDeleteGlyph` 共用同一几何）。
+    /// 滴答 nib：24×24 按钮，距右缘约 10pt。
     func checklistDeleteHitRect(centerY: CGFloat) -> NSRect {
-        NSRect(x: bounds.maxX - 26, y: centerY - 9, width: 18, height: 18)
+        NSRect(x: bounds.maxX - 34, y: centerY - 12, width: 24, height: 24)
+    }
+
+    /// 铃铛在删除按钮左侧，两个 24pt 命中区间隔 2pt。
+    func checklistReminderHitRect(centerY: CGFloat) -> NSRect {
+        NSRect(x: bounds.maxX - 60, y: centerY - 12, width: 24, height: 24)
+    }
+
+    /// 行号以换行切分，与 `NativeDocument.blocks` 的顺序一致。
+    func checklistLineIndex(for location: Int) -> Int {
+        guard let storage = textStorage else { return 0 }
+        let source = storage.string as NSString
+        let bounded = max(0, min(location, source.length))
+        guard bounded > 0 else { return 0 }
+        var count = 0
+        for index in 0..<bounded where source.character(at: index) == 0x0A {
+            count += 1
+        }
+        return count
+    }
+
+    /// 行号对应的字符区间（不含行尾换行之外的内容）。越界返回 nil。
+    func characterRange(forChecklistLine line: Int) -> NSRange? {
+        guard let storage = textStorage, line >= 0 else { return nil }
+        let source = storage.string as NSString
+        if source.length == 0 { return line == 0 ? NSRange(location: 0, length: 0) : nil }
+        var current = 0
+        var offset = 0
+        while offset < source.length {
+            let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
+            if current == line { return paragraph }
+            let next = NSMaxRange(paragraph)
+            guard next > offset else { break }
+            offset = next
+            current += 1
+        }
+        // 文末空段：没有字符，但模型里仍是最后一行。
+        if current == line, source.hasSuffix("\n") {
+            return NSRange(location: source.length, length: 0)
+        }
+        return nil
+    }
+
+    /// VoiceOver 读出的检查项描述；非检查项行返回 nil。
+    /// 正文本身由 NSTextView 朗读，这里补上"已完成/有提醒"这层状态。
+    func checklistAccessibilityLabel(forLine line: Int) -> String? {
+        guard let storage = textStorage,
+              let paragraph = characterRange(forChecklistLine: line) else { return nil }
+        let token = paragraph.location < storage.length
+            ? storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location, effectiveRange: nil) as? String
+            : nil
+        guard token == "checklist" || token == "checked" else { return nil }
+        let text = (storage.string as NSString).substring(with: paragraph)
+            .trimmingCharacters(in: .newlines)
+        let title = text.isEmpty ? "空检查事项" : text
+        var label = "检查事项：\(title)，" + (token == "checked" ? "已完成" : "未完成")
+        if profile.checklistItem(line)?.reminderAt != nil { label += "，有提醒" }
+        return label
+    }
+
+    /// VoiceOver 聚焦正文时，若光标停在检查项上就读出这一项的完成态/提醒；
+    /// 普通正文仍交给 NSTextView 原生的整段朗读。
+    override func accessibilityLabel() -> String? {
+        if let paragraph = activeChecklistParagraph(),
+           let label = checklistAccessibilityLabel(forLine: checklistLineIndex(for: paragraph.location)) {
+            return label
+        }
+        return super.accessibilityLabel()
+    }
+
+    override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
+        var actions = super.accessibilityCustomActions() ?? []
+        guard let paragraph = activeChecklistParagraph(),
+              let storage = textStorage,
+              let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                            effectiveRange: nil) as? String else { return actions }
+        let checked = token == "checked"
+        actions.append(NSAccessibilityCustomAction(name: checked ? "取消勾选" : "勾选") { [weak self] in
+            guard let self else { return false }
+            self.toggleNoteChecklist(at: paragraph.location)
+            return true
+        })
+        guard profile.checklistRemindersEnabled else { return actions }
+        let line = checklistLineIndex(for: paragraph.location)
+        let reminder = NSAccessibilityCustomAction(name: "设置检查事项提醒") { [weak self] in
+            guard let self else { return false }
+            self.presentChecklistReminderPanel(
+                lineIndex: line,
+                centerY: self.viewRect(forCharacterAt: paragraph.location)?.midY ?? self.bounds.midY)
+            return true
+        }
+        let delete = NSAccessibilityCustomAction(name: "删除检查事项") { [weak self] in
+            guard let self else { return false }
+            return self.deleteChecklistItem(at: paragraph)
+        }
+        actions.append(contentsOf: [reminder, delete])
+        return actions
+    }
+
+    func activeChecklistParagraph() -> NSRange? {
+        guard isEditable, let storage = textStorage, storage.length > 0 else { return nil }
+        let source = storage.string as NSString
+        let caret = min(max(selectedRange().location, 0), source.length)
+        let anchor = min(caret, source.length - 1)
+        let paragraph = source.paragraphRange(for: NSRange(location: anchor, length: 0))
+        let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                      effectiveRange: nil) as? String
+        return token == "checklist" || token == "checked" ? paragraph : nil
+    }
+
+    /// 通知点开项提醒后定位：滚动到该行、落光标，并用系统查找指示闪一下。
+    func revealChecklistLine(_ line: Int) {
+        guard let paragraph = characterRange(forChecklistLine: line) else { return }
+        window?.makeFirstResponder(self)
+        let target = NSRange(location: paragraph.location, length: 0)
+        setSelectedRange(target)
+        scrollRangeToVisible(target)
+        guard paragraph.length > 0 else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.firstResponder === self else { return }
+            self.showFindIndicator(for: paragraph)
+        }
+    }
+
+    func presentChecklistReminderPanel(lineIndex: Int, centerY: CGFloat) {
+        guard let window else { return }
+        dismissChecklistReminderPanel()
+        // 组合串先落字：提醒写入的是模型，不能把未上屏的输入留在编辑器里。
+        if hasMarkedText() { unmarkText() }
+        let current = profile.checklistItem(lineIndex)?.reminderAt
+        let anchor = window.convertToScreen(convert(
+            checklistReminderHitRect(centerY: centerY), to: nil))
+        let panel = ChecklistItemReminderPanel(anchor: anchor, owner: window,
+            now: Date(), calendar: .current, current: current,
+            notice: profile.checklistReminderNotice()) { [weak self] date in
+                guard let self else { return }
+                self.profile.setChecklistReminder(lineIndex, date)
+                self.needsDisplay = true
+            } onDismiss: { [weak self] in
+                // Outside clicks / Esc dismiss through the shared registry; the
+                // text view's pointer must not outlive the window.
+                self?.checklistReminderPanel = nil
+            }
+        checklistReminderPanel = panel
+    }
+
+    func dismissChecklistReminderPanel() {
+        checklistReminderPanel?.dismiss()
+        checklistReminderPanel = nil
     }
 
     /// 删除整项：段落区间（含行尾换行）整段移除，光标落到被删位置。
@@ -529,7 +764,19 @@ final class NativeTextView: NSTextView {
     ///
     /// 列表 / 检查项 / 引用 / 代码行的行首标记另有职责（复选框翻转等），这里不接管。
     func openBlockMenu(at point: NSPoint) -> Bool {
-        guard isEditable, let window, let storage = textStorage else { return false }
+        guard let target = blockMenuTarget(at: point), let window else { return false }
+        window.makeFirstResponder(self)
+        setSelectedRange(NSRange(location: target.paragraph.location, length: 0))
+        slashSession = SlashSession(start: target.paragraph.location, trigger: "", scope: .block)
+        refreshSlash()
+        return true
+    }
+
+    /// 行首沟槽的块菜单命中（不触发副作用），供点击与光标共用。
+    private func blockMenuTarget(at point: NSPoint) -> (paragraph: NSRange, caret: NSRect)? {
+        guard isEditable, window != nil, let storage = textStorage else { return nil }
+        let markerX = DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX)
+        guard point.x >= markerX - 2, point.x <= markerX + 10 else { return nil }
         let source = storage.string as NSString
         // 命中"点中的那一行"而不是光标所在行：用户会去点自己看到的那一行，
         // 光标不在那里时也应照常打开。沟槽的 x 在文本容器之外，TextKit 的
@@ -553,17 +800,12 @@ final class NativeTextView: NSTextView {
         case .paragraph, .heading:
             break
         case .bullet, .ordered, .checklist, .quote, .code, .divider:
-            return false
+            return nil
         }
-        guard let caret = viewRect(forCharacterAt: paragraph.location) else { return false }
-        let hit = NSRect(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: decorationVisibleMinX) - 2,
-                         y: caret.minY, width: 12, height: caret.height)
-        guard hit.contains(point) else { return false }
-        window.makeFirstResponder(self)
-        setSelectedRange(NSRange(location: paragraph.location, length: 0))
-        slashSession = SlashSession(start: paragraph.location, trigger: "", scope: .block)
-        refreshSlash()
-        return true
+        guard let caret = viewRect(forCharacterAt: paragraph.location) else { return nil }
+        let hit = NSRect(x: markerX - 2, y: caret.minY, width: 12, height: caret.height)
+        guard hit.contains(point) else { return nil }
+        return (paragraph, caret)
     }
 
     /// 沟槽点击落在哪一段（y 命中段落首/末字符的行矩形；文末空段用它自己的插入点矩形）。
@@ -596,7 +838,8 @@ final class NativeTextView: NSTextView {
     /// 文末空段的检查项翻转：无字符可改，直接改输入属性与待定级别并注册撤销；
     /// 光标同时落到文末（级别只有这样才会随下一次 commit 进模型）。
     func setTrailingChecklist(checked: Bool) {
-        applyTrailingState(typing: DocumentTextCodec.attributes(kind: .checklist(checked), marks: []),
+        applyTrailingState(typing: DocumentTextCodec.attributes(kind: .checklist(checked), marks: [],
+                                                              indentLevel: trailingIndentLevel),
                            trailing: .checklist(checked))
     }
 
@@ -616,25 +859,78 @@ final class NativeTextView: NSTextView {
         didChangeText()
     }
 
+    /// 勾选/取消检查项只改段落属性，不替换文字。整段替换会让 NSTextView
+    /// 把插入点移到替换处并滚动到那里，表现为“点一下就跳回最上面”。
     func toggleNoteChecklist(at offset: Int) {
         guard let storage = textStorage, offset >= 0, offset < storage.length else { return }
-        let range = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
-        let selected = storage.attributedSubstring(from: range)
-        var document = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
-        guard let first = document.blocks.first, case .checklist(let checked) = first.kind else { return }
-        document.blocks[0].kind = .checklist(!checked)
+        let paragraph = (string as NSString).paragraphRange(for: NSRange(location: offset, length: 0))
+        guard let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                            effectiveRange: nil) as? String,
+              token == "checklist" || token == "checked" else { return }
+        applyChecklistPresentation(checked: token == "checklist", to: paragraph)
+    }
+
+    private func applyChecklistPresentation(checked: Bool, to paragraph: NSRange) {
+        guard let storage = textStorage, paragraph.length > 0 else { return }
+        let previous = storage.attributedSubstring(from: paragraph)
         let selection = selectedRange()
         let previousTyping = typingAttributes
-        let caretOutsideItem = selection.length == 0
-            && (selection.location < range.location || selection.location >= NSMaxRange(range))
-        insertText(DocumentTextCodec.render(document), replacementRange: range)
-        setSelectedRange(selection)
-        // Toggling another row must not seed the active empty paragraph with
-        // the checked item's decorative strike/gray input attributes.
-        if caretOutsideItem {
-            typingAttributes = previousTyping
-            didChangeText()
+        let caretInside = selection.location >= paragraph.location
+            && selection.location <= NSMaxRange(paragraph)
+        breakUndoCoalescing()
+        documentUndoManager.registerUndo(withTarget: self) { [weak self] view in
+            view.restoreChecklistParagraph(previous, at: paragraph.location, typing: previousTyping)
         }
+        applyChecklistAttributes(checked: checked, to: paragraph, in: storage)
+        setSelectedRange(selection)
+        if caretInside, selection.location < storage.length {
+            typingAttributes = storage.attributes(at: selection.location, effectiveRange: nil)
+        } else {
+            typingAttributes = previousTyping
+        }
+        needsDisplay = true
+        didChangeText()
+    }
+
+    private func applyChecklistAttributes(checked: Bool, to range: NSRange, in storage: NSTextStorage) {
+        let kind = DocumentBlockKind.checklist(checked)
+        var runs: [(NSRange, [NSAttributedString.Key: Any])] = []
+        storage.enumerateAttributes(in: range) { attributes, runRange, _ in
+            runs.append((runRange, attributes))
+        }
+        storage.beginEditing()
+        for (runRange, attributes) in runs {
+            var updated = attributes
+            updated[DocumentTextCodec.blockKey] = DocumentTextCodec.blockToken(kind)
+            updated[.foregroundColor] = checked
+                ? NSColor(WFColors.taskCompletedTitle) : NSColor.labelColor
+            // 勾选态的删除线是展示层（切回文本时才加），这里统一清掉，
+            // 避免取消勾选后残留。
+            updated.removeValue(forKey: .strikethroughStyle)
+            updated.removeValue(forKey: DocumentTextCodec.completedChecklistPresentationKey)
+            storage.setAttributes(updated, range: runRange)
+        }
+        storage.endEditing()
+    }
+
+    /// 撤销/重做只还原这一段属性；文字与选区长度不变。
+    private func restoreChecklistParagraph(_ value: NSAttributedString, at location: Int,
+                                           typing: [NSAttributedString.Key: Any]) {
+        guard let storage = textStorage,
+              location >= 0, location + value.length <= storage.length else { return }
+        let range = NSRange(location: location, length: value.length)
+        let current = storage.attributedSubstring(from: range)
+        documentUndoManager.registerUndo(withTarget: self) { [weak self] view in
+            view.restoreChecklistParagraph(current, at: location, typing: typing)
+        }
+        let selection = selectedRange()
+        storage.beginEditing()
+        storage.replaceCharacters(in: range, with: value)
+        storage.endEditing()
+        setSelectedRange(selection)
+        typingAttributes = typing
+        needsDisplay = true
+        didChangeText()
     }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
@@ -643,17 +939,33 @@ final class NativeTextView: NSTextView {
             dismissTagCompletion()
             hideLinkHoverMenu()
             dismissSelectionToolbar()
+            dismissChecklistReminderPanel()
         }
         super.viewWillMove(toWindow: newWindow)
     }
 
     override func deleteBackward(_ sender: Any?) {
+        if outdentListAtParagraphStart() { return }
         // 空检查项行首退格 = 删掉这一项（滴答 `deleteChecklistItemCell:viaBackspace:`）。
         if deleteEmptyChecklistItemOnBackspace() { return }
         super.deleteBackward(sender)
     }
 
+    override func keyDown(with event: NSEvent) {
+        // Input sources can dispatch Shift+Tab as insertTab:. Read the actual
+        // key modifiers before that translation, keeping IME/system chords native.
+        if event.keyCode == 48,
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           changeListIndent(by: event.modifierFlags.contains(.shift) ? -1 : 1) { return }
+        super.keyDown(with: event)
+    }
+
     override func doCommand(by selector: Selector) {
+        // 提醒面板开着时 Esc 先收起面板，不把 Esc 传给上层检查器。
+        if selector == #selector(cancelOperation(_:)), checklistReminderPanel != nil, !hasMarkedText() {
+            dismissChecklistReminderPanel()
+            return
+        }
         // 标签候选优先于普通回车/Esc（面板开着时这三个键归面板）。
         if tagSession != nil, !hasMarkedText() {
             switch selector {
@@ -673,6 +985,9 @@ final class NativeTextView: NSTextView {
             default: break
             }
         }
+        if selector == #selector(insertTab(_:)), changeListIndent(by: 1) { return }
+        if selector == #selector(insertBacktab(_:)), changeListIndent(by: -1) { return }
+        if selector == #selector(insertNewline(_:)), handleListNewline() { return }
         // 空格式行上回车：退回正文（有内容的行回车会延续格式，不受影响）。
         if selector == #selector(insertNewline(_:)), !hasMarkedText(),
            exitEmptyBlockOnNewline() { return }
@@ -752,6 +1067,7 @@ final class NativeTextView: NSTextView {
             panel.isOpaque = false
             panel.becomesKeyOnlyIfNeeded = true
             panel.appearance = window.effectiveAppearance
+            EditorPopupWindowLevel.apply(to: panel, owner: window)
             window.addChildWindow(panel, ordered: .above)
             selectionPanel = panel
         }
@@ -764,14 +1080,11 @@ final class NativeTextView: NSTextView {
         let size = content.fittingSize
         // firstRect 返回屏幕坐标，与子窗口 setFrame 同一坐标系。
         let rect = firstRect(forCharacterRange: range, actualRange: nil)
-        let bounds = (window.screen?.visibleFrame ?? window.frame).intersection(window.frame).insetBy(dx: 8, dy: 8)
-        let width = min(max(size.width, 120), bounds.width)
-        let height = max(size.height, 30)
-        let x = min(max(rect.midX - width / 2, bounds.minX), bounds.maxX - width)
-        let y = rect.maxY + 6 + height <= bounds.maxY
-            ? rect.maxY + 6
-            : max(bounds.minY, rect.minY - height - 6)
-        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
+        let frame = EditorPopupGeometry.frame(anchor: rect,
+            size: NSSize(width: max(size.width, 120), height: max(size.height, 30)),
+            bounds: EditorPopupGeometry.bounds(in: window), preferredSide: .above, alignment: .center)
+        guard !frame.isEmpty else { closeSelectionPanel(); return }
+        panel.setFrame(frame, display: true)
         panel.orderFront(nil)
     }
 
@@ -802,16 +1115,20 @@ final class NativeTextView: NSTextView {
     // MARK: - 图片粘贴（迁移自 Flutter onImagePaste：剪贴板图片 → data URL 图片块）
 
     override func copy(_ sender: Any?) {
+        if copyDocumentFragment(to: .general) { return }
         if !copyDiagramContent(to: .general) { super.copy(sender) }
     }
 
     override func cut(_ sender: Any?) {
         guard isEditable else { return }
-        if copyDiagramContent(to: .general) { insertText("", replacementRange: selectedRange()) }
+        if copyDocumentFragment(to: .general) || copyDiagramContent(to: .general) {
+            insertText("", replacementRange: selectedRange())
+        }
         else { super.cut(sender) }
     }
 
     override func paste(_ sender: Any?) {
+        if pasteDocumentFragment(from: .general) { return }
         if pasteDiagramContent(from: .general) { return }
         // 剪贴板是文件（Finder 复制/拖到编辑区）：交给宿主落盘成附件（TI2-03）。
         if let pasteFiles = profile.onPasteFiles {
@@ -824,6 +1141,8 @@ final class NativeTextView: NSTextView {
             }
         }
         if insertPastedImage() { return }
+        if pasteExternalDocumentFragment(from: .general,
+                                         destinationKind: currentParagraphKind() ?? .paragraph) { return }
         // 富文本粘贴：保留粗/斜/下划线/删除线/行内代码/链接这些**基础标记**，
         // 丢字号、颜色、背景、缩进与字体族（这些不是文档模型的一部分，带进来
         // 只会在 decode 时变成脏属性）。没有可保留标记时退回纯文本。
@@ -868,6 +1187,8 @@ final class NativeTextView: NSTextView {
     private func currentParagraphKind() -> DocumentBlockKind? {
         guard let storage = textStorage else { return nil }
         let source = storage.string as NSString
+        if selectedRange().location == source.length, source.length == 0 || string.hasSuffix("\n"),
+           let trailing = pendingTrailingBlock ?? displayedTrailingBlock { return trailing }
         let anchor = source.length == 0 ? 0 : min(max(selectedRange().location, 0), source.length - 1)
         guard source.length > 0,
               let token = storage.attribute(DocumentTextCodec.blockKey, at: anchor,
@@ -997,6 +1318,37 @@ final class NativeTextView: NSTextView {
     /// 重入保护：着色写 storage 会再触发 `didChangeText`。
     private var isRestylingCode = false
     private var decorationBoundsObserver: NSObjectProtocol?
+    private var scrollObservers: [NSObjectProtocol] = []
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        installScrollObservers()
+    }
+
+    /// Content-sized editors live inside SwiftUI's outer ScrollView; the text
+    /// view's own bounds never move when that scrolls. Observe every ancestor
+    /// clip view so hover and open cards follow real scrolling.
+    private func installScrollObservers() {
+        scrollObservers.forEach(NotificationCenter.default.removeObserver)
+        scrollObservers.removeAll()
+        var ancestor = superview
+        while let view = ancestor {
+            if let scroll = view as? NSScrollView {
+                let clip = scroll.contentView
+                scrollObservers.append(NotificationCenter.default.addObserver(
+                    forName: NSView.boundsDidChangeNotification, object: clip, queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        guard let self else { return }
+                        self.decorationOverlay?.needsDisplay = true
+                        self.dismissChecklistReminderPanel()
+                        self.updateChecklistHoverFromMouse()
+                    }
+                })
+            }
+            ancestor = view.superview
+        }
+    }
 
     override func layout() {
         super.layout()
@@ -1048,7 +1400,17 @@ final class NativeTextView: NSTextView {
         decorationBoundsObserver = NotificationCenter.default.addObserver(
             forName: NSView.boundsDidChangeNotification, object: self, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.decorationOverlay?.needsDisplay = true }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.decorationOverlay?.needsDisplay = true
+                let origin = self.bounds.origin
+                if let last = self.lastBoundsOrigin, last != origin {
+                    // 滚动会把锚点带走：提醒面板收起，悬停行按新位置重算。
+                    self.dismissChecklistReminderPanel()
+                    self.updateChecklistHoverFromMouse()
+                }
+                self.lastBoundsOrigin = origin
+            }
         }
         spellObserver = NotificationCenter.default.addObserver(
             forName: EditorPreferences.spellCheckingDidChange, object: nil, queue: .main
@@ -1086,7 +1448,8 @@ final class NativeTextView: NSTextView {
         drawsBackground = false
         backgroundColor = .clear
         textColor = .labelColor
-        font = .systemFont(ofSize: 15)
+        insertionPointColor = .labelColor
+        font = .systemFont(ofSize: DocumentEditorPresentationMetrics.bodyFontSize)
         // Empty documents must begin at the same origin as rendered paragraphs
         // and headings; NSTextView's default typing style has zero indent.
         typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
@@ -1116,6 +1479,7 @@ final class NativeTextView: NSTextView {
             NotificationCenter.default.removeObserver(decorationBoundsObserver)
         }
         if let spellObserver { NotificationCenter.default.removeObserver(spellObserver) }
+        scrollObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     override func cancelOperation(_ sender: Any?) {

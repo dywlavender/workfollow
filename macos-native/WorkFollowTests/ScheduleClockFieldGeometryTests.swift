@@ -63,6 +63,25 @@ final class ScheduleClockFieldGeometryTests: XCTestCase {
                           "「结束」前缀 + 输入框都应贴近值区域起点，不能整体被推到中间")
     }
 
+    /// 聚焦时间输入框时不能出现系统焦点环，也不能整段选中（蓝底）。
+    func testFocusedClockFieldHasNoFocusRingOrSelectionHighlight() throws {
+        let host = NSHostingView(rootView: AnyView(
+            LeadingScheduleClockField(text: .constant("09:00"), requestsFocus: true, onSubmit: {})
+                .frame(width: rowWidth, height: ScheduleMetrics.rowHeight)
+        ))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: rowWidth, height: ScheduleMetrics.rowHeight)
+        defer { window.close() }
+
+        let field = try XCTUnwrap(firstTextField(in: host))
+        XCTAssertEqual(field.focusRingType, .none, "时间输入框不应绘制蓝色焦点环")
+        try InspectorPanelTestSupport.waitUntil("时间输入框应在下一拍拿到焦点") {
+            window.firstResponder is NSTextView
+        }
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        XCTAssertEqual(editor.selectedRange.length, 0, "聚焦不能整段选中，否则会出现蓝色选中底色")
+        XCTAssertEqual(editor.selectedRange.location, ("09:00" as NSString).length)
+    }
+
     // MARK: 工具
 
     private func makeCanvasWithClockEditor() throws -> PropertyRowCanvas {

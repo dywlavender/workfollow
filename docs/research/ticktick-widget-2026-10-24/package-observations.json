@@ -1,0 +1,388 @@
+{
+  "kind": "shipped package metadata observed with plistlib, Apple tools and a bounded arm64 embedded-entitlement XML parser; not REA Evidence",
+  "target": "/Applications/TickTick.app",
+  "version": "8.0.80",
+  "build": "492",
+  "host": {
+    "CFBundleIdentifier": "com.TickTick.task.mac",
+    "NSPrincipalClass": "TickTick.TTApplication",
+    "NSMainNibFile": "MainMenu",
+    "CFBundleURLTypes": [
+      {
+        "CFBundleTypeRole": "Editor",
+        "CFBundleURLName": "com.TickTick.task",
+        "CFBundleURLSchemes": [
+          "com.TickTick.task",
+          "ticktick",
+          "dida",
+          "com.ticktick.task"
+        ]
+      },
+      {
+        "CFBundleTypeRole": "Editor",
+        "CFBundleURLName": "google",
+        "CFBundleURLSchemes": [
+          "com.googleusercontent.apps.366263775281-83uotc2fsov4oqmkevbejjbime796qvu"
+        ]
+      }
+    ],
+    "NSUserActivityTypes": [
+      "NSUserActivityTypeBrowsingWeb",
+      "TTAddTaskIntent",
+      "TTAddTaskToCalendarIntent",
+      "TTAddTasksIntent",
+      "TTCalendarGridViewIntent",
+      "TTCheckinHabitIntent",
+      "TTGetTasksFromListIntent",
+      "TTHabitViewIntent",
+      "TTMatrixViewIntent",
+      "TTOpenCalendarIntent",
+      "TTOpenListIntent",
+      "TTSimpleActionIntent",
+      "TTStartPomoWithDurationIntent",
+      "TTTaskListIntent",
+      "TTViewProjectIntent",
+      "TTViewTasksIntent",
+      "TTWeekViewIntent",
+      "com.ticktick.handoff.view"
+    ],
+    "entitlementRead": "arm64 embedded XML declaration parsed directly; OS acceptance not established",
+    "appGroups": [
+      "75TY9UT8AY.com.TickTick.task.mac"
+    ],
+    "sandbox": null,
+    "networkClient": null,
+    "entitlementFileOffset": 44528701
+  },
+  "extensions": [
+    {
+      "bundle": "TickTick.Intents.Extension.appex",
+      "identifier": "com.TickTick.task.mac.TickTick-Intents-Extension",
+      "extension": {
+        "NSExtensionAttributes": {
+          "IntentsRestrictedWhileLocked": [
+            "TTSimpleActionIntent",
+            "TTViewProjectIntent"
+          ],
+          "IntentsRestrictedWhileProtectedDataUnavailable": [],
+          "IntentsSupported": [
+            "TTAddTaskIntent",
+            "TTAddTaskToCalendarIntent",
+            "TTAddTasksIntent",
+            "TTCheckinHabitIntent",
+            "TTGetTasksFromListIntent",
+            "TTOpenCalendarIntent",
+            "TTOpenListIntent",
+            "TTSimpleActionIntent",
+            "TTStartPomoWithDurationIntent",
+            "TTViewProjectIntent",
+            "TTViewTasksIntent"
+          ]
+        },
+        "NSExtensionPointIdentifier": "com.apple.intents-service",
+        "NSExtensionPrincipalClass": "TickTick_Intents_Extension.IntentHandler"
+      },
+      "appGroups": [
+        "75TY9UT8AY.com.TickTick.task.mac"
+      ],
+      "sandbox": true,
+      "networkClient": true,
+      "entitlementRead": "arm64 embedded XML declaration parsed directly; OS acceptance not established",
+      "entitlementFileOffset": 137504
+    },
+    {
+      "bundle": "TickTick.Safari.Extension.appex",
+      "identifier": "com.TickTick.task.mac.TickTick-Safari-Extension",
+      "extension": {
+        "NSExtensionPointIdentifier": "com.apple.Safari.extension",
+        "NSExtensionPrincipalClass": "TickTick_Safari_Extension.SafariExtensionHandler",
+        "SFSafariContentScript": [
+          {
+            "Script": "content.js"
+          }
+        ],
+        "SFSafariToolbarItem": {
+          "Action": "Command",
+          "Identifier": "TickTickActionButton",
+          "Image": "ticktick_logo.pdf",
+          "Label": "Add to TickTick"
+        },
+        "SFSafariWebsiteAccess": {
+          "Allowed Domains": [
+            "*"
+          ],
+          "Level": "All"
+        }
+      },
+      "appGroups": [
+        "75TY9UT8AY.com.TickTick.task.mac"
+      ],
+      "sandbox": true,
+      "networkClient": null,
+      "entitlementRead": "arm64 embedded XML declaration parsed directly; OS acceptance not established",
+      "entitlementFileOffset": 153807
+    },
+    {
+      "bundle": "TickTick.Today.Widget.appex",
+      "identifier": "com.TickTick.task.mac.TickTick-Today-Widget",
+      "extension": {
+        "NSExtensionAttributes": {
+          "NSExtensionPointVersion": "3.0"
+        },
+        "NSExtensionMainNibFile": "TTTodayWidgetViewController",
+        "NSExtensionPointIdentifier": "com.apple.widget-extension",
+        "NSExtensionPrincipalClass": "TickTick_Today_Widget.TTTodayWidgetViewController",
+        "com.apple.notificationcenter.widget.description": "TickTick"
+      },
+      "appGroups": [
+        "75TY9UT8AY.com.TickTick.task.mac"
+      ],
+      "sandbox": true,
+      "networkClient": true,
+      "entitlementRead": "arm64 embedded XML declaration parsed directly; OS acceptance not established",
+      "entitlementFileOffset": 453015
+    },
+    {
+      "bundle": "TickTick.Widget.Extension.appex",
+      "identifier": "com.TickTick.task.mac.MainWidget",
+      "extension": {
+        "NSExtensionPointIdentifier": "com.apple.widgetkit-extension"
+      },
+      "appGroups": [
+        "75TY9UT8AY.com.TickTick.task.mac"
+      ],
+      "sandbox": true,
+      "networkClient": true,
+      "entitlementRead": "arm64 embedded XML declaration parsed directly; OS acceptance not established",
+      "entitlementFileOffset": 2638784
+    },
+    {
+      "bundle": "TickTick.WidgetConfiguration.Extension.appex",
+      "identifier": "com.TickTick.task.mac.TickTick-WidgetConfiguration-Extension",
+      "extension": {
+        "NSExtensionAttributes": {
+          "IntentsRestrictedWhileLocked": [],
+          "IntentsRestrictedWhileProtectedDataUnavailable": [],
+          "IntentsSupported": [
+            "TTCalendarGridViewIntent",
+            "TTHabitViewIntent",
+            "TTMatrixViewIntent",
+            "TTSingleCountdownIntent",
+            "TTTaskListIntent",
+            "TTWeekViewIntent"
+          ]
+        },
+        "NSExtensionPointIdentifier": "com.apple.intents-service",
+        "NSExtensionPrincipalClass": "TickTick_WidgetConfiguration_Extension.IntentHandler"
+      },
+      "appGroups": [
+        "75TY9UT8AY.com.TickTick.task.mac"
+      ],
+      "sandbox": true,
+      "networkClient": null,
+      "entitlementRead": "arm64 embedded XML declaration parsed directly; OS acceptance not established",
+      "entitlementFileOffset": 305016
+    }
+  ],
+  "widget_actions": [
+    {
+      "name": "TickTick_Widget_Extension.CheckChecklistItemIntent",
+      "openAppWhenRun": false,
+      "isDiscoverable": false,
+      "systemProtocols": [],
+      "parameters": [
+        {
+          "name": "itemID",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": []
+        }
+      ]
+    },
+    {
+      "name": "TickTick_Widget_Extension.CheckHabitIntent",
+      "openAppWhenRun": false,
+      "isDiscoverable": false,
+      "systemProtocols": [],
+      "parameters": [
+        {
+          "name": "habitID",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": []
+        },
+        {
+          "name": "dayOff",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": []
+        }
+      ]
+    },
+    {
+      "name": "TickTick_Widget_Extension.CheckTaskIntent",
+      "openAppWhenRun": false,
+      "isDiscoverable": false,
+      "systemProtocols": [],
+      "parameters": [
+        {
+          "name": "taskID",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": []
+        }
+      ]
+    },
+    {
+      "name": "TickTick_Widget_Extension.TTTaskListAppIntent",
+      "openAppWhenRun": false,
+      "isDiscoverable": false,
+      "systemProtocols": [
+        "com.apple.link.systemProtocol.WidgetConfiguration"
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "string": {
+                "wrapper": "today"
+              }
+            }
+          ]
+        },
+        {
+          "name": "list",
+          "dynamicOptionsSupport": 2,
+          "defaultMetadata": []
+        },
+        {
+          "name": "folder",
+          "dynamicOptionsSupport": 2,
+          "defaultMetadata": []
+        },
+        {
+          "name": "tag",
+          "dynamicOptionsSupport": 2,
+          "defaultMetadata": []
+        },
+        {
+          "name": "smartlist",
+          "dynamicOptionsSupport": 2,
+          "defaultMetadata": []
+        },
+        {
+          "name": "showOverdue",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "int": {
+                "wrapper": 1
+              }
+            }
+          ]
+        },
+        {
+          "name": "showTaskOnly",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": []
+        },
+        {
+          "name": "showCheckbox",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "int": {
+                "wrapper": 1
+              }
+            }
+          ]
+        },
+        {
+          "name": "theme",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "string": {
+                "wrapper": "blue"
+              }
+            }
+          ]
+        },
+        {
+          "name": "autoDarkMode",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "int": {
+                "wrapper": 1
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "TickTick_Widget_Extension.TTWeekViewAppIntent",
+      "openAppWhenRun": false,
+      "isDiscoverable": false,
+      "systemProtocols": [
+        "com.apple.link.systemProtocol.WidgetConfiguration"
+      ],
+      "parameters": [
+        {
+          "name": "showOverdue",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "int": {
+                "wrapper": 1
+              }
+            }
+          ]
+        },
+        {
+          "name": "showTaskOnly",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": []
+        },
+        {
+          "name": "showCheckbox",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "int": {
+                "wrapper": 1
+              }
+            }
+          ]
+        },
+        {
+          "name": "theme",
+          "dynamicOptionsSupport": 0,
+          "defaultMetadata": [
+            "LNValueTypeSpecificMetadataKeyDefaultValue",
+            {
+              "string": {
+                "wrapper": "auto"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "widget_eligible_legacy_configurations": [
+    "TTTaskList",
+    "TTWeekView",
+    "TTCalendarGridView",
+    "TTHabitView",
+    "TTMatrixView",
+    "TTSingleCountdown",
+    "TTCountdownList"
+  ]
+}

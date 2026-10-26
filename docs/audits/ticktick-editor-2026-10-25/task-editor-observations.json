@@ -1,0 +1,39 @@
+{
+  "scope": "Current native task editor, isolated TaskInspectorShell with temporary data; no production edits",
+  "native_model_round_trip": [
+    "native-supported-model-round-trip: true",
+    "native-image-reference-retained: true",
+    "native-diagram-retained: true",
+    "code-inline-marks-before: 3 after: 0"
+  ],
+  "rtf_copy_paste": [
+    "native-copy-plain-text: 第一项 | 第二项",
+    "ordered-kinds-after-rtf-paste: paragraph,paragraph",
+    "bold-survives-rtf-paste: true"
+  ],
+  "interaction_observations": [
+    "AUDIT collapsedRows=1, outlineHeightBefore=140.0, after=60.0",
+    "AUDIT childSectionHeightBefore=166.0, after=187.0",
+    "AUDIT commentDraftOnTaskB=仅属于任务 A 的未发送草稿",
+    "AUDIT commentsOnA=0, commentsOnB=1"
+  ],
+  "reference_scope": "macOS TickTick 8.0.80 (492), reused current-version REA metadata and read-only AX observation",
+  "not_accepted": [
+    "Pixel geometry from distorted screenshots",
+    "Ordinary-task selection popup parity",
+    "Exact reference Tab/Shift+Tab results"
+  ],
+  "validation": {
+    "existing_related_tests_passed": 17,
+    "investigation_test_cases": 2,
+    "confirmed_failures": [
+      "comment draft reused and posted to another task",
+      "collapsed outline does not reduce host section height"
+    ],
+    "test_location": "temporary source snapshot only",
+    "production_data_modified": false,
+    "project_source_modified": false
+  },
+  "source_delivery_check": "NativeTextView, DocumentTextCodec and TaskCommentSection unchanged from the tested source snapshot. Later TaskInspectorShell changes affect the more menu and removed helper actions, not comment identity or fold height.",
+  "markdown_input_correction": "User directly verified in TickTick: typing # opens suggestions; adding a space converts to H1 and removes # plus space from the visible content. AX source markers do not establish a user-facing source editing mode. Keep the native rich-text kernel."
+}

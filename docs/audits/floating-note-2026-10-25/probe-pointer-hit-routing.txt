@@ -1,0 +1,4 @@
+key=FLOAT8 appActive=true
+HIT inPanel (990.0, 602.0) -> windowNumber=26519 owner=Probe name=FLOAT8
+HIT inMain(non-key) (504.0, 316.0) -> windowNumber=25833 owner=WindowManager name=
+HIT outsideApp (30.0, 30.0) -> windowNumber=25833 owner=WindowManager name=

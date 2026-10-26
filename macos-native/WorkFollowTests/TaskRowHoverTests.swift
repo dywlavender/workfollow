@@ -24,7 +24,8 @@ final class TaskRowHoverTests: XCTestCase {
             let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: bitmap)
             let scale = CGFloat(bitmap.pixelsWide) / host.bounds.width
-            return try XCTUnwrap(bitmap.colorAt(x: Int(382 * scale), y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB))
+            // 底色左右各内缩 16pt，取行中段而不是右缘。
+            return try XCTUnwrap(bitmap.colorAt(x: Int(200 * scale), y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB))
         }
         let before = try color()
         let view = try XCTUnwrap(hoverView(host))

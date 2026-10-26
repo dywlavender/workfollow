@@ -23,6 +23,20 @@ final class QuillDeltaCodecTests: XCTestCase {
         assertRoundTrip(NativeDocument(plainText: "第一行\n第二行\n\n第四行"))
     }
 
+    func testExistingQuillImageEmbedSurvivesOpeningAndSavingNatively() throws {
+        let source = "data:image/png;base64,iVBORw0KGgo="
+        let document = QuillDeltaCodec.document(from: [
+            QuillDeltaOp(insert: .object(["image": .string(source)])),
+            QuillDeltaOp(insert: .string("\n"))
+        ])
+        let attachment = try XCTUnwrap(document.blocks.first?.runs.first?.attachment)
+        XCTAssertEqual(attachment.storedName, source)
+        let reopened = try JSONDecoder().decode(NativeDocument.self,
+            from: JSONEncoder().encode(document))
+        XCTAssertEqual(reopened, document)
+        XCTAssertEqual(reopened.blocks.first?.runs.first?.attachment, attachment)
+    }
+
     func testEveryBlockKindRoundTrips() {
         let document = NativeDocument(blocks: [
             DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "标题")]),

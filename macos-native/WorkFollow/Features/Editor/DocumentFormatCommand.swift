@@ -217,7 +217,8 @@ extension NativeTextView {
         if range.length == 0 {
             let token = typingAttributes[DocumentTextCodec.blockKey] as? String ?? "paragraph"
             let sample = NSAttributedString(string: " ", attributes: typingAttributes)
-            var marks = DocumentTextCodec.decode(sample, preserving: .empty).blocks.first?.runs.first?.marks ?? []
+            let currentBlock = DocumentTextCodec.decode(sample, preserving: .empty).blocks.first
+            var marks = currentBlock?.runs.first?.marks ?? []
             if let mark = command.mark {
                 if marks.contains(mark) { marks.remove(mark) }
                 else { marks.insert(mark) }
@@ -229,7 +230,9 @@ extension NativeTextView {
             // 当场让协调器收到变更——否则在文末空行上选完标题、不输入就切走会丢掉
             // 这一级（原版把行属性存在 Delta 里，没有这个边界）。
             replaceEmptyBlock(range: range, content: NSAttributedString(string: ""),
-                              typing: DocumentTextCodec.attributes(kind: resolved, marks: marks),
+                              typing: DocumentTextCodec.attributes(kind: resolved, marks: marks,
+                                  indentLevel: currentBlock?.indentLevel ?? 0,
+                                  listStart: currentBlock?.listStart),
                               trailing: resolved == .paragraph ? nil : resolved)
             return
         }
@@ -268,7 +271,9 @@ extension NativeTextView {
             // from typingAttributes. Rendered runs carry their own marks, so clear
             // stale typing marks while replacing the selected attributed text.
             var cleanTypingAttributes = DocumentTextCodec.attributes(
-                kind: document.blocks.first?.kind ?? .paragraph, marks: [])
+                kind: document.blocks.first?.kind ?? .paragraph, marks: [],
+                indentLevel: document.blocks.first?.indentLevel ?? 0,
+                listStart: document.blocks.first?.listStart)
             cleanTypingAttributes.removeValue(forKey: DocumentTextCodec.completedChecklistPresentationKey)
             typingAttributes = cleanTypingAttributes
         }
@@ -303,7 +308,9 @@ extension NativeTextView {
             syncParagraphStyleAfterEdit(at: caret)
             typingAttributes = DocumentTextCodec.attributes(
                 kind: document.blocks.first?.kind ?? .paragraph,
-                marks: document.blocks.first?.runs.first?.marks ?? [])
+                marks: document.blocks.first?.runs.first?.marks ?? [],
+                indentLevel: document.blocks.first?.indentLevel ?? 0,
+                listStart: document.blocks.first?.listStart)
         } else {
             // Formatting expands to the paragraph, but must not replace the user's
             // caret/selection with that entire paragraph.
@@ -341,7 +348,9 @@ extension NativeTextView {
         let selected = storage.attributedSubstring(from: paragraph)
         let decoded = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
         let attributes = DocumentTextCodec.attributes(kind: decoded.blocks.first?.kind ?? .paragraph,
-                                                      marks: decoded.blocks.first?.runs.first?.marks ?? [])
+                                                      marks: decoded.blocks.first?.runs.first?.marks ?? [],
+                                                      indentLevel: decoded.blocks.first?.indentLevel ?? 0,
+                                                      listStart: decoded.blocks.first?.listStart)
         typingAttributes = attributes
 
         // 段落分隔符（空行的唯一字符）承受整段的字号与段落样式。

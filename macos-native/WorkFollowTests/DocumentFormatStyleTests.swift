@@ -14,13 +14,17 @@ final class DocumentFormatStyleTests: XCTestCase {
         let plain = try style(.paragraph)
         XCTAssertEqual(plain.headIndent, DocumentEditorGeometry.decorationLane)
         XCTAssertEqual(try style(.heading(1)).headIndent, plain.headIndent)
-        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false), .quote] {
+        for kind in [DocumentBlockKind.bullet, .ordered, .quote] {
             let structured = try style(kind)
             XCTAssertEqual(structured.headIndent - plain.headIndent, 16)
             XCTAssertEqual(structured.firstLineHeadIndent, structured.headIndent)
             XCTAssertEqual(structured.paragraphSpacing, 2)
             XCTAssertTrue(structured.textLists.isEmpty)
         }
+        let checklist = try style(.checklist(false))
+        XCTAssertEqual(checklist.headIndent - plain.headIndent, 24, "17pt 勾选框 + 文字间距")
+        XCTAssertEqual(checklist.paragraphSpacing, 19, "清单节距 37pt（滴答截图实测）")
+        XCTAssertTrue(checklist.textLists.isEmpty)
         XCTAssertEqual(plain.paragraphSpacing, 8)
     }
 
@@ -204,9 +208,12 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual(try lineBox(.heading(3)), 1.6 * 14, accuracy: 0.01, "三级标题行盒 22.4")
         XCTAssertEqual(try lineBox(.heading(6)), 1.6 * 14, accuracy: 0.01, "六级标题与三级同盒")
         XCTAssertEqual(try lineBox(.paragraph), 21, accuracy: 0.01, "正文行盒 1.5 倍字号")
-        for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false), .quote] {
+        for kind in [DocumentBlockKind.bullet, .ordered, .quote] {
             XCTAssertEqual(try lineBox(kind), 18, accuracy: 0.01, "\(kind) 行盒 18，配 2pt 段间距得 20")
         }
+        XCTAssertEqual(try lineBox(.checklist(false)), 18, accuracy: 0.01, "清单行盒 18")
+        XCTAssertEqual(try pitch(.checklist(false), .checklist(false)), 37, accuracy: 1,
+                       "清单节距约 37（滴答截图实测）")
 
         XCTAssertEqual(try pitch(.heading(1), .heading(2)), 35, accuracy: 1, "滴答 35")
         XCTAssertEqual(try pitch(.heading(2), .heading(3)), 32, accuracy: 1, "滴答 32")
@@ -292,19 +299,20 @@ final class DocumentFormatStyleTests: XCTestCase {
     // 键入 `# `/`- [ ] ` 等前缀的行为已按 2026-10-16 口径修订为**输入期转换**
     // （对齐滴答 8.0.80）：用例见 `MarkdownInputTriggerTests`。
 
-    /// 已勾选检查项的置灰与删除线是**展示层**：渲染时写入，解码时不成为用户标记。
+    /// 已勾选检查项只置灰（与已完成任务同档），不再加删除线；解码时也不产生用户标记。
     @MainActor
-    func testCheckedChecklistGreysAndStrikesWithoutPollutingMarks() {
+    func testCheckedChecklistGreysWithoutStrikeOrPollutingMarks() {
         let document = NativeDocument(blocks: [
             DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "已完成", marks: [])])
         ])
         let rendered = DocumentTextCodec.render(document)
         XCTAssertEqual((rendered.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor),
-                       NSColor.secondaryLabelColor)
-        XCTAssertNotEqual(rendered.attribute(.strikethroughStyle, at: 0, effectiveRange: nil) as? Int, 0)
+                       NSColor(WFColors.taskCompletedTitle))
+        XCTAssertNil(rendered.attribute(.strikethroughStyle, at: 0, effectiveRange: nil),
+                     "勾选后只变灰，不划删除线")
 
         let decoded = DocumentTextCodec.decode(rendered, preserving: document)
-        XCTAssertEqual(decoded.blocks[0].runs[0].marks, [], "删除线不应写进用户标记")
+        XCTAssertEqual(decoded.blocks[0].runs[0].marks, [], "无删除线可写进用户标记")
         XCTAssertEqual(decoded.blocks[0].kind, .checklist(true))
     }
 

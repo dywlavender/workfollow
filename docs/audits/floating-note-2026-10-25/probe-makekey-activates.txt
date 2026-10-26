@@ -1,0 +1,6 @@
+STEP boot | active=false key=nil panelKey=false panelVisible=true ordered=["MAIN"]
+STEP deactivated | active=false key=nil panelKey=false panelVisible=true ordered=["MAIN"]
+STEP A: orderFrontRegardless | active=false key=nil panelKey=false panelVisible=true ordered=["MAIN"]
+STEP B: makeKey() only | active=true key=FLOAT panelKey=true panelVisible=true ordered=["MAIN"]
+STEP C: makeKeyAndOrderFront | active=true key=FLOAT panelKey=true panelVisible=true ordered=["MAIN"]
+STEP D: after focus attempt | active=true key=FLOAT panelKey=true panelVisible=true ordered=["MAIN"]

@@ -156,7 +156,50 @@ final class TaskWidgetTests: XCTestCase {
         XCTAssertEqual(environment.navigation.destination, .weekPlan)
         XCTAssertEqual(environment.weeklyPlanning.weekStart, SummaryReviewBuilder.weekStart(of: now, calendar: calendar))
         XCTAssertNil(environment.weeklyPlanning.listName)
+        XCTAssertTrue(environment.openResourceLink(TaskWidgetLink.countdowns))
+        XCTAssertEqual(environment.navigation.destination, .countdown)
         XCTAssertTrue(environment.taskWorkspace.allTasks.isEmpty)
+    }
+
+    func testCountdownSnapshotsFollowSmartListRulesAcrossPreparedDaysAndReadLegacyTasks() throws {
+        let today = CountdownEvent(name: "周末", kind: .countdown, rule: .once(day(0)), smartListDisplay: .sameDay)
+        let tomorrow = CountdownEvent(name: "发布日", kind: .countdown, rule: .once(day(1)), smartListDisplay: .sameDay)
+        let hidden = CountdownEvent(name: "隐藏", rule: .once(day(0)), smartListDisplay: .never)
+        let archived = CountdownEvent(name: "归档", rule: .once(day(0)), archivedAt: now)
+        let items = TaskWidgetBridge.items([try task("今日任务", due: day(0))])
+        let snapshot = TaskWidgetSnapshot(updatedAt: now, tasks: items,
+            countdowns: TaskWidgetBridge.countdownItems([today, tomorrow, hidden, archived], now: now, calendar: calendar))
+        XCTAssertEqual(snapshot.today(at: now, calendar: calendar).countdowns.map(\.id), [today.id])
+        XCTAssertEqual(snapshot.today(at: now, calendar: calendar).entryCount, 2)
+        XCTAssertEqual(snapshot.today(at: day(1), calendar: calendar).countdowns.map(\.id), [tomorrow.id])
+        XCTAssertEqual(snapshot.today(at: day(1), calendar: calendar).countdowns.first?.relativeLabel, "今天")
+        XCTAssertEqual(try JSONDecoder().decode(TaskWidgetSnapshot.self,
+            from: JSONEncoder().encode(snapshot)), snapshot)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+        legacy.removeValue(forKey: "countdowns")
+        let restored = try JSONDecoder().decode(TaskWidgetSnapshot.self,
+            from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(restored.countdowns)
+        XCTAssertEqual(restored.tasks, items)
+    }
+
+    func testCountdownChangesRefreshWidgetWithoutEditingAnyTask() throws {
+        let root = try directory(), channel = TaskWidgetChannel(directory: root.appendingPathComponent("widget"))
+        let store = CountdownStore(clock: { self.now }, calendar: calendar, directory: root.appendingPathComponent("countdowns"))
+        let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: calendar, seedDemoData: false)
+        let bridge = TaskWidgetBridge(channel: channel, workspace: workspace, countdowns: store,
+            canProcess: { true }, flush: { $0(nil) }, reload: {})
+        let event = store.add(name: "周末", kind: .countdown, rule: .once(day(0)), smartListDisplay: .sameDay)
+        try InspectorPanelTestSupport.waitUntil("新增倒数日应主动刷新组件") {
+            (try? channel.readSnapshot()?.today(at: self.now, calendar: self.calendar).countdowns.first?.id) == event.id
+        }
+        store.archive(event.id)
+        try InspectorPanelTestSupport.waitUntil("归档倒数日应从组件移除") {
+            (try? channel.readSnapshot()?.today(at: self.now, calendar: self.calendar).countdowns.isEmpty) == true
+        }
+        XCTAssertTrue(workspace.allTasks.isEmpty)
+        XCTAssertTrue(try channel.pending().isEmpty)
+        withExtendedLifetime(bridge) {}
     }
 
     func testMediumWidgetFitsAndRendersInLightAndDarkAppearance() throws {
@@ -165,23 +208,76 @@ final class TaskWidgetTests: XCTestCase {
         let values = try [task("准备项目评审", due: day(0), priority: .high),
                           task("整理本周的工作进展和下周需要跟进的事项", due: day(-1)),
                           task("核对设计稿", due: day(0), priority: .medium), task("阅读与学习", due: day(0))]
-        let snapshot = TaskWidgetSnapshot(updatedAt: now, tasks: TaskWidgetBridge.items(values))
+        var items = TaskWidgetBridge.items(values)
+        items[0].dueAt = now
+        items[0].hasTime = true
+        let countdown = CountdownEvent(name: "周末", kind: .countdown, rule: .once(day(0)))
+        let countdowns = TaskWidgetBridge.countdownItems([countdown], now: now, calendar: calendar)
+        let mixed = TaskWidgetSnapshot(updatedAt: now, tasks: Array(items.prefix(3)), countdowns: countdowns)
+        let tasksOnly = TaskWidgetSnapshot(updatedAt: now, tasks: items)
+        let more = try (0..<15).map { try task("其它工作 \($0 + 1)", due: day(0)) }
+        let overflow = TaskWidgetSnapshot(updatedAt: now, tasks: items + TaskWidgetBridge.items(more), countdowns: countdowns)
+        let states: [(String, TaskWidgetSnapshot?)] = [
+            ("", mixed), ("-tasks", tasksOnly), ("-overflow", overflow), ("-empty", .empty), ("-unavailable", nil)
+        ]
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            let view = TodayTaskWidgetView(snapshot: snapshot, date: now)
-                .environment(\.colorScheme, name == "light" ? .light : .dark)
-                .frame(width: 328).fixedSize(horizontal: false, vertical: true)
-            let fitting = NSHostingView(rootView: view)
-            XCTAssertLessThanOrEqual(fitting.fittingSize.height, 138, "中号组件的四条任务和页脚必须同时可见")
-            let host = NSHostingView(rootView: view.padding(16).frame(width: 360, height: 170)
-                .background(Color(nsColor: .windowBackgroundColor)))
-            let owner = InspectorPanelTestSupport.ownerWindow(for: host, width: 360, height: 170)
-            owner.appearance = NSAppearance(named: appearance)
-            InspectorPanelTestSupport.settle(owner)
-            let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
-            host.cacheDisplay(in: host.bounds, to: bitmap)
-            try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-                .write(to: directory.appendingPathComponent("medium-\(name).png"))
-            owner.close()
+            for (suffix, value) in states {
+                let heights: [CGFloat] = suffix.isEmpty ? [164, 154] : [164]
+                for height in heights {
+                    let sizeSuffix = height == 154 ? "-compact" : ""
+                    let view = TodayTaskWidgetView(snapshot: value, date: now)
+                        .environment(\.colorScheme, name == "light" ? .light : .dark)
+                    let host = NSHostingView(rootView: view.frame(width: 344, height: height)
+                        .background(Color(nsColor: .windowBackgroundColor)))
+                    let owner = InspectorPanelTestSupport.ownerWindow(for: host, width: 344, height: height)
+                    owner.appearance = NSAppearance(named: appearance)
+                    InspectorPanelTestSupport.settle(owner)
+                    let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+                    host.cacheDisplay(in: host.bounds, to: bitmap)
+                    if let value, value.today(at: now, calendar: calendar).entryCount > 0 {
+                        let bands = leadingIconBands(in: bitmap, logicalWidth: 344, logicalHeight: height)
+                        XCTAssertEqual(bands.count, min(4, value.today(at: now, calendar: calendar).entryCount),
+                            "必须完整显示四行图标：\(name)\(suffix)\(sizeSuffix)")
+                        let scale = CGFloat(bitmap.pixelsWide) / 344
+                        XCTAssertTrue(bands.allSatisfy { CGFloat($0.count) >= 13 * scale },
+                            "最后一行的勾选框不能被裁掉")
+                        if height == 164 {
+                            for (previous, next) in zip(bands, bands.dropFirst()) {
+                                let pitch = CGFloat(next.lowerBound + next.upperBound - previous.lowerBound - previous.upperBound) / (2 * scale)
+                                XCTAssertEqual(pitch, 29, accuracy: 1, "正常中号组件应保持参考图的行距")
+                            }
+                        }
+                    }
+                    try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                        .write(to: directory.appendingPathComponent("medium-\(name)\(suffix)\(sizeSuffix).png"))
+                    owner.close()
+                }
+            }
         }
     }
+
+
+    /// Check the actual rendered icon column. App Intent controls do not expose
+    /// useful AX frames in this XCTest host, so layout assertions use pixels.
+    private func leadingIconBands(in bitmap: NSBitmapImageRep, logicalWidth: CGFloat,
+                                  logicalHeight: CGFloat) -> [Range<Int>] {
+        let scale = CGFloat(bitmap.pixelsWide) / logicalWidth
+        var bands: [Range<Int>] = []
+        var start: Int?
+        let end = min(bitmap.pixelsHigh, Int((logicalHeight - 6) * scale))
+        for y in Int(38 * scale)..<end {
+            guard let background = bitmap.colorAt(x: Int(34 * scale), y: y)?.usingColorSpace(.sRGB) else { continue }
+            let hasInk = (Int(12 * scale)..<Int(32 * scale)).contains { x in
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return false }
+                return max(abs(color.redComponent - background.redComponent),
+                           max(abs(color.greenComponent - background.greenComponent),
+                               abs(color.blueComponent - background.blueComponent))) > 0.07
+            }
+            if hasInk, start == nil { start = y }
+            if !hasInk, let first = start { bands.append(first..<y); start = nil }
+        }
+        if let start { bands.append(start..<end) }
+        return bands
+    }
+
 }

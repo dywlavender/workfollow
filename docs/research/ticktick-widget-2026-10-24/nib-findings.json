@@ -1,0 +1,420 @@
+{
+  "analysis": "REA decode-interface-builder, static resource projection",
+  "target": {
+    "installed_package": "/Applications/TickTick.app",
+    "version": "8.0.80",
+    "build": "492"
+  },
+  "raw_records": {
+    "installed_package": "/private/tmp/ticktick-nib-readonly-audit-bc67j2fn/nib-projection-supported-limits.json",
+    "focused_resource_copy": "/private/tmp/ticktick-nib-readonly-audit-bc67j2fn/focused-nib-projection-complete.json"
+  },
+  "coverage": {
+    "installed_package": "The real package was decoded with the installed CLI limits: 64 documents, 20000 objects, 40000 connections. That inventory does not cover every nib in the package.",
+    "focused_resource_copy": "A separate temporary app-shaped input contains byte-identical copies of five selected nibs, Info.plist and the main executable. It omits all other resources and dependencies. The executable was supplied only for static artifact identification and was not run.",
+    "comparison_record": "nib-input-provenance.json",
+    "focused_documents_complete": true,
+    "runtime_observation": false
+  },
+  "documents": [
+    {
+      "relative_path": "Contents/Resources/Base.lproj/MainMenu.nib",
+      "object_count": 170,
+      "connection_count": 66,
+      "hierarchy_complete": true,
+      "window_classes": [],
+      "owner_classes": [
+        "NSApplication"
+      ],
+      "visibleAtLaunch": "not directly decoded",
+      "connections": [
+        {
+          "kind": "outlet",
+          "name": "delegate",
+          "source_id": "2",
+          "destination_id": "8"
+        },
+        {
+          "kind": "outlet",
+          "name": "addTaskMenuItem",
+          "source_id": "8",
+          "destination_id": "29"
+        },
+        {
+          "kind": "outlet",
+          "name": "mainWindowMenuItem",
+          "source_id": "8",
+          "destination_id": "229"
+        },
+        {
+          "kind": "action",
+          "name": "mainWindowMenuItemClicked:",
+          "source_id": "229",
+          "destination_id": "8"
+        }
+      ]
+    },
+    {
+      "relative_path": "Contents/Resources/TTAddTaskBarViewController.nib",
+      "object_count": 53,
+      "connection_count": 12,
+      "hierarchy_complete": true,
+      "window_classes": [],
+      "owner_classes": [
+        "_TtC8TickTick26TTAddTaskBarViewController"
+      ],
+      "visibleAtLaunch": "not directly decoded",
+      "connections": [
+        {
+          "kind": "outlet",
+          "name": "addButton",
+          "source_id": "2",
+          "destination_id": "11"
+        },
+        {
+          "kind": "outlet",
+          "name": "dateButton",
+          "source_id": "2",
+          "destination_id": "25"
+        },
+        {
+          "kind": "outlet",
+          "name": "inputContainerHeightLC",
+          "source_id": "2",
+          "destination_id": "39"
+        },
+        {
+          "kind": "outlet",
+          "name": "listButton",
+          "source_id": "2",
+          "destination_id": "65"
+        },
+        {
+          "kind": "outlet",
+          "name": "priorityButton",
+          "source_id": "2",
+          "destination_id": "78"
+        },
+        {
+          "kind": "outlet",
+          "name": "textField",
+          "source_id": "2",
+          "destination_id": "43"
+        },
+        {
+          "kind": "outlet",
+          "name": "textFieldContainer",
+          "source_id": "2",
+          "destination_id": "40"
+        },
+        {
+          "kind": "outlet",
+          "name": "view",
+          "source_id": "2",
+          "destination_id": "93"
+        },
+        {
+          "kind": "action",
+          "name": "addButtonClicked:",
+          "source_id": "11",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "dateButtonClicked:",
+          "source_id": "25",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "listButtonClicked:",
+          "source_id": "65",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "priorityButtonClicked:",
+          "source_id": "78",
+          "destination_id": "2"
+        }
+      ]
+    },
+    {
+      "relative_path": "Contents/Resources/TTMainWindowController.nib",
+      "object_count": 7,
+      "connection_count": 2,
+      "hierarchy_complete": true,
+      "window_classes": [
+        "_TtC8TickTick18TTLegacyMainWindow"
+      ],
+      "owner_classes": [
+        "_TtC8TickTick22TTMainWindowController"
+      ],
+      "visibleAtLaunch": "not directly decoded",
+      "main_window": {
+        "archive_object_id": "11",
+        "template_class": "NSWindowTemplate",
+        "window_class": "_TtC8TickTick18TTLegacyMainWindow",
+        "NSWindowIsRestorable": false
+      },
+      "connections": [
+        {
+          "kind": "outlet",
+          "name": "window",
+          "source_id": "2",
+          "destination_id": "11"
+        },
+        {
+          "kind": "outlet",
+          "name": "delegate",
+          "source_id": "11",
+          "destination_id": "2"
+        }
+      ]
+    },
+    {
+      "relative_path": "Contents/Resources/TTQuickAddViewController.nib",
+      "object_count": 128,
+      "connection_count": 27,
+      "hierarchy_complete": true,
+      "window_classes": [],
+      "owner_classes": [
+        "_TtC8TickTick24TTQuickAddViewController"
+      ],
+      "visibleAtLaunch": "not directly decoded",
+      "connections": [
+        {
+          "kind": "outlet",
+          "name": "buttonsContainerHeightLC",
+          "source_id": "2",
+          "destination_id": "11"
+        },
+        {
+          "kind": "outlet",
+          "name": "calendarButton",
+          "source_id": "2",
+          "destination_id": "29"
+        },
+        {
+          "kind": "outlet",
+          "name": "cancelButton",
+          "source_id": "2",
+          "destination_id": "71"
+        },
+        {
+          "kind": "outlet",
+          "name": "confirmButton",
+          "source_id": "2",
+          "destination_id": "80"
+        },
+        {
+          "kind": "outlet",
+          "name": "contentHeightLC",
+          "source_id": "2",
+          "destination_id": "88"
+        },
+        {
+          "kind": "outlet",
+          "name": "contentScrollView",
+          "source_id": "2",
+          "destination_id": "157"
+        },
+        {
+          "kind": "outlet",
+          "name": "contentView",
+          "source_id": "2",
+          "destination_id": "89"
+        },
+        {
+          "kind": "outlet",
+          "name": "detailContentView",
+          "source_id": "2",
+          "destination_id": "130"
+        },
+        {
+          "kind": "outlet",
+          "name": "dividerLine",
+          "source_id": "2",
+          "destination_id": "153"
+        },
+        {
+          "kind": "outlet",
+          "name": "logoImageView",
+          "source_id": "2",
+          "destination_id": "91"
+        },
+        {
+          "kind": "outlet",
+          "name": "modeTypeButton",
+          "source_id": "2",
+          "destination_id": "42"
+        },
+        {
+          "kind": "outlet",
+          "name": "priorityButton",
+          "source_id": "2",
+          "destination_id": "15"
+        },
+        {
+          "kind": "outlet",
+          "name": "projectButton",
+          "source_id": "2",
+          "destination_id": "134"
+        },
+        {
+          "kind": "outlet",
+          "name": "tableview",
+          "source_id": "2",
+          "destination_id": "161"
+        },
+        {
+          "kind": "outlet",
+          "name": "tagButton",
+          "source_id": "2",
+          "destination_id": "36"
+        },
+        {
+          "kind": "outlet",
+          "name": "titleTextField",
+          "source_id": "2",
+          "destination_id": "114"
+        },
+        {
+          "kind": "outlet",
+          "name": "titleTextFieldLeadingLC",
+          "source_id": "2",
+          "destination_id": "227"
+        },
+        {
+          "kind": "outlet",
+          "name": "view",
+          "source_id": "2",
+          "destination_id": "255"
+        },
+        {
+          "kind": "action",
+          "name": "priorityButtonClicked:",
+          "source_id": "15",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "calendarButtonClicked:",
+          "source_id": "29",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "tagButtonClicked:",
+          "source_id": "36",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "modeTypeButtonClicked:",
+          "source_id": "42",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "cancelButtonClicked:",
+          "source_id": "71",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "confirmButtonClicked:",
+          "source_id": "80",
+          "destination_id": "2"
+        },
+        {
+          "kind": "action",
+          "name": "projectButtonClicked:",
+          "source_id": "134",
+          "destination_id": "2"
+        },
+        {
+          "kind": "outlet",
+          "name": "dataSource",
+          "source_id": "161",
+          "destination_id": "2"
+        },
+        {
+          "kind": "outlet",
+          "name": "delegate",
+          "source_id": "161",
+          "destination_id": "2"
+        }
+      ]
+    },
+    {
+      "relative_path": "Contents/Resources/zh-Hans.lproj/MainMenu.nib",
+      "object_count": 98,
+      "connection_count": 66,
+      "hierarchy_complete": true,
+      "window_classes": [],
+      "owner_classes": [
+        "NSApplication"
+      ],
+      "visibleAtLaunch": "not directly decoded",
+      "connections": [
+        {
+          "kind": "outlet",
+          "name": "delegate",
+          "source_id": "2",
+          "destination_id": "8"
+        },
+        {
+          "kind": "outlet",
+          "name": "addTaskMenuItem",
+          "source_id": "8",
+          "destination_id": "27"
+        },
+        {
+          "kind": "outlet",
+          "name": "mainWindowMenuItem",
+          "source_id": "8",
+          "destination_id": "159"
+        },
+        {
+          "kind": "action",
+          "name": "mainWindowMenuItemClicked:",
+          "source_id": "159",
+          "destination_id": "8"
+        }
+      ]
+    }
+  ],
+  "conclusions": [
+    {
+      "status": "observed",
+      "finding": "Both decoded MainMenu resources contain application delegate and menu objects, with no recognized window object."
+    },
+    {
+      "status": "observed",
+      "finding": "The independent main-window nib contains an NSWindowTemplate using TickTick.TTLegacyMainWindow; NSWindowIsRestorable is false."
+    },
+    {
+      "status": "observed",
+      "finding": "The quick-add nib supplies TickTick.TTQuickAddViewController content and actions, with no recognized NSWindowTemplate, NSPanel or NSPopover."
+    },
+    {
+      "status": "inference",
+      "finding": "Separate menu, main-window and quick-add resources support selective presentation; the actual launch and URL dispatch policy requires code evidence."
+    },
+    {
+      "status": "unresolved",
+      "finding": "The quick-add outer window or popover is not determined by this resource projection."
+    },
+    {
+      "status": "unresolved",
+      "finding": "visibleAtLaunch is not a directly recognized field. The private NSWTFlags integer has not been interpreted."
+    }
+  ],
+  "limitations": [
+    "The graph reflects recognized Interface Builder archive fields and connections; omitted private or unrecognized archive fields remain unknown.",
+    "A target-action selector is an Interface Builder observation and does not prove that the binary contains a matching implementation.",
+    "Decoded constraints, runtime visibility, dynamic UI creation, and pixel geometry are not inferred from these archives.",
+    "Compiled Interface Builder archives are private serialized object graphs. The decoder reports only recognized keyed-archive objects and connections; unrecognized object classes and fields remain unknown."
+  ]
+}

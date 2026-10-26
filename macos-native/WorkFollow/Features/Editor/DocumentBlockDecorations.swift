@@ -17,18 +17,25 @@ extension NativeTextView {
 
             var offset = max(0, visible.location)
             let end = min(source.length, NSMaxRange(visible))
+            var lineIndex = checklistLineIndex(for: offset)
             while offset < end {
                 let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
                 offset = NSMaxRange(paragraph)
+                defer { lineIndex += 1 }
                 guard paragraph.length > 0 else { continue }
                 guard let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
                                                     effectiveRange: nil) as? String else { continue }
                 let kind = DocumentTextCodec.kind(token)
                 guard let lineRect = viewRect(forCharacterAt: paragraph.location) else { continue }
                 switch kind {
-                case .bullet, .ordered, .checklist:
+                case .bullet, .ordered:
                     drawListMarker(kind: kind, paragraph: paragraph, lineRect: lineRect,
-                                   storage: storage, dirtyRect: dirtyRect)
+                                   storage: storage, lineIndex: lineIndex, dirtyRect: dirtyRect)
+                case .checklist:
+                    drawListMarker(kind: kind, paragraph: paragraph, lineRect: lineRect,
+                                   storage: storage, lineIndex: lineIndex, dirtyRect: dirtyRect)
+                    drawChecklistSeparator(paragraph: paragraph, firstLine: lineRect,
+                                           storage: storage, dirtyRect: dirtyRect)
                 case .quote:
                     drawQuoteRule(paragraph: paragraph, firstLine: lineRect, dirtyRect: dirtyRect)
                 default:
@@ -41,16 +48,21 @@ extension NativeTextView {
         drawTrailingListMarkerIfPresent(in: dirtyRect)
         // 标题角标与空行"+"是"光标所在行"的标记，单独走活动行这一趟。
         drawActiveLineMarker(in: dirtyRect)
+        // 检查项行尾控件：优先跟随鼠标悬停行，其次光标所在行。
+        drawChecklistControlRow(in: dirtyRect)
     }
 
     private func drawListMarker(kind: DocumentBlockKind, paragraph: NSRange, lineRect: NSRect,
-                                storage: NSAttributedString, dirtyRect: NSRect) {
+                                storage: NSAttributedString, lineIndex: Int, dirtyRect: NSRect) {
         let accent = NSColor(WFColors.accent)
         let centerY = (lineRect.minY + lineRect.maxY) / 2
         // 三种标记与段落文字**左对齐**：滴答实测圆点墨迹 x19..24、有序编号 x19..28.5、
         // 列表文字 x34，正文与标题文字也起于 x19——标记对齐的是文字左缘，不是右对齐成一列。
         // 段落文字起点 = 首字形起点 − 列表文字缩进（lineRect.minX 是首字形起点）。
-        let markerOrigin = lineRect.minX - DocumentEditorGeometry.listTextIndent
+        let textIndent = kind.isChecklist
+            ? DocumentEditorGeometry.checklistTextIndent
+            : DocumentEditorGeometry.listTextIndent
+        let markerOrigin = lineRect.minX - textIndent
             + DocumentEditorGeometry.listMarkerOpticalOffset
         switch kind {
         case .bullet:
@@ -60,7 +72,10 @@ extension NativeTextView {
             context.setFillColor(accent.cgColor)
             context.fillEllipse(in: dot)
         case .ordered:
-            let ordinal = DocumentTextCodec.ordinal(forOrderedParagraphAt: paragraph.location, in: storage)
+            let trailing = paragraph.location == storage.length
+            let ordinal = DocumentTextCodec.ordinal(forOrderedParagraphAt: paragraph.location, in: storage,
+                indentLevel: trailing ? trailingIndentLevel : nil,
+                listStart: trailing ? trailingListStart : nil)
             let marker = "\(ordinal)." as NSString
             let font = NSFont.systemFont(ofSize: 14)
             let size = marker.size(withAttributes: [.font: font])
@@ -69,34 +84,48 @@ extension NativeTextView {
             guard frame.intersects(dirtyRect) else { return }
             marker.draw(at: frame.origin, withAttributes: [.font: font, .foregroundColor: accent])
         case .checklist(let checked):
-            let frame = NSRect(x: markerOrigin, y: centerY - 6.5, width: 12.96, height: 12.96)
+            // 命中区仍按滴答 nib 的 17×17，可见描边框按截图收为 15×15
+            // （勾选框四周各留 1pt 透明边）；与 24pt 行尾按钮同高居中。
+            let frame = NSRect(x: markerOrigin + 1, y: centerY - 7.5, width: 15, height: 15)
             guard frame.intersects(dirtyRect) else { return }
             drawCheckbox(checked: checked, frame: frame)
+            // 有提醒的检查项常驻一个小铃铛：不必点亮这一行也能看出提醒还在。
+            if profile.checklistRemindersEnabled,
+               profile.checklistItem(lineIndex)?.reminderAt != nil {
+                drawChecklistBell(in: checklistReminderHitRect(centerY: centerY),
+                                  color: NSColor.secondaryLabelColor, pointSize: 13,
+                                  dirtyRect: dirtyRect)
+            }
         default:
             break
         }
     }
 
-    /// 圆角方框复选框：尺寸/圆角/边宽/勾线宽取原版 `TaskDocumentMetrics`
-    /// （12.96 / 4.05 / 1.053 / 1.62）。未勾选 = 透明底 + borderStrong 描边；
-    /// 已勾选 = 填 documentChecklistFill + 对比色勾（勾形同原版 painter）。
+    /// 圆角方框复选框：可见框 15×15，圆角/描边/勾线按截图比例缩放。
+    /// 未勾选 = 透明底 + 深一档描边；已勾选 = 填浅灰 + 白色勾。
     private func drawCheckbox(checked: Bool, frame: NSRect) {
+        let border = NSColor(WFColors.documentChecklistBorder)
         let fill = NSColor(WFColors.documentChecklistFill)
-        let path = NSBezierPath(roundedRect: frame, xRadius: 4.05, yRadius: 4.05)
+        let path = NSBezierPath(roundedRect: frame, xRadius: 4, yRadius: 4)
         if checked {
             fill.setFill()
             path.fill()
+            fill.setStroke()
+        } else {
+            border.setStroke()
         }
-        fill.setStroke()
-        path.lineWidth = 1.053
+        path.lineWidth = 1
         path.stroke()
         if checked {
             let checkColor = NSColor(WFColors.documentChecklistCheck)
             let mark = NSBezierPath()
-            mark.move(to: NSPoint(x: frame.minX + 3.7, y: frame.minY + 6.5))
-            mark.line(to: NSPoint(x: frame.minX + 5.6, y: frame.minY + 8.6))
-            mark.line(to: NSPoint(x: frame.minX + 9.7, y: frame.minY + 4))
-            mark.lineWidth = 1.62
+            mark.move(to: NSPoint(x: frame.minX + frame.width * 0.29,
+                                  y: frame.minY + frame.height * 0.5))
+            mark.line(to: NSPoint(x: frame.minX + frame.width * 0.43,
+                                  y: frame.minY + frame.height * 0.665))
+            mark.line(to: NSPoint(x: frame.minX + frame.width * 0.747,
+                                  y: frame.minY + frame.height * 0.306))
+            mark.lineWidth = frame.width * 0.12
             mark.lineCapStyle = .round
             mark.lineJoinStyle = .round
             checkColor.setStroke()
@@ -115,7 +144,8 @@ extension NativeTextView {
         let anchor = source.length
         guard let lineRect = viewRect(forCharacterAt: anchor) else { return }
         drawListMarker(kind: kind, paragraph: NSRange(location: anchor, length: 0),
-                       lineRect: lineRect, storage: storage, dirtyRect: dirtyRect)
+                       lineRect: lineRect, storage: storage,
+                       lineIndex: checklistLineIndex(for: anchor), dirtyRect: dirtyRect)
     }
 
     private func isListMarkerKind(_ kind: DocumentBlockKind) -> Bool {
@@ -173,22 +203,86 @@ extension NativeTextView {
                 drawBlockHandle(centerY: centerY, dirtyRect: dirtyRect)
             }
         case .checklist:
-            // 活动检查项：行尾给出整项删除按钮（TI2-05a）。
-            drawChecklistDeleteGlyph(centerY: centerY, dirtyRect: dirtyRect)
+            // 行尾控件由 `drawChecklistControlRow` 统一绘制（悬停行优先）。
+            break
         case .bullet, .ordered, .quote, .code, .divider:
             break
         }
     }
 
-    /// 活动检查项行的行尾删除按钮：淡灰 "×"，命中区与 `checklistDeleteHitRect` 一致。
+    /// 检查项行尾的铃铛/删除：鼠标悬停哪一行就在哪一行显示；没有悬停时
+    /// 退回光标所在行。控件只在清单任务里出现。
+    private func drawChecklistControlRow(in dirtyRect: NSRect) {
+        guard profile.checklistRemindersEnabled else { return }
+        let activeLine: Int? = {
+            guard isEditable, window?.firstResponder === self,
+                  let paragraph = activeChecklistParagraph() else { return nil }
+            return checklistLineIndex(for: paragraph.location)
+        }()
+        guard let line = hoveredChecklistLine ?? activeLine,
+              let paragraph = characterRange(forChecklistLine: line), paragraph.length > 0,
+              let storage = textStorage,
+              let lineRect = viewRect(forCharacterAt: paragraph.location) else { return }
+        let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                      effectiveRange: nil) as? String
+        guard token == "checklist" || token == "checked" else { return }
+        drawChecklistReminderGlyph(centerY: lineRect.midY, lineIndex: line, dirtyRect: dirtyRect)
+        drawChecklistDeleteGlyph(centerY: lineRect.midY, dirtyRect: dirtyRect)
+    }
+
+    /// 相邻检查项之间的细分隔线：1 物理像素、极浅灰，只画在留白中间。
+    private func drawChecklistSeparator(paragraph: NSRange, firstLine: NSRect,
+                                        storage: NSAttributedString, dirtyRect: NSRect) {
+        let next = NSMaxRange(paragraph)
+        guard next < storage.length,
+              let token = storage.attribute(DocumentTextCodec.blockKey, at: next, effectiveRange: nil) as? String,
+              DocumentTextCodec.kind(token).isChecklist else { return }
+        let lastIndex = max(paragraph.location, NSMaxRange(paragraph) - 1)
+        let lastLine = viewRect(forCharacterAt: lastIndex) ?? firstLine
+        let scale = window?.backingScaleFactor ?? 2
+        let thickness = 1 / scale
+        let y = lastLine.maxY + DocumentEditorGeometry.checklistSeparatorOffset - thickness / 2
+        // 与滴答一致：从文字左缘起，几乎铺到右缘（留 12pt）；颜色压到 #F3F3F3。
+        let startX = firstLine.minX
+        let rect = NSRect(x: startX, y: y,
+                          width: max(0, bounds.maxX - 12 - startX), height: thickness)
+        guard rect.intersects(dirtyRect) else { return }
+        NSColor.separatorColor.withAlphaComponent(0.08).setFill()
+        rect.fill()
+    }
+
+    /// 检查项行尾删除按钮：滴答为垃圾桶，24pt 命中区里画 13pt 图形。
     private func drawChecklistDeleteGlyph(centerY: CGFloat, dirtyRect: NSRect) {
         let rect = checklistDeleteHitRect(centerY: centerY)
-        guard rect.intersects(dirtyRect) else { return }
-        let mark = "×" as NSString
-        let font = NSFont.systemFont(ofSize: 13, weight: .regular)
-        let size = mark.size(withAttributes: [.font: font])
-        mark.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2),
-                  withAttributes: [.font: font, .foregroundColor: NSColor.tertiaryLabelColor])
+        drawSymbol("trash", in: rect, pointSize: 13, color: NSColor.secondaryLabelColor,
+                   dirtyRect: dirtyRect)
+    }
+
+    /// 检查项行尾铃铛；有提醒时实心加重，否则是空心入口。
+    private func drawChecklistReminderGlyph(centerY: CGFloat, lineIndex: Int, dirtyRect: NSRect) {
+        guard profile.checklistRemindersEnabled else { return }
+        let hasReminder = profile.checklistItem(lineIndex)?.reminderAt != nil
+        drawChecklistBell(in: checklistReminderHitRect(centerY: centerY),
+                          color: NSColor.secondaryLabelColor, pointSize: 13,
+                          filled: hasReminder, dirtyRect: dirtyRect)
+    }
+
+    private func drawChecklistBell(in rect: NSRect, color: NSColor, pointSize: CGFloat,
+                                   filled: Bool = false, dirtyRect: NSRect) {
+        drawSymbol(filled ? "bell.fill" : "bell", in: rect, pointSize: pointSize,
+                   color: color, dirtyRect: dirtyRect)
+    }
+
+    private func drawSymbol(_ name: String, in rect: NSRect, pointSize: CGFloat,
+                            color: NSColor, dirtyRect: NSRect) {
+        guard rect.intersects(dirtyRect),
+              let image = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return }
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
+        let configured = image.withSymbolConfiguration(config) ?? image
+        let size = configured.size
+        configured.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2,
+                                   width: size.width, height: size.height))
     }
 
     /// 光标所在正文行的六点块手柄：2 列 × 3 点，落在 20pt 行首沟槽里，

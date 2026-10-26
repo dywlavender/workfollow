@@ -35,7 +35,8 @@ struct TodayTaskProvider: TimelineProvider {
         return TaskWidgetSnapshot(updatedAt: now, tasks: ["梳理本周重点", "准备项目评审", "整理今天的进展", "阅读与学习"].enumerated().map { index, title in
             TaskWidgetItem(id: UUID(), title: title, listName: "工作", priority: index == 0 ? 3 : 0,
                 dueAt: now, hasTime: false, isCompleted: false, updatedAt: now)
-        })
+        }, countdowns: [TaskWidgetCountdownItem(id: UUID(), title: "周末", symbol: "hourglass",
+            displayDate: now, relativeLabel: "今天")])
     }
 }
 
@@ -46,7 +47,8 @@ struct WorkFollowWidgets: Widget {
             TodayTaskWidgetView(snapshot: entry.snapshot, date: entry.date)
         }
         .configurationDisplayName("今日待办")
-        .description("查看今天和逾期任务，直接勾选完成，快速进入本周计划。")
+        .description("查看今天的任务和倒数日，直接勾选完成，快速新增任务。")
         .supportedFamilies([.systemMedium])
+        .contentMarginsDisabled()
     }
 }

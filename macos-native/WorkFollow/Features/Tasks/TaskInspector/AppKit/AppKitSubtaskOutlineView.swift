@@ -94,6 +94,8 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
             outlineView.addTableColumn(column)
             outlineView.outlineTableColumn = column
             outlineView.headerView = nil
+            outlineView.style = .plain
+            outlineView.intercellSpacing = .zero
             outlineView.rowSizeStyle = .custom
             outlineView.dataSource = self
             outlineView.delegate = self
@@ -128,9 +130,12 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
             }.first
             lastRootTasks = rootTasks
             lastAllTasks = allTasks
-            tasksByID = Dictionary(uniqueKeysWithValues: allTasks.map { ($0.id, $0) })
+            let visibleTasks = allTasks.filter {
+                $0.deletedAt == nil && $0.skippedAt == nil && $0.convertedNoteID == nil
+            }
+            tasksByID = Dictionary(uniqueKeysWithValues: visibleTasks.map { ($0.id, $0) })
             childrenByParent = [:]
-            for task in allTasks where task.parentID != nil {
+            for task in visibleTasks where task.parentID != nil {
                 childrenByParent[task.parentID!, default: []].append(task)
             }
             for key in childrenByParent.keys {

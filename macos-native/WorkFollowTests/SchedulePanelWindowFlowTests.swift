@@ -102,6 +102,60 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         XCTAssertEqual(fixture.workspace.task(for: fixture.task.id), fixture.task)
     }
 
+    /// 时间输入框的焦点必须跟着时间子卡走：选完时刻（子卡收起）或切到提醒/重复后，
+    /// 蓝色光标不能还留在输入框里。
+    func testClockFieldResignsFocusWhenLeavingTheTimeSheet() throws {
+        let fixture = try makeFixture()
+        defer { close(fixture) }
+        let (parent, timeChild) = try openTimePanel(in: fixture)
+        var clock = try XCTUnwrap(firstTextField(in: try XCTUnwrap(parent.contentView)))
+        XCTAssertTrue(parent.firstResponder is NSTextView, "打开时间子卡后应先聚焦输入框")
+
+        try clickChild(.option("12:30"), in: timeChild, fixture: fixture)
+        settle(fixture)
+        XCTAssertFalse(timeChild.isVisible)
+        XCTAssertNil(clock.currentEditor(), "选完时刻收起子卡后，时间输入框应交出焦点")
+        XCTAssertFalse(parent.firstResponder is NSTextView)
+
+        try clickMain(.icon(.time), in: parent, fixture: fixture)
+        XCTAssertTrue(parent.firstResponder is NSTextView, "重新打开时间子卡应重新聚焦")
+        try clickMain(.icon(.reminder), in: parent, fixture: fixture)
+        XCTAssertTrue(try XCTUnwrap(childPanel(in: parent)).isVisible)
+        clock = try XCTUnwrap(firstTextField(in: try XCTUnwrap(parent.contentView)))
+        XCTAssertNil(clock.currentEditor(), "切到提醒后，时间输入框不应继续持有光标")
+        XCTAssertFalse(parent.firstResponder is NSTextView)
+
+        // 不经过时间子卡、直接点亮行内输入框后再切属性行，同样必须收光标。
+        parent.makeFirstResponder(clock)
+        settle(fixture)
+        XCTAssertNotNil(clock.currentEditor(), "行内时间输入框应能被直接点亮")
+        try clickMain(.icon(.repeat), in: parent, fixture: fixture)
+        settle(fixture)
+        XCTAssertNil(clock.currentEditor(), "直接点亮行内输入框后切到重复，也不该留光标")
+        XCTAssertFalse(parent.firstResponder is NSTextView)
+    }
+
+    /// 行内时间框直接点亮后，点日历格也必须结束编辑；点击本身不能被吞掉。
+    func testClockFieldResignsOnCalendarClickViaEventMonitor() throws {
+        let fixture = try makeFixture()
+        defer { close(fixture) }
+        let (parent, timeChild) = try openTimePanel(in: fixture)
+        try clickChild(.option("12:30"), in: timeChild, fixture: fixture)
+        settle(fixture)
+
+        let clock = try XCTUnwrap(firstTextField(in: try XCTUnwrap(parent.contentView)))
+        parent.makeFirstResponder(clock)
+        settle(fixture)
+        XCTAssertNotNil(clock.currentEditor(), "行内时间框应能被直接点亮")
+
+        try postClickMain(.option("2026年10月3日"), in: parent, fixture: fixture)
+        settle(fixture)
+        XCTAssertNil(clock.currentEditor(), "点日历格应结束时间编辑")
+        XCTAssertFalse(parent.firstResponder is NSTextView)
+        XCTAssertEqual(fixture.layout.frames[.option("2026年10月3日")]?.active, true,
+                       "结束编辑不能吞掉日历点击")
+    }
+
     func testNativeCancelCommandClosesChildBeforeParent() throws {
         let fixture = try makeFixture()
         defer { close(fixture) }
@@ -515,6 +569,31 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
         settle(fixture)
     }
 
+    /// 经由应用事件队列发送点击，让 `NSEvent` 本地监听真的跑一遍。
+    private func postClickMain(_ anchor: ScheduleRenderAnchor, in panel: NSPanel,
+                               fixture: Fixture) throws {
+        let frame = try XCTUnwrap(fixture.layout.frames[anchor]?.frame)
+        let view = try XCTUnwrap(panel.contentView)
+        let point = view.convert(NSPoint(x: frame.midX,
+                                         y: view.isFlipped ? frame.midY : view.bounds.height - frame.midY),
+                                 to: nil)
+        func event(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: panel.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 1,
+                pressure: type == .leftMouseUp ? 0 : 1))
+        }
+        NSApp.postEvent(try event(.leftMouseUp), atStart: true)
+        NSApp.postEvent(try event(.leftMouseDown), atStart: true)
+        let down = try XCTUnwrap(NSApp.nextEvent(matching: .leftMouseDown, until: Date(),
+                                                 inMode: .default, dequeue: true))
+        NSApp.sendEvent(down)
+        if let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date(),
+                                    inMode: .default, dequeue: true) {
+            NSApp.sendEvent(up)
+        }
+    }
+
     private func captureChildFrames(in child: NSPanel, fixture: Fixture) {
         // The debug environment observes every real child host across updates.
         // Mutating host.rootView here would be overwritten by the presenter.
@@ -556,6 +635,11 @@ final class SchedulePanelWindowFlowTests: XCTestCase {
 
     private func childPanel(in parent: NSWindow) -> NSPanel? {
         parent.childWindows?.compactMap { $0 as? NSPanel }.first(where: \.isVisible)
+    }
+
+    private func firstTextField(in root: NSView) -> NSTextField? {
+        if let field = root as? NSTextField { return field }
+        return root.subviews.lazy.compactMap { self.firstTextField(in: $0) }.first
     }
 
     private func sendClick(in view: NSView, frame: CGRect, window: NSWindow) throws {

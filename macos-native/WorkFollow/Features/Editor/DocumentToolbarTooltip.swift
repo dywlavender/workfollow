@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Real control geometry for render contracts; does not participate in sizing.
@@ -18,7 +19,12 @@ final class ToolbarTooltipState: ObservableObject {
     /// 当前被悬停的控件标题；nil 表示没有。
     @Published var hovered: String?
     /// 键是标题（同一工具条内标题唯一）。
-    var frames: [String: CGRect] = [:]
+    @Published private(set) var frames: [String: CGRect] = [:]
+
+    func updateFrame(_ frame: CGRect, for title: String) {
+        guard frames[title] != frame else { return }
+        frames[title] = frame
+    }
 
     /// 指针落在一个控件上。
     func enter(_ title: String) { hovered = title }
@@ -39,6 +45,12 @@ struct DocumentToolbarTooltip {
     /// 提示卡与控件之间的间距，以及卡自身的固定高度（标题宽度不定，高度恒定）。
     static let gap: CGFloat = 6
     static let cardHeight: CGFloat = 22
+
+    static func width(for title: String) -> CGFloat {
+        ceil((title as NSString).size(withAttributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium)
+        ]).width) + WFSpace.sm * 2
+    }
 }
 
 /// 挂在工具条每个控件上：报矩形 + 收悬停。
@@ -52,8 +64,8 @@ private struct ToolbarTooltipTarget: ViewModifier {
                 GeometryReader { proxy in
                     let frame = proxy.frame(in: .named(DocumentToolbarTooltip.space))
                     Color.clear
-                        .onAppear { state.frames[title] = frame }
-                        .onChange(of: frame) { _, value in state.frames[title] = value }
+                        .onAppear { state.updateFrame(frame, for: title) }
+                        .onChange(of: frame) { _, value in state.updateFrame(value, for: title) }
                 }
             }
             .onHover { inside in
@@ -65,15 +77,17 @@ private struct ToolbarTooltipTarget: ViewModifier {
 /// 提示卡本身：深色小圆角面 + 11 medium 白字。
 struct ToolbarTooltipCard: View {
     let title: String
+    var maximumWidth: CGFloat = .infinity
 
     var body: some View {
         Text(title)
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(WFColors.tooltipText)
             .lineLimit(1)
-            .fixedSize()
+            .truncationMode(.tail)
             .padding(.horizontal, WFSpace.sm)
             .frame(height: DocumentToolbarTooltip.cardHeight)
+            .frame(maxWidth: maximumWidth)
             .background(WFColors.tooltipSurface,
                         in: RoundedRectangle(cornerRadius: WFSpace.inline))
             .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
@@ -165,14 +179,17 @@ enum DocumentToolbarPicker: Equatable {
     }
 }
 
-/// 上面两个面板的卡面：浮层底 + 描边 + level2 阴影，行按 36 高竖排。
+/// Existing picker content keeps its row dimensions; the shared child host owns
+/// shadow and focus, and the viewport scrolls when the window limits its height.
 struct DocumentToolbarPickerCard: View {
     let picker: DocumentToolbarPicker
     /// 标题菜单用来给当前级别打勾；时间菜单没有选中项。
     let selectedIndex: Int?
     let onPick: (Int) -> Void
+    var viewportHeight: CGFloat? = nil
 
     var body: some View {
+        ScrollView {
         VStack(spacing: 0) {
             ForEach(Array(picker.titles.enumerated()), id: \.offset) { index, title in
                 DocumentToolbarPickerRow(title: title,
@@ -183,11 +200,14 @@ struct DocumentToolbarPickerCard: View {
             }
         }
         .padding(.vertical, picker.verticalPadding)
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: 12))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12).stroke(WFColors.overlayBorder, lineWidth: 1)
+        .compactScrollbars()
         }
-        .shadow(color: WFColors.overlayShadow, radius: 18, y: 6)
+        .frame(height: viewportHeight ?? picker.height)
+        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
     }
 }
 

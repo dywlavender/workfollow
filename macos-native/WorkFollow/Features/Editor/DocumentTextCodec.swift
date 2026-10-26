@@ -8,6 +8,8 @@ enum DocumentTextCodec {
     static let inlineCodeKey = NSAttributedString.Key("WorkFollow.inlineCode")
     static let explicitBoldKey = NSAttributedString.Key("WorkFollow.explicitBold")
     static let completedChecklistPresentationKey = NSAttributedString.Key("WorkFollow.completedChecklistPresentation")
+    static let indentKey = NSAttributedString.Key("WorkFollow.listIndent")
+    static let listStartKey = NSAttributedString.Key("WorkFollow.listStart")
     static func blockToken(_ kind: DocumentBlockKind) -> String {
         switch kind {
         case .paragraph: "paragraph"
@@ -59,32 +61,47 @@ enum DocumentTextCodec {
 
     /// 有序列表项的序号：向前数连续的 ordered 段（与原版 Quill 的编号口径一致，
     /// 中间断开就重新从 1 计）。
-    static func ordinal(forOrderedParagraphAt location: Int, in source: NSAttributedString) -> Int {
+    static func ordinal(forOrderedParagraphAt location: Int, in source: NSAttributedString,
+                        indentLevel: Int? = nil, listStart: Int? = nil) -> Int {
         let ns = source.string as NSString
+        guard location >= 0, location <= ns.length else { return 1 }
+        let currentAttributes = location < source.length
+            ? source.attributes(at: max(0, location), effectiveRange: nil) : [:]
+        let level = indentLevel ?? (currentAttributes[indentKey] as? Int ?? 0)
+        if let start = listStart ?? (currentAttributes[listStartKey] as? Int) { return start }
         guard location > 0, location <= ns.length else { return 1 }
         var ordinal = 1
         var offset = location
         while offset > 0 {
             let paragraph = ns.paragraphRange(for: NSRange(location: offset - 1, length: 0))
-            guard let token = source.attribute(blockKey, at: paragraph.location,
-                                               effectiveRange: nil) as? String,
-                  token == "ordered" else { break }
+            let attributes = source.attributes(at: paragraph.location, effectiveRange: nil)
+            let kind = Self.kind(attributes[blockKey] as? String ?? "paragraph")
+            let previousLevel = attributes[indentKey] as? Int ?? 0
+            guard kind.isList, previousLevel >= level else { break }
+            if previousLevel > level { offset = paragraph.location; continue }
+            guard kind == .ordered else { break }
+            if let start = attributes[listStartKey] as? Int { return start + ordinal }
             ordinal += 1
             offset = paragraph.location
         }
         return ordinal
     }
 
-    static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>) -> [NSAttributedString.Key: Any] {
+    static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>,
+                           indentLevel: Int = 0, listStart: Int? = nil) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
         let structured = kind == .quote || isListKind(kind)
-        style.paragraphSpacing = structured ? DocumentEditorGeometry.structuredParagraphSpacing : 8
+        // 清单行的文字与滴答一样留出更松的上下间距；行距由 paragraphSpacing
+        // 承担，不拉高单行字体行盒，避免光标与文字基线偏移。
+        style.paragraphSpacing = kind.isChecklist ? DocumentEditorGeometry.checklistRowSpacing
+            : (structured ? DocumentEditorGeometry.structuredParagraphSpacing : 8)
         // 字阶按滴答实测（2026-10-16，截图 1px = 1pt）：标题三级 18 / 16 / 14，正文 14。
         // 滴答的标题 3 到 6 是**同一个字号**（实测三级到六级墨水质量完全相同），
         // 只靠字重与段间距和正文区分，所以这里不再按级别继续收窄。
-        var size: CGFloat = 14
+        var size: CGFloat = DocumentEditorPresentationMetrics.bodyFontSize
         if case .heading(let level) = kind { size = level == 1 ? 18 : level == 2 ? 16 : 14 }
         let isHeading: Bool = { if case .heading = kind { return true }; return false }()
+        let checklistCompleted: Bool = { if case .checklist(true) = kind { return true }; return false }()
         var font: NSFont
         if kind == .code || marks.contains(.code) {
             font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
@@ -117,26 +134,27 @@ enum DocumentTextCodec {
             // macOS 14+ 的 TextKit 2 会自绘 NSTextList 标记并占用行首空间，
             // 与视图层画的强调色标记叠成"双点/1.1"（用户实测）。标记与段落
             // 文字左缘对齐（滴答实测，装饰层按 `lineRect.minX` 反推）。
-            style.firstLineHeadIndent = gutter + DocumentEditorGeometry.listTextIndent
+            // 检查项的勾选框更宽，文字再多让 8pt。
+            let listIndent = kind.isChecklist
+                ? DocumentEditorGeometry.checklistTextIndent
+                : DocumentEditorGeometry.listTextIndent
+            style.firstLineHeadIndent = gutter + listIndent
+                + CGFloat(max(0, indentLevel)) * DocumentEditorGeometry.listIndentStep
             style.headIndent = style.firstLineHeadIndent
         } else {
             style.firstLineHeadIndent = gutter
             style.headIndent = gutter
         }
-        if kind == .checklist(true) {
-            // 勾选后的检查项不再额外调段落间距，保持与未勾选一致。
-        }
         var attrs: [NSAttributedString.Key: Any] = [
             blockKey: blockToken(kind), explicitBoldKey: marks.contains(.bold), .font: font, .paragraphStyle: style,
-            // 引用与已勾选检查项转灰：前者对齐滴答截图，后者是原版
-            // `completedChecklistText`（勾选后置灰 + 删除线）。
-            .foregroundColor: kind == .quote || kind == .checklist(true)
-                ? NSColor.secondaryLabelColor : NSColor.labelColor
+            // 引用与已勾选检查项转灰：勾选后只变灰（与已完成任务同一档灰），
+            // 不再加删除线——删除线由切回文本时的转换负责。
+            .foregroundColor: kind == .quote ? NSColor.secondaryLabelColor
+                : checklistCompleted ? NSColor(WFColors.taskCompletedTitle)
+                : NSColor.labelColor
         ]
-        if kind == .checklist(true) {
-            attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
-            attrs[completedChecklistPresentationKey] = true
-        }
+        if kind.isList { attrs[indentKey] = max(0, min(8, indentLevel)) }
+        if kind == .ordered, let listStart { attrs[listStartKey] = max(1, listStart) }
         if marks.contains(.code) { attrs[inlineCodeKey] = true }
         if marks.contains(.underline) { attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         if marks.contains(.strikethrough) { attrs[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
@@ -148,7 +166,8 @@ enum DocumentTextCodec {
         let result = NSMutableAttributedString(string: "")
         for (index, block) in document.blocks.enumerated() {
             for run in block.runs {
-                var attrs = attributes(kind: block.kind, marks: run.marks)
+                var attrs = attributes(kind: block.kind, marks: run.marks,
+                                       indentLevel: block.indentLevel, listStart: block.listStart)
                 if block.kind == .divider {
                     let attachment = NSTextAttachment()
                     attachment.attachmentCell = DocumentDividerCell()
@@ -181,7 +200,8 @@ enum DocumentTextCodec {
             if index < document.blocks.count - 1 {
                 let separatorKind = block.kind == .divider ? DocumentBlockKind.paragraph : block.kind
                 result.append(NSAttributedString(string: "\n", attributes: attributes(
-                    kind: separatorKind, marks: [])))
+                    kind: separatorKind, marks: [], indentLevel: block.indentLevel,
+                    listStart: block.listStart)))
             }
         }
         applyCodeHighlighting(to: result, document: document)
@@ -305,7 +325,8 @@ enum DocumentTextCodec {
     }
 
     static func decode(_ text: NSAttributedString, preserving previous: NativeDocument,
-                       trailing: DocumentBlockKind? = nil) -> NativeDocument {
+                       trailing: DocumentBlockKind? = nil,
+                       trailingIndentLevel: Int = 0, trailingListStart: Int? = nil) -> NativeDocument {
         let plain = text.string as NSString
         let skeleton = previous.replacingPlainText(text.string)
         var offset = 0
@@ -313,13 +334,21 @@ enum DocumentTextCodec {
             let length = (block.plainText as NSString).length
             var runs: [DocumentRun] = []
             var kind: DocumentBlockKind = .paragraph
+            var indentLevel = 0
+            var listStart: Int?
             if offset < text.length, let token = text.attribute(blockKey, at: offset, effectiveRange: nil) as? String {
                 kind = Self.kind(token)
+                indentLevel = text.attribute(indentKey, at: offset, effectiveRange: nil) as? Int ?? 0
+                listStart = text.attribute(listStartKey, at: offset, effectiveRange: nil) as? Int
             }
             // 文末那个"一个字符都没有"的空段落：TextKit 把段落样式挂在字符上，而它
             // 没有字符，级别只活在输入属性里，所以由视图把待定级别报进来。原版把行
             // 属性存在 Delta 里，没有这个边界。
-            if length == 0, index == skeleton.blocks.count - 1, let trailing { kind = trailing }
+            if length == 0, index == skeleton.blocks.count - 1, let trailing {
+                kind = trailing
+                indentLevel = trailingIndentLevel
+                listStart = trailingListStart
+            }
             text.enumerateAttributes(in: NSRange(location: min(offset, text.length), length: length)) { attrs, range, _ in
                 var marks = Set<DocumentMark>()
                 if attrs[inlineCodeKey] as? Bool == true { marks.insert(.code) }
@@ -348,7 +377,9 @@ enum DocumentTextCodec {
                 runs.append(DocumentRun(text: plain.substring(with: range), marks: marks, attachment: attachment, diagram: diagram))
             }
             offset += length + 1
-            return DocumentBlock(id: block.id, kind: kind, runs: runs)
+            return DocumentBlock(id: block.id, kind: kind, runs: runs,
+                                 indentLevel: indentLevel, listStart: listStart,
+                                 checklist: block.checklist)
         }
         return NativeDocument(blocks: blocks)
     }

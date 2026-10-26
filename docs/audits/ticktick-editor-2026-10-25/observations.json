@@ -1,0 +1,78 @@
+{
+  "native-editor-class-observations": [
+    {
+      "class": "APMarkdownTextView",
+      "superclass": "NSTextView",
+      "source": "/Applications/TickTick.app/Contents/Frameworks/AppestKit.framework/Versions/A/AppestKit",
+      "metadata_line": 21011
+    },
+    {
+      "class": "APMarkdownLayoutManager",
+      "superclass": "NSLayoutManager",
+      "source": "/Applications/TickTick.app/Contents/Frameworks/AppestKit.framework/Versions/A/AppestKit",
+      "metadata_line": 20725
+    },
+    {
+      "class": "APMarkdownTypesetter",
+      "superclass": "NSATSTypesetter",
+      "source": "/Applications/TickTick.app/Contents/Frameworks/AppestKit.framework/Versions/A/AppestKit",
+      "metadata_line": 23015
+    }
+  ],
+  "task-note-editor-owner-observations": [
+    {
+      "class": "TTTaskDetailMarkdownCell",
+      "observations": [
+        "type      <address> @\"_TtC9AppestKit18APMarkdownTextView\"",
+        "attributes <address> T@\"_TtC9AppestKit18APMarkdownTextView\",N,R,VtextView"
+      ]
+    },
+    {
+      "class": "TTSingleTaskDetailViewController",
+      "observations": [
+        "name    <address> (<address>) detailMarkdownCellTaskIsNoteKind",
+        "name    <address> (<address>) editingMarkdownTextView",
+        "name    <address> (<address>) bottomActionViewDidClickConvertTaskAndNotes:",
+        "name    <address> (<address>) isNoteKind",
+        "name    <address> (<address>) bottomActionViewDidClickConvertTaskAndNotes:",
+        "attributes <address> T@\"_TtC9AppestKit18APMarkdownTextView\",N,R",
+        "attributes <address> T@\"_TtC9AppestKit18APMarkdownTextView\",N,R",
+        "attributes <address> T@\"_TtC9AppestKit18APMarkdownTextView\",N,R",
+        "name       <address> isNoteKind",
+        "name       <address> editingMarkdownTextView",
+        "attributes <address> T@\"_TtC9AppestKit18APMarkdownTextView\",N,R",
+        "name    <address> (<address>) bottomActionViewDidClickConvertTaskAndNotes:"
+      ]
+    },
+    {
+      "class": "TTTaskDetailTitleCell",
+      "observations": [
+        "name    <address> (<address>) kindButtonClicked:"
+      ]
+    }
+  ],
+  "codec-round-trip-observations": {
+    "alignmentRetained": false,
+    "backgroundAfterRoundTrip": "#ffe98a",
+    "imageEmbedRetained": false,
+    "indentRetained": false,
+    "plainTextAfterRoundTrip": "彩色正文\n[图片]",
+    "textColorRetained": false
+  },
+  "slash-click-observations": {
+    "expectedIndex": 11,
+    "command": "paragraph",
+    "receivedIndex": null,
+    "mouseClickPreservesInsertionIndex": false
+  },
+  "scope": {
+    "reference": "Installed macOS TickTick 8.0.80 (492)",
+    "project": "Current WorkFollow source, note Quill 2.0.3",
+    "changes": "Analysis only; the unverified native-note switch was withdrawn; no task-editor edits in this investigation",
+    "limits": [
+      "Static metadata proves native class relationships, not every runtime behavior.",
+      "Quill data and mouse-menu probes run against source in isolation, not real user notes.",
+      "Pixel geometry not accepted from the distorted native screenshot."
+    ]
+  }
+}

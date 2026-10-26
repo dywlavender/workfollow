@@ -118,10 +118,20 @@ enum InspectorPanelTestSupport {
     /// Preference frames use the named SwiftUI coordinate space: origin at top-left.
     static func click(_ frame: CGRect, in view: NSView, window: NSWindow,
                       modifiers: NSEvent.ModifierFlags = []) throws {
+        try click(frame, in: view, window: window, modifiers: modifiers, clickCount: 1)
+    }
+
+    /// 滴答式标题：双击才进入行内编辑。
+    static func doubleClick(_ frame: CGRect, in view: NSView, window: NSWindow) throws {
+        try click(frame, in: view, window: window, modifiers: [], clickCount: 2)
+    }
+
+    private static func click(_ frame: CGRect, in view: NSView, window: NSWindow,
+                              modifiers: NSEvent.ModifierFlags, clickCount: Int) throws {
         let point = view.convert(NSPoint(x: frame.midX,
                                          y: view.isFlipped ? frame.midY : view.bounds.height - frame.midY),
                                  to: nil)
-        try sendClick(at: point, to: window, modifiers: modifiers)
+        try sendClick(at: point, to: window, modifiers: modifiers, clickCount: clickCount)
         settle(window)
     }
 
@@ -166,14 +176,15 @@ enum InspectorPanelTestSupport {
 
     private static var clickEventNumber = 0
     private static func sendClick(at point: NSPoint, to window: NSWindow,
-                                  modifiers: NSEvent.ModifierFlags = []) throws {
+                                  modifiers: NSEvent.ModifierFlags = [],
+                                  clickCount: Int = 1) throws {
         clickEventNumber += 2
         func event(_ type: NSEvent.EventType) throws -> NSEvent {
             try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point,
                 modifierFlags: modifiers, timestamp: ProcessInfo.processInfo.systemUptime,
                 windowNumber: window.windowNumber, context: nil,
                 eventNumber: clickEventNumber + (type == .leftMouseUp ? 1 : 0),
-                clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
+                clickCount: clickCount, pressure: type == .leftMouseUp ? 0 : 1))
         }
         // Native text controls may synchronously track until mouse-up. Queue
         // that event first so dispatching mouse-down cannot deadlock the test.
@@ -203,7 +214,8 @@ enum InspectorPanelTestSupport {
                 "标签": .tagsMenuRow, "任务动态": .activityMenuRow, "创建副本": .duplicateMenuRow,
                 "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch,
                 "设置预计专注": .focusEstimate, "截止日期": .deadlineLabel,
-                "任务类型": .kind, "笔记信息": .noteInfo, "在独立窗口打开": .detach, "评论": .footerComment
+                "任务类型": .kind, "笔记信息": .noteInfo, "打开便签": .detach, "评论": .footerComment,
+                "转换为笔记": .noteConversionMenuRow, "转换为任务": .noteConversionMenuRow
             ]
             let frames = window === owner ? probe.main : probe.popup
             var rect = anchors[labelFragment].flatMap { frames[$0] }

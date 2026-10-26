@@ -38,6 +38,12 @@ final class SummaryPopupLayoutTests: XCTestCase {
         XCTAssertEqual(above.minY, lower.maxY + 4)
         XCTAssertLessThanOrEqual(above.maxX, screen.maxX - 8)
         XCTAssertGreaterThanOrEqual(above.minX, screen.minX + 8)
+
+        // 底栏触发：即使屏幕下方有空间，也应优先向上展开。
+        let middle = CGRect(x: 1160, y: 400, width: 160, height: 28)
+        let forcedAbove = AnchoredPropertyPanelGeometry.dropdownFrame(
+            anchor: middle, size: size, bounds: screen, prefersAbove: true)
+        XCTAssertEqual(forcedAbove.minY, middle.maxY + 4)
     }
 
     func testRealSummaryControlAnchorsItsPanelToTheValueButton() throws {

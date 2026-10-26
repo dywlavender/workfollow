@@ -74,7 +74,7 @@ final class DocumentChecklistItemTests: XCTestCase {
         let rect = view.checklistDeleteHitRect(centerY: 20)
         XCTAssertGreaterThan(rect.minX, view.bounds.midX, "删除按钮在行尾，不在行首")
         XCTAssertLessThanOrEqual(rect.maxX, view.bounds.maxX)
-        XCTAssertEqual(rect.width, 18, accuracy: 0.5)
+        XCTAssertEqual(rect.width, 24, accuracy: 0.5, "滴答 nib 的行尾按钮 24×24")
     }
 
     // MARK: - Helpers

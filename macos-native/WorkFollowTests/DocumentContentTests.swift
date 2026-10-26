@@ -316,7 +316,8 @@ final class DocumentContentTests: XCTestCase {
             // 标记由视图层自绘：段落不挂 NSTextList，否则 TextKit 2（macOS 14+）
             // 会再画一份灰色标记并挤占行首空间。
             XCTAssertEqual(style?.textLists.isEmpty, true)
-            XCTAssertEqual(style?.firstLineHeadIndent, DocumentEditorGeometry.decorationLane + DocumentEditorGeometry.listTextIndent)
+            XCTAssertEqual(style?.firstLineHeadIndent,
+                           DocumentEditorGeometry.decorationLane + DocumentEditorGeometry.checklistTextIndent)
         }
     }
 

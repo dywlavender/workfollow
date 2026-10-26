@@ -102,7 +102,8 @@ final class NotesWorkspaceModel: ObservableObject {
         store.sort(order)
         revision += 1
     }
-    func create(folder: String? = nil) {
+    @discardableResult
+    func create(folder: String? = nil, select: Bool = true) -> UUID {
         let id = store.create()
         if let folder {
             let folderID = self.folderID(named: folder)
@@ -111,8 +112,23 @@ final class NotesWorkspaceModel: ObservableObject {
                 $0.folderID = folderID
             }
         }
-        selectedID = id
+        if select { selectedID = id }
         revision += 1
+        return id
+    }
+
+    /// 悬浮窗关闭时只丢弃“本次浮窗新建且仍未写任何内容”的笔记，
+    /// 不把已有空笔记或已进垃圾桶的笔记一起清掉。
+    @discardableResult
+    func discardEmptyNote(_ id: UUID) -> Bool {
+        guard let note = notes.first(where: { $0.id == id }),
+              note.deletedAt == nil,
+              note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              note.document.isEmpty else { return false }
+        store.removeCreatedNote(id)
+        if selectedID == id { selectedID = nil }
+        revision += 1
+        return true
     }
 
     func moveNoteToFolder(_ id: UUID, named folder: String) {

@@ -32,6 +32,12 @@ struct TaskTagsSectionView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
+    var sectionCollapsed: Bool = false
+    var onToggleSection: () -> Void = {}
+    /// 分组显示状态（滴答标签头「⋯」：显示 / 隐藏 / 有内容时显示）。
+    /// 只控制组内标签行，分组头始终保留，保证入口随时可改回来。
+    var sectionVisibility: SmartListVisibility = .visible
+    var onSetSectionVisibility: (SmartListVisibility) -> Void = { _ in }
     @State private var collapsed: Set<UUID> = []
     @State private var targeted: UUID?
     @State private var colorTag: UUID?
@@ -40,22 +46,25 @@ struct TaskTagsSectionView: View {
     var body: some View {
         let counts = workspace.tagSidebarCounts
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("标签").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                Spacer(minLength: 0)
-                Button { create(parentID: nil) } label: {
-                    Image(systemName: "plus").font(.system(size: 12)).frame(width: 20, height: 20)
+            SidebarSectionHeader(title: "标签", collapsed: sectionCollapsed, toggle: onToggleSection) {
+                HStack(spacing: 0) {
+                    tagSectionMenu
+                    Button { create(parentID: nil) } label: {
+                        Image(systemName: "plus").font(.system(size: 12)).frame(width: 20, height: 20)
+                    }
+                    .foregroundStyle(WFColors.secondaryText)
+                    .help("新建标签").accessibilityLabel("新建标签")
                 }
-                .foregroundStyle(WFColors.secondaryText)
-                .help("新建标签").accessibilityLabel("新建标签")
+                .fixedSize()
             }
-            .padding(.horizontal, WFSpace.sm).padding(.top, WFSpace.lg).padding(.bottom, WFSpace.xs)
-            if workspace.taskTags.isEmpty {
-                Text("以标签组织不同清单中的任务").font(.caption).foregroundStyle(.tertiary)
-                    .padding(.horizontal, WFSpace.sm)
-            }
-            ForEach(workspace.orderedTags.filter { workspace.tagAncestors($0.id).allSatisfy { !collapsed.contains($0) } }) { tag in
-                tagRow(tag, count: counts[tag.name, default: 0])
+            if !sectionCollapsed && sectionVisibility.shows(hasContent: !workspace.taskTags.isEmpty) {
+                if workspace.taskTags.isEmpty {
+                    SidebarHintCard(text: "以标签的维度展示不同清单的任务。在添加任务时输入“#”可快速选择标签")
+                } else {
+                    ForEach(workspace.orderedTags.filter { workspace.tagAncestors($0.id).allSatisfy { !collapsed.contains($0) } }) { tag in
+                        tagRow(tag, count: counts[tag.name, default: 0])
+                    }
+                }
             }
         }
         .buttonStyle(.plain).font(WFType.navigation)
@@ -65,6 +74,26 @@ struct TaskTagsSectionView: View {
                 onSaved: { parentID in if let parentID { collapsed.remove(parentID) } },
                 onDismiss: { editor = nil })
         }
+    }
+
+    /// 标签分组头「⋯」：对齐滴答实测（2026-10-25），只有三个显示状态项。
+    /// 宽度用 narrow（176），不沿用右键菜单的 224 宽度。
+    private var tagSectionMenu: some View {
+        BusinessMenu(width: PopupMetrics.menuWidthNarrow, title: "标签显示") {
+            BusinessMenuChoices(selection: Binding(
+                get: { sectionVisibility },
+                set: { onSetSectionVisibility($0) }),
+                options: SmartListVisibility.menuOrder.map { BusinessChoice($0, $0.title) })
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 18, height: 20)
+                .contentShape(Rectangle())
+        }
+        .fixedSize()
+        .help("标签显示")
+        .accessibilityLabel("标签显示")
     }
 
     private func tagRow(_ tag: TaskTag, count: Int) -> some View {
@@ -84,8 +113,8 @@ struct TaskTagsSectionView: View {
                 workspace.activeList = nil; workspace.activeFilterID = nil; workspace.activeTag = tag.name
                 onNavigate()
             } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "tag").font(.system(size: 12)).frame(width: 12)
+                HStack(spacing: 6) {
+                    Image(systemName: "tag").font(.system(size: 12)).frame(width: 22)
                         .foregroundStyle(workspace.tagColor(tag.name))
                     Text(tag.name).lineLimit(1)
                     Spacer(minLength: WFSpace.xs)
@@ -100,7 +129,9 @@ struct TaskTagsSectionView: View {
             }
             .accessibilityLabel("标签：" + tag.name)
         }
-        .padding(.horizontal, WFSpace.sm)
+        // 滴答实测：标签图标起于行内 19、文字 47，与智能清单同一列。
+        .padding(.leading, 11)
+        .padding(.trailing, WFSpace.sm)
         .padding(.leading, CGFloat(workspace.tagDepth(tag.name)) * 16)
         .background(workspace.activeTag == tag.name ? WFColors.listSelection : .clear,
                     in: RoundedRectangle(cornerRadius: WFMetrics.corner))

@@ -151,6 +151,19 @@ enum ScheduleDisplay {
         return day + " " + clockText(date, calendar: calendar)
     }
 
+    /// 「倒数日」口径：`3天后`、`今天 14:30`、`逾期2天`。
+    /// 有具体时刻时保留时间——只看天数会丢掉当天的时间约束。
+    static func countdownText(_ date: Date, hasTime: Bool, now: Date,
+                              calendar: Calendar) -> String {
+        let distance = dayDistance(from: now, to: date, calendar: calendar)
+        let day: String
+        if distance > 0 { day = "\(distance)天后" }
+        else if distance < 0 { day = "逾期\(-distance)天" }
+        else { day = "今天" }
+        guard hasTime else { return day }
+        return day + " " + clockText(date, calendar: calendar)
+    }
+
     private static func fullDateText(_ date: Date, hasTime: Bool, now: Date,
                                      calendar: Calendar) -> String {
         var parts: [String] = []
@@ -184,7 +197,7 @@ enum ScheduleDisplay {
 
     // These fixed Chinese numeric labels do not need ICU formatter setup on
     // every row redraw. Keep formatter semantics for other calendar systems.
-    private static func absoluteDateText(_ date: Date, now: Date, calendar: Calendar) -> String {
+    static func absoluteDateText(_ date: Date, now: Date, calendar: Calendar) -> String {
         guard calendar.identifier == .gregorian else {
             return dateFormatter(calendar: calendar, now: now, date: date).string(from: date)
         }

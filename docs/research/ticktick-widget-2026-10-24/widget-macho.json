@@ -1,7 +1,7 @@
 {
   "ok": true,
   "data": {
-    "evidence_id": "ev_26761bf4dd374f93de29acce88f522edb6d57e27fdca8db925526887e0e6d75a",
+    "evidence_id": "[evidence identifier omitted]",
     "subject": {
       "name": "TickTick.Widget.Extension",
       "local_path": "/Applications/TickTick.app/Contents/PlugIns/TickTick.Widget.Extension.appex/Contents/MacOS/TickTick.Widget.Extension",
@@ -2949,7 +2949,7 @@
             "source": null
           },
           {
-            "name": "_$s04TickA17_Widget_Extension12ProgressViewV19percentageFormatter33_BDDA7A31452BAF4C629BCF0C2F7BA453LLSo08NSNumberG0Cvpfi",
+            "name": "_$s04TickA17_Widget_Extension12ProgressViewV19percentageFormatter33_[internal value omitted]LLSo08NSNumberG0Cvpfi",
             "address": "0x100003c84",
             "weak": null,
             "reexport": false,

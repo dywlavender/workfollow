@@ -11,6 +11,22 @@ html, body {
   font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
 }
 
+/* Fixed viewport hosts scroll the editor, never the whole Web document. */
+html, body { height: 100%; overflow: hidden; }
+#root { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+#editor { flex: 1 1 auto; min-height: 0; }
+#wf-toolbar { flex-shrink: 0; }
+
+/* Match the native overlay thumb without adding a permanent gutter. */
+::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(60, 60, 67, 0.28); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(60, 60, 67, 0.42); }
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb { background: rgba(235, 235, 245, 0.30); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(235, 235, 245, 0.45); }
+}
+
 .ql-container { border: 0 !important; font-family: inherit; }
 
 /* 内容自适应高度（contentSized 宿主，body.wf-grows 由宿主开关）：
@@ -18,6 +34,7 @@ html, body {
    回车时若内层 web 滚动与外层并存，光标会上下跳动（2026-10-24 实测 bug）；
    固定视口宿主（spike / 任务详情）不挂该类，保留 Quill 默认内滚。 */
 body.wf-grows { height: auto; overflow: hidden; }
+body.wf-grows #root { height: auto; display: block; }
 body.wf-grows .ql-container.ql-snow { height: auto; }
 body.wf-grows .ql-editor {
   height: auto !important;

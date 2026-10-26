@@ -84,7 +84,7 @@ final class SystemTaskNotificationClient: TaskNotificationClient {
     }
     func pendingManagedIDs() async -> [String] {
         await center.pendingNotificationRequests().map(\.identifier).filter {
-            $0.hasPrefix("task.") || $0.hasPrefix("countdown.")
+            $0.hasPrefix("task.") || $0.hasPrefix("countdown.") || $0.hasPrefix("checklist.")
         }
     }
     func delivered() async -> [ReminderDelivery] {

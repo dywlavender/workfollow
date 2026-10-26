@@ -60,7 +60,8 @@ private struct TaskReminderPanel: View {
             Label(delivery.title, systemImage: "bell.badge").font(.headline).lineLimit(2)
             Text(delivery.body).font(.subheadline).foregroundStyle(.secondary)
             HStack {
-                Button(delivery.kind == .task ? "打开任务" : "查看提醒", action: onOpen)
+                Button(delivery.kind == .task || delivery.kind == .checklistItem ? "打开任务" : "查看提醒",
+                       action: onOpen)
                 Spacer()
                 BusinessMenu("稍后提醒") {
                     ForEach(Array(Set([5, defaultMinutes, 10, 30])).sorted(), id: \.self) { minutes in

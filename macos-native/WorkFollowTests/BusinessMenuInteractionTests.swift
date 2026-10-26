@@ -219,6 +219,8 @@ final class BusinessMenuInteractionTests: XCTestCase {
         let screen = owner.convertToScreen(CGRect(origin: point, size: .zero))
         XCTAssertEqual(menu.frame.minX, screen.minX, accuracy: 1)
         XCTAssertEqual(menu.frame.maxY, screen.minY, accuracy: 1)
+        XCTAssertEqual(menu.frame.width, PopupMetrics.menuWidthTight, accuracy: 0.5,
+                       "单项右键菜单按内容收窄，不再铺 224")
         XCTAssertEqual(probe.rows.count, 1)
         try click(probe.rows[0].rect, in: menu)
         XCTAssertEqual(model.actions, 1)

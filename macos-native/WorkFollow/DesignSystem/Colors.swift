@@ -17,13 +17,16 @@ enum WFColors {
             : NSColor(red: 0.753, green: 0.769, blue: 0.796, alpha: 1)
     })
     static let border = Color(nsColor: .separatorColor).opacity(0.5)
+    /// 滴答 2026-10 参考截图（Display P3 → sRGB）的全界面蓝：约 #6389F5。
+    /// 之前是偏紫的 #5B5CEB；任务栏、日历、详情统一改成滴答蓝后，
+    /// `priorityLow`（#5B8CFB）与强调色几乎同色，这是滴答本身的配色。
     static let accent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(red: 0.494, green: 0.533, blue: 1, alpha: 1)
-            : NSColor(red: 0.357, green: 0.361, blue: 0.922, alpha: 1)
+            ? NSColor(red: 0.561, green: 0.663, blue: 1, alpha: 1)
+            : NSColor(red: 0.388, green: 0.537, blue: 0.961, alpha: 1)
     })
     /// Hover emphasis used for time fragments in Flutter's smart Quick Add.
-    static let accentHover = themed(rgb(0x4B4CD9), rgb(0x98A1FF))
+    static let accentHover = themed(rgb(0x4D74E8), rgb(0xA2B7FF))
     static let selection = accent.opacity(0.10)
     /// 第二栏（导航）与第三栏（任务/笔记列表）的**选中行底色**。滴答实测：导航栏
     /// 选中 `(241,241,241)`、任务行选中 `(242,242,242)`——同一档中性灰，取 `#F2F2F2`。
@@ -80,7 +83,7 @@ enum WFColors {
     /// 中优先级。
     static let warning = themed(rgb(0xA15C08), rgb(0xF2B84B))
     /// 优先级旗（滴答实测色,2026-10 截图取色):高 #FF393C、中 #FF8D29、
-    /// 低=accent(#5B5CEB,与 accent 浅色值一致故不另立)。旗子是图形不是
+    /// 低=accent(#6389F5,与 accent 浅色值一致故不另立)。旗子是图形不是
     /// 文字,用饱和图形色;danger/warning 是文字语义色,饱和度不同,不混用。
     static let flagHigh = themed(rgb(0xFF393C), rgb(0xFF5B5E))
     static let flagMedium = themed(rgb(0xFF8D29), rgb(0xFFA14D))
@@ -114,8 +117,8 @@ enum WFColors {
     /// `(238,122,118)`（两张截图同为 Display 配置，比较成立）。原因是 `themed(rgb:)`
     /// 走 sRGB、由系统转到显示器色彩空间，而滴答的值本身就落在显示器空间里。
     /// 用 ImageCms 验过：sRGB `(94,203,149)` → Display `(123,201,153)`，与我们实测
-    /// **逐值一致**；同一模型对 `accent` 蓝的预测 `(91,92,227)` 也与实测一致。
-    /// 想要屏上逐值相同，源值要写反解后的 sRGB `(9,206,144)` / `(255,114,114)`。
+    /// **逐值一致**。想要屏上逐值相同，源值要写反解后的 sRGB `(9,206,144)` /
+    /// `(255,114,114)`。
     /// **没有那样做**：全工程的颜色（`flagHigh`、`tile*`、`danger`…）都是「截图实测值
     /// 直接当源值」，只把徽标反解会让它成为全app 最饱和的一块，与自己的色板冲突。
     /// 要改成屏上逐值对齐，就该整层一起改，不是单独改这一对。
@@ -124,16 +127,19 @@ enum WFColors {
     /// 徽标上的字。两档底色都够深，白字对比安全（同 `tooltipText` 的做法：
     /// 这种"切在实心块里的洞"不按底色算明度）。
     static let onWorkdayBadge = themed(rgb(0xFFFFFF), rgb(0xFFFFFF))
-    /// 强调色的浅底（周视图卡片投放高亮、导航选中）。
-    static let accentSoft = themed(rgb(0xEEF0FF), rgb(0x2D355C))
+    /// 强调色的浅底（周视图卡片投放高亮、正文选区）。
+    static let accentSoft = themed(rgb(0xEDF2FF), rgb(0x253148))
     /// 强调色最浅的一档（Flutter `accentFaint`）：只用在"这一行可以点"的悬停底色上，
     /// 比 `accentSoft` 再淡一档——它底下通常是内容而不是选中态。
-    static let accentFaint = themed(rgb(0xF6F7FF), rgb(0x252B4A))
+    static let accentFaint = themed(rgb(0xF7F9FF), rgb(0x202839))
     /// 已勾选检查项的填充。滴答的"已完成"标记是**浅灰**（2026-10-18 从滴答看板
     /// 已完成卡取样 #E6E6E6；卡片处于 dim 态，反推原色约 #D1D1D1）。此前用
     /// Flutter 的 `textSecondary`（#5D6B75）显得过深，用户反馈"和滴答不一样"。
     /// 深色保持中性强一档，勾在暗底上仍可读。
-    static let documentChecklistFill = themed(rgb(0xD2D3D6), rgb(0x4A505B))
+    /// 清单复选框：未勾选描边比填充深一档（滴答实测描边 ≈ #A3A3A3，
+    /// 勾选填充 ≈ #E8E8E8），同一控件两种状态不共用一个颜色。
+    static let documentChecklistBorder = themed(rgb(0xA3A3A3), rgb(0x6E7480))
+    static let documentChecklistFill = themed(rgb(0xE8E8E8), rgb(0x4A505B))
     /// 填充上的勾（原版 `documentChecklistCheck`：对比安全色）。
     static let documentChecklistCheck = themed(rgb(0xFFFFFF), rgb(0xEDEFF2))
     /// 列表行的 hover 底。四象限任务行与侧栏清单行共用。

@@ -1,0 +1,7 @@
+NSTextView.acceptsFirstMouse = false
+NSScrollView.acceptsFirstMouse = false
+NSTextView.mouseDownCanMoveWindow = false
+NSScrollView.mouseDownCanMoveWindow = false
+NSHostingView.acceptsFirstMouse = false
+NSHostingView.needsPanelToBecomeKey = false
+NSTextView.needsPanelToBecomeKey = true

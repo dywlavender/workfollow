@@ -19,6 +19,7 @@ struct NotesWorkspaceView: View {
     // 笔记页脚的浮动格式工具条（Round B2 迁移：Flutter DocumentEditorFooter + DocumentEditorToolbar）。
     @State private var showFormatToolbar = false
     @StateObject private var editorHandle = DocumentEditorHandle()
+    @ObservedObject private var floatingNotes = FloatingNoteWindowController.shared
     private var trash: Bool { navigation.destination == .notesTrash }
     private var rows: [Note] { notes.rows(trash: trash, query: query, folder: folder, favorites: favorites) }
     private var visibleNote: Note? { rows.first { $0.id == notes.selectedID } ?? rows.first }
@@ -27,6 +28,21 @@ struct NotesWorkspaceView: View {
         notes.favoritesOnly = false
         notes.create(folder: folder)
         detailOnly = true
+    }
+
+    /// 从悬浮窗“在主页打开”回来时，清搜索/筛选并强制进入详情栏。
+    /// 清筛选会触发既有 onChange 把 detailOnly 置 false，所以详情切换延后一拍。
+    private func consumeNoteRevealRequest() {
+        guard let id = navigation.noteRevealRequest else { return }
+        notes.selectedID = id
+        query = ""
+        notes.favoritesOnly = false
+        notes.folderFilter = nil
+        navigation.noteRevealRequest = nil
+        DispatchQueue.main.async {
+            detailOnly = true
+            showFormatToolbar = false
+        }
     }
 
     var body: some View {
@@ -74,6 +90,11 @@ struct NotesWorkspaceView: View {
         .onChange(of: navigation.destination) { _, _ in detailOnly = false; query = ""; showFormatToolbar = false }
         .onChange(of: notes.folderFilter) { _, _ in detailOnly = false; query = "" }
         .onChange(of: notes.favoritesOnly) { _, _ in detailOnly = false; query = "" }
+        .onChange(of: floatingNotes.openNoteIDs) { _, _ in
+            if let note = visibleNote, floatingNotes.isOpen(note.id) { showFormatToolbar = false }
+        }
+        .onChange(of: navigation.noteRevealRequest) { _, _ in consumeNoteRevealRequest() }
+        .onAppear { consumeNoteRevealRequest() }
         .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
             Button("取消", role: .cancel) {}
             Button("全部删除", role: .destructive) { notes.emptyTrash() }
@@ -131,6 +152,12 @@ struct NotesWorkspaceView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
                                     if note.favorite { Image(systemName: "star.fill") }
+                                    if floatingNotes.isOpen(note.id) {
+                                        Image(systemName: "rectangle.on.rectangle")
+                                            .font(.caption2)
+                                            .foregroundStyle(WFColors.accent)
+                                            .help("正在悬浮窗中编辑")
+                                    }
                                     Text(note.title.isEmpty ? "未命名笔记" : note.title).lineLimit(1).strikethrough(trash)
                                     Spacer()
                                 }
@@ -206,6 +233,8 @@ struct NotesWorkspaceView: View {
                     if trash {
                         Button { notes.restore(note.id); detailOnly = false } label: { Image(systemName: "arrow.uturn.backward") }.help("恢复笔记")
                         Button(role: .destructive) { purgeID = note.id } label: { Image(systemName: "trash.slash") }.help("永久删除笔记")
+                    } else {
+                        FloatingEditorButton { openFloatingNote(note) }
                     }
                 }.buttonStyle(.borderless).padding(.horizontal, 20).frame(height: 44)
                 Divider()
@@ -222,41 +251,44 @@ struct NotesWorkspaceView: View {
                         .foregroundStyle(body.isEmpty ? WFColors.tertiaryText : WFColors.text)
                         .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    TextField("笔记标题", text: Binding(get: { notes.notes.first { $0.id == note.id }?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }), axis: .vertical)
-                        .textFieldStyle(.plain).font(WFType.detailTitle)
-                        .lineLimit(1...3).focused($focusedTitle, equals: note.id)
-                        .task(id: note.id) { if note.title.isEmpty { focusedTitle = note.id } }
-                    if note.hasPreservedRichContent {
-                        HStack(spacing: 8) {
-                            Image(systemName: "lock.shield")
-                            Text("原始富文本已保留；需要纯文本版本时可创建独立副本。")
-                            Button("创建副本") { _ = notes.createPlainTextCopy(note.id) }
-                        }.font(.caption).foregroundStyle(.secondary)
-                    }
-                    // 内核切换 P3：笔记页第一个切到 Quill 宿主（同签名）。
-                    // 工具条（滴答口径默认隐藏，Aa 开关在底部操作栏）与斜杠在 Web 侧。
-                    QuillDocumentEditorView(documentID: note.id, document: note.document,
-                                   onDocumentChange: { document in notes.edit(note.id) { $0.document = document } },
-                                   onEscape: { .endEditing },
-                                   onEditingChanged: { _ in },
-                                   contentSized: true, handle: editorHandle,
-                                   toolbarVisible: showFormatToolbar).id(note.id)
-                        .overlay(alignment: .topLeading) {
-                            if note.document.isEmpty {
-                                // 位置要和插入点一致：`NativeTextView` 用
-                                // `textContainerInset = (0, 4)`，文本实际从
-                                // `lineFragmentPadding`（5）处起排，空文档的光标就落在 (5, 4)。
-                                // 原来只加了 top 8，于是占了上下都不对。
-                                Text("写下你的想法、会议记录或下一步行动…")
-                                    // 字号也要跟 `NativeTextView.font`（15）一致，
-                                    // 否则基线高度不同，视觉上仍会错位。
-                                    .font(.system(size: 15))
-                                    .foregroundStyle(WFColors.tertiaryText)
-                                    .padding(.leading, 5)
-                                    .padding(.top, 4)
-                                    .allowsHitTesting(false)
-                            }
+                    if floatingNotes.isOpen(note.id) {
+                        floatingNoteBanner(note)
+                        Text(note.title.isEmpty ? "未命名笔记" : note.title)
+                            .font(WFType.detailTitle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        let body = note.document.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        Text(body.isEmpty ? "还没有正文。" : body)
+                            .font(WFType.body)
+                            .foregroundStyle(body.isEmpty ? WFColors.tertiaryText : WFColors.text)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        TextField("笔记标题", text: Binding(get: { notes.notes.first { $0.id == note.id }?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }), axis: .vertical)
+                            .textFieldStyle(.plain).font(WFType.detailTitle)
+                            .lineLimit(1...3).focused($focusedTitle, equals: note.id)
+                            .task(id: note.id) { if note.title.isEmpty { focusedTitle = note.id } }
+                        if note.hasPreservedRichContent {
+                            HStack(spacing: 8) {
+                                Image(systemName: "lock.shield")
+                                Text("原始富文本已保留；需要纯文本版本时可创建独立副本。")
+                                Button("创建副本") { _ = notes.createPlainTextCopy(note.id) }
+                            }.font(.caption).foregroundStyle(.secondary)
                         }
+                        // Task and note hosts share the same native editing kernel.
+                        // The profile supplies note-specific business actions.
+                        DocumentEditor(documentID: note.id, document: note.document,
+                                       onDocumentChange: { document in notes.edit(note.id) { $0.document = document } },
+                                       onEscape: { .endEditing },
+                                       onEditingChanged: { _ in },
+                                       profile: NoteDocumentProfile.make(host: NoteEditorHostActions.make(
+                                           noteID: note.id, tasks: tasks, notes: notes)),
+                                       contentSized: true, handle: editorHandle)
+                            .overlay(alignment: .topLeading) {
+                                if DocumentEditorPlaceholder.isVisible(for: note.document) {
+                                    DocumentEditorPlaceholder(title: "写下你的想法、会议记录或下一步行动…")
+                                }
+                            }
+                    }
                     linkedTasksSection(note)
                     if !note.attachments.isEmpty { AttachmentListView(attachments: note.attachments) { attachments in
                         notes.edit(note.id) { $0.attachments = attachments }
@@ -265,23 +297,49 @@ struct NotesWorkspaceView: View {
                 }.padding(.horizontal, 28).padding(.top, 14).padding(.bottom, 44)
                     .frame(maxWidth: 820).frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .top)
                     .background {
-                        if !trash {
-                            Color.clear.contentShape(Rectangle()).onTapGesture { editorHandle.focusEnd() }
+                        if !trash && !floatingNotes.isOpen(note.id) {
+                            EditorWhitespaceHitTarget(handle: editorHandle, documentID: note.id)
                         }
                     }
+                    .compactScrollbars()
                 }
                 }
-                if !trash { Divider(); footer(note).padding(.horizontal, 20).frame(height: 44) }
+                if !trash { Divider(); footer(note) }
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .documentFormattingToolbar(isPresented: showFormatToolbar && !trash
+                                           && !floatingNotes.isOpen(note.id), handle: editorHandle)
         } else {
             Text(trash ? "没有可预览的笔记" : "选择一篇笔记").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
+    private func floatingNoteBanner(_ note: Note) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "rectangle.on.rectangle")
+                .foregroundStyle(WFColors.accent)
+            Text("正在悬浮窗中编辑")
+                .font(WFType.supporting)
+                .foregroundStyle(WFColors.secondaryText)
+            Spacer()
+            Button("定位悬浮窗") { floatingNotes.bringToFront(noteID: note.id) }
+                .buttonStyle(.plain)
+                .font(WFType.supporting)
+                .foregroundStyle(WFColors.accent)
+        }
+        .padding(10)
+        .background(WFColors.selection, in: RoundedRectangle(cornerRadius: 8))
+    }
+
     // MARK: - 笔记操作菜单（Round B2：复制正文 / 创建纯文本副本；移到垃圾桶沿用删除按钮）
 
+    private func openFloatingNote(_ note: Note) {
+        showFormatToolbar = false
+        editorHandle.prepareForDocumentChange()
+        floatingNotes.open(noteID: note.id)
+    }
+
     private func noteActionsMenu(_ note: Note) -> some View {
-        BusinessMenu {
+        BusinessMenu(title: "笔记操作", prefersAbove: true) {
             Button(note.favorite ? "取消收藏" : "收藏") {
                 notes.edit(note.id) { $0.favorite.toggle() }
             }
@@ -293,8 +351,10 @@ struct NotesWorkspaceView: View {
             Button("移到垃圾桶", role: .destructive) { notes.delete(note.id) }
         } label: {
             Image(systemName: "ellipsis")
+                .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+                .contentShape(Rectangle())
         }.fixedSize()
-        .help("笔记操作").accessibilityLabel("笔记操作")
+        .help("更多操作").accessibilityLabel("更多笔记操作")
     }
 
     private func copyPlainText(_ note: Note) {
@@ -373,10 +433,10 @@ struct NotesWorkspaceView: View {
 
     // MARK: - 页脚：字数统计 + 浮动格式工具条开关
 
-    /// 滴达口径的底部操作栏：左＝文件夹，右＝Aa（展开正文工具条）＋更多。
+    /// The folder belongs to the note host; formatting uses shared controls.
     private func footer(_ note: Note) -> some View {
         HStack(spacing: 10) {
-            BusinessMenu {
+            BusinessMenu(prefersAbove: true) {
                 ForEach(["未归档"] + notes.folders, id: \.self) { value in
                     Button(value) { notes.moveNoteToFolder(note.id, named: value) }
                 }
@@ -394,18 +454,13 @@ struct NotesWorkspaceView: View {
                 Button("保存失败 · 重试") { environment.flush { _ in } }
                     .buttonStyle(.plain).font(.caption).foregroundStyle(.red).help(error)
             }
-            Button {
-                showFormatToolbar.toggle()
-            } label: {
-                Text("Aa")
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 30, height: 22)
-                    .foregroundStyle(showFormatToolbar ? WFColors.accent : WFColors.secondaryText)
-                    .overlay(RoundedRectangle(cornerRadius: 5).stroke(showFormatToolbar ? WFColors.accent : WFColors.border))
+            if !floatingNotes.isOpen(note.id) {
+                DocumentFormattingToggle(isPresented: $showFormatToolbar, handle: editorHandle)
             }
-            .buttonStyle(.plain).help("正文格式").accessibilityLabel("正文格式")
             noteActionsMenu(note)
         }
+        .padding(.horizontal, 20)
+        .frame(height: DocumentEditorPresentationMetrics.footerHeight)
     }
 
     /// 滴答笔记顶栏日期："今天，10月24日" / "昨天，…" / 本周内"周X，…"。

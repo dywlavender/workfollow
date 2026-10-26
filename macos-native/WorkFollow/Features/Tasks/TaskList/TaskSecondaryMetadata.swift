@@ -7,9 +7,14 @@ struct TaskSecondaryMetadata: Identifiable, Equatable {
     var value: String? = nil
     let accessibilityLabel: String
 
-    static func items(for task: Task, subtaskProgress: String?) -> [Self] {
+    static func items(for task: Task, subtaskProgress: String?,
+                      checklistProgress: String? = nil) -> [Self] {
         var items: [Self] = []
-        if let progress = subtaskProgress {
+        // 清单任务有检查项时，清单进度优先于子任务进度。
+        if let progress = checklistProgress {
+            items.append(.init(id: "checklist", value: progress,
+                               accessibilityLabel: "检查事项进度：\(progress)"))
+        } else if let progress = subtaskProgress {
             items.append(.init(id: "subtasks", value: progress,
                                accessibilityLabel: "子任务进度：\(progress)"))
         }
@@ -44,7 +49,8 @@ struct TaskKanbanCardDetails: Equatable {
     let showsAbandoned: Bool
     let indicators: [TaskSecondaryMetadata]
 
-    init(task: Task, subtaskProgress: String?, showsListBadge: Bool,
+    init(task: Task, subtaskProgress: String?, checklistProgress: String? = nil,
+         showsListBadge: Bool,
          hidesDetails: Bool, hiddenFields: [TaskRowDetailField]) {
         preview = TaskListViewDefaults.bodyPreview(of: task.document)
         listName = !hidesDetails && showsListBadge && !hiddenFields.contains(.list) ? task.list.name : nil
@@ -55,7 +61,8 @@ struct TaskKanbanCardDetails: Equatable {
         showsPinned = !hidesDetails && task.isPinned
         showsAbandoned = !hidesDetails && task.isAbandoned
         indicators = !hidesDetails && !hiddenFields.contains(.indicators)
-            ? TaskSecondaryMetadata.items(for: task, subtaskProgress: subtaskProgress).filter { $0.id != "tags" }
+            ? TaskSecondaryMetadata.items(for: task, subtaskProgress: subtaskProgress,
+                                          checklistProgress: checklistProgress).filter { $0.id != "tags" }
             : []
     }
 }

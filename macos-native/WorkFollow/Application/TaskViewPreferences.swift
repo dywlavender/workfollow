@@ -75,6 +75,10 @@ enum SmartListVisibility: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 菜单顺序对齐滴答（实测 2026-10-25：有内容时显示 → 显示 → 隐藏）。
+    /// 不能用 `allCases`：枚举声明顺序是按代码语义排的，不是菜单顺序。
+    static let menuOrder: [SmartListVisibility] = [.automatic, .visible, .hidden]
+
     var title: String {
         switch self {
         case .visible: "显示"
@@ -96,6 +100,14 @@ enum SmartListVisibility: String, Codable, CaseIterable, Identifiable {
     static func isConfigurable(_ destination: NativeDestination) -> Bool {
         destination != .inbox
     }
+}
+
+/// 侧栏可折叠分组（滴答「清单 / 过滤器 / 标签」）。
+/// 折叠状态是全局偏好，不随单个任务视图切换。
+enum SidebarSectionID: String, CaseIterable, Identifiable {
+    case collections, filters, tags
+
+    var id: String { rawValue }
 }
 
 /// 视图偏好的键：清单/标签视图按名字，智能视图按 destination。
@@ -120,6 +132,9 @@ enum TaskRowDetailField: String, CaseIterable, Codable, Identifiable {
     case indicators
 
     var id: String { rawValue }
+
+    /// 显示设置菜单顺序单独声明，枚举声明顺序不参与 UI 排序。
+    static let menuOrder: [TaskRowDetailField] = [.date, .list, .priority, .tags, .indicators]
 
     var title: String {
         switch self {
@@ -199,14 +214,24 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         var preferences: [String: TaskViewPreference] = [:]
         /// 智能清单显示状态：键 = destination.rawValue。缺省（不在字典里）= 显示。
         var smartListVisibility: [String: SmartListVisibility] = [:]
+        /// 侧栏已折叠的分组 id（`SidebarSectionID.rawValue`，排序后写入）。
+        var collapsedSidebarSections: [String] = []
+        /// 侧栏分组的显示状态：键 = `SidebarSectionID.rawValue`。缺省 = 显示。
+        var sidebarSectionVisibility: [String: SmartListVisibility] = [:]
 
         init(preferences: [String: TaskViewPreference] = [:],
-             smartListVisibility: [String: SmartListVisibility] = [:]) {
+             smartListVisibility: [String: SmartListVisibility] = [:],
+             collapsedSidebarSections: [String] = [],
+             sidebarSectionVisibility: [String: SmartListVisibility] = [:]) {
             self.preferences = preferences
             self.smartListVisibility = smartListVisibility
+            self.collapsedSidebarSections = collapsedSidebarSections
+            self.sidebarSectionVisibility = sidebarSectionVisibility
         }
 
-        private enum CodingKeys: String, CodingKey { case preferences, smartListVisibility }
+        private enum CodingKeys: String, CodingKey {
+            case preferences, smartListVisibility, collapsedSidebarSections, sidebarSectionVisibility
+        }
 
         /// additive：旧 view-preferences.json 只有 `preferences` 键。
         init(from decoder: Decoder) throws {
@@ -215,11 +240,17 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
                                                      forKey: .preferences) ?? [:]
             smartListVisibility = try values.decodeIfPresent([String: SmartListVisibility].self,
                                                              forKey: .smartListVisibility) ?? [:]
+            collapsedSidebarSections = try values.decodeIfPresent([String].self,
+                                                                  forKey: .collapsedSidebarSections) ?? []
+            sidebarSectionVisibility = try values.decodeIfPresent([String: SmartListVisibility].self,
+                                                                  forKey: .sidebarSectionVisibility) ?? [:]
         }
     }
 
     @Published private(set) var preferences: [String: TaskViewPreference]
     @Published private(set) var smartListVisibility: [String: SmartListVisibility]
+    @Published private(set) var collapsedSidebarSections: Set<String>
+    @Published private(set) var sidebarSectionVisibility: [String: SmartListVisibility]
 
     private let persistence: JSONFileStore<Archive>
     private var organizationCancellable: AnyCancellable?
@@ -231,6 +262,8 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         let archive = store.load()
         preferences = archive?.preferences ?? [:]
         smartListVisibility = archive?.smartListVisibility ?? [:]
+        collapsedSidebarSections = Set(archive?.collapsedSidebarSections ?? [])
+        sidebarSectionVisibility = archive?.sidebarSectionVisibility ?? [:]
         organizationCancellable = NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)
             .sink { [weak self] note in
                 guard let kind = note.userInfo?["kind"] as? String,
@@ -261,6 +294,35 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
             smartListVisibility.removeValue(forKey: destination.rawValue)
         } else {
             smartListVisibility[destination.rawValue] = visibility
+        }
+        persist()
+    }
+
+    /// 侧栏分组默认展开；只记录用户主动收起的状态。
+    func isSidebarSectionCollapsed(_ section: SidebarSectionID) -> Bool {
+        collapsedSidebarSections.contains(section.rawValue)
+    }
+
+    func setSidebarSectionCollapsed(_ section: SidebarSectionID, _ collapsed: Bool) {
+        var next = collapsedSidebarSections
+        let changed = collapsed ? next.insert(section.rawValue).inserted
+                               : next.remove(section.rawValue) != nil
+        guard changed else { return }
+        collapsedSidebarSections = next
+        persist()
+    }
+
+    /// 侧栏分组本身默认显示；分组头始终保留，隐藏只收起组内的行。
+    func visibility(for section: SidebarSectionID) -> SmartListVisibility {
+        sidebarSectionVisibility[section.rawValue] ?? .visible
+    }
+
+    func setVisibility(_ visibility: SmartListVisibility, for section: SidebarSectionID) {
+        guard self.visibility(for: section) != visibility else { return }
+        if visibility == .visible {
+            sidebarSectionVisibility.removeValue(forKey: section.rawValue)
+        } else {
+            sidebarSectionVisibility[section.rawValue] = visibility
         }
         persist()
     }
@@ -400,6 +462,8 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
 
     private func persist() {
         persistence.schedule(Archive(preferences: preferences,
-                                     smartListVisibility: smartListVisibility))
+                                     smartListVisibility: smartListVisibility,
+                                     collapsedSidebarSections: collapsedSidebarSections.sorted(),
+                                     sidebarSectionVisibility: sidebarSectionVisibility))
     }
 }

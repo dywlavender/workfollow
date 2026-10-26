@@ -23,6 +23,7 @@ extension AppEnvironment {
                 weeklyPlanning.listName = nil
                 navigate(to: .weekPlan)
             case .quickAdd: break // Presented independently above.
+            case .countdowns: navigate(to: .countdown)
             }
             return true
         }

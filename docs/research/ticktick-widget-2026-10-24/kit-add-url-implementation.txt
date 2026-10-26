@@ -1,0 +1,346 @@
+  332b98:	fa 67 bb a9	stp	x26, x25, [sp, #-0x50]!
+  332b9c:	f8 5f 01 a9	stp	x24, x23, [sp, #0x10]
+  332ba0:	f6 57 02 a9	stp	x22, x21, [sp, #0x20]
+  332ba4:	f4 4f 03 a9	stp	x20, x19, [sp, #0x30]
+  332ba8:	fd 7b 04 a9	stp	x29, x30, [sp, #0x40]
+  332bac:	fd 03 01 91	add	x29, sp, #0x40
+  332bb0:	f3 03 08 aa	mov	x19, x8
+  332bb4:	00 00 80 d2	mov	x0, #0x0
+  332bb8:	9a d3 05 94	bl	0x4a7a20
+  332bbc:	f5 03 00 aa	mov	x21, x0
+  332bc0:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  332bc4:	08 21 40 f9	ldr	x8, [x8, #0x40]
+  332bc8:	e9 03 08 aa	mov	x9, x8
+  332bcc:	30 10 00 f0	adrp	x16, 519 ; 0x539000
+  332bd0:	10 a2 40 f9	ldr	x16, [x16, #0x140] ; literal pool symbol address: ___chkstk_darwin
+  332bd4:	00 02 3f d6	blr	x16
+  332bd8:	e9 03 00 91	mov	x9, sp
+  332bdc:	08 3d 00 91	add	x8, x8, #0xf
+  332be0:	08 ed 7c 92	and	x8, x8, #0xfffffffffffffff0
+  332be4:	36 01 08 cb	sub	x22, x9, x8
+  332be8:	df 02 00 91	mov	sp, x22
+  332bec:	00 00 80 d2	mov	x0, #0x0
+  332bf0:	86 d3 05 94	bl	0x4a7a08
+  332bf4:	f7 03 00 aa	mov	x23, x0
+  332bf8:	18 3c 80 b9	ldrsw	x24, [x0, #0x3c]
+  332bfc:	c8 02 18 8b	add	x8, x22, x24
+  332c00:	f6 fe ff 97	bl	0x3327d8
+  332c04:	00 00 80 d2	mov	x0, #0x0
+  332c08:	8c d3 05 94	bl	0x4a7a38
+  332c0c:	e3 03 00 aa	mov	x3, x0
+  332c10:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  332c14:	08 1d 40 f9	ldr	x8, [x8, #0x38]
+  332c18:	39 00 80 52	mov	w25, #0x1
+  332c1c:	c0 02 18 8b	add	x0, x22, x24
+  332c20:	01 00 80 52	mov	w1, #0x0
+  332c24:	22 00 80 52	mov	w2, #0x1
+  332c28:	00 01 3f d6	blr	x8
+  332c2c:	f8 22 80 b9	ldrsw	x24, [x23, #0x20]
+  332c30:	00 00 80 d2	mov	x0, #0x0
+  332c34:	88 cc 05 94	bl	0x4a5e54
+  332c38:	f4 03 00 aa	mov	x20, x0
+  332c3c:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  332c40:	1a 1d 40 f9	ldr	x26, [x8, #0x38]
+  332c44:	c0 02 18 8b	add	x0, x22, x24
+  332c48:	21 00 80 52	mov	w1, #0x1
+  332c4c:	22 00 80 52	mov	w2, #0x1
+  332c50:	e3 03 14 aa	mov	x3, x20
+  332c54:	40 03 3f d6	blr	x26
+  332c58:	e8 26 80 b9	ldrsw	x8, [x23, #0x24]
+  332c5c:	c0 02 08 8b	add	x0, x22, x8
+  332c60:	21 00 80 52	mov	w1, #0x1
+  332c64:	22 00 80 52	mov	w2, #0x1
+  332c68:	e3 03 14 aa	mov	x3, x20
+  332c6c:	40 03 3f d6	blr	x26
+  332c70:	00 e4 00 6f	movi.2d	v0, #0000000000000000
+  332c74:	c0 02 01 ad	stp	q0, q0, [x22, #0x20]
+  332c78:	c0 02 00 ad	stp	q0, q0, [x22]
+  332c7c:	e8 2a 80 b9	ldrsw	x8, [x23, #0x28]
+  332c80:	49 00 80 52	mov	w9, #0x2
+  332c84:	c9 6a 28 38	strb	w9, [x22, x8]
+  332c88:	e8 2e 80 b9	ldrsw	x8, [x23, #0x2c]
+  332c8c:	c8 02 08 8b	add	x8, x22, x8
+  332c90:	1f 01 00 f9	str	xzr, [x8]
+  332c94:	19 21 00 39	strb	w25, [x8, #0x8]
+  332c98:	e8 32 80 b9	ldrsw	x8, [x23, #0x30]
+  332c9c:	c8 02 08 8b	add	x8, x22, x8
+  332ca0:	1f 7d 00 a9	stp	xzr, xzr, [x8]
+  332ca4:	e8 36 80 b9	ldrsw	x8, [x23, #0x34]
+  332ca8:	c8 02 08 8b	add	x8, x22, x8
+  332cac:	1f 7d 00 a9	stp	xzr, xzr, [x8]
+  332cb0:	e8 3a 80 b9	ldrsw	x8, [x23, #0x38]
+  332cb4:	d4 02 08 8b	add	x20, x22, x8
+  332cb8:	00 00 80 d2	mov	x0, #0x0
+  332cbc:	56 d3 05 94	bl	0x4a7a14
+  332cc0:	e1 03 00 aa	mov	x1, x0
+  332cc4:	9f 7e 00 a9	stp	xzr, xzr, [x20]
+  332cc8:	e0 03 16 aa	mov	x0, x22
+  332ccc:	22 00 80 52	mov	w2, #0x1
+  332cd0:	90 dc 05 94	bl	0x4a9f10 ; symbol stub for: _swift_storeEnumTagMultiPayload
+  332cd4:	e0 03 16 aa	mov	x0, x22
+  332cd8:	e1 03 15 aa	mov	x1, x21
+  332cdc:	22 00 80 52	mov	w2, #0x1
+  332ce0:	8c dc 05 94	bl	0x4a9f10 ; symbol stub for: _swift_storeEnumTagMultiPayload
+  332ce4:	e8 03 13 aa	mov	x8, x19
+  332ce8:	e0 03 16 aa	mov	x0, x22
+  332cec:	56 d3 05 94	bl	0x4a7a44
+  332cf0:	e0 03 16 aa	mov	x0, x22
+  332cf4:	08 00 00 94	bl	0x332d14
+  332cf8:	bf 03 01 d1	sub	sp, x29, #0x40
+  332cfc:	fd 7b 44 a9	ldp	x29, x30, [sp, #0x40]
+  332d00:	f4 4f 43 a9	ldp	x20, x19, [sp, #0x30]
+  332d04:	f6 57 42 a9	ldp	x22, x21, [sp, #0x20]
+  332d08:	f8 5f 41 a9	ldp	x24, x23, [sp, #0x10]
+  332d0c:	fa 67 c5 a8	ldp	x26, x25, [sp], #0x50
+  332d10:	c0 03 5f d6	ret
+  332d14:	f4 4f be a9	stp	x20, x19, [sp, #-0x20]!
+  332d18:	fd 7b 01 a9	stp	x29, x30, [sp, #0x10]
+  332d1c:	fd 43 00 91	add	x29, sp, #0x10
+  332d20:	f3 03 00 aa	mov	x19, x0
+  332d24:	00 00 80 d2	mov	x0, #0x0
+  332d28:	3e d3 05 94	bl	0x4a7a20
+  332d2c:	e1 03 00 aa	mov	x1, x0
+  332d30:	08 80 5f f8	ldur	x8, [x0, #-0x8]
+  332d34:	08 05 40 f9	ldr	x8, [x8, #0x8]
+  332d38:	e0 03 13 aa	mov	x0, x19
+  332d3c:	00 01 3f d6	blr	x8
+  332d40:	e0 03 13 aa	mov	x0, x19
+  332d44:	fd 7b 41 a9	ldp	x29, x30, [sp, #0x10]
+  332d48:	f4 4f c2 a8	ldp	x20, x19, [sp], #0x20
+  332d4c:	c0 03 5f d6	ret
+  332d50:	00 00 22 9e	scvtf	s0, x0
+  332d54:	c0 03 5f d6	ret
+  332d58:	00 00 62 9e	scvtf	d0, x0
+  332d5c:	c0 03 5f d6	ret
+  332d60:	3f 00 00 eb	cmp	x1, x0
+  332d64:	20 c0 80 9a	csel	x0, x1, x0, gt
+  332d68:	c0 03 5f d6	ret
+  332d6c:	08 00 26 1e	fmov	w8, s0
+  332d70:	08 79 00 12	and	w8, w8, #0x7fffffff
+  332d74:	09 10 b0 12	mov	w9, #0x7f7fffff
+  332d78:	1f 01 09 6b	cmp	w8, w9
+  332d7c:	6d 00 00 54	b.le	0x332d88
+  332d80:	00 00 80 d2	mov	x0, #0x0
+  332d84:	c0 03 5f d6	ret
+  332d88:	28 00 80 52	mov	w8, #0x1
+  332d8c:	08 e0 bb 72	movk	w8, #0xdf00, lsl #16
+  332d90:	01 01 27 1e	fmov	s1, w8
+  332d94:	00 20 21 1e	fcmp	s0, s1
+  332d98:	cd 00 00 54	b.le	0x332db0
+  332d9c:	e1 67 02 0f	movi.2s	v1, #0x5f, lsl #24
+  332da0:	00 20 21 1e	fcmp	s0, s1
+  332da4:	85 00 00 54	b.pl	0x332db4
+  332da8:	00 00 38 9e	fcvtzs	x0, s0
+  332dac:	c0 03 5f d6	ret
+  332db0:	20 00 20 d4	brk	#0x1
+  332db4:	20 00 20 d4	brk	#0x1
+  332db8:	00 c0 22 1e	fcvt	d0, s0
+  332dbc:	c0 03 5f d6	ret
+  332dc0:	00 40 62 1e	fcvt	s0, d0
+  332dc4:	c0 03 5f d6	ret
+  332dc8:	01 00 00 14	b	0x332dcc
+  332dcc:	08 00 66 9e	fmov	x8, d0
+  332dd0:	08 f9 40 92	and	x8, x8, #0x7fffffffffffffff
+  332dd4:	09 02 f0 92	mov	x9, #0x7fefffffffffffff
+  332dd8:	1f 01 09 eb	cmp	x8, x9
+  332ddc:	8c 01 00 54	b.gt	0x332e0c
+  332de0:	28 00 80 d2	mov	x8, #0x1
+  332de4:	08 7c f8 f2	movk	x8, #0xc3e0, lsl #48
+  332de8:	01 01 67 9e	fmov	d1, x8
+  332dec:	00 20 61 1e	fcmp	d0, d1
+  332df0:	0d 01 00 54	b.le	0x332e10
+  332df4:	08 7c e8 d2	mov	x8, #0x43e0000000000000
+  332df8:	01 01 67 9e	fmov	d1, x8
+  332dfc:	00 20 61 1e	fcmp	d0, d1
+  332e00:	a5 00 00 54	b.pl	0x332e14
+  332e04:	00 00 78 9e	fcvtzs	x0, d0
+  332e08:	c0 03 5f d6	ret
+  332e0c:	20 00 20 d4	brk	#0x1
+  332e10:	20 00 20 d4	brk	#0x1
+  332e14:	20 00 20 d4	brk	#0x1
+  332e18:	ea ff ff 17	b	0x332dc0
+  332e1c:	cf ff ff 17	b	0x332d58
+  332e20:	ea ff ff 17	b	0x332dc8
+  332e24:	23 18 62 1e	fdiv	d3, d1, d2
+  332e28:	60 20 60 1e	fcmp	d3, d0
+  332e2c:	85 00 00 54	b.pl	0x332e3c
+  332e30:	24 1c a1 4e	mov.16b	v4, v1
+  332e34:	23 18 60 1e	fdiv	d3, d1, d0
+  332e38:	03 00 00 14	b	0x332e44
+  332e3c:	04 08 62 1e	fmul	d4, d0, d2
+  332e40:	43 1c a2 4e	mov.16b	v3, v2
+  332e44:	20 38 64 1e	fsub	d0, d1, d4
+  332e48:	01 10 6c 1e	fmov	d1, #0.50000000
+  332e4c:	00 08 61 1e	fmul	d0, d0, d1
+  332e50:	42 38 63 1e	fsub	d2, d2, d3
+  332e54:	41 08 61 1e	fmul	d1, d2, d1
+  332e58:	82 1c a4 4e	mov.16b	v2, v4
+  332e5c:	c0 03 5f d6	ret
+  332e60:	ff 83 01 d1	sub	sp, sp, #0x60
+  332e64:	ed 33 01 6d	stp	d13, d12, [sp, #0x10]
+  332e68:	eb 2b 02 6d	stp	d11, d10, [sp, #0x20]
+  332e6c:	e9 23 03 6d	stp	d9, d8, [sp, #0x30]
+  332e70:	f4 4f 04 a9	stp	x20, x19, [sp, #0x40]
+  332e74:	fd 7b 05 a9	stp	x29, x30, [sp, #0x50]
+  332e78:	fd 43 01 91	add	x29, sp, #0x50
+  332e7c:	08 40 66 1e	frinta	d8, d0
+  332e80:	29 40 66 1e	frinta	d9, d1
+  332e84:	4a 40 66 1e	frinta	d10, d2
+  332e88:	6b 40 66 1e	frinta	d11, d3
+  332e8c:	00 1d a8 4e	mov.16b	v0, v8
+  332e90:	21 1d a9 4e	mov.16b	v1, v9
+  332e94:	42 1d aa 4e	mov.16b	v2, v10
+  332e98:	63 1d ab 4e	mov.16b	v3, v11
+  332e9c:	aa d9 05 94	bl	0x4a9544 ; symbol stub for: _CGRectGetMaxX
+  332ea0:	0c 1c a0 4e	mov.16b	v12, v0
+  332ea4:	e0 03 14 aa	mov	x0, x20
+  332ea8:	96 17 06 94	bl	_objc_msgSend$size
+  332eac:	0d 10 7e 1e	fmov	d13, #-1.00000000
+  332eb0:	41 29 6d 1e	fadd	d1, d10, d13
+  332eb4:	80 21 60 1e	fcmp	d12, d0
+  332eb8:	2a 9c 6a 1e	fcsel	d10, d1, d10, ls
+  332ebc:	00 1d a8 4e	mov.16b	v0, v8
+  332ec0:	21 1d a9 4e	mov.16b	v1, v9
+  332ec4:	42 1d aa 4e	mov.16b	v2, v10
+  332ec8:	63 1d ab 4e	mov.16b	v3, v11
+  332ecc:	a1 d9 05 94	bl	0x4a9550 ; symbol stub for: _CGRectGetMaxY
+  332ed0:	0c 1c a0 4e	mov.16b	v12, v0
+  332ed4:	e0 03 14 aa	mov	x0, x20
+  332ed8:	8a 17 06 94	bl	_objc_msgSend$size
+  332edc:	60 29 6d 1e	fadd	d0, d11, d13
+  332ee0:	80 21 61 1e	fcmp	d12, d1
+  332ee4:	0b 9c 6b 1e	fcsel	d11, d0, d11, ls
+  332ee8:	e0 03 14 aa	mov	x0, x20
+  332eec:	85 17 06 94	bl	_objc_msgSend$size
+  332ef0:	08 20 60 1e	fcmp	d0, #0.0
+  332ef4:	4d 06 00 54	b.le	0x332fbc
+  332ef8:	e0 03 14 aa	mov	x0, x20
+  332efc:	81 17 06 94	bl	_objc_msgSend$size
+  332f00:	28 20 60 1e	fcmp	d1, #0.0
+  332f04:	cd 05 00 54	b.le	0x332fbc
+  332f08:	00 1d a8 4e	mov.16b	v0, v8
+  332f0c:	21 1d a9 4e	mov.16b	v1, v9
+  332f10:	42 1d aa 4e	mov.16b	v2, v10
+  332f14:	63 1d ab 4e	mov.16b	v3, v11
+  332f18:	9d d9 05 94	bl	0x4a958c ; symbol stub for: _CGRectGetWidth
+  332f1c:	08 20 60 1e	fcmp	d0, #0.0
+  332f20:	ed 04 00 54	b.le	0x332fbc
+  332f24:	00 1d a8 4e	mov.16b	v0, v8
+  332f28:	21 1d a9 4e	mov.16b	v1, v9
+  332f2c:	42 1d aa 4e	mov.16b	v2, v10
+  332f30:	63 1d ab 4e	mov.16b	v3, v11
+  332f34:	81 d9 05 94	bl	0x4a9538 ; symbol stub for: _CGRectGetHeight
+  332f38:	08 20 60 1e	fcmp	d0, #0.0
+  332f3c:	0d 04 00 54	b.le	0x332fbc
+  332f40:	e8 11 00 d0	adrp	x8, 574 ; 0x570000
+  332f44:	00 9d 43 f9	ldr	x0, [x8, #0x738] ; Objc class ref: _OBJC_CLASS_$_NSImage
+  332f48:	84 da 05 94	bl	0x4a9958 ; symbol stub for: _objc_allocWithZone
+  332f4c:	40 1d aa 4e	mov.16b	v0, v10
+  332f50:	61 1d ab 4e	mov.16b	v1, v11
+  332f54:	5b 00 06 94	bl	"_objc_msgSend$initWithSize:"
+  332f58:	f3 03 00 aa	mov	x19, x0
+  332f5c:	11 06 06 94	bl	_objc_msgSend$lockFocus
+  332f60:	08 fe e7 d2	mov	x8, #0x3ff0000000000000
+  332f64:	e8 03 00 f9	str	x8, [sp]
+  332f68:	00 e4 00 6f	movi.2d	v0, #0000000000000000
+  332f6c:	01 e4 00 6f	movi.2d	v1, #0000000000000000
+  332f70:	e0 03 14 aa	mov	x0, x20
+  332f74:	42 1d aa 4e	mov.16b	v2, v10
+  332f78:	63 1d ab 4e	mov.16b	v3, v11
+  332f7c:	04 1d a8 4e	mov.16b	v4, v8
+  332f80:	25 1d a9 4e	mov.16b	v5, v9
+  332f84:	46 1d aa 4e	mov.16b	v6, v10
+  332f88:	67 1d ab 4e	mov.16b	v7, v11
+  332f8c:	22 00 80 52	mov	w2, #0x1
+  332f90:	9c fb 05 94	bl	"_objc_msgSend$drawInRect:fromRect:operation:fraction:"
+  332f94:	e0 03 13 aa	mov	x0, x19
+  332f98:	82 1b 06 94	bl	_objc_msgSend$unlockFocus
+  332f9c:	e0 03 13 aa	mov	x0, x19
+  332fa0:	fd 7b 45 a9	ldp	x29, x30, [sp, #0x50]
+  332fa4:	f4 4f 44 a9	ldp	x20, x19, [sp, #0x40]
+  332fa8:	e9 23 43 6d	ldp	d9, d8, [sp, #0x30]
+  332fac:	eb 2b 42 6d	ldp	d11, d10, [sp, #0x20]
+  332fb0:	ed 33 41 6d	ldp	d13, d12, [sp, #0x10]
+  332fb4:	ff 83 01 91	add	sp, sp, #0x60
+  332fb8:	c0 03 5f d6	ret
+  332fbc:	e0 03 14 aa	mov	x0, x20
+  332fc0:	fd 7b 45 a9	ldp	x29, x30, [sp, #0x50]
+  332fc4:	f4 4f 44 a9	ldp	x20, x19, [sp, #0x40]
+  332fc8:	e9 23 43 6d	ldp	d9, d8, [sp, #0x30]
+  332fcc:	eb 2b 42 6d	ldp	d11, d10, [sp, #0x20]
+  332fd0:	ed 33 41 6d	ldp	d13, d12, [sp, #0x10]
+  332fd4:	ff 83 01 91	add	sp, sp, #0x60
+  332fd8:	a5 da 05 14	b	0x4a9a6c ; symbol stub for: _objc_retain
+  332fdc:	fa 67 bb a9	stp	x26, x25, [sp, #-0x50]!
+  332fe0:	f8 5f 01 a9	stp	x24, x23, [sp, #0x10]
+  332fe4:	f6 57 02 a9	stp	x22, x21, [sp, #0x20]
+  332fe8:	f4 4f 03 a9	stp	x20, x19, [sp, #0x30]
+  332fec:	fd 7b 04 a9	stp	x29, x30, [sp, #0x40]
+  332ff0:	fd 03 01 91	add	x29, sp, #0x40
+  332ff4:	f3 03 02 aa	mov	x19, x2
+  332ff8:	f5 03 01 aa	mov	x21, x1
+  332ffc:	f6 03 00 aa	mov	x22, x0
+  333000:	00 00 80 d2	mov	x0, #0x0
+  333004:	34 cb 05 94	bl	0x4a5cd4
+  333008:	f7 03 00 aa	mov	x23, x0
+  33300c:	19 80 5f f8	ldur	x25, [x0, #-0x8]
+  333010:	28 23 40 f9	ldr	x8, [x25, #0x40]
+  333014:	e9 03 08 aa	mov	x9, x8
+  333018:	30 10 00 d0	adrp	x16, 518 ; 0x539000
+  33301c:	10 a2 40 f9	ldr	x16, [x16, #0x140] ; literal pool symbol address: ___chkstk_darwin
+  333020:	00 02 3f d6	blr	x16
+  333024:	e9 03 00 91	mov	x9, sp
+  333028:	08 3d 00 91	add	x8, x8, #0xf
+  33302c:	08 ed 7c 92	and	x8, x8, #0xfffffffffffffff0
+  333030:	38 01 08 cb	sub	x24, x9, x8
+  333034:	1f 03 00 91	mov	sp, x24
+  333038:	e8 03 18 aa	mov	x8, x24
+  33303c:	e0 03 16 aa	mov	x0, x22
+  333040:	e1 03 15 aa	mov	x1, x21
+  333044:	06 cb 05 94	bl	0x4a5c5c
+  333048:	e0 03 18 aa	mov	x0, x24
+  33304c:	e1 03 13 aa	mov	x1, x19
+  333050:	0e 00 00 94	bl	0x333088
+  333054:	f3 03 00 aa	mov	x19, x0
+  333058:	28 07 40 f9	ldr	x8, [x25, #0x8]
+  33305c:	e0 03 18 aa	mov	x0, x24
+  333060:	e1 03 17 aa	mov	x1, x23
+  333064:	00 01 3f d6	blr	x8
+  333068:	60 02 00 12	and	w0, w19, #0x1
+  33306c:	bf 03 01 d1	sub	sp, x29, #0x40
+  333070:	fd 7b 44 a9	ldp	x29, x30, [sp, #0x40]
+  333074:	f4 4f 43 a9	ldp	x20, x19, [sp, #0x30]
+  333078:	f6 57 42 a9	ldp	x22, x21, [sp, #0x20]
+  33307c:	f8 5f 41 a9	ldp	x24, x23, [sp, #0x10]
+  333080:	fa 67 c5 a8	ldp	x26, x25, [sp], #0x50
+  333084:	c0 03 5f d6	ret
+  333088:	ff c3 02 d1	sub	sp, sp, #0xb0
+  33308c:	fc 6f 05 a9	stp	x28, x27, [sp, #0x50]
+  333090:	fa 67 06 a9	stp	x26, x25, [sp, #0x60]
+  333094:	f8 5f 07 a9	stp	x24, x23, [sp, #0x70]
+  333098:	f6 57 08 a9	stp	x22, x21, [sp, #0x80]
+  33309c:	f4 4f 09 a9	stp	x20, x19, [sp, #0x90]
+  3330a0:	fd 7b 0a a9	stp	x29, x30, [sp, #0xa0]
+  3330a4:	fd 83 02 91	add	x29, sp, #0xa0
+  3330a8:	f9 03 01 aa	mov	x25, x1
+  3330ac:	f5 03 00 aa	mov	x21, x0
+  3330b0:	e0 03 14 aa	mov	x0, x20
+  3330b4:	b3 ee 05 94	bl	_objc_msgSend$TIFFRepresentation
+  3330b8:	fd 03 1d aa	mov	x29, x29
+  3330bc:	75 da 05 94	bl	0x4a9a90 ; symbol stub for: _objc_retainAutoreleasedReturnValue
+  3330c0:	80 16 00 b4	cbz	x0, 0x333390
+  3330c4:	f4 03 00 aa	mov	x20, x0
+  3330c8:	18 cb 05 94	bl	0x4a5d28
+  3330cc:	f6 03 00 aa	mov	x22, x0
+  3330d0:	f3 03 01 aa	mov	x19, x1
+  3330d4:	e0 03 14 aa	mov	x0, x20
+  3330d8:	62 da 05 94	bl	0x4a9a60 ; symbol stub for: _objc_release
+  3330dc:	e8 11 00 b0	adrp	x8, 573 ; 0x570000
+  3330e0:	00 99 43 f9	ldr	x0, [x8, #0x730] ; Objc class ref: _OBJC_CLASS_$_NSBitmapImageRep
+  3330e4:	1d da 05 94	bl	0x4a9958 ; symbol stub for: _objc_allocWithZone
+  3330e8:	f4 03 00 aa	mov	x20, x0
+  3330ec:	e0 03 16 aa	mov	x0, x22
+  3330f0:	e1 03 13 aa	mov	x1, x19
+  3330f4:	6f df f9 97	bl	0x1aaeb0
+  3330f8:	e0 03 16 aa	mov	x0, x22
+  3330fc:	e1 03 13 aa	mov	x1, x19

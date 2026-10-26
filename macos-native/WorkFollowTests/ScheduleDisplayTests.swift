@@ -111,6 +111,49 @@ final class ScheduleDisplayTests: XCTestCase {
         XCTAssertEqual(ScheduleDisplay.dayText(date(2026, 9, 26), calendar: calendar), "9月26日")
     }
 
+    func testInspectorOverdueDaysUseCalendarDatesAndRetainClockTime() {
+        let now = date(2026, 10, 25, 12)
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: date(2026, 9, 26)), now: now, calendar: calendar),
+            "9月26日, 延迟29天")
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: date(2026, 10, 21)), now: now, calendar: calendar),
+            "10月21日, 延迟4天")
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: date(2026, 10, 24, 23, 55), hasTime: true),
+            now: date(2026, 10, 25, 0, 5), calendar: calendar),
+            "10月24日, 23:55, 延迟1天", "跨自然日即计入一天，不按满24小时取整")
+    }
+
+    func testInspectorDelayOnlyAppearsForOpenOverdueSchedules() {
+        let now = date(2026, 10, 25, 12)
+        let old = date(2026, 9, 26)
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: old), now: now, calendar: calendar, isClosed: true),
+            ScheduleDisplay.dateText(old, hasTime: false, now: now, calendar: calendar, style: .full))
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: date(2026, 10, 25)), now: now, calendar: calendar),
+            "今天, 10月25日")
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: date(2026, 10, 26)), now: now, calendar: calendar),
+            "明天, 10月26日")
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(
+            schedule: TaskSchedule(dueAt: date(2026, 10, 25, 9), hasTime: true), now: now, calendar: calendar),
+            "10月25日, 09:00, 延迟不足1天")
+    }
+
+    func testInspectorPeriodsUseTheirEndForOverdueStatusAndDayCount() {
+        let now = date(2026, 10, 25, 12)
+        let ongoing = TaskSchedule(dueAt: date(2026, 10, 21), dueEndAt: date(2026, 10, 26))
+        XCTAssertEqual(TaskInspectorSchedulePresentation.tone(schedule: ongoing, now: now, calendar: calendar),
+                       .scheduled)
+        XCTAssertFalse(TaskInspectorSchedulePresentation.label(schedule: ongoing, now: now, calendar: calendar)
+            .contains("延迟"))
+        let ended = TaskSchedule(dueAt: date(2026, 9, 24), dueEndAt: date(2026, 9, 26))
+        XCTAssertEqual(TaskInspectorSchedulePresentation.label(schedule: ended, now: now, calendar: calendar),
+                       "9月24日 - 9月26日, 延迟29天")
+    }
+
     func testNumericDateLabelsKeepFormatterOutputAcrossTimeZones() {
         let now = date(2026, 10, 3, 9)
         let dates = [date(2026, 9, 27, 0, 5), date(2025, 12, 31, 23, 59), date(2027, 1, 1, 0, 0)]

@@ -1,0 +1,18 @@
+--- fullSizeContentView=true titlebarHeight=32.0 ---
+  fromTop=4 x=395 -> NSButton
+  fromTop=12 x=395 -> NSButton
+  fromTop=20 x=395 -> NSButton
+  fromTop=27 x=395 -> NSButton
+  fromTop=29 x=395 -> NSButton
+  fromTop=40 x=395 -> NSButton
+  fromTop=60 x=395 -> NSView
+  contentView.frame=(0.0, 0.0, 440.0, 600.0) contentLayoutRect=(0.0, 0.0, 440.0, 568.0) windowFrame=(244.0, 90.0, 440.0, 600.0)
+--- fullSizeContentView=false titlebarHeight=32.0 ---
+  fromTop=4 x=395 -> NSThemeFrame
+  fromTop=12 x=395 -> NSThemeFrame
+  fromTop=20 x=395 -> NSThemeFrame
+  fromTop=27 x=395 -> NSThemeFrame
+  fromTop=29 x=395 -> NSThemeFrame
+  fromTop=40 x=395 -> NSButton
+  fromTop=60 x=395 -> NSButton
+  contentView.frame=(0.0, 0.0, 440.0, 600.0) contentLayoutRect=(0.0, 0.0, 440.0, 600.0) windowFrame=(244.0, 90.0, 440.0, 632.0)

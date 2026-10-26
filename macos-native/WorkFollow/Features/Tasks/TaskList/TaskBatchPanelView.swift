@@ -68,6 +68,10 @@ struct TaskBatchPanelView: View {
     @State private var showParentPicker = false
 
     private var count: Int { workspace.bulkSelection.count }
+    private var selectionIsNotes: Bool {
+        let selected = workspace.allTasks.filter { workspace.bulkSelection.contains($0.id) }
+        return !selected.isEmpty && selected.allSatisfy { $0.kind == .note }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -318,8 +322,9 @@ struct TaskBatchPanelView: View {
             actionTile("创建副本", symbol: "doc.on.doc", tint: WFColors.tileCyan) {
                 workspace.applyBulk(.duplicate)
             }
-            actionTile("转换为笔记", symbol: "note.text", tint: WFColors.tileGreen) {
-                workspace.convertBulkToNotes(environment: environment)
+            actionTile(selectionIsNotes ? "转换为任务" : "转换为笔记", symbol: "note.text", tint: WFColors.tileGreen) {
+                if selectionIsNotes { workspace.convertBulkToTasks() }
+                else { workspace.convertBulkToNotes(environment: environment) }
             }
             actionTile("复制文本", symbol: "doc.plaintext", tint: WFColors.tileBlue) {
                 workspace.copyBulkTitlesToPasteboard()

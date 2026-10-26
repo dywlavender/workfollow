@@ -11,6 +11,7 @@ struct TaskChangeSet: Equatable {
     enum Field: Hashable {
         case title
         case document
+        case kind
         case tags
         case recurrence
         case recurrenceRule
@@ -57,14 +58,23 @@ struct TaskChangeSet: Equatable {
         let reminderFields: Set<Field> = [
             .title, .list, .schedule, .recurrence, .recurrenceRule,
             .reminderAt, .reminderOffsets, .status, .isAbandoned,
-            .deletedAt, .skippedAt, .convertedNoteID
+            .deletedAt, .skippedAt, .convertedNoteID, .kind
         ]
         return entries.contains { entry in
             switch entry.operation {
             case .insert, .delete:
-                true
+                return true
             case .update:
-                !entry.changedFields.isDisjoint(with: reminderFields)
+                if !entry.changedFields.isDisjoint(with: reminderFields) { return true }
+                // 检查项提醒挂在正文行属性里：只有清单任务的正文变更才需要
+                // 重排通知，普通任务打字不触发提醒对账。
+                if entry.changedFields.contains(.document),
+                   entry.before?.kind == .checklist || entry.after?.kind == .checklist {
+                    let before = entry.before?.document.checklistSummary?.reminders ?? []
+                    let after = entry.after?.document.checklistSummary?.reminders ?? []
+                    return before != after
+                }
+                return false
             }
         }
     }
@@ -113,6 +123,7 @@ struct TaskChangeSet: Equatable {
         var fields = Set<Field>()
         if before.title != after.title { fields.insert(.title) }
         if before.document != after.document { fields.insert(.document) }
+        if before.kind != after.kind { fields.insert(.kind) }
         if before.tags != after.tags || before.tagReferences != after.tagReferences { fields.insert(.tags) }
         if before.recurrence != after.recurrence { fields.insert(.recurrence) }
         if before.recurrenceRule != after.recurrenceRule { fields.insert(.recurrenceRule) }

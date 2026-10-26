@@ -14,20 +14,28 @@ private struct ScheduleClockInput: NSViewRepresentable {
         let field = NSTextField(string: text)
         field.isBordered = false
         field.drawsBackground = false
+        // 行内时间不画系统焦点环：选中时间后不应出现蓝色描边框。
+        field.focusRingType = .none
         field.placeholderString = "09:00"
         field.font = .systemFont(ofSize: 14)
         field.textColor = NSColor(WFColors.accent)
         field.delegate = context.coordinator
         field.target = context.coordinator
         field.action = #selector(Coordinator.submit)
+        context.coordinator.observeOutsideClicks(on: field)
         return field
+    }
+
+    static func dismantleNSView(_ nsView: NSTextField, coordinator: Coordinator) {
+        coordinator.stopObservingOutsideClicks()
     }
 
     func updateNSView(_ field: NSTextField, context: Context) {
         let coordinator = context.coordinator
         coordinator.input = self
         if field.stringValue != text { field.stringValue = text }
-        let shouldFocus = requestsFocus && !coordinator.requested
+        let hadFocusRequest = coordinator.requested
+        let shouldFocus = requestsFocus && !hadFocusRequest
         coordinator.requested = requestsFocus
         if shouldFocus {
             DispatchQueue.main.async { [weak field, weak coordinator] in
@@ -35,7 +43,18 @@ private struct ScheduleClockInput: NSViewRepresentable {
                       let window = field.window else { return }
                 window.makeKey()
                 window.makeFirstResponder(field)
-                field.selectText(nil)
+                // 只落光标，不整段选中：全选会给时间盖一层系统蓝底。
+                if let editor = field.currentEditor() {
+                    editor.selectedRange = NSRange(location: (field.stringValue as NSString).length, length: 0)
+                }
+            }
+        } else if hadFocusRequest && !requestsFocus {
+            // 时间子卡收起或切到提醒/重复后必须交出第一响应者：鼠标已经在
+            // 别的属性行上，蓝色光标再留在时间里就是焦点残留。
+            DispatchQueue.main.async { [weak field] in
+                guard let field, let editor = field.currentEditor(),
+                      field.window?.firstResponder === editor else { return }
+                field.window?.makeFirstResponder(nil)
             }
         }
     }
@@ -43,7 +62,39 @@ private struct ScheduleClockInput: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var input: ScheduleClockInput
         var requested = false
+        private weak var field: NSTextField?
+        private var outsideClickMonitor: Any?
+
         init(_ input: ScheduleClockInput) { self.input = input }
+
+        /// 时间输入框允许直接点亮（不必先展开时间子卡），所以不能只靠
+        /// `requestsFocus` 的开关来收焦点：点日历格、快捷日、分段、底栏时
+        /// 都要在 mouse-down 这一拍结束编辑，光标才不会留在时间值后面。
+        func observeOutsideClicks(on field: NSTextField) {
+            self.field = field
+            guard outsideClickMonitor == nil else { return }
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                    guard let self, let field = self.field,
+                          let editor = field.currentEditor(),
+                          field.window?.firstResponder === editor else { return event }
+                    if event.window === field.window {
+                        let point = field.convert(event.locationInWindow, from: nil)
+                        guard !field.bounds.contains(point) else { return event }
+                    }
+                    field.window?.makeFirstResponder(nil)
+                    // 只收焦点，不消费点击：日历/快捷日等目标仍要收到这次点击。
+                    return event
+                }
+        }
+
+        func stopObservingOutsideClicks() {
+            if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
+            outsideClickMonitor = nil
+        }
+
+        deinit { stopObservingOutsideClicks() }
+
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }
             input.text = field.stringValue
@@ -145,6 +196,8 @@ struct TaskDatePopoverV2: View {
     @State private var pendingRecurrencePlan: SchedulePlan?
     @State private var showRecurrenceScope = false
     @State private var selectedRepeatDraftDate = Date()
+    @State private var showRepeatDatePicker = false
+    @State private var repeatDatePickerMonth = Date()
     @State private var repeatEndDraftDate = Date()
     @State private var repeatEndDisplayedMonth = Date()
     /// 时间段页签：点「开始 / 结束」行打开的单日选择子面板。
@@ -934,8 +987,51 @@ struct TaskDatePopoverV2: View {
             BusinessPicker("起算方式", selection: Binding(get: { model.recurrenceBase }, set: model.chooseBase), options:
                 RecurrenceBase.allCases.map { BusinessChoice($0, $0.title) })
             if model.recurrenceBase == .selectedDates {
-                HStack {
-                    DatePicker("日期", selection: $selectedRepeatDraftDate, displayedComponents: .date).labelsHidden()
+                HStack(spacing: 8) {
+                    Button {
+                        repeatDatePickerMonth = selectedRepeatDraftDate
+                        showRepeatDatePicker = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 12))
+                                .foregroundStyle(WFColors.secondaryText)
+                            Text(selectedRepeatDraftDate.formatted(
+                                .dateTime.year().month().day().locale(.appDate)))
+                                .font(WFType.control)
+                                .foregroundStyle(WFColors.text)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
+                        .frame(height: 28)
+                        .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 6))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("重复日期")
+                    .background {
+                        AnchoredPropertyPanel(isPresented: $showRepeatDatePicker,
+                                              width: SchedulePopoverLayoutV2.panelWidth,
+                                              placement: .vertical,
+                                              focusPolicy: .preservePresenter,
+                                              title: "重复日期") {
+                            AppKitMonthGridView(calendar: calendar,
+                                displayedMonth: $repeatDatePickerMonth,
+                                today: workspace.dateFromToday(0),
+                                selection: selectedRepeatDraftDate) { day in
+                                    selectedRepeatDraftDate = day
+                                    showRepeatDatePicker = false
+                                }
+                                .frame(height: AppKitMonthGridView.contentHeight)
+                                .overlay(alignment: .top) {
+                                    CalendarAnnotationOverlay(calendar: calendar,
+                                        displayedMonth: repeatDatePickerMonth,
+                                        occurrenceDays: Set<Date>(), showBadges: true)
+                                        .allowsHitTesting(false)
+                                }
+                                .padding(14)
+                        }
+                    }
                     Button("添加") { model.chooseSelectedDates(model.selectedRepeatDates + [selectedRepeatDraftDate]) }
                 }
                 ForEach(model.selectedRepeatDates, id: \.self) { day in
@@ -1270,7 +1366,28 @@ struct TaskDatePopoverV2: View {
     // MARK: Sheet state
 
     private func toggleSheet(_ sheet: InlineSheet) {
+        endInlineClockEditing()
         if inlineSheet == sheet { closeSheet() } else { openSheet(sheet) }
+    }
+
+    /// 属性行之间切换时先结束行内文本编辑。时间输入框可能是在时间子卡关闭后
+    /// 被直接点亮的（此时 `requestsFocus` 从未为 true），单靠子卡收起回调
+    /// 清不掉光标。
+    private func endInlineClockEditing() {
+        // 先看 key 窗口（正常点进弹层时就是它）；弹层是子窗口，测试或切换
+        // 瞬间可能还没拿到 key，再按窗口找当前场编辑器兜底。
+        if let key = NSApp.keyWindow, resignFieldEditor(in: key) { return }
+        for window in NSApp.windows where window.isVisible {
+            if resignFieldEditor(in: window) { return }
+        }
+    }
+
+    /// 只收真正的场编辑器（`isFieldEditor` 排除正文编辑器）。
+    private func resignFieldEditor(in window: NSWindow) -> Bool {
+        guard let editor = window.firstResponder as? NSTextView,
+              editor.isFieldEditor else { return false }
+        window.makeFirstResponder(nil)
+        return true
     }
 
     private func closeSheet() {
@@ -1387,7 +1504,7 @@ struct TaskDatePopoverV2: View {
 /// grid's exact header/weekday/row geometry with empty placeholders, so
 /// occurrence discs, 班/休 badges and statutory festival names land on the
 /// right cells without touching the grid itself.
-private struct CalendarAnnotationOverlay: View {
+struct CalendarAnnotationOverlay: View {
     let calendar: Calendar
     let displayedMonth: Date
     let occurrenceDays: Set<Date>

@@ -55,6 +55,9 @@ enum NativeDestination: String, CaseIterable, Identifiable {
 @MainActor
 final class AppNavigation: ObservableObject {
     @Published var destination: NativeDestination = .today
+    /// 跨窗口“在主页打开笔记”的请求。NotesWorkspaceView 消费后清空，
+    /// 同时清搜索与筛选，避免目标笔记被当前过滤条件挡在列表外。
+    @Published var noteRevealRequest: UUID?
     init(destination: NativeDestination = .today) { self.destination = destination }
 
     var taskSelectionToPreserveOnNextNavigation: UUID?

@@ -20,6 +20,14 @@ struct NativeDocument: Equatable, Codable {
     /// 已水合或本来就是内存文档时为 nil。
     var deferredSummary: DocumentSummary? { deferred?.summary }
 
+    /// 清单进度/提醒的快路径：延迟文档只读摘要；内存文档才从块计算。
+    /// 不得为了拿摘要而调用 `materialized()`，否则列表会逐条水合正文。
+    var checklistSummary: ChecklistSummary? {
+        if let deferred { return deferred.summary.checklist }
+        let summary = ChecklistSummary(blocks: storedBlocks)
+        return summary.total > 0 ? summary : nil
+    }
+
     init(deferred: DeferredDocument) { storedBlocks = []; self.deferred = deferred }
     func materialized() throws -> NativeDocument { try deferred?.resolve() ?? self }
     /// 持久化形态（2026-10-24 内核切换决策）：`{ops, plainText}`——Delta 是真源，
@@ -106,23 +114,86 @@ struct NativeDocument: Equatable, Codable {
             ids[prefix + offset] = blocks[prefix + offset].id
         }
 
+        let metadataByID = Dictionary(blocks.compactMap { block in
+            block.checklist.map { (block.id, $0) }
+        }, uniquingKeysWith: { first, _ in first })
         let newBlocks = newLines.enumerated().map { index, line in
-            DocumentBlock(id: ids[index] ?? UUID(), kind: .paragraph,
-                          runs: [DocumentRun(text: line)])
+            let id = ids[index] ?? UUID()
+            return DocumentBlock(id: id, kind: .paragraph,
+                                 runs: [DocumentRun(text: line)],
+                                 checklist: metadataByID[id])
         }
         return NativeDocument(blocks: newBlocks)
     }
 }
 
+/// 检查事项的业务元数据。正文仍由 `DocumentBlock` 持有，这里只存完成时间
+/// 与项级提醒；随 Delta 行属性 `wf-checklist-*` 往返，旧档缺键即 nil。
+struct ChecklistItemMeta: Equatable, Codable {
+    var completedAt: Date?
+    var reminderAt: Date?
+    var allDay: Bool
+
+    init(completedAt: Date? = nil, reminderAt: Date? = nil, allDay: Bool = false) {
+        self.completedAt = completedAt
+        self.reminderAt = reminderAt
+        self.allDay = allDay
+    }
+
+    var isEmpty: Bool { completedAt == nil && reminderAt == nil }
+
+    private enum CodingKeys: String, CodingKey { case completedAt, reminderAt, allDay }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        completedAt = try values.decodeIfPresent(Date.self, forKey: .completedAt)
+        reminderAt = try values.decodeIfPresent(Date.self, forKey: .reminderAt)
+        allDay = try values.decodeIfPresent(Bool.self, forKey: .allDay) ?? false
+    }
+}
+
 struct DocumentBlock: Identifiable, Equatable, Codable {
     let id: UUID
-    var kind: DocumentBlockKind
+    var kind: DocumentBlockKind {
+        didSet {
+            if !kind.isList { indentLevel = 0 }
+            if kind != .ordered { listStart = nil }
+        }
+    }
     var runs: [DocumentRun]
+    var indentLevel: Int
+    var listStart: Int?
+    /// 检查项元数据。块换成普通段落/标题时保留，供切回清单时恢复。
+    var checklist: ChecklistItemMeta?
 
-    init(id: UUID = UUID(), kind: DocumentBlockKind, runs: [DocumentRun] = []) {
+    init(id: UUID = UUID(), kind: DocumentBlockKind, runs: [DocumentRun] = [],
+         indentLevel: Int = 0, listStart: Int? = nil,
+         checklist: ChecklistItemMeta? = nil) {
         self.id = id
         self.kind = kind
         self.runs = runs
+        self.indentLevel = kind.isList ? min(8, max(0, indentLevel)) : 0
+        self.listStart = kind == .ordered ? listStart.map { max(1, $0) } : nil
+        self.checklist = checklist?.isEmpty == true ? nil : checklist
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, kind, runs, indentLevel, listStart, checklist }
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try values.decode(UUID.self, forKey: .id),
+                  kind: try values.decode(DocumentBlockKind.self, forKey: .kind),
+                  runs: try values.decode([DocumentRun].self, forKey: .runs),
+                  indentLevel: try values.decodeIfPresent(Int.self, forKey: .indentLevel) ?? 0,
+                  listStart: try values.decodeIfPresent(Int.self, forKey: .listStart),
+                  checklist: try values.decodeIfPresent(ChecklistItemMeta.self, forKey: .checklist))
+    }
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(id, forKey: .id)
+        try values.encode(kind, forKey: .kind)
+        try values.encode(runs, forKey: .runs)
+        if indentLevel > 0 { try values.encode(indentLevel, forKey: .indentLevel) }
+        try values.encodeIfPresent(listStart, forKey: .listStart)
+        try values.encodeIfPresent(checklist, forKey: .checklist)
     }
 
     var plainText: String { runs.map(\.text).joined() }
@@ -137,6 +208,18 @@ enum DocumentBlockKind: Equatable, Codable {
     case quote
     case code
     case divider
+
+    var isList: Bool {
+        switch self {
+        case .bullet, .ordered, .checklist: true
+        default: false
+        }
+    }
+
+    var isChecklist: Bool {
+        if case .checklist = self { return true }
+        return false
+    }
 }
 
 struct DocumentRun: Equatable, Codable {

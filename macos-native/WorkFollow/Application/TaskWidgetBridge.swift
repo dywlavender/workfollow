@@ -6,6 +6,7 @@ import WidgetKit
 final class TaskWidgetBridge {
     private let channel: TaskWidgetChannel
     private let workspace: TaskWorkspaceModel
+    private let countdownStore: CountdownStore?
     private let canProcess: () -> Bool
     private let flush: (@escaping (Error?) -> Void) -> Void
     private let reload: () -> Void
@@ -14,15 +15,22 @@ final class TaskWidgetBridge {
     private var publishing: DispatchWorkItem?
     private var processing = false
     private var lastItems: [TaskWidgetItem]?
+    private var lastCountdowns: [TaskWidgetCountdownItem]?
 
     init(channel: TaskWidgetChannel, workspace: TaskWorkspaceModel,
+         countdowns: CountdownStore? = nil,
          canProcess: @escaping () -> Bool,
          flush: @escaping (@escaping (Error?) -> Void) -> Void,
          reload: @escaping () -> Void = { WidgetCenter.shared.reloadTimelines(ofKind: TaskWidgetChannel.kind) }) {
         self.channel = channel; self.workspace = workspace; self.canProcess = canProcess
+        countdownStore = countdowns
         self.flush = flush; self.reload = reload
         workspace.taskChanges.sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
         workspace.listArchiveChanges.sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
+        if let countdowns {
+            countdowns.$events.dropFirst().sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
+            countdowns.$dateRevision.dropFirst().sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
+        }
         observer = DistributedNotificationCenter.default().addObserver(forName: Notification.Name(TaskWidgetChannel.notification),
             object: nil, queue: .main) { [weak self] _ in
                 _Concurrency.Task { @MainActor in await self?.processPending() }
@@ -47,10 +55,13 @@ final class TaskWidgetBridge {
     func publish() -> Bool {
         guard canProcess() else { return false }
         let items = Self.items(workspace.tasksInActiveLists)
-        guard items != lastItems else { return true }
+        let now = workspace.clock()
+        let countdowns = Self.countdownItems(countdownStore?.events ?? [], now: now, calendar: workspace.calendar)
+        guard items != lastItems || countdowns != lastCountdowns else { return true }
         do {
-            try channel.publish(TaskWidgetSnapshot(updatedAt: workspace.clock(), tasks: items))
+            try channel.publish(TaskWidgetSnapshot(updatedAt: now, tasks: items, countdowns: countdowns))
             lastItems = items
+            lastCountdowns = countdowns
             reload()
             return true
         } catch { return false }
@@ -63,6 +74,18 @@ final class TaskWidgetBridge {
                 dueEndAt: $0.schedule.dueEndAt, deadlineAt: $0.schedule.deadlineAt, hasTime: $0.schedule.hasTime,
                 completedAt: $0.completedAt, isCompleted: $0.status == .completed,
                 weekKey: $0.weeklyPlanning?.currentWeek, updatedAt: $0.updatedAt)
+        }
+    }
+
+    static func countdownItems(_ events: [CountdownEvent], now: Date,
+                               calendar: Calendar) -> [TaskWidgetCountdownItem] {
+        let today = calendar.startOfDay(for: now)
+        return (0...7).flatMap { offset -> [TaskWidgetCountdownItem] in
+            guard let day = calendar.date(byAdding: .day, value: offset, to: today) else { return [] }
+            return CountdownSmartListProjection.section(events: events, now: day, calendar: calendar).entries.map { entry in
+                return TaskWidgetCountdownItem(id: entry.id, title: entry.name, symbol: entry.symbol,
+                    displayDate: day, relativeLabel: entry.relativeLabel)
+            }
         }
     }
 

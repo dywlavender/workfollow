@@ -14,6 +14,8 @@ struct BusinessMenu<Label: View, Content: View>: View {
     let title: String
     let search: Binding<String>?
     let presentation: Binding<Bool>?
+    /// 底栏触发时优先向上展开，避免菜单越过窗口底边。
+    let prefersAbove: Bool
     private let label: Label
     private let content: () -> Content
     @Environment(\.businessMenuContext) private var parent
@@ -24,10 +26,11 @@ struct BusinessMenu<Label: View, Content: View>: View {
     @State private var identity = UUID()
 
     init(width: CGFloat? = nil, title: String = "操作菜单", search: Binding<String>? = nil,
-         isPresented: Binding<Bool>? = nil,
+         isPresented: Binding<Bool>? = nil, prefersAbove: Bool = false,
          @ViewBuilder content: @escaping () -> Content, @ViewBuilder label: () -> Label) {
         self.explicitWidth = width; self.title = title; self.search = search
         self.presentation = isPresented
+        self.prefersAbove = prefersAbove
         self.content = content; self.label = label()
     }
 
@@ -90,6 +93,7 @@ struct BusinessMenu<Label: View, Content: View>: View {
         .businessMenuTriggerProbe(title)
         .background {
             AnchoredPropertyPanel(isPresented: showing, width: resolvedWidth,
+                prefersAbove: prefersAbove,
                 placement: parent == nil ? .dropdown : .submenu,
                 focusPolicy: search == nil ? .preservePresenter : .panel, title: title) {
                 BusinessMenuContent(controller: controller, close: { showing.wrappedValue = false },
@@ -261,7 +265,9 @@ struct BusinessMenuOption: View {
     private var optionLabel: some View {
         HStack(spacing: 8) {
             if let symbol { Image(systemName: symbol).frame(width: 16).foregroundStyle(color ?? WFColors.secondaryText) }
-            Text(title).lineLimit(1).truncationMode(.middle)
+            // 文字优先于右侧 Spacer/勾选列拿宽度：紧凑菜单里也不能把
+            // 「有内容时显示」截成「有内…显示」。
+            Text(title).lineLimit(1).truncationMode(.middle).layoutPriority(1)
             Spacer(minLength: 8)
             Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold))
                 .frame(width: 14)

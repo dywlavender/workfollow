@@ -1,0 +1,5 @@
+[plain-allowmain] A-boot active=true key=MAIN main=MAIN raiseSet=["MAIN", "MAIN"] firstResp=NSTextView sel={150, 0}
+[plain-allowmain] B-after-deactivate(用户在看PDF) active=true key=MAIN main=MAIN raiseSet=["MAIN", "MAIN"] firstResp=NSTextView sel={150, 0}
+[plain-allowmain] C-orderFrontRegardless-only active=true key=MAIN main=MAIN raiseSet=["MAIN", "MAIN"] firstResp=NSTextView sel={150, 0}
+[plain-allowmain] D-after-click-note active=true key=NOTE main=NOTE raiseSet=["NOTE", "NOTE"] firstResp=NSTextView sel={150, 0}
+[plain-allowmain] E-after-click-pdf active=true key=NOTE main=NOTE raiseSet=["NOTE", "NOTE"] firstResp=NSTextView sel={150, 0}

@@ -118,12 +118,36 @@ final class TaskInspectorShellContractTests: XCTestCase {
         typealias Presentation = TaskInspectorSchedulePresentation
         XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: start, hasTime: true,
             dueEndAt: date(19, 11, 43)), now: date(19, 12), calendar: calendar),
-            "今天, 10月19日, 09:17 - 11:43")
+            "10月19日, 09:17 - 11:43, 延迟不足1天")
         XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: date(19),
             dueEndAt: date(20)), now: date(19, 12), calendar: calendar),
             "今天, 10月19日 - 明天, 10月20日")
         XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: date(19),
             dueEndAt: date(19)), now: date(19, 12), calendar: calendar), "今天, 10月19日")
+    }
+
+    func testOverdueHeaderKeepsCalendarIconAndOpensTheDatePanel() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 25, hour: 12))!
+        let due = calendar.date(from: DateComponents(year: 2026, month: 9, day: 26))!
+        let workspace = TaskWorkspaceModel(clock: { now }, calendar: calendar, seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "逾期日期", in: .inbox).taskID)
+        workspace.saveTiming(id, schedule: TaskSchedule(dueAt: due), reminder: nil, frequency: .never)
+        workspace.select(id)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace)
+        let owner = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { owner.close() }
+        func buttons(in view: NSView) -> [NSButton] {
+            [view as? NSButton].compactMap { $0 } + view.subviews.flatMap { buttons(in: $0) }
+        }
+        let chip = try XCTUnwrap(buttons(in: host).first { $0.attributedTitle.string == "9月26日, 延迟29天" })
+        XCTAssertNotNil(chip.image, "详情顶部仍保留日历图标")
+        try InspectorPanelTestSupport.clickButton(containing: "9月26日, 延迟29天", in: owner)
+        let datePanel = try InspectorPanelTestSupport.panel(title: "日期属性", below: owner)
+        XCTAssertTrue(datePanel.isVisible)
+        try InspectorPanelTestSupport.sendEscape(to: datePanel)
+        XCTAssertFalse(datePanel.isVisible)
     }
 
     private func render<V: View>(_ view: V, width: CGFloat,

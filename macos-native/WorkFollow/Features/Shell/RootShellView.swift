@@ -166,6 +166,12 @@ private struct TaskWorkspaceView: View {
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
     @State private var dragOrigin: CGFloat?
+    @AppStorage(TaskDetailLayout.defaultsKey) private var detailLayoutRaw =
+        TaskDetailLayout.sidePeek.rawValue
+
+    private var detailLayout: TaskDetailLayout {
+        TaskDetailLayout(rawValue: detailLayoutRaw) ?? .sidePeek
+    }
 
     /// 视图偏好的键（与 TaskListView 同一套派生，真值源唯一）。
     private var preferenceKey: String {
@@ -225,8 +231,43 @@ private struct TaskWorkspaceView: View {
                 TaskBatchPanelView(workspace: workspace)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if workspace.selectedTask != nil {
-                TaskInspectorShell(workspace: workspace, showBack: true,
-                                   commentStore: environment.taskCommentStore)
+                if detailLayout == .popup {
+                    // 窄窗口选「弹窗」：列表留在原位，详情以带阴影的浮层出现。
+                    ZStack(alignment: .topTrailing) {
+                        TaskListView(workspace: workspace, navigation: navigation,
+                                     navigationVisible: navigationVisible)
+                        TaskInspectorShell(workspace: workspace, showBack: false,
+                                           allowsClosing: true,
+                                           commentStore: environment.taskCommentStore)
+                            .frame(width: min(420, max(320, geometry.size.width - 64)),
+                                   height: max(280, geometry.size.height - 32))
+                            .background(WFColors.content,
+                                        in: RoundedRectangle(cornerRadius: 12))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(WFColors.border, lineWidth: 1)
+                                    .allowsHitTesting(false)
+                            }
+                            .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
+                            .padding(.vertical, 16)
+                            .padding(.trailing, 16)
+                    }
+                } else {
+                    // 「侧边栏」：详情贴右边缘停靠，列表仍从左侧露出来（不撑满整个内容区）。
+                    ZStack(alignment: .topTrailing) {
+                        TaskListView(workspace: workspace, navigation: navigation,
+                                     navigationVisible: navigationVisible)
+                        TaskInspectorShell(workspace: workspace, showBack: false,
+                                           allowsClosing: true,
+                                           commentStore: environment.taskCommentStore)
+                            .frame(width: min(440, max(320, geometry.size.width * 0.72)),
+                                   height: geometry.size.height)
+                            .background(WFColors.content)
+                            .overlay(alignment: .leading) {
+                                Rectangle().fill(WFColors.border).frame(width: 1)
+                            }
+                    }
+                }
             } else {
                 TaskListView(workspace: workspace, navigation: navigation,
                              navigationVisible: navigationVisible)

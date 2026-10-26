@@ -3,14 +3,16 @@ import SwiftUI
 import XCTest
 @testable import WorkFollow
 
-/// TI2-17：详情独立窗口。
-///
-/// 滴答的容器切换（`detail_side_peek` / `detail_popup`）；本地做成真正的独立窗口：
-/// 顶栏入口只在宽布局出现，重复点击复用同一个窗口。
+/// The task inspector's top entry uses the common floating editor in both layouts.
 @MainActor
 final class TaskDetailWindowTests: XCTestCase {
 
-    func testDetachEntryOnlyAppearsInWideLayout() throws {
+    override func tearDown() {
+        FloatingEditorWindowController.shared.closeAll()
+        super.tearDown()
+    }
+
+    func testFloatingEntryRemainsAvailableInWideAndCompactLayouts() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try XCTUnwrap(workspace.createTask(title: "独立窗口用例", in: .inbox).taskID)
         workspace.select(id)
@@ -21,7 +23,7 @@ final class TaskDetailWindowTests: XCTestCase {
         XCTAssertLessThan(detach.maxX, priority.minX + 0.5, "入口在优先级左侧")
 
         let narrow = try render(TaskInspectorShell(workspace: workspace, showBack: true))
-        XCTAssertNil(narrow[.detach], "窄列（已分离视图）不再重复给入口")
+        XCTAssertNotNil(narrow[.detach], "移除更多菜单入口后，窄布局也应能从顶部打开便签")
     }
 
     func testControllerReusesTheSameWindow() throws {
@@ -31,15 +33,24 @@ final class TaskDetailWindowTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         let environment = AppEnvironment(directory: directory)
         let workspace = environment.taskWorkspace
-        _ = try XCTUnwrap(workspace.createTask(title: "窗口用例", in: .inbox).taskID)
+        let id = try XCTUnwrap(workspace.createTask(title: "窗口用例", in: .inbox).taskID)
+        workspace.select(id)
 
         TaskDetailWindowController.shared.show(workspace: workspace, environment: environment)
         let first = try XCTUnwrap(TaskDetailWindowController.shared.window)
-        XCTAssertEqual(first.title, "任务详情")
+        XCTAssertEqual(first.title, "任务便签")
+        let panel = try XCTUnwrap(first as? FloatingEditorPanel)
+        InspectorPanelTestSupport.settle(panel)
+        XCTAssertEqual(panel.editorHandle.textView?.documentIdentity, id)
 
         TaskDetailWindowController.shared.show(workspace: workspace, environment: environment)
         XCTAssertTrue(TaskDetailWindowController.shared.window === first,
                       "重复点入口只前置，不再开第二个窗口")
+        let other = try XCTUnwrap(workspace.createTask(title: "另一个任务", in: .inbox).taskID)
+        workspace.select(other)
+        InspectorPanelTestSupport.settle(panel)
+        XCTAssertEqual(panel.editorHandle.textView?.documentIdentity, id,
+                       "主页面切换任务不能改变已打开浮窗的内容")
     }
 
     // MARK: - Helpers

@@ -10,6 +10,10 @@ struct MatrixRuleEditor: View {
     let onSave: (MatrixQuadrantConfiguration) -> Void
     let onCancel: () -> Void
 
+    private enum DateField: Equatable { case start, end }
+    @State private var activeDateField: DateField?
+    @State private var dateFieldMonth = Date()
+
     private var matches: Int { tasks.filter { PlanningProjection.appearsOnCalendar($0) && value.rule.matches($0, now: now, calendar: calendar) }.count }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -74,12 +78,10 @@ struct MatrixRuleEditor: View {
                         }
                         if value.rule.date.kind == .dateRange {
                             WFFormRow("开始") {
-                                DatePicker("", selection: optionalDate($value.rule.date.rangeStart), displayedComponents: .date)
-                                    .labelsHidden()
+                                dateButton(.start, binding: $value.rule.date.rangeStart)
                             }
                             WFFormRow("结束") {
-                                DatePicker("", selection: optionalDate($value.rule.date.rangeEnd), displayedComponents: .date)
-                                    .labelsHidden()
+                                dateButton(.end, binding: $value.rule.date.rangeEnd)
                             }
                         }
                     }
@@ -125,13 +127,61 @@ struct MatrixRuleEditor: View {
     private var invalidRange: Bool {
         value.rule.date.kind == .dateRange && (value.rule.date.rangeEnd ?? now) < (value.rule.date.rangeStart ?? now)
     }
+
+    private func dateButton(_ field: DateField, binding: Binding<Date?>) -> some View {
+        Button {
+            dateFieldMonth = binding.wrappedValue ?? now
+            activeDateField = field
+        } label: {
+            HStack(spacing: 6) {
+                Text(binding.wrappedValue.map {
+                    $0.formatted(.dateTime.year().month().day().locale(.appDate))
+                } ?? "选择日期")
+                Spacer(minLength: 0)
+                Image(systemName: "calendar")
+                    .font(.system(size: 12))
+                    .foregroundStyle(WFColors.secondaryText)
+            }
+            .font(WFType.control)
+            .foregroundStyle(binding.wrappedValue == nil ? WFColors.secondaryText : WFColors.text)
+            .padding(.horizontal, 8)
+            .frame(width: 190, height: 26)
+            .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 5))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(field == .start ? "开始日期" : "结束日期")
+        .background {
+            AnchoredPropertyPanel(isPresented: Binding(
+                get: { activeDateField == field },
+                set: { if !$0, activeDateField == field { activeDateField = nil } }),
+                width: 260, placement: .vertical,
+                focusPolicy: .preservePresenter, title: "日期") {
+                    AppKitMonthGridView(calendar: calendar,
+                        displayedMonth: $dateFieldMonth,
+                        today: now,
+                        selection: binding.wrappedValue,
+                        minimumDate: field == .end ? value.rule.date.rangeStart : nil,
+                        onSelect: { day in
+                            binding.wrappedValue = day
+                            activeDateField = nil
+                        })
+                        .frame(height: AppKitMonthGridView.contentHeight)
+                        .overlay(alignment: .top) {
+                            CalendarAnnotationOverlay(calendar: calendar,
+                                displayedMonth: dateFieldMonth,
+                                occurrenceDays: Set<Date>(), showBadges: true)
+                                .allowsHitTesting(false)
+                        }
+                        .padding(14)
+                }
+        }
+    }
+
     private func membership<T: Equatable>(_ item: T, in collection: Binding<[T]>) -> Binding<Bool> {
         Binding(get: { collection.wrappedValue.contains(item) }, set: { enabled in
             collection.wrappedValue.removeAll { $0 == item }
             if enabled { collection.wrappedValue.append(item) }
         })
-    }
-    private func optionalDate(_ binding: Binding<Date?>) -> Binding<Date> {
-        Binding(get: { binding.wrappedValue ?? now }, set: { binding.wrappedValue = $0 })
     }
 }

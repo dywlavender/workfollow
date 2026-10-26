@@ -4,7 +4,7 @@ import SwiftUI
 /// Compact Task menu geometry. Row height and command order remain stable;
 /// TickTick reference selection is neutral fill without an accent outline.
 enum SlashMenuMetrics {
-    static let width: CGFloat = 160
+    static let width: CGFloat = PopupMetrics.completionWidth
     static let rowHeight: CGFloat = 34
     static let padding: CGFloat = 4
     static let itemInset: CGFloat = 4
@@ -14,7 +14,7 @@ enum SlashMenuMetrics {
     static let itemTrailing: CGFloat = 12
     /// 4 above the hairline, 1 for the hairline, 4 below.
     static let dividerBlock: CGFloat = 9
-    static let radius: CGFloat = 16
+    static let radius: CGFloat = PopupMetrics.cornerRadius
     static let rowRadius: CGFloat = 8
     static let labelSize: CGFloat = 13
 
@@ -28,14 +28,6 @@ enum SlashMenuMetrics {
             + CGFloat(dividerCount) * dividerBlock
             + padding * 2
     }
-}
-
-/// 原版 `PopoverPlacement` 的默认间距 6 与 `WorkFollowSpacing.popoverSafeArea` 12，
-/// 以及"面板高度最多夹到 max(220, 窗口高 - 24)，超出滚动"。
-private enum SlashLayout {
-    static let gap = WFPlanningOverlayMetrics.gap
-    static let safeArea = WFPlanningOverlayMetrics.safeArea
-    static let minHeight: CGFloat = 220
 }
 
 extension NativeTextView {
@@ -80,6 +72,7 @@ extension NativeTextView {
             panel.isOpaque = false
             panel.becomesKeyOnlyIfNeeded = true
             panel.appearance = window.effectiveAppearance
+            EditorPopupWindowLevel.apply(to: panel, owner: window)
             window.addChildWindow(panel, ordered: .above)
             slashPanel = panel
         }
@@ -96,19 +89,13 @@ extension NativeTextView {
             panel.contentView = NSHostingView(rootView: list)
         }
         let caret = firstRect(forCharacterRange: selectedRange(), actualRange: nil)
-        // 夹取范围取**窗口**（原版是窗口内的浮层，安全边距 12），不是屏幕可视区。
-        let bounds = window.frame.insetBy(dx: SlashLayout.safeArea, dy: SlashLayout.safeArea)
-        let width = min(compact ? SlashMenuMetrics.width : 300, bounds.width)
         let desiredHeight = compact
             ? SlashMenuMetrics.height(for: commands)
             : CGFloat(min(max(commands.count, 1), 8) * 44 + 34)
-        let height = min(desiredHeight, max(SlashLayout.minHeight, bounds.height))
-        let x = min(max(caret.minX, bounds.minX), bounds.maxX - width)
-        // 原版是 `bottomStart`：光标**下方**优先（AppKit 的 y 是窗口底边），放不下才翻到上方。
-        let y = caret.minY - height - SlashLayout.gap >= bounds.minY
-            ? caret.minY - height - SlashLayout.gap
-            : min(caret.maxY + SlashLayout.gap, bounds.maxY - height)
-        panel.setFrame(NSRect(x: x, y: y, width: width, height: height), display: true)
+        let frame = EditorPopupGeometry.frame(anchor: caret,
+            size: CGSize(width: compact ? SlashMenuMetrics.width : 300, height: desiredHeight),
+            bounds: EditorPopupGeometry.bounds(in: window))
+        panel.setFrame(frame, display: true)
         panel.orderFront(nil)
         startFollowingSlash()
         if isFirstPresentation {
@@ -156,7 +143,7 @@ extension NativeTextView {
 
     func moveSlash(_ offset: Int) {
         guard var session = slashSession else { return }
-        session.move(offset, count: session.results(in: profile.slashCommands).count)
+        session.move(offset, count: session.results(in: commands(for: session)).count)
         slashSession = session
         refreshSlash()
     }
@@ -217,6 +204,7 @@ struct SlashCommandList: View {
             .onAppear { proxy.scrollTo(selected, anchor: nil) }
         }
         .font(.system(size: compact ? SlashMenuMetrics.labelSize : 14))
+        .transaction { $0.animation = nil }
         .foregroundStyle(WFColors.text)
         // Task compact cards have no hard outline; the panel owns their shadow.
         .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: SlashMenuMetrics.radius))

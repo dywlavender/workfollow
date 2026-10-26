@@ -1,0 +1,37 @@
+{
+  "original_package": "/Applications/TickTick.app",
+  "focused_input": "/private/tmp/ticktick-nib-readonly-audit-bc67j2fn/FocusedNibResources.app",
+  "method": "Direct byte-for-byte comparison of each copied file; no target execution.",
+  "files": [
+    {
+      "relative_path": "Contents/Info.plist",
+      "byte_identical": true
+    },
+    {
+      "relative_path": "Contents/Resources/Base.lproj/MainMenu.nib",
+      "byte_identical": true
+    },
+    {
+      "relative_path": "Contents/Resources/zh-Hans.lproj/MainMenu.nib",
+      "byte_identical": true
+    },
+    {
+      "relative_path": "Contents/Resources/TTMainWindowController.nib",
+      "byte_identical": true
+    },
+    {
+      "relative_path": "Contents/Resources/TTQuickAddViewController.nib",
+      "byte_identical": true
+    },
+    {
+      "relative_path": "Contents/Resources/TTAddTaskBarViewController.nib",
+      "byte_identical": true
+    },
+    {
+      "relative_path": "Contents/MacOS/TickTick",
+      "byte_identical": true
+    }
+  ],
+  "all_compared_files_byte_identical": true,
+  "coverage_boundary": "The selected resources are exact copies. The temporary input is not a complete application package and does not establish behavior of omitted resources or runtime-created windows."
+}

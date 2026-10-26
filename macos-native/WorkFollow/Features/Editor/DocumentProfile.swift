@@ -66,6 +66,14 @@ struct DocumentProfile {
     var onListInserted: (String) -> Void = { _ in }
     /// 粘贴文件（TI2-03 剩余项）：宿主负责落盘成附件；默认不处理。
     var onPasteFiles: (([URL]) -> Void)?
+    /// 检查项行内控件：行号按换行切分，与 `NativeDocument.blocks` 对齐。
+    /// 返回 nil 表示该行不是检查项。
+    var checklistItem: (Int) -> ChecklistItemMeta? = { _ in nil }
+    var setChecklistReminder: (Int, Date?) -> Void = { _, _ in }
+    /// 未授权通知时提醒面板底部的说明；nil 不显示。
+    var checklistReminderNotice: () -> String? = { nil }
+    /// 只有清单任务开启行尾铃铛；笔记/文本里的行内复选框保持原样。
+    var checklistRemindersEnabled = false
     // Explicit host policy. Nil preserves profiles constructed by older callers.
     var selectionToolbarEnabled: Bool?
     /// Complete host-owned menu; nil keeps legacy/generic profile behavior.

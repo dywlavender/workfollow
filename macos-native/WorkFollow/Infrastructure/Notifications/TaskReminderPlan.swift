@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 struct ReminderDelivery: Codable, Equatable, Identifiable {
-    enum Kind: String, Codable { case task, countdown, test }
+    enum Kind: String, Codable { case task, countdown, checklistItem, test }
     var id: String
     var kind: Kind
     var sourceID: UUID
@@ -11,6 +11,23 @@ struct ReminderDelivery: Codable, Equatable, Identifiable {
     var body: String
     var originalDate: Date
     var fireDate: Date
+    /// 检查项所在块；项级提醒打开时可选定位到该行。
+    var checklistItemID: UUID? = nil
+
+    /// 通知标识前缀。任务与检查项共用一个系统队列，容量裁剪必须按前缀
+    /// 分别计算，否则项提醒多了会把任务提醒顶出队列（反之亦然）。
+    var identifierPrefix: String { kind.identifierPrefix }
+}
+
+extension ReminderDelivery.Kind {
+    var identifierPrefix: String {
+        switch self {
+        case .task: return "task."
+        case .countdown: return "countdown."
+        case .checklistItem: return "checklist."
+        case .test: return "test."
+        }
+    }
 }
 
 struct ReminderDecision: Codable, Equatable {
@@ -88,7 +105,10 @@ enum TaskReminderPlanner {
                     fireDate: decisions[id]?.snoozedUntil ?? date))
             }
         }
-        for task in tasks { append(task, sourceID: task.id, occurrence: task.occurrenceKey) }
+        for task in tasks {
+            append(task, sourceID: task.id, occurrence: task.occurrenceKey)
+            appendChecklistItems(of: task, decisions: decisions, into: &values)
+        }
         for ghost in ghosts { append(ghost.task, sourceID: ghost.sourceTaskID, occurrence: ghost.key) }
         for event in countdowns {
             for date in ReminderSchedule.fireDates(for: event, calendar: calendar, now: now) {
@@ -100,5 +120,26 @@ enum TaskReminderPlanner {
             }
         }
         return values.sorted { $0.fireDate == $1.fireDate ? $0.id < $1.id : $0.fireDate < $1.fireDate }
+    }
+
+    /// 清单任务里未勾选、带提醒的检查项。摘要只投影未完成项：勾选、删除、
+    /// 切回文本或完成任务后，下一次对账自然不再生成投递。
+    private static func appendChecklistItems(of task: Task,
+                                             decisions: [String: ReminderDecision],
+                                             into values: inout [ReminderDelivery]) {
+        guard task.kind == .checklist, task.isActiveSeriesOccurrence,
+              let reminders = task.document.checklistSummary?.reminders else { return }
+        for item in reminders {
+            let id = "checklist.\(task.id.uuidString).\(item.blockID.uuidString)"
+                + ".at.\(Int64(item.fireDate.timeIntervalSince1970))"
+            guard decisions[id]?.acknowledged != true else { continue }
+            values.append(ReminderDelivery(
+                id: id, kind: .checklistItem, sourceID: task.id,
+                occurrence: task.occurrenceKey, title: item.title,
+                body: task.title.isEmpty ? task.list.name : task.title,
+                originalDate: item.fireDate,
+                fireDate: decisions[id]?.snoozedUntil ?? item.fireDate,
+                checklistItemID: item.blockID))
+        }
     }
 }

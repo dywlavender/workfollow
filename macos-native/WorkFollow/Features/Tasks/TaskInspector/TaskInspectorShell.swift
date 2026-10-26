@@ -45,7 +45,15 @@ struct TaskInspectorShell: View {
     @State private var showNoteInfo = false
     /// 任务类型浮层（TI2-05b）。
     @State private var showKindMenu = false
+    /// 切到清单会压平标题/引用/代码/分割线时的确认目标。
+    @State private var pendingChecklistTaskID: UUID?
     @StateObject private var editorHandle = DocumentEditorHandle()
+    @ObservedObject private var floatingTasks = StickyNoteWindowController.shared
+
+    private var selectedTaskHasFloatingEditor: Bool {
+        guard let id = workspace.selectedTaskID else { return false }
+        return floatingTasks.isOpen(id)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -62,6 +70,12 @@ struct TaskInspectorShell: View {
                             .frame(minWidth: viewport.size.width,
                                    minHeight: viewport.size.height,
                                    alignment: .topLeading)
+                            .background {
+                                if !selectedTaskHasFloatingEditor {
+                                    EditorWhitespaceHitTarget(handle: editorHandle, documentID: task.id)
+                                }
+                            }
+                            .compactScrollbars()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -73,6 +87,8 @@ struct TaskInspectorShell: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
+        .documentFormattingToolbar(isPresented: showFormattingToolbar && !selectedTaskHasFloatingEditor,
+                                   handle: editorHandle)
         .onReceive(workspace.selectionWillChange) { nextID in
             guard editorHandle.textView?.documentIdentity != nextID else { return }
             editorHandle.prepareForDocumentChange()
@@ -89,9 +105,11 @@ struct TaskInspectorShell: View {
                                           title: workspace.selectedTask?.title ?? "")
             titleEditing = false
             presentation.editingTarget = .none
+            revealPendingChecklistItem()
             dismissTransientPanels()
             showFormattingToolbar = false
             showComments = false
+            pendingChecklistTaskID = nil
         }
         .onDisappear { dismissTransientPanels() }
         .onChange(of: workspace.pendingChildTitleEditorID) { _, _ in beginPendingChildEditing() }
@@ -104,7 +122,23 @@ struct TaskInspectorShell: View {
                 titleEditing = true
             }
         }
-        .onAppear { focusPendingTitleIfNeeded() }
+        .onChange(of: workspace.pendingChecklistReveal) { _, _ in revealPendingChecklistItem() }
+        .onAppear {
+            focusPendingTitleIfNeeded()
+            revealPendingChecklistItem()
+        }
+        .alert("切换模式后，当前排版格式将失效，是否继续？",
+               isPresented: Binding(get: { pendingChecklistTaskID != nil },
+                                    set: { if !$0 { pendingChecklistTaskID = nil } })) {
+            Button("取消", role: .cancel) { pendingChecklistTaskID = nil }
+            Button("继续") {
+                guard let id = pendingChecklistTaskID else { return }
+                pendingChecklistTaskID = nil
+                workspace.setKind(id, .checklist)
+            }
+        } message: {
+            Text("标题、引用、代码与分割线会保留，但不会变成检查事项，也不计入清单进度。")
+        }
         .onExitCommand {
             _ = handleEscape()
         }
@@ -137,7 +171,10 @@ struct TaskInspectorShell: View {
                             onBack: { workspace.select(nil) },
                             onComplete: { _ = workspace.changeStatus(task) },
                             onRepeat: { openSchedulePanel(.recurrence) },
-                            onDetach: showBack ? nil : {
+                            onDetach: {
+                                dismissTransientPanels()
+                                showFormattingToolbar = false
+                                editorHandle.prepareForDocumentChange()
                                 TaskDetailWindowController.shared.show(workspace: workspace,
                                                                        environment: environment)
                             },
@@ -146,16 +183,6 @@ struct TaskInspectorShell: View {
                             kindSymbol: task.kind.symbol,
                             schedule: { scheduleChip(task, field: .due) },
                             priority: { priorityMenu(task) })
-        // 子任务进度条（TI2-07）：贴在顶栏下沿，不改变 Header 高度/内容几何。
-        .overlay(alignment: .bottom) {
-            if let progress = headerProgress(task) {
-                TaskInspectorProgressBar(progress: progress,
-                                         onAdjust: progress.isAdjustable
-                                            ? { adjustSubtaskProgress(task.id, to: $0) }
-                                            : nil)
-                    .inspectorRenderAnchor(.progressBar)
-            }
-        }
         .anchoredPropertyPanel(isPresented: $showKindMenu, trigger: TaskInspectorHeaderPanel.kind,
                                width: PopupMetrics.taskMenuWidth, title: "任务类型") {
             kindPopover(task)
@@ -295,63 +322,56 @@ struct TaskInspectorShell: View {
         binding.wrappedValue = opening
     }
 
-    /// 「更多」菜单的实测行数：16 个动作 + 1 条分组细线（见 `moreActionsPopover`）。
-    /// 加/删行时同步这个常量，菜单高度跟着走。
-    private var moreMenuHeight: CGFloat {
-        let screenHeight = (NSScreen.main?.visibleFrame.height ?? 900)
-        return TaskInspectorMetrics.moreMenuHeight(rowCount: 16, dividerCount: 1, screenHeight: screenHeight)
-    }
-
     private func moreActionsPopover(_ task: Task) -> some View {
-        ScrollView {
-            VStack(spacing: 2) {
-                moreAction("添加子任务", symbol: "list.bullet.indent") {
-                    workspace.requestChildTitleEditor(for: task.id)
-                }
-                moreAction("关联主任务", symbol: "rectangle.3.group") {
-                    openActionPanel(.parent)
-                }
-                .disabled(task.isClosed || task.skippedAt != nil || task.convertedNoteID != nil ||
-                          workspace.allTasks.contains { $0.parentID == task.id })
-                .inspectorRenderAnchor(.parentMenuRow)
-                moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
-                    _ = workspace.setPinned(task.id, !task.isPinned)
-                }
-                moreAction(task.isAbandoned ? "恢复" : "放弃", symbol: "xmark.square") {
-                    if task.isAbandoned { _ = workspace.restore(task.id) }
-                    else { _ = workspace.abandon(task.id) }
-                }
-                .disabled(task.status == .completed)
-                moreAction("标签", symbol: "tag") { openActionPanel(.tags) }
-                    .inspectorRenderAnchor(.tagsMenuRow)
-                moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
-                focusSubmenuRow(task)
-                // 预计专注入口随专注动作进子菜单（TI2-10）：滴答的 focus 动作
-                // （番茄 / 正计时 / 预计）同属一个出口，顶层菜单保持滴答的 15 项顺序。
-                Divider().padding(.horizontal, 8).padding(.vertical, 4)
-                moreAction("任务动态", symbol: "list.bullet.rectangle") { openActionPanel(.activity) }
-                    .inspectorRenderAnchor(.activityMenuRow)
-                moreAction("保存为模板", symbol: "doc.badge.plus") { saveAsTemplate() }
-                moreAction("创建副本", symbol: "square.on.square") { workspace.duplicate(task.id) }
-                    .inspectorRenderAnchor(.duplicateMenuRow)
-                moreAction("复制链接", symbol: "link") {
-                    let copied = TaskLinkClipboard.copy(task)
-                    environment.feedback.show(FeedbackEvent(kind: copied ? .success : .error,
-                        message: copied ? "已复制任务链接" : "无法复制任务链接"))
-                }
-                // 滴答「…」菜单第 12 项（实测 2026-10-16）：打开便签浮窗。
-                moreAction("打开便签", symbol: "note") {
-                    StickyNoteWindowController.shared.open(taskID: task.id)
-                }
-                moreAction("转换为笔记", symbol: "doc.text") { _ = environment.convertTaskToNote(task.id) }
-                // 滴答「…」菜单第 14 项（`bottomActionViewDidClickPrint:`）。
-                moreAction("插入本周摘要", symbol: "text.append") { insertWeeklySummary(into: task.id) }
-                moreAction("打印", symbol: "printer") { printTask(task) }
-                moreAction("删除", symbol: "trash") { _ = workspace.delete(task.id) }
+        VStack(spacing: 2) {
+            moreAction("添加子任务", symbol: "list.bullet.indent") {
+                workspace.requestChildTitleEditor(for: task.id)
             }
-            .padding(8)
+            moreAction("关联主任务", symbol: "rectangle.3.group") {
+                openActionPanel(.parent)
+            }
+            .disabled(task.isClosed || task.skippedAt != nil || task.convertedNoteID != nil ||
+                      workspace.allTasks.contains { $0.parentID == task.id })
+            .inspectorRenderAnchor(.parentMenuRow)
+            moreAction(task.isPinned ? "取消置顶" : "置顶", symbol: "pin") {
+                _ = workspace.setPinned(task.id, !task.isPinned)
+            }
+            moreAction(task.isAbandoned ? "恢复" : "放弃", symbol: "xmark.square") {
+                if task.isAbandoned { _ = workspace.restore(task.id) }
+                else { _ = workspace.abandon(task.id) }
+            }
+            .disabled(task.status == .completed)
+            moreAction("标签", symbol: "tag") { openActionPanel(.tags) }
+                .inspectorRenderAnchor(.tagsMenuRow)
+            moreAction("上传附件", symbol: "paperclip") { addAttachments(to: task.id) }
+            focusSubmenuRow(task)
+            // 预计专注入口随专注动作进子菜单（TI2-10）：滴答的 focus 动作
+            // （番茄 / 正计时 / 预计）同属一个出口，顶层菜单保持滴答的项序。
+            Divider().padding(.horizontal, 8).padding(.vertical, 4)
+            moreAction("任务动态", symbol: "list.bullet.rectangle") { openActionPanel(.activity) }
+                .inspectorRenderAnchor(.activityMenuRow)
+            moreAction("保存为模板", symbol: "doc.badge.plus") { saveAsTemplate() }
+            moreAction("创建副本", symbol: "square.on.square") { workspace.duplicate(task.id) }
+                .inspectorRenderAnchor(.duplicateMenuRow)
+            moreAction(task.kind == .note ? "转换为任务" : "转换为笔记", symbol: "doc.text") {
+                if task.kind == .note { _ = workspace.setKind(task.id, .text) }
+                else { _ = environment.convertTaskToNote(task.id) }
+            }
+            .inspectorRenderAnchor(.noteConversionMenuRow)
+            // 本工程比滴答多的一项：正文流程图入口（与斜杠菜单同一个编辑器命令）。
+            moreAction("流程图", symbol: "point.3.connected.trianglepath.dotted") {
+                if let floating = FloatingEditorWindowController.shared.panel(for: .task(task.id)) {
+                    floatingTasks.bringToFront(taskID: task.id)
+                    floating.editorHandle.insertDiagram()
+                } else {
+                    editorHandle.insertDiagram()
+                }
+            }
+            moreAction("删除", symbol: "trash") { _ = workspace.delete(task.id) }
         }
-        .frame(width: PopupMetrics.taskActionsWidth, height: moreMenuHeight)
+        .padding(8)
+        .frame(width: PopupMetrics.taskActionsWidth)
+        .fixedSize(horizontal: false, vertical: true)
         .inspectorRenderAnchor(.moreMenu)
     }
 
@@ -621,34 +641,6 @@ struct TaskInspectorShell: View {
         }
     }
 
-    /// 顶栏进度来源：优先子任务；清单形态下没有子任务时用检查项完成度。
-    private func headerProgress(_ task: Task) -> TaskInspectorSubtaskProgress? {
-        if let progress = TaskInspectorSubtaskProgress.parse(workspace.subtaskProgress(for: task.id)) {
-            return progress
-        }
-        guard task.kind == .checklist else { return nil }
-        var done = 0
-        var total = 0
-        for block in task.document.blocks {
-            guard case .checklist(let checked) = block.kind else { continue }
-            total += 1
-            if checked { done += 1 }
-        }
-        guard total > 0 else { return nil }
-        // 清单形态只读：这份进度来自正文检查项，拖动会与正文编辑抢同一份状态。
-        return TaskInspectorSubtaskProgress(done: done, total: total, isAdjustable: false)
-    }
-
-    /// 拖动进度条 → 按层级顺序勾选前 k 条子任务、取消其余。
-    ///
-    /// 一次拖动只产生一步撤销：`adjustSubtaskCompletion` 把整组勾选/取消压成一个事务。
-    private func adjustSubtaskProgress(_ parentID: UUID, to targetDone: Int) {
-        let children = editorChildren(parentID)
-        guard !children.isEmpty else { return }
-        let target = min(max(targetDone, 0), children.count)
-        workspace.adjustSubtaskCompletion(children.map(\.id), completedCount: target)
-    }
-
     /// 顶栏次要日期（滴答 `secondaryDateLabel`）：只在任务已有截止日期时渲染，逾期红字。
     private func deadlineLabel(_ task: Task, deadline: Date) -> some View {
         let now = workspace.clock()
@@ -672,9 +664,13 @@ struct TaskInspectorShell: View {
     }
 
     private func scheduleChipColor(_ task: Task, field: ScheduleField) -> Color {
-        switch TaskInspectorSchedulePresentation.tone(
-            date: field.date(in: task), hasTime: task.schedule.hasTime,
-            now: workspace.clock(), calendar: workspace.calendar) {
+        if task.isClosed { return WFColors.secondaryText }
+        let tone = field == .due
+            ? TaskInspectorSchedulePresentation.tone(schedule: task.schedule,
+                now: workspace.clock(), calendar: workspace.calendar)
+            : TaskInspectorSchedulePresentation.tone(date: field.date(in: task),
+                hasTime: task.schedule.hasTime, now: workspace.clock(), calendar: workspace.calendar)
+        switch tone {
         case .overdue: return WFColors.danger
         case .scheduled: return WFColors.accent
         case .empty: return WFColors.tertiaryText
@@ -682,7 +678,9 @@ struct TaskInspectorShell: View {
     }
 
     private func subtaskSection(_ task: Task) -> some View {
-        VStack(alignment: .leading, spacing: TaskInspectorMetrics.childAddGap) {
+        let layout = SubtaskOutlineLayout.measure(under: task.id,
+            children: { editorChildren($0).map(\.id) }, collapsed: collapsedSubtaskIDs)
+        return VStack(alignment: .leading, spacing: TaskInspectorMetrics.childAddGap) {
             AppKitSubtaskOutlineView(
                 rootTasks: editorChildren(task.id),
                 allTasks: workspace.allTasks,
@@ -719,9 +717,9 @@ struct TaskInspectorShell: View {
                     if collapsedSubtaskIDs != collapsed { collapsedSubtaskIDs = collapsed }
                 }
             )
-            .frame(height: subtaskOutlineHeight(task.id))
-            if hiddenSubtaskCount(task.id) > 0 {
-                Text("已折叠 \(hiddenSubtaskCount(task.id)) 项")
+            .frame(height: layout.height(rowHeight: TaskInspectorMetrics.childRowMinHeight))
+            if layout.hiddenRowCount > 0 {
+                Text("已折叠 \(layout.hiddenRowCount) 项")
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -731,22 +729,6 @@ struct TaskInspectorShell: View {
             addChildRow(task)
         }
         .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
-    }
-
-    /// 被折叠节点遮住的子孙行数（用于「已折叠 N 项」提示）。
-    private func hiddenSubtaskCount(_ parentID: UUID) -> Int {
-        SubtaskFoldSummary.hiddenCount(under: parentID,
-                                       children: { editorChildren($0).map(\.id) },
-                                       collapsed: collapsedSubtaskIDs)
-    }
-
-    /// 子任务树默认全展开时的可见行数 × 行高（不含"添加子任务"行）。
-    private func subtaskOutlineHeight(_ parentID: UUID) -> CGFloat {
-        func count(_ id: UUID) -> Int {
-            let children = editorChildren(id)
-            return children.reduce(0) { $0 + 1 + count($1.id) }
-        }
-        return CGFloat(count(parentID)) * TaskInspectorMetrics.childRowMinHeight
     }
 
     /// Existing add-child action, separated from neutral child surfaces by the
@@ -802,15 +784,10 @@ struct TaskInspectorShell: View {
                 .inspectorRenderAnchor(.footerMerge)
             }
             // A 出口（mdEditButton）：字面 "A"，切换正文格式工具条。
-            AppKitTextButton(title: "A", pointSize: 15,
-                             tint: NSColor(showFormattingToolbar ? WFColors.accent : WFColors.secondaryText),
-                             accessibilityLabel: "正文格式", action: {
-                                 let isOpening = !showFormattingToolbar
-                                 showFormattingToolbar.toggle()
-                                 if isOpening { editorHandle.focusEditor() }
-                             })
-                .frame(width: 28, height: 28)
-                .inspectorRenderAnchor(.footerFormatting)
+            if !floatingTasks.isOpen(task.id) {
+                DocumentFormattingToggle(isPresented: $showFormattingToolbar, handle: editorHandle)
+                    .inspectorRenderAnchor(.footerFormatting)
+            }
             // 评论出口（commentButton）：打开任务评论面板；有条数角标（TI2-09）。
             footerIconButton("bubble.left", label: "评论") { showComments.toggle() }
                 .overlay(alignment: .topTrailing) {
@@ -825,12 +802,6 @@ struct TaskInspectorShell: View {
         .font(WFType.body)
         .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
         .frame(height: TaskInspectorMetrics.footerHeight)
-        .overlay(alignment: .bottom) {
-            if showFormattingToolbar {
-                formattingToolbar.padding(.horizontal, 16)
-                    .padding(.bottom, TaskInspectorMetrics.footerOverlayInset)
-            }
-        }
     }
 
     /// 底栏图标出口统一封装：AppKit `NSButton`，命中区 34×34，次级墨色。
@@ -839,11 +810,6 @@ struct TaskInspectorShell: View {
         AppKitIconButton(symbol: symbol, pointSize: 14, tint: .inspectorSecondary,
                          accessibilityLabel: label, action: action)
             .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
-    }
-
-    private var formattingToolbar: some View {
-        // 宽度与提示文案都取原版默认值（444 / 「上传附件」），不再在调用点上改写。
-        DocumentFormatToolbarView(handle: editorHandle)
     }
 
     private func editorChildren(_ parentID: UUID) -> [Task] {
@@ -875,6 +841,18 @@ struct TaskInspectorShell: View {
         DispatchQueue.main.async { titleEditing = true }
     }
 
+    private func revealPendingChecklistItem() {
+        guard let taskID = workspace.selectedTaskID,
+              let blockID = workspace.consumeChecklistReveal(for: taskID),
+              let task = workspace.task(for: taskID),
+              let document = try? task.document.materialized(),
+              let line = document.blocks.firstIndex(where: { $0.id == blockID }) else { return }
+        DispatchQueue.main.async {
+            guard workspace.selectedTaskID == taskID else { return }
+            editorHandle.revealChecklistLine(line)
+        }
+    }
+
     private func beginPendingChildEditing() {
         guard let childID = workspace.consumePendingChildTitleEditor() else { return }
         inlineChildEditorID = childID
@@ -903,28 +881,6 @@ struct TaskInspectorShell: View {
                 environment.feedback.show(FeedbackEvent(kind: .error, message: "无法添加附件"))
             }
         }
-    }
-
-    @MainActor
-    private func printTask(_ task: Task) {
-        TaskPrintService.printTask(task, subtasks: editorChildren(task.id),
-                                   calendar: workspace.calendar, now: workspace.clock())
-    }
-
-    @MainActor
-    /// 把本周摘要（滴答摘要的正文）追加到当前任务正文末尾。
-    /// 语义提示：插入的是「本周摘要」，不是任务自身的标题/属性快照。
-    private func insertWeeklySummary(into taskID: UUID) {
-        guard let task = workspace.task(for: taskID) else { return }
-        let builder = SummaryReviewBuilder(clock: workspace.clock, calendar: workspace.calendar)
-        let review = builder.review(for: workspace.allTasks, weekOf: workspace.clock())
-        let summary = builder.document(for: review)
-        var document = task.document
-        if !document.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            document.blocks.append(DocumentBlock(kind: .divider))
-        }
-        document.blocks.append(contentsOf: summary.blocks)
-        _ = workspace.setDocument(taskID, document)
     }
 
     private func saveAsTemplate() {
@@ -980,61 +936,77 @@ struct TaskInspectorShell: View {
 
     private func documentEditor(_ task: Task) -> some View {
         ZStack(alignment: .topLeading) {
-            DocumentEditor(
-                documentID: task.id,
-                document: task.document,
-                onDocumentChange: { _ = workspace.setDocument(task.id, $0) },
-                onEscape: handleEscape,
-                onEditingChanged: { isEditing in
-                    if isEditing {
-                        presentation.editingTarget = .body
-                    } else if presentation.editingTarget == .body {
-                        presentation.editingTarget = .none
+            if floatingTasks.isOpen(task.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("正在便签中编辑").font(WFType.supporting)
+                            .foregroundStyle(WFColors.secondaryText)
+                        Spacer()
+                        Button("定位便签") { floatingTasks.bringToFront(taskID: task.id) }
+                            .buttonStyle(.plain).foregroundStyle(WFColors.accent)
                     }
-                },
-                profile: TaskDocumentProfile.make(task: task, host: TaskEditorHostActions(
-                    createChild: {
-                        workspace.requestChildTitleEditor(for: task.id)
+                    Text(task.document.plainText).font(WFType.body)
+                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                DocumentEditor(
+                    documentID: task.id,
+                    document: task.document,
+                    onDocumentChange: { _ = workspace.setDocument(task.id, $0) },
+                    onEscape: handleEscape,
+                    onEditingChanged: { isEditing in
+                        if isEditing {
+                            presentation.editingTarget = .body
+                        } else if presentation.editingTarget == .body {
+                            presentation.editingTarget = .none
+                        }
                     },
-                    openTags: { openActionPanel(.tags) },
-                    openRelation: {
-                        openActionPanel(.relation)
-                    }, openLink: openDocumentLink,
-                    availableTags: { workspace.tagNames },
-                    addTag: { tag in
-                        guard let current = workspace.task(for: task.id) else { return }
-                        guard !current.tags.contains(tag) else { return }
-                        workspace.setTags(task.id, current.tags + [tag])
-                    },
-                    availableLists: {
-                        // 当前清单排除在外：候选里列出"已经在的清单"没有意义。
-                        workspace.availableListNames.filter { $0 != task.list.name }
-                    },
-                    moveToList: { name in
-                        guard let current = workspace.task(for: task.id) else { return }
-                        guard current.list.name != name else { return }
-                        workspace.moveToList(task.id, TaskList(name: name))
-                    },
-                    pasteFiles: { urls in
-                        guard let imported = try? NativeAttachmentFiles.importFiles(urls),
-                              !imported.isEmpty else { return }
-                        guard let current = workspace.task(for: task.id) else { return }
-                        workspace.setAttachments(task.id, current.attachments + imported)
-                    })),
-                contentSized: true,
-                handle: editorHandle,
-                // 传给编辑器的是"宿主内可见的装饰槽宽度"（容器坐标），不是分栏线位置；
-                // 标记再由 DocumentEditorGeometry.decorationMarkerX 向内让 4pt。
-                decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane - TaskInspectorMetrics.documentLeadingPadding)
-            )
+                    profile: TaskDocumentProfile.make(task: task, host: TaskEditorHostActions(
+                        createChild: {
+                            workspace.requestChildTitleEditor(for: task.id)
+                        },
+                        openTags: { openActionPanel(.tags) },
+                        openRelation: {
+                            openActionPanel(.relation)
+                        }, openLink: openDocumentLink,
+                        availableTags: { workspace.tagNames },
+                        addTag: { tag in
+                            guard let current = workspace.task(for: task.id) else { return }
+                            guard !current.tags.contains(tag) else { return }
+                            workspace.setTags(task.id, current.tags + [tag])
+                        },
+                        availableLists: {
+                            // 当前清单排除在外：候选里列出"已经在的清单"没有意义。
+                            workspace.availableListNames.filter { $0 != task.list.name }
+                        },
+                        moveToList: { name in
+                            guard let current = workspace.task(for: task.id) else { return }
+                            guard current.list.name != name else { return }
+                            workspace.moveToList(task.id, TaskList(name: name))
+                        },
+                        pasteFiles: { urls in
+                            guard let imported = try? NativeAttachmentFiles.importFiles(urls),
+                                  !imported.isEmpty else { return }
+                            guard let current = workspace.task(for: task.id) else { return }
+                            workspace.setAttachments(task.id, current.attachments + imported)
+                        },
+                        checklistItem: { line in
+                            workspace.checklistItemMeta(task.id, line: line)
+                        },
+                        setChecklistReminder: { line, date in
+                            _ = workspace.setChecklistItemReminder(task.id, line: line, at: date)
+                        },
+                        checklistReminderNotice: { environment.reminders.checklistReminderNotice })),
+                    contentSized: true,
+                    handle: editorHandle,
+                    // 传给编辑器的是"宿主内可见的装饰槽宽度"（容器坐标），不是分栏线位置；
+                    // 标记再由 DocumentEditorGeometry.decorationMarkerX 向内让 4pt。
+                    decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane - TaskInspectorMetrics.documentLeadingPadding)
+                )
 
-            if task.document.isEmpty {
-                Text("添加描述…")
-                    .font(WFType.body)
-                    .foregroundStyle(WFColors.tertiaryText)
-                    .padding(.top, 4)
-                    .padding(.leading, 5)
-                    .allowsHitTesting(false)
+                if DocumentEditorPlaceholder.isVisible(for: task.document) {
+                    DocumentEditorPlaceholder(title: "添加描述…")
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1065,10 +1037,16 @@ struct TaskInspectorShell: View {
     /// 任务类型菜单（TI2-05b）：三行 + 当前值对勾。
     private func kindPopover(_ task: Task) -> some View {
         VStack(spacing: 2) {
-            ForEach(TaskKind.allCases, id: \.self) { kind in
+            ForEach(TaskKind.menuOrder, id: \.self) { kind in
                 Button {
                     showKindMenu = false
-                    workspace.setKind(task.id, kind)
+                    if kind == .checklist,
+                       let document = try? task.document.materialized(),
+                       TaskActions.checklistConversionImpact(in: document).requiresConfirmation {
+                        pendingChecklistTaskID = task.id
+                    } else {
+                        workspace.setKind(task.id, kind)
+                    }
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: kind.symbol)
@@ -1133,11 +1111,13 @@ struct TaskInspectorShell: View {
     private func listMenu(_ task: Task) -> some View {
         if task.parentID != nil {
             Label(task.list.name, systemImage: "tray")
-                .font(WFType.control).foregroundStyle(WFColors.text)
+                .font(WFType.control)
+                .foregroundStyle(WFColors.tertiaryText)
                 .help("子任务跟随父任务清单")
                 .accessibilityLabel("清单：\(task.list.name)，子任务跟随父任务")
         } else {
-        BusinessMenu(title: "移动到清单", search: workspace.availableListNames.count > 10 ? $listMenuQuery : nil) {
+        BusinessMenu(title: "移动到清单", search: workspace.availableListNames.count > 10 ? $listMenuQuery : nil,
+                     prefersAbove: true) {
             ForEach(workspace.availableListNames.filter { listMenuQuery.isEmpty || $0.localizedStandardContains(listMenuQuery) }, id: \.self) { name in
                 let list = TaskList(name: name)
                 BusinessMenuOption(list.name, selected: task.list == list, symbol: "tray") {
@@ -1177,7 +1157,8 @@ struct TaskInspectorShell: View {
         let now = workspace.clock()
         let calendar = workspace.calendar
         if field == .due {
-            return TaskInspectorSchedulePresentation.label(schedule: task.schedule, now: now, calendar: calendar)
+            return TaskInspectorSchedulePresentation.label(schedule: task.schedule, now: now,
+                calendar: calendar, isClosed: task.isClosed)
         }
         return TaskInspectorSchedulePresentation.label(date: date,
             hasTime: false, now: now, calendar: calendar)

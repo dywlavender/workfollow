@@ -1,0 +1,137 @@
+import AppKit
+import SwiftUI
+import XCTest
+@testable import WorkFollow
+
+@MainActor
+final class NotesNativeEditorIntegrationTests: XCTestCase {
+    private var directories: [ObjectIdentifier: URL] = [:]
+    private func fixture() -> AppEnvironment {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("notes-native-editor-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let environment = AppEnvironment(directory: directory)
+        directories[ObjectIdentifier(environment)] = directory
+        environment.navigation.destination = .notes
+        return environment
+    }
+
+    private func host(_ environment: AppEnvironment,
+                      onToolbarFrames: @escaping ([String: CGRect]) -> Void = { _ in },
+                      onToolbarBounds: @escaping (CGRect) -> Void = { _ in }) -> NSHostingView<some View> {
+        NSHostingView(rootView: NotesWorkspaceView(notes: environment.notesWorkspace,
+            navigation: environment.navigation, tasks: environment.taskWorkspace)
+            .environmentObject(environment)
+            .onPreferenceChange(EditorToolbarCommandFramesKey.self, perform: onToolbarFrames)
+            .onPreferenceChange(DocumentFormattingToolbarBoundsKey.self, perform: onToolbarBounds))
+    }
+
+    private func editor(in view: NSView) -> NativeTextView? {
+        if let editor = view as? NativeTextView { return editor }
+        return view.subviews.lazy.compactMap { self.editor(in: $0) }.first
+    }
+
+    private func formattingToggle(in view: NSView) -> NSButton? {
+        if let button = view as? NSButton, button.title == "A" { return button }
+        return view.subviews.lazy.compactMap { self.formattingToggle(in: $0) }.first
+    }
+
+    func testNoteUsesTaskEditorAndRealFormattingControls() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        notes.create()
+        let id = try XCTUnwrap(notes.selectedID)
+        notes.edit(id) { $0.title = "原生笔记"; $0.document = NativeDocument(plainText: "正文") }
+        var toolbarFrames: [String: CGRect] = [:]
+        var toolbarBounds = CGRect.zero
+        let host = host(environment, onToolbarFrames: { toolbarFrames = $0 },
+                        onToolbarBounds: { toolbarBounds = $0 })
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+        let editor = try XCTUnwrap(editor(in: host))
+        XCTAssertEqual(editor.documentIdentity, id)
+        XCTAssertEqual(editor.font?.pointSize, DocumentEditorPresentationMetrics.bodyFontSize)
+        XCTAssertTrue(editor.usesHostScrollView)
+        editor.setSelectedRange(NSRange(location: 0, length: 2))
+        let toggle = try XCTUnwrap(formattingToggle(in: host))
+        XCTAssertTrue(toggle.sendAction(toggle.action, to: toggle.target))
+        try InspectorPanelTestSupport.waitUntil("Formatting toolbar did not appear") {
+            toolbarFrames["format.bold"] != nil && toolbarBounds.width > 0
+        }
+        let bold = try XCTUnwrap(toolbarFrames["format.bold"])
+        XCTAssertGreaterThan(toolbarBounds.width, 0)
+        let boldInHost = bold.offsetBy(dx: toolbarBounds.minX, dy: toolbarBounds.minY)
+        try InspectorPanelTestSupport.click(boldInHost, in: host, window: window)
+        InspectorPanelTestSupport.settle(window)
+        let document = try XCTUnwrap(notes.notes.first { $0.id == id }?.document)
+        XCTAssertTrue(document.blocks[0].runs[0].marks.contains(.bold))
+        XCTAssertTrue(window.firstResponder === editor)
+    }
+
+    func testSwitchingNotesFlushesOutgoingCompositionAndPersistsEachDocument() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        notes.create()
+        let first = try XCTUnwrap(notes.selectedID)
+        notes.edit(first) { $0.title = "第一篇"; $0.document = NativeDocument(plainText: "甲") }
+        notes.create()
+        let second = try XCTUnwrap(notes.selectedID)
+        notes.edit(second) { $0.title = "第二篇"; $0.document = NativeDocument(plainText: "乙") }
+        notes.selectedID = first
+        let host = host(environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+        let editor = try XCTUnwrap(editor(in: host))
+        window.makeFirstResponder(editor)
+        editor.setSelectedRange(NSRange(location: 1, length: 0))
+        editor.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0),
+                             replacementRange: editor.selectedRange())
+        XCTAssertTrue(editor.hasMarkedText())
+        notes.selectedID = second
+        InspectorPanelTestSupport.settle(window)
+        let rebound = try XCTUnwrap(self.editor(in: host))
+        XCTAssertTrue(rebound === editor, "The shared editor rebinds its document rather than replacing its host")
+        XCTAssertEqual(rebound.documentIdentity, second)
+        XCTAssertEqual(rebound.string, "乙")
+        XCTAssertEqual(notes.notes.first { $0.id == first }?.document.plainText, "甲组合输入")
+        XCTAssertFalse(rebound.hasMarkedText())
+        rebound.setSelectedRange(NSRange(location: 1, length: 0))
+        rebound.insertText("续写", replacementRange: rebound.selectedRange())
+        InspectorPanelTestSupport.settle(window)
+        let saved = expectation(description: "notes saved")
+        environment.flush { error in XCTAssertNil(error); saved.fulfill() }
+        wait(for: [saved], timeout: 5)
+        let directory = try XCTUnwrap(directories[ObjectIdentifier(environment)])
+        let reopened = try XCTUnwrap(NativePreviewRepository(directory: directory).load())
+        XCTAssertEqual(reopened.notes.first { $0.id == first }?.document.plainText, "甲组合输入")
+        XCTAssertEqual(reopened.notes.first { $0.id == second }?.document.plainText, "乙续写")
+    }
+
+    func testLongNoteUsesOuterCompactScrollView() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        notes.create()
+        let id = try XCTUnwrap(notes.selectedID)
+        let body = (1...70).map { "第\($0)段：检查长笔记滚动" }.joined(separator: "\n")
+        notes.edit(id) { $0.title = "长笔记"; $0.document = NativeDocument(plainText: body) }
+        let host = host(environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+        let editor = try XCTUnwrap(editor(in: host))
+        let scroll = try XCTUnwrap(editor.enclosingScrollView)
+        XCTAssertFalse(scroll.documentView === editor)
+        XCTAssertEqual(scroll.scrollerStyle, .overlay)
+        editor.scrollRangeToVisible(NSRange(location: (body as NSString).length - 1, length: 1))
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
+        XCTAssertEqual(editor.string, body)
+    }
+
+    func testPlainPlaceholderDoesNotCoverAnEmptyFormattedBlock() {
+        XCTAssertTrue(DocumentEditorPlaceholder.isVisible(for: .empty))
+        for kind: DocumentBlockKind in [.heading(1), .bullet, .checklist(false), .quote, .code] {
+            let document = NativeDocument(blocks: [DocumentBlock(kind: kind)])
+            XCTAssertFalse(DocumentEditorPlaceholder.isVisible(for: document))
+        }
+    }
+}

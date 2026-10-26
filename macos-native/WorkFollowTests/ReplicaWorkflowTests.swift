@@ -107,7 +107,7 @@ final class ReplicaWorkflowTests: XCTestCase {
         let id = try XCTUnwrap(workspace.createTask(title: "交付复盘", in: .inbox).taskID)
         _ = workspace.createChild(id, title: "记录验收结果")
         let before = workspace.allTasks
-        let noteID = try XCTUnwrap(environment.convertTaskToNote(id))
+        let noteID = try XCTUnwrap(environment.moveTaskToNoteLibrary(id))
         let after = workspace.allTasks
         let note = try XCTUnwrap(environment.notesWorkspace.notes.first { $0.id == noteID })
 

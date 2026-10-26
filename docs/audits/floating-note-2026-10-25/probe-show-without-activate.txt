@@ -1,0 +1,8 @@
+STEP boot | active=false key=nil panelKey=false panelVisible=false mainKey=false
+STEP deactivated | active=false key=nil panelKey=false panelVisible=false mainKey=false
+STEP after-orderFrontRegardless | active=false key=nil panelKey=false panelVisible=true mainKey=false
+FRONT #0Window Server/2147483630/ #1Window Server/24/Menubar #2程序坞/20/ #3Probe/3/FLOAT5 #4WindowManager/0/ #5WindowManager/0/ #6ChatGPT/0/ #7Safari浏览器/0/ #8Qoder CN/0/
+STEP after-order-above | active=false key=nil panelKey=false panelVisible=true mainKey=false
+FRONT #0Window Server/2147483630/ #1Window Server/24/Menubar #2程序坞/20/ #3Probe/3/FLOAT5 #4WindowManager/0/ #5WindowManager/0/ #6ChatGPT/0/ #7Safari浏览器/0/ #8Qoder CN/0/
+STEP after-makeKeyAndOrderFront | active=true key=FLOAT5 panelKey=true panelVisible=true mainKey=false
+FRONT #0Window Server/2147483630/ #1Window Server/24/Menubar #2程序坞/20/ #3Probe/3/FLOAT5 #4WindowManager/0/ #5WindowManager/0/ #6ChatGPT/0/ #7Safari浏览器/0/ #8Qoder CN/0/

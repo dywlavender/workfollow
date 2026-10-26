@@ -2,6 +2,9 @@ import SwiftUI
 
 enum WFType {
     static let pageTitle = Font.system(size: 19, weight: .semibold)
+    /// 任务列表页头：滴答 `TTTaskListViewController.nib` 实测 24pt Medium。
+    /// 其它模块（笔记/日历/会议）仍用 19pt 的 `pageTitle`。
+    static let taskListPageTitle = Font.system(size: 24, weight: .medium)
     static let detailTitle = Font.system(size: 18, weight: .semibold)
     /// 任务标题输入框（任务详情）：滴答实测 19pt Medium。从滴答任务详情面板的
     /// 富文本导出直读（`\fs38` = 19pt、HelveticaNeue-Medium，2026-10-16）。

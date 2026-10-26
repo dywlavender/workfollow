@@ -11,6 +11,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private var onEditingChanged: (Bool) -> Void
     private var committedStorageRevision: Int?
     private var committedTrailingBlock: DocumentBlockKind?
+    private var committedTrailingIndentLevel = 0
+    private var committedTrailingListStart: Int?
     private(set) var decodeCount = 0
 
     init(documentID: UUID, document: NativeDocument,
@@ -43,17 +45,24 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             textView.setSelectedRange(incomingSelection)
             // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
             // 否则切回来接着在文末输入会退回正文。
-            textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document))
+            textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document),
+                indentLevel: document.blocks.last?.indentLevel ?? 0, listStart: document.blocks.last?.listStart)
             didLoadDocument(in: textView, reparseInline: true)
-        } else if self.document != document,
-                  !textView.hasMarkedText() {
-            let selection = textView.selectedRange()
-            self.document = document
-            textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
-            let location = min(selection.location, (document.plainText as NSString).length)
-            let length = min(selection.length, (document.plainText as NSString).length - location)
-            textView.setSelectedRange(NSRange(location: location, length: length))
-            didLoadDocument(in: textView)
+        } else if self.document != document {
+            if Self.sameContent(self.document, document) {
+                // 仅检查项元数据（提醒/完成时间）变化：正文投影没变，不重建
+                // text storage，保住光标、选区、输入法组合串与提醒面板。
+                self.document = document
+                textView.needsDisplay = true
+            } else if !textView.hasMarkedText() {
+                let selection = textView.selectedRange()
+                self.document = document
+                textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+                let location = min(selection.location, (document.plainText as NSString).length)
+                let length = min(selection.length, (document.plainText as NSString).length - location)
+                textView.setSelectedRange(NSRange(location: location, length: length))
+                didLoadDocument(in: textView)
+            }
         }
         self.onDocumentChange = onDocumentChange
         self.onEscape = onEscape
@@ -62,6 +71,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         textView.onEditingChanged = onEditingChanged
         // 文末空段的级别供装饰层常驻绘制（它没有字符，主循环看不见）。
         textView.displayedTrailingBlock = Self.trailingBlockKind(of: document)
+        textView.displayedTrailingIndentLevel = document.blocks.last?.indentLevel ?? 0
+        textView.displayedTrailingListStart = document.blocks.last?.listStart
     }
 
 
@@ -109,7 +120,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         let trailing = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
         if !textView.hasMarkedText(), textView.documentCommandCommit == nil,
            committedStorageRevision == textView.storageRevision,
-           committedTrailingBlock == trailing { return }
+           committedTrailingBlock == trailing,
+           committedTrailingIndentLevel == textView.trailingIndentLevel,
+           committedTrailingListStart == textView.trailingListStart { return }
         if textView.hasMarkedText() {
             textView.unmarkText()
         }
@@ -126,6 +139,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     func didLoadDocument(in textView: NativeTextView, reparseInline: Bool = false) {
         committedStorageRevision = textView.storageRevision
         committedTrailingBlock = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
+        committedTrailingIndentLevel = textView.trailingIndentLevel
+        committedTrailingListStart = textView.trailingListStart
         guard reparseInline else { return }
         // 渲染期解析（2026-10-17 口径）：加载/切换文档后把已有字面标记渲染成富文本。
         // 放到下一轮 runloop，避免在 SwiftUI update 过程中改模型。
@@ -151,12 +166,18 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         // 文末空段的级别：优先用输入待定（光标在行上的最新意图），光标不在时
         // 回退到模型当前值——否则在别处编辑一次，文末列表就会丢级别。
         let pending = (textView as? NativeTextView)?.pendingTrailingBlock
+        let native = textView as? NativeTextView
+        let trailingIndent = native?.trailingIndentLevel ?? document.blocks.last?.indentLevel ?? 0
+        let trailingStart = native != nil ? native?.trailingListStart : document.blocks.last?.listStart
         decodeCount += 1
         let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document,
-                                              trailing: pending ?? Self.trailingBlockKind(of: document))
+                                              trailing: pending ?? native?.displayedTrailingBlock ?? Self.trailingBlockKind(of: document),
+                                              trailingIndentLevel: trailingIndent, trailingListStart: trailingStart)
         if let native = textView as? NativeTextView {
             committedStorageRevision = native.storageRevision
             committedTrailingBlock = pending ?? Self.trailingBlockKind(of: updated)
+            committedTrailingIndentLevel = trailingIndent
+            committedTrailingListStart = trailingStart
         }
         if let commit = (textView as? NativeTextView)?.documentCommandCommit {
             document = updated
@@ -166,6 +187,18 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         guard updated != document else { return }
         document = updated
         onDocumentChange(updated)
+    }
+
+    /// 两个文档的编辑器投影是否一致。清单元数据不参与渲染，只有它变化时
+    /// 不应重建正文。
+    static func sameContent(_ lhs: NativeDocument, _ rhs: NativeDocument) -> Bool {
+        let left = lhs.blocks
+        let right = rhs.blocks
+        guard left.count == right.count else { return false }
+        return zip(left, right).allSatisfy { lhs, rhs in
+            lhs.id == rhs.id && lhs.kind == rhs.kind && lhs.runs == rhs.runs
+                && lhs.indentLevel == rhs.indentLevel && lhs.listStart == rhs.listStart
+        }
     }
 
     /// 模型里最后一个块没有字符时，它的段落类型只存在于"输入属性"这一层。

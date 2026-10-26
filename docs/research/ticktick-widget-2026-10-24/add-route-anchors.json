@@ -1,0 +1,50 @@
+{
+  "kind": "standard Apple tooling observation; not REA Evidence",
+  "target": "/Applications/TickTick.app/Contents/PlugIns/TickTick.Widget.Extension.appex/Contents/MacOS/TickTick.Widget.Extension",
+  "url_getter_selector_slot": "0x100117208",
+  "url_getter_objc_stub": "0x1000dd0c0",
+  "url_getter_call": "0x10000d850",
+  "bridge_stubs": [
+    "1000d8ffc:\t00 02 1f d6\tbr\tx16",
+    "1000d9000:\td0 01 00 f0\tadrp\tx16, 59 ; 0x100114000",
+    "1000d9004:\t10 72 42 f9\tldr\tx16, [x16, #0x4e0]",
+    "1000d9008:\t00 02 1f d6\tbr\tx16",
+    "1000d900c:\td0 01 00 f0\tadrp\tx16, 59 ; 0x100114000",
+    "1000d9010:\t10 76 42 f9\tldr\tx16, [x16, #0x4e8]",
+    "1000d9014:\t00 02 1f d6\tbr\tx16",
+    "1000d9018:\td0 01 00 f0\tadrp\tx16, 59 ; 0x100114000",
+    "1000d901c:\t10 7a 42 f9\tldr\tx16, [x16, #0x4f0]",
+    "1000d9020:\t00 02 1f d6\tbr\tx16",
+    "1000d9024:\td0 01 00 f0\tadrp\tx16, 59 ; 0x100114000",
+    "1000d9028:\t10 7e 42 f9\tldr\tx16, [x16, #0x4f8]",
+    "1000d902c:\t00 02 1f d6\tbr\tx16"
+  ],
+  "kit_getter": "TTListIdentifier.urlForAddTaskInList",
+  "kit_getter_implementation": "0x332b98",
+  "kit_url_builder_import": "AppestKit.Appest.AnyGo.URLScheme.privateURL(Action)",
+  "appest_selected_exports": [
+    "000000000005b404 T _$s9AppestKit0A0V5AnyGoV9URLSchemeV6schemeSSvau",
+    "000000000005b410 T _$s9AppestKit0A0V5AnyGoV9URLSchemeV6schemeSSvgZ",
+    "000000000005b428 T _$s9AppestKit0A0V5AnyGoV9URLSchemeV10privateURLy10Foundation0G0VSgAE6ActionOFZ",
+    "000000000005efbc t _$s9AppestKit0A0V5AnyGoV9URLSchemeV7PrivateV3urly10Foundation3URLVSgAE6ActionOFZSSSgyXEfU_",
+    "000000000017c1a0 S _$s9AppestKit0A0V5AnyGoV9URLSchemeV6schemeSSvpZ"
+  ],
+  "SwiftUI_Link_initializer_stub": "0x1000d9918",
+  "SwiftUI_Link_initializer_call_contexts": [
+    [
+      "10003dee0:\tb8 03 19 f8\tstur\tx24, [x29, #-0x70]",
+      "10003dee4:\t01 00 00 b0\tadrp\tx1, 1 ; 0x10003e000",
+      "10003dee8:\t21 80 05 91\tadd\tx1, x1, #0x160",
+      "10003deec:\ta2 43 02 d1\tsub\tx2, x29, #0x90",
+      "10003def0:\te8 03 1a aa\tmov\tx8, x26",
+      "10003def4:\te0 03 1c aa\tmov\tx0, x28",
+      "10003def8:\te3 03 15 aa\tmov\tx3, x21",
+      "10003defc:\te4 03 17 aa\tmov\tx4, x23",
+      "10003df00:\t86 6e 02 94\tbl\t0x1000d9918",
+      "10003df04:\t60 06 00 f0\tadrp\tx0, 207 ; 0x10010c000",
+      "10003df08:\t00 bc 43 f9\tldr\tx0, [x0, #0x778]",
+      "10003df0c:\te1 03 16 aa\tmov\tx1, x22",
+      "10003df10:\tfd 71 02 94\tbl\t0x1000da704 ; symbol stub for: _swift_getWitnessTable"
+    ]
+  ]
+}

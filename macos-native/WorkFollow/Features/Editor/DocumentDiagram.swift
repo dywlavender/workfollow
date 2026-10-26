@@ -56,7 +56,7 @@ final class DocumentDiagramCell: NSTextAttachmentCell {
 extension NativeTextView {
     private static let diagramPasteboardType = NSPasteboard.PasteboardType("com.workfollow.document.drawio")
 
-    func copyDiagramContent(to pasteboard: NSPasteboard) -> Bool {
+    func copyDiagramContent(to pasteboard: NSPasteboard, preservingExistingContent: Bool = false) -> Bool {
         let range = selectedRange()
         guard range.length > 0, NSMaxRange(range) <= attributedString().length else { return false }
         let selected = attributedString().attributedSubstring(from: range)
@@ -66,9 +66,13 @@ extension NativeTextView {
         let plain = content.blocks.map { block in
             block.runs.map { $0.diagram.map { "[流程图：" + $0.title + "]" } ?? $0.text }.joined()
         }.joined(separator: "\n")
-        pasteboard.clearContents()
+        if preservingExistingContent {
+            pasteboard.addTypes([Self.diagramPasteboardType], owner: nil)
+        } else {
+            pasteboard.clearContents()
+        }
         pasteboard.setData(data, forType: Self.diagramPasteboardType)
-        pasteboard.setString(plain, forType: .string)
+        if !preservingExistingContent { pasteboard.setString(plain, forType: .string) }
         return true
     }
 

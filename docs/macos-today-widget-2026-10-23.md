@@ -168,3 +168,31 @@ macOS 27.0.1 的隔离实测：
 - 本地通道最终复验：`/private/tmp/workfollow-widget-local-qa/local-channel-final-tests.log`；容器探针：`container-result.json`；桌面宿主：`desktop-result.json`；更新包构建：`desktop-source-build.log`（后三者均在同一验收目录）。
 
 参考：[创建 WidgetKit 扩展](https://developer.apple.com/documentation/widgetkit/creating-a-widget-extension)、[交互按钮与 App Intent](https://developer.apple.com/documentation/widgetkit/adding-interactivity-to-widgets-and-live-activities)、[刷新时间线](https://developer.apple.com/documentation/widgetkit/keeping-a-widget-up-to-date/)、[macOS App Groups 与签名授权](https://developer.apple.com/forums/thread/721701)。
+
+
+## 中号组件排版与交互优化（2026-10-24）
+
+本轮范围是现有中号「今日待办」，没有新增旧 Today 扩展或迁移共享数据通道。
+
+- 标题旁显示待办总数；日期移到右侧，与加号排列，打开今天的区域独立保留。
+- 任务标题从 12 调整为 13 点；加号点击区域为 24 点，勾选区域和任务行高为 22 点。勾选与打开详情继续分开。
+- 逾期任务右侧显示日期，今天有具体时间的任务显示时间，长标题保持单行截断。
+- 页脚去掉「已完成 0」，有更多任务时明确显示「还有 N 项」；本周入口继续保留，视觉层级降低。
+- 空状态居中，顶部标题与底部操作位置固定；未建立快照时仍引导打开主应用，有快照的空状态仍打开快速新增。
+
+现有快速新增启动分流修复纳入同一构建；8 项快速新增 XCTest、组件导航用例和布局用例共 10 项定向用例通过。布局用例实际渲染浅、深色各四种状态（正常、多任务、空状态、未加载），在 360×170 宿主中核对内容高度。没有进行全量回归。
+
+预览输出：`/Users/dongyangwei/.codex/visualizations/2026/10/13/01a135b2-f44a-7673-88db-eb71f3dc8cc1/today-widget/`。测试与构建记录在本轮隔离构建目录的 `appearance-*.log` 和 `appearance-targeted-results.json`。
+
+用户已确认滴答中号「今天」在桌面上。原生工具读取通知中心时仍只绑定电池窗口，未取得这块参考组件的画面；本轮属于本项目组件的排版与操作改进，**没有通过滴答外观一致性验收**。也不以进程内测试代替冷启动后实际组件加号的窗口验收。
+
+构建期间编辑器文件存在并行改动，本轮保留当前日用安装版，以隔离构建和源码作为交付结果。
+
+
+## 按用户截图对齐中号组件（2026-10-24 后续）
+
+后续已取得用户提供的滴答中号「今天」截图，完成一轮基于该图的调整，取代上一轮的临时排版：蓝色标题与条数、独立加号、圆角方形勾选框、四行列表和中文月日；组件不再显示日期标题及底部统计、周计划入口。
+
+同时接入真正的倒数日条目，复用现有智能清单规则和当前日＋未来七天投影，监听倒数日增改与归档；倒数日只提供打开模块的链接，普通任务仍使用原有完成 Intent。旧的任务快照保持可读，旧周计划链接保留兼容。标题总数包含当天符合条件的任务和倒数日。
+
+组件相关 18 项定向用例通过；另有浅深色十二份隔离渲染及正常/紧凑尺寸的图标裁切、行距检查。未进行全量回归。参考图、预览和边界说明见 [中号组件截图对齐记录](audits/widget-2026-10-24/README.md)。并行编辑器更新期间，本轮保持日用安装版原位，真实桌面动作留待统一更新后验收。

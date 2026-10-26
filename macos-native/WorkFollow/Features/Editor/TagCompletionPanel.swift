@@ -73,7 +73,7 @@ extension NativeTextView {
         let query = (paragraphPrefix as NSString).substring(with: match.range(at: 1))
         let filtered = all.filter { query.isEmpty || $0.localizedCaseInsensitiveContains(query) }
         guard !filtered.isEmpty else { return false }
-        let candidates = Array(filtered.prefix(6))
+        let candidates = filtered
         let selected = min(tagSession?.selectedIndex ?? 0, candidates.count - 1)
         let start = paragraph.location + match.range.location
         tagSession = TagCompletionSession(kind: kind, start: start,
@@ -138,7 +138,7 @@ extension NativeTextView {
         let panel: NSPanel
         if let existing = tagPanel { panel = existing }
         else {
-            panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+            panel = EditorCompletionPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
             panel.isReleasedWhenClosed = false
             panel.hasShadow = true
@@ -146,11 +146,18 @@ extension NativeTextView {
             panel.isOpaque = false
             panel.becomesKeyOnlyIfNeeded = true
             panel.appearance = window.effectiveAppearance
+            EditorPopupWindowLevel.apply(to: panel, owner: window)
             window.addChildWindow(panel, ordered: .above)
             tagPanel = panel
         }
+        let caret = firstRect(forCharacterRange: selectedRange(), actualRange: nil)
+        let frame = EditorPopupGeometry.frame(anchor: caret,
+            size: CGSize(width: PopupMetrics.completionWidth,
+                         height: CGFloat(min(6, session.candidates.count)) * 28 + 8),
+            bounds: EditorPopupGeometry.bounds(in: window))
         let list = TagCandidateList(tags: session.candidates, selected: session.selectedIndex,
                                     symbol: session.kind == .tag ? "number" : "list.bullet",
+                                    viewportSize: frame.size,
                                     onSelect: { [weak self] index in self?.commitTagCompletion(at: index) },
                                     onHover: { [weak self] index in self?.hoverTagCompletion(index) })
         if let hosting = panel.contentView as? NSHostingView<TagCandidateList> {
@@ -158,14 +165,10 @@ extension NativeTextView {
         } else {
             panel.contentView = NSHostingView(rootView: list)
         }
-        let caret = firstRect(forCharacterRange: selectedRange(), actualRange: nil)
-        let bounds = window.frame.insetBy(dx: 12, dy: 12)
-        let size = NSSize(width: 160, height: CGFloat(session.candidates.count) * 28 + 8)
-        let x = min(max(caret.minX, bounds.minX), bounds.maxX - size.width)
-        let y = caret.minY - size.height - 6 >= bounds.minY
-            ? caret.minY - size.height - 6
-            : min(caret.maxY + 6, bounds.maxY - size.height)
-        panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
+        panel.setFrame(frame, display: true)
+        (panel as? EditorCompletionPanel)?.followGeometry(of: self) { [weak self] in
+            self?.presentTagPanel()
+        }
         panel.orderFront(nil)
     }
 }
@@ -175,10 +178,13 @@ private struct TagCandidateList: View {
     let tags: [String]
     let selected: Int
     let symbol: String
+    let viewportSize: CGSize
     let onSelect: (Int) -> Void
     let onHover: (Int) -> Void
 
     var body: some View {
+        ScrollViewReader { proxy in
+        ScrollView {
         VStack(spacing: 0) {
             ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
                 Button { onSelect(index) } label: {
@@ -201,12 +207,20 @@ private struct TagCandidateList: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { if $0 { onHover(index) } }
+                .id(index)
             }
         }
+        .compactScrollbars()
+        }
+        .onChange(of: selected) { _, index in proxy.scrollTo(index) }
+        .onAppear { proxy.scrollTo(selected) }
+        }
+        .frame(height: max(0, viewportSize.height - 8))
         .padding(4)
-        .frame(width: PopupMetrics.completionWidth)
+        .frame(width: viewportSize.width)
         .background(WFColors.overlay)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(WFColors.overlayBorder))
+        .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
+        .transaction { $0.animation = nil }
     }
 }

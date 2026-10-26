@@ -92,23 +92,6 @@ final class TaskKindTests: XCTestCase {
         XCTAssertNotNil(frames[.kind], "顶栏有任务类型入口")
     }
 
-    func testChecklistKindShowsDocumentProgressWithoutSubtasks() throws {
-        let workspace = TaskWorkspaceModel(seedDemoData: false)
-        let id = try XCTUnwrap(workspace.createTask(title: "清单进度", in: .inbox).taskID)
-        workspace.setDocument(id, NativeDocument(blocks: [
-            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "一")]),
-            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "二")])
-        ]))
-        workspace.select(id)
-
-        var frames = try render(TaskInspectorShell(workspace: workspace, showBack: false))
-        XCTAssertNil(frames[.progressBar], "文本形态不显示检查项进度")
-
-        workspace.setKind(id, .checklist)
-        frames = try render(TaskInspectorShell(workspace: workspace, showBack: false))
-        XCTAssertNotNil(frames[.progressBar], "清单形态用检查项完成度填顶栏进度条")
-    }
-
     // MARK: - Helpers
 
     private func render(_ root: some View) throws -> [InspectorRenderAnchor: CGRect] {

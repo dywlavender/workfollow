@@ -14,6 +14,10 @@ struct TaskEditorHostActions {
     var moveToList: (String) -> Void = { _ in }
     /// 粘贴文件成附件（TI2-03 剩余项）。
     var pasteFiles: ([URL]) -> Void = { _ in }
+    /// 检查项行内控件：行号按换行切分，与任务文档的块顺序一致。
+    var checklistItem: (Int) -> ChecklistItemMeta? = { _ in nil }
+    var setChecklistReminder: (Int, Date?) -> Void = { _, _ in }
+    var checklistReminderNotice: () -> String? = { nil }
 }
 
 enum TaskDocumentProfile {
@@ -35,6 +39,10 @@ enum TaskDocumentProfile {
         profile.listCandidates = host.availableLists
         profile.onListInserted = host.moveToList
         profile.onPasteFiles = host.pasteFiles
+        profile.checklistItem = host.checklistItem
+        profile.setChecklistReminder = host.setChecklistReminder
+        profile.checklistReminderNotice = host.checklistReminderNotice
+        profile.checklistRemindersEnabled = task.kind == .checklist
         return profile
     }
 

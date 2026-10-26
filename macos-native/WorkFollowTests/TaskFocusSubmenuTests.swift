@@ -17,6 +17,35 @@ final class TaskFocusSubmenuTests: XCTestCase {
         XCTAssertTrue(bounds.insetBy(dx: 8, dy: 8).contains(low))
     }
 
+    func testMoreMenuShowsFullContentWithoutScrolling() throws {
+        let environment = AppEnvironment()
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "完整菜单验收", in: .inbox).taskID)
+        workspace.select(id)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+        InspectorPanelTestSupport.settle(window)
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        XCTAssertFalse(descendants(of: more.contentView).contains { $0 is NSScrollView },
+                       "更多菜单应完整展开，不含内部滚动容器")
+        let content = try XCTUnwrap(more.contentView)
+        XCTAssertEqual(more.frame.height, content.fittingSize.height, accuracy: 1,
+                       "弹框高度应跟随全部菜单内容")
+        // XCTest 宿主不提供 SwiftUI 菜单的 AX 节点，按末行在实际菜单中的位置点击。
+        let lastRow = CGRect(x: 16, y: content.bounds.height - 8 - 32,
+                             width: content.bounds.width - 32, height: 32)
+        try InspectorPanelTestSupport.click(lastRow, in: content, window: more)
+        XCTAssertNotNil(workspace.task(for: id)?.deletedAt, "末行无需滚动即可执行")
+    }
+
+    private func descendants(of view: NSView?) -> [NSView] {
+        guard let view else { return [] }
+        return [view] + view.subviews.flatMap(descendants)
+    }
+
     func testBothActionsStartRealSessionAndBusySessionIsNotReplaced() throws {
         for stopwatch in [false, true] {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("task-focus-\(UUID().uuidString)")

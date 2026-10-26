@@ -123,6 +123,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 window.hasShadow = true
                 window.appearance = owner.effectiveAppearance
                 window.contentView = host
+                EditorPopupWindowLevel.apply(to: window, owner: owner)
                 owner.addChildWindow(window, ordered: .above)
                 panel = window
                 for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
@@ -223,7 +224,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
             case .schedule:
                 frame = AnchoredPropertyPanelGeometry.scheduleFrame(anchor: row, size: size, bounds: screen)
             case .dropdown:
-                frame = AnchoredPropertyPanelGeometry.dropdownFrame(anchor: row, size: size, bounds: screen)
+                frame = AnchoredPropertyPanelGeometry.dropdownFrame(anchor: row, size: size, bounds: screen,
+                                                                   prefersAbove: prefersAbove)
             case .cursor:
                 frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size, screen: screen, gap: 0)
             case .vertical:
@@ -332,12 +334,15 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
 
 enum AnchoredPropertyPanelGeometry {
     /// Menu-like placement: align right edges and open below the value button.
-    static func dropdownFrame(anchor: CGRect, size: CGSize, bounds: CGRect, gap: CGFloat = PopupMetrics.controlGap) -> CGRect {
+    static func dropdownFrame(anchor: CGRect, size: CGSize, bounds: CGRect,
+                              gap: CGFloat = PopupMetrics.controlGap,
+                              prefersAbove: Bool = false) -> CGRect {
         let safe = bounds.insetBy(dx: PopupMetrics.screenInset, dy: PopupMetrics.screenInset)
         let width = min(size.width, safe.width), height = min(size.height, safe.height)
         let below = anchor.minY - gap - height
         let above = anchor.maxY + gap
-        let proposedY = below >= safe.minY ? below
+        let proposedY = prefersAbove && above + height <= safe.maxY ? above
+            : below >= safe.minY ? below
             : above + height <= safe.maxY ? above
             : max(safe.minY, min(below, safe.maxY - height))
         return CGRect(x: min(max(anchor.maxX - width, safe.minX), safe.maxX - width),

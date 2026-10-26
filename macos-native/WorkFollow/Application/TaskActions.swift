@@ -10,6 +10,14 @@ enum TaskDropPlacement: Equatable {
     }
 }
 
+/// 文本/笔记切到清单时需要提醒的结构数量：标题、引用、代码、分割线会保留，
+/// 但不会变成检查事项，也不计入清单进度。纯段落与列表不算“受影响”。
+struct ChecklistConversionImpact: Equatable {
+    var affectedBlocks = 0
+    var richTextBlocks = 0
+    var requiresConfirmation: Bool { affectedBlocks > 0 }
+}
+
 final class TaskActions {
     private let store: WorkspaceStore
     private let clock: () -> Date
@@ -219,6 +227,12 @@ final class TaskActions {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
         guard !task.isClosed else { return .failure(.alreadyCompleted) }
+        if task.kind == .checklist,
+           let summary = task.document.checklistSummary,
+           summary.total > 0,
+           summary.done < summary.total {
+            return .failure(.checklistItemsIncomplete)
+        }
         let now = completedAt ?? clock()
         let recordedAt = clock()
         var snapshot = store.tasks.map { original -> Task in
@@ -248,10 +262,28 @@ final class TaskActions {
             snapshot += occurrence.children
             resultID = occurrence.spawn.id
         }
-        store.commit(snapshot)
+        // 子任务完成后父清单可能满足派生完成条件；与本次完成合成一步撤销。
+        store.transaction {
+            store.commit(snapshot)
+            completeChecklistParent(of: id)
+        }
         // The returned id points at the spawned occurrence so callers can move
         // the selection onto the next instance of the chain.
         return .success(resultID)
+    }
+
+    /// 最后一个未完成子任务完成后，父清单任务重新计算派生状态（P5-A4）。
+    private func completeChecklistParent(of childID: UUID) {
+        guard let child = store.task(childID), let parentID = child.parentID,
+              let parent = store.task(parentID), parent.kind == .checklist,
+              parent.deletedAt == nil, parent.skippedAt == nil, !parent.isClosed,
+              let summary = parent.document.checklistSummary,
+              summary.total > 0, summary.done == summary.total else { return }
+        let hasOpenChild = store.children(of: parentID).contains {
+            $0.deletedAt == nil && $0.skippedAt == nil && !$0.isClosed
+        }
+        guard !hasOpenChild else { return }
+        _ = complete(parentID)
     }
 
     /// Builds the next occurrence for a completing or skipped recurring task
@@ -301,6 +333,12 @@ final class TaskActions {
                          priority: task.priority, schedule: task.schedule,
                          parentID: task.parentID, childOrder: task.childOrder,
                          createdAt: now, updatedAt: now)
+        spawn.kind = task.kind
+        if task.kind == .checklist {
+            // 下一周期从全新清单开始：勾选清空，项提醒随日期平移（D7）。
+            spawn.document = Self.resetChecklistItems(task.document, shiftingRemindersBy: days,
+                                                     now: now, calendar: calendar)
+        }
         spawn.schedule.dueAt = next
         spawn.schedule.dueEndAt = shifted(task.schedule.dueEndAt)
         spawn.schedule.deadlineAt = shifted(task.schedule.deadlineAt)
@@ -334,6 +372,11 @@ final class TaskActions {
                              tags: child.tags, list: child.list, priority: child.priority,
                              schedule: child.schedule, parentID: spawn.id, childOrder: order,
                              createdAt: now, updatedAt: now)
+            value.kind = child.kind
+            if child.kind == .checklist {
+                value.document = Self.resetChecklistItems(child.document, shiftingRemindersBy: days,
+                                                         now: now, calendar: calendar)
+            }
             value.listID = child.listID
             value.tagReferences = child.tagReferences
             value.schedule.dueAt = shifted(child.schedule.dueAt)
@@ -356,6 +399,12 @@ final class TaskActions {
     func restore(_ id: UUID) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.isClosed else { return .failure(.alreadyActive) }
+        if task.kind == .checklist,
+           let summary = task.document.checklistSummary,
+           summary.total > 0,
+           summary.done == summary.total {
+            return .failure(.checklistItemsCompleted)
+        }
         return edit(id) { task in
             task.status = .active
             task.completedAt = nil
@@ -474,18 +523,80 @@ final class TaskActions {
 
     @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
-        editText(id, document: document)
+        guard let task = store.task(id) else { return .failure(.missingTask) }
+        guard task.deletedAt == nil else { return .failure(.deletedTask) }
+        guard let previous = try? task.document.materialized() else {
+            return editText(id, document: document)
+        }
+        // Only checklist tasks own item metadata. Inline checklists inside a
+        // note/text body are plain content and must not grow completion dates.
+        guard task.kind == .checklist else {
+            guard document != previous else { return .success(id) }
+            return editText(id, document: document)
+        }
+        let reconciled = Self.reconcilingChecklistMetadata(in: document, previous: previous, now: clock())
+        guard reconciled != previous else { return .success(id) }
+        var result: TaskActionResult = .success(id)
+        store.transaction {
+            result = editText(id, document: reconciled)
+            guard result.taskID != nil else { return }
+            if let derived = deriveChecklistStatus(id, before: previous, after: reconciled) {
+                result = derived
+            }
+        }
+        return result
     }
 
-    /// 任务形态切换（TI2-05b）：切到清单把普通/列表段落变成检查项；切回文本/笔记
-    /// 把检查项变回段落（已完成项保留删除线，避免"勾选状态"静默丢失）。
+    /// A note is another task kind. Changing between text and note preserves
+    /// its rich body, inline checklists and attachments without remapping them.
     @discardableResult
     func setKind(_ id: UUID, _ kind: TaskKind) -> TaskActionResult {
-        guard let current = store.task(id), current.kind != kind else { return .success(id) }
-        return edit(id) { task in
-            task.kind = kind
-            task.document = Self.document(task.document, convertingTo: kind)
+        guard let current = store.task(id) else { return .failure(.missingTask) }
+        guard current.kind != kind else { return .success(id) }
+        guard let before = try? current.document.materialized() else {
+            return edit(id) { task in
+                task.kind = kind
+                if kind == .checklist || (current.kind == .checklist && kind == .text) {
+                    task.document = Self.document(task.document, convertingTo: kind)
+                }
+            }
         }
+        var converted = before
+        var result: TaskActionResult = .success(id)
+        store.transaction {
+            result = edit(id) { task in
+                task.kind = kind
+                if kind == .checklist || (current.kind == .checklist && kind == .text) {
+                    converted = Self.document(before, convertingTo: kind)
+                    if kind == .checklist {
+                        // Pre-checked inline items get their completion stamp
+                        // only when the body actually becomes a checklist.
+                        converted = Self.reconcilingChecklistMetadata(
+                            in: converted, previous: before, now: clock())
+                    }
+                    task.document = converted
+                }
+            }
+            guard result.taskID != nil else { return }
+            if let derived = deriveChecklistStatus(id, before: before, after: converted) {
+                result = derived
+            }
+        }
+        return result
+    }
+
+    /// The complete selection changes kind in one undo step; parent/child
+    /// identity and relations stay in the task collection.
+    @discardableResult
+    func setKinds(_ ids: Set<UUID>, _ kind: TaskKind) -> [UUID] {
+        let selected = store.tasks.filter {
+            ids.contains($0.id) && $0.deletedAt == nil && $0.skippedAt == nil
+                && !$0.isConverted && $0.kind != kind
+        }.map(\.id)
+        store.transaction {
+            for id in selected { _ = setKind(id, kind) }
+        }
+        return selected
     }
 
     /// 形态切换的内容映射（纯函数，测试直接调）。
@@ -495,8 +606,10 @@ final class TaskActions {
             var copy = block
             switch (kind, block.kind) {
             case (.checklist, .paragraph), (.checklist, .bullet), (.checklist, .ordered):
-                copy.kind = .checklist(false)
-            case (.text, .checklist(let checked)), (.note, .checklist(let checked)):
+                // 切回清单时按上次的完成时间恢复勾选；首次转换没有元数据 → 未勾选。
+                // 标题/引用/代码/分割线保持原样，只提示它们不计入清单进度。
+                copy.kind = .checklist(copy.checklist?.completedAt != nil)
+            case (.text, .checklist(let checked)):
                 copy.kind = .paragraph
                 if checked {
                     copy.runs = copy.runs.map { run in
@@ -511,6 +624,123 @@ final class TaskActions {
             return copy
         }
         return document
+    }
+
+    /// 切到清单前的影响面：哪些块保留但不会计入清单进度，多少块保留富文本。
+    /// 只有这些结构才值得打断用户确认；纯段落/列表直接切换。
+    static func checklistConversionImpact(in document: NativeDocument) -> ChecklistConversionImpact {
+        var impact = ChecklistConversionImpact()
+        for block in document.blocks {
+            if block.runs.contains(where: { !$0.marks.isEmpty || $0.attachment != nil || $0.diagram != nil }) {
+                impact.richTextBlocks += 1
+            }
+            switch block.kind {
+            case .heading, .quote, .code, .divider:
+                impact.affectedBlocks += 1
+            default:
+                break
+            }
+        }
+        return impact
+    }
+
+    /// 文档提交时统一维护检查项元数据：勾选写入完成时间，取消勾选清除；
+    /// 编辑器往返只保证块身份，不把时间戳塞进 attributed string。
+    static func reconcilingChecklistMetadata(in document: NativeDocument,
+                                             previous: NativeDocument,
+                                             now: Date) -> NativeDocument {
+        let previousByID = Dictionary(previous.blocks.map { ($0.id, $0) },
+                                      uniquingKeysWith: { first, _ in first })
+        var document = document
+        document.blocks = document.blocks.map { block in
+            var block = block
+            var meta = block.checklist
+            if case .checklist(let checked) = block.kind {
+                if checked {
+                    if meta?.completedAt == nil {
+                        if let old = previousByID[block.id],
+                           case .checklist(true) = old.kind,
+                           let completedAt = old.checklist?.completedAt {
+                            if meta == nil { meta = old.checklist }
+                            else { meta?.completedAt = completedAt }
+                        } else {
+                            if meta == nil { meta = ChecklistItemMeta() }
+                            meta?.completedAt = now
+                        }
+                    }
+                } else {
+                    meta?.completedAt = nil
+                }
+            }
+            block.checklist = meta?.isEmpty == true ? nil : meta
+            return block
+        }
+        return document
+    }
+
+    /// 新实例/副本的检查项起点：全部未勾选、完成时间清空。
+    /// 重复任务传平移天数（D7：项提醒随任务日期平移，落点在过去则清空）；
+    /// 复制与模板传 nil，提醒一并清空。
+    static func resetChecklistItems(_ document: NativeDocument, shiftingRemindersBy days: Int?,
+                                    now: Date, calendar: Calendar) -> NativeDocument {
+        var document = document
+        document.blocks = document.blocks.map { block in
+            guard case .checklist = block.kind else { return block }
+            var copy = block
+            copy.kind = .checklist(false)
+            var meta = copy.checklist
+            meta?.completedAt = nil
+            if let reminder = meta?.reminderAt {
+                meta?.reminderAt = days
+                    .flatMap { ScheduleSemantics.shifted(reminder, byDays: $0, calendar: calendar) }
+                    .flatMap { $0 > now ? $0 : nil }
+            }
+            copy.checklist = meta?.isEmpty == true ? nil : meta
+            return copy
+        }
+        return document
+    }
+
+    /// 手动改期（拖日历 / 日期面板 / 顺延）时，项提醒跟着到期日平移同一时间差；
+    /// 落点已在过去的提醒清空。复制/模板仍走 `resetChecklistItems` 全清。
+    static func shiftChecklistReminders(_ document: NativeDocument,
+                                        by seconds: TimeInterval, now: Date) -> NativeDocument {
+        guard seconds != 0 else { return document }
+        var document = document
+        document.blocks = document.blocks.map { block in
+            guard case .checklist = block.kind, var meta = block.checklist,
+                  let reminder = meta.reminderAt else { return block }
+            let shifted = reminder.addingTimeInterval(seconds)
+            meta.reminderAt = shifted > now ? shifted : nil
+            var copy = block
+            copy.checklist = meta.isEmpty ? nil : meta
+            return copy
+        }
+        return document
+    }
+
+    /// 清单任务的完成状态派生。返回 nil 表示本次文档变更不需要改任务状态。
+    private func deriveChecklistStatus(_ id: UUID, before: NativeDocument,
+                                       after: NativeDocument) -> TaskActionResult? {
+        guard let task = store.task(id), task.kind == .checklist,
+              let afterSummary = after.checklistSummary,
+              afterSummary.total > 0 else { return nil }
+        let beforeSummary = before.checklistSummary
+        let hasOpenChild = store.children(of: id).contains {
+            $0.deletedAt == nil && $0.skippedAt == nil && !$0.isClosed
+        }
+        if !task.isClosed, !hasOpenChild, afterSummary.done == afterSummary.total {
+            return complete(id)
+        }
+        if task.isClosed,
+           let beforeSummary,
+           beforeSummary.total == afterSummary.total,
+           beforeSummary.total > 0,
+           beforeSummary.done == beforeSummary.total,
+           afterSummary.done == afterSummary.total - 1 {
+            return restore(id)
+        }
+        return nil
     }
 
     private func editText(_ id: UUID, title: String? = nil,
@@ -1021,6 +1251,14 @@ final class TaskActions {
     @discardableResult
     func setSchedule(_ id: UUID, _ schedule: TaskSchedule) -> TaskActionResult {
         edit(id) { task in
+            if task.kind == .checklist,
+               let oldDue = task.schedule.dueAt, let newDue = schedule.dueAt,
+               oldDue != newDue,
+               let document = try? task.document.materialized() {
+                let shifted = Self.shiftChecklistReminders(
+                    document, by: newDue.timeIntervalSince(oldDue), now: clock())
+                if shifted != task.document { task.document = shifted }
+            }
             if let key = task.occurrenceKey, schedule != task.schedule {
                 task.occurrenceOverride = OccurrenceOverride(occurrence: key,
                     actualSchedule: schedule, outcome: task.occurrenceOverride?.outcome ?? .active)
@@ -1394,7 +1632,9 @@ final class TaskActions {
         let title = template.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, !store.archivedListNames.contains(list.name) else { return .failure(.invalidList) }
         let now = clock()
-        var parent = Task(id: UUID(), title: title, document: template.document,
+        var parent = Task(id: UUID(), title: title,
+                          document: Self.resetChecklistItems(template.document, shiftingRemindersBy: nil,
+                                                             now: now, calendar: calendar),
                           tags: template.tags, list: list, priority: template.priority ?? .none,
                           schedule: TaskSchedule(dueAt: template.schedule?.date(from: now, calendar: calendar)),
                           parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
@@ -1430,6 +1670,12 @@ final class TaskActions {
                  isPinned: false, abandonedAt: nil, skippedAt: nil,
                  convertedNoteID: nil, sourceNoteID: source.sourceNoteID)
             value.tagReferences = source.tagReferences
+            value.kind = source.kind
+            if source.kind == .checklist {
+                // 复制是全新任务：不带检查项的完成时间与项提醒。
+                value.document = Self.resetChecklistItems(source.document, shiftingRemindersBy: nil,
+                                                         now: now, calendar: calendar)
+            }
             return value
         }
 

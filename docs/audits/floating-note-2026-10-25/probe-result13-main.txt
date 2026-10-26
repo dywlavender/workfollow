@@ -1,0 +1,2 @@
+[main] boot(主窗口为key+main) appActive=false key=nil main=nil wouldRaise=[-,-] ordered=["WMAIN"]
+[main] after-click-note appActive=true key=WNOTE main=WNOTE wouldRaise=[WNOTE,WNOTE] ordered=["WMAIN"]

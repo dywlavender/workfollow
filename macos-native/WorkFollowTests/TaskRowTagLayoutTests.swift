@@ -14,11 +14,11 @@ final class TaskRowTagLayoutTests: XCTestCase {
         let tags = TaskListMetrics.taskRowHeight(hasPreview: false, hasTags: true)
         let both = TaskListMetrics.taskRowHeight(hasPreview: true, hasTags: true)
 
-        XCTAssertEqual(base, WFMetrics.rowHeight, accuracy: 0.5, "无预览无标签时保持基础行高")
-        XCTAssertGreaterThan(preview, base, "预览行要多占高度")
-        XCTAssertGreaterThan(tags, base, "标签行要多占高度")
-        XCTAssertGreaterThan(both, preview)
-        XCTAssertGreaterThan(both, tags)
+        // 滴答实机：40 基础；预览 +21；标签 +21（标签单独时 62）。
+        XCTAssertEqual(base, 40, accuracy: 0.5)
+        XCTAssertEqual(preview, 61, accuracy: 0.5)
+        XCTAssertEqual(tags, 62, accuracy: 0.5)
+        XCTAssertEqual(both, 82, accuracy: 0.5)
     }
 
     func testNativeRowResizesWhenTagsAreAddedAndUndoRestoresHeight() throws {

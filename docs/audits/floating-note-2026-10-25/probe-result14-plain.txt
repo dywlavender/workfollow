@@ -1,0 +1,3 @@
+[plain] before-click: appActive=false key=nil firstResponder=Optional(probe14.Plain) selectedRange={340, 0}
+[plain] posted click at screen (1020.0, 650.0)
+[plain] after-click:  appActive=false key=nil firstResponder=Optional(probe14.Plain) selectedRange={340, 0} acceptsFirstMouse=false
