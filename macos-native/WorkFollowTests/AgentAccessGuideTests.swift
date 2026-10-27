@@ -12,9 +12,15 @@ final class AgentAccessGuideTests: XCTestCase {
         return root
     }
 
-    func testPackagedInstallerCanRunBothCopiedCommandsWithoutARepository() throws {
-        let root = try directory()
-        let app = root.appendingPathComponent("WorkFollow Example.app")
+    private struct Fixture {
+        let app: URL
+        let installer: URL
+        let cli: URL
+        let skill: URL
+    }
+
+    private func fixture(in root: URL) throws -> Fixture {
+        let app = root.appendingPathComponent("Applications/WorkFollow Example.app")
         let embeddedInstaller = app.appendingPathComponent("Contents/Resources/Automation/install-native-cli.sh")
         let cli = app.appendingPathComponent("Contents/MacOS/workfollowctl")
         let skill = app.appendingPathComponent("Contents/Resources/Skills/workfollow-cli/SKILL.md")
@@ -28,36 +34,92 @@ final class AgentAccessGuideTests: XCTestCase {
         try "#!/bin/sh\nprintf '%s\\n' '{\"ok\":true}'\n".write(to: cli, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: cli.path)
         try "---\nname: workfollow-cli\ndescription: fixture\n---\n".write(to: skill, atomically: true, encoding: .utf8)
-        let user = root.appendingPathComponent("Local User")
-        let guide = AgentAccessGuide(appURL: app, userDirectory: user,
-                                     codexDirectory: user.appendingPathComponent(".codex"))
+        return Fixture(app: app, installer: embeddedInstaller, cli: cli, skill: skill)
+    }
 
+    private func run(_ command: String, environment: [String: String]) throws -> (Int32, String) {
+        let process = Process(), output = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = ["-c", command]
+        process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, value in value }
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: data, as: UTF8.self))
+    }
+
+    func testSameCopiedCommandWorksWithDifferentMacDirectories() throws {
+        let root = try directory(), guide = AgentAccessGuide()
         for agent in AgentAccessGuide.Agent.allCases {
-            let process = Process(), output = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/bin/bash")
-            process.arguments = ["-e", "-c", guide.manualCommand(for: agent)]
-            process.standardOutput = output
-            process.standardError = output
-            try process.run()
-            let data = output.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            let text = String(decoding: data, as: UTF8.self)
-            XCTAssertEqual(process.terminationStatus, 0, text)
-            XCTAssertTrue(text.contains("\"ok\":true"), text)
-            let destination = try FileManager.default.destinationOfSymbolicLink(atPath: guide.cliURL.path)
-            XCTAssertEqual(URL(fileURLWithPath: destination).resolvingSymlinksInPath().path,
-                           cli.resolvingSymlinksInPath().path)
-            let installed = guide.skillDirectory(for: agent).appendingPathComponent("workfollow-cli/SKILL.md")
-            XCTAssertEqual(try String(contentsOf: installed, encoding: .utf8),
-                           try String(contentsOf: skill, encoding: .utf8))
+            let command = guide.manualCommand(for: agent)
+            for name in ["第一台 Mac", "第二台 Mac"] {
+                let machine = root.appendingPathComponent(agent.rawValue + "/" + name)
+                let app = try fixture(in: machine)
+                let bin = machine.appendingPathComponent("Local User/bin")
+                let skills = machine.appendingPathComponent("Local User/skills")
+                let (status, text) = try run(command, environment: [
+                    "WORKFOLLOW_APP_PATH": app.app.path,
+                    "WORKFOLLOW_CLI_BIN_DIR": bin.path,
+                    "WORKFOLLOW_CLI_SKILL_DIR": skills.path
+                ])
+                XCTAssertEqual(status, 0, text)
+                XCTAssertTrue(text.contains("\"ok\":true"), text)
+                let link = bin.appendingPathComponent("workfollowctl")
+                XCTAssertEqual(link.resolvingSymlinksInPath().path, app.cli.resolvingSymlinksInPath().path)
+                let installed = skills.appendingPathComponent("workfollow-cli/SKILL.md")
+                XCTAssertEqual(try String(contentsOf: installed, encoding: .utf8),
+                               try String(contentsOf: app.skill, encoding: .utf8))
+            }
         }
     }
 
+    func testEmbeddedInstallerFindsItsOwnAppWithoutAnAppArgument() throws {
+        let root = try directory(), app = try fixture(in: root)
+        let bin = root.appendingPathComponent("user/bin"), skills = root.appendingPathComponent("user/skills")
+        let process = Process(), output = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [app.installer.path]
+        process.environment = ProcessInfo.processInfo.environment.merging([
+            "WORKFOLLOW_CLI_BIN_DIR": bin.path,
+            "WORKFOLLOW_CLI_SKILL_DIR": skills.path
+        ]) { _, value in value }
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0, String(decoding: data, as: UTF8.self))
+        XCTAssertEqual(bin.appendingPathComponent("workfollowctl").resolvingSymlinksInPath().path,
+                       app.cli.resolvingSymlinksInPath().path)
+    }
+
+    func testMissingAppStopsBeforeWritingAgentConfiguration() throws {
+        let root = try directory(), destination = root.appendingPathComponent("configuration")
+        let (status, text) = try run(AgentAccessGuide().manualCommand(for: .workbuddy), environment: [
+            "WORKFOLLOW_APP_PATH": root.appendingPathComponent("Missing.app").path,
+            "WORKFOLLOW_CLI_BIN_DIR": destination.appendingPathComponent("bin").path,
+            "WORKFOLLOW_CLI_SKILL_DIR": destination.appendingPathComponent("skills").path
+        ])
+        XCTAssertNotEqual(status, 0)
+        XCTAssertTrue(text.contains("没有找到 WorkFollow"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    func testCopiedInstructionsUseTheTargetMacEnvironment() {
+        let guide = AgentAccessGuide()
+        let texts = [guide.aiInstructions] + AgentAccessGuide.Agent.allCases.map(guide.manualCommand(for:))
+        for text in texts {
+            XCTAssertFalse(text.contains(FileManager.default.homeDirectoryForCurrentUser.path))
+            XCTAssertFalse(text.contains(Bundle.main.bundleURL.path))
+            XCTAssertTrue(text.contains("$HOME"))
+        }
+        XCTAssertTrue(guide.manualCommand(for: .codex).contains("${CODEX_HOME:-$HOME/.codex}/skills"))
+    }
+
     func testCopyButtonsAndAgentChoiceUseTheDisplayedPlan() throws {
-        let root = try directory()
-        let user = root.appendingPathComponent("Local User")
-        let guide = AgentAccessGuide(appURL: root.appendingPathComponent("WorkFollow.app"), userDirectory: user,
-                                     codexDirectory: user.appendingPathComponent(".codex"))
+        let guide = AgentAccessGuide()
         for width: CGFloat in [600, 340] {
             var frames: [InspectorRenderAnchor: CGRect] = [:]
             var copied: [String] = []
@@ -87,7 +149,7 @@ final class AgentAccessGuideTests: XCTestCase {
             InspectorPanelTestSupport.settle(window)
             try InspectorPanelTestSupport.click(try XCTUnwrap(frames[.agentCopyCommand]), in: host, window: window)
             XCTAssertEqual(copied.last, guide.manualCommand(for: .codex))
-            XCTAssertFalse(FileManager.default.fileExists(atPath: user.path), "查看和复制说明不应执行安装")
+            XCTAssertEqual(copied.count, 3)
 
             let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
             host.cacheDisplay(in: host.bounds, to: bitmap)

@@ -14,10 +14,12 @@ CLI 本身不调用模型，也不依赖旧 Python 后端。AI 理解用户意�
 
 用户接入入口位于「帮助 → 新手引导 → 👋欢迎 → 探索更多 → 让 AI 操作任务和笔记」：
 
-- **复制给 AI**：复制包含当前 App 路径、Skill 位置、配置步骤和连接验证的说明，粘贴给本机 AI 助手完成接入。
+- **复制给 AI**：复制包含目标 Mac 上的 App 定位方式、Skill 目录、配置步骤和连接验证的通用说明，粘贴给能在目标机器执行命令的 AI 助手完成接入。
 - **手动执行**：选择 WorkBuddy 或 Codex，复制显示的命令到终端执行，再按安装输出刷新技能或新建会话。
 
 指引页面只展示和复制文本。手动命令使用 App 内置安装脚本，可以在没有开发仓库的 Mac 上使用；CLI 与 Skill 的快捷入口指向当前 App。既有欢迎清单会在升级时补入这条指引，保留完成状态。
+
+复制文本中的 `$HOME`、`CODEX_HOME` 在目标 Mac 上解析，不写入生成说明时的用户名或构建路径。手动命令优先查找 `/Applications/WorkFollow.app` 与 `$HOME/Applications/WorkFollow.app`；放在其他位置时，先设置 `WORKFOLLOW_APP_PATH` 为目标机器的实际 `.app` 路径。App 内置安装脚本不传参数时会从脚本自身位置定位 App，仍支持显式传入 App 路径。找不到 App 或安装失败时会停止，不继续用已有 CLI 的状态掩盖失败。
 
 先按 [日用版构建与更新](../macos-native/README.md#日用版构建与更新) 更新 App，再在仓库根目录执行：
 
@@ -114,6 +116,12 @@ workfollowctl list unarchive --name "客户项目" --json
 旧 `workfollow` MCP 仍指向另一套后端，不会自动切换到原生数据。当前原生接入使用本 CLI 和配套 Skill。
 
 ## 验证记录
+
+2026-10-27，接入说明跨 Mac 路径修正：
+
+- 复制给 AI 的文本和手动命令改为通用模板，账户目录与 App 位置在目标 Mac 执行时解析。原实现是在生成文本时读取所在机器的绝对路径；App 本身换机后会重新生成，但已复制的文本无法跨机器复用。
+- 6 项 `AgentAccessGuideTests` 全部通过：同一段命令分别在两套不同 App 和用户目录中执行，覆盖 WorkBuddy、Codex；内置脚本不传 App 参数也能定位所属 App；缺少 App 时不写入配置；宽窄窗口的复制、切换与引导入口正常。
+- 日志：`/private/tmp/workfollow-agent-guide-portability-20261027-tests.log`。测试使用临时安装目录，不改写 `HOME` 或本机 Agent 配置。
 
 2026-10-27，新手接入指引：
 

@@ -36,12 +36,12 @@ struct AgentAccessGuideView: View {
             .pickerStyle(.segmented)
             .frame(width: 210)
 
-            ScrollView(.horizontal) {
+            ScrollView([.horizontal, .vertical]) {
                 Text(guide.manualCommand(for: agent))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(WFColors.text)
                     .textSelection(.enabled)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .fixedSize(horizontal: true, vertical: true)
                     .padding(12)
             }
             .background(WFColors.canvas, in: RoundedRectangle(cornerRadius: 8))
