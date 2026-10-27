@@ -520,6 +520,19 @@ struct TaskInspectorShell: View {
             documentEditor(task)
                 .inspectorRenderAnchor(.document)
                 .padding(.top, TaskInspectorMetrics.titleDocumentGap)
+            if let guideAction = WelcomeGuide.action(for: task),
+               WelcomeGuide.mediaURL(for: guideAction) != nil {
+                WelcomeGuideMediaView(action: guideAction)
+                    .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                    .padding(.top, 12)
+            }
+            if let guideAction = WelcomeGuide.action(for: task) {
+                WelcomeGuideActionView(action: guideAction) {
+                    _ = environment.openGuideAction(guideAction)
+                }
+                .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
+                .padding(.top, 12)
+            }
             // 附件行（TI2-03）：此前「上传附件」只写库、详情里看不见；这里复用笔记面的
             // 同一个 `AttachmentListView`（打开 / Finder / 移除 / 再加）。
             if !task.attachments.isEmpty {

@@ -113,6 +113,11 @@ struct AppCommands: Commands {
             Button("显示或隐藏侧栏") { environment.toggleSidebar() }
                 .keyboardShortcut("\\", modifiers: .command)
         }
+        CommandGroup(after: .help) {
+            Divider()
+            Button("新手引导") { environment.showWelcomeGuide() }
+            Button("重置新手引导…") { environment.resetWelcomeGuide() }
+        }
         #if DEBUG
         // 编辑器内核切换的 P0 骨架验收入口（验收后随正式组件移除）。
         CommandMenu("调试") {

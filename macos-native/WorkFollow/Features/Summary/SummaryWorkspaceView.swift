@@ -144,6 +144,14 @@ struct SummaryWorkspaceView: View {
         .onReceive(environment.focusStore.$historyRevision.dropFirst()) { _ in
             DispatchQueue.main.async { refreshFocus() }
         }
+        #if DEBUG
+        // 录制引导演示时直接走复制路径，避免在非前台测试宿主里展开菜单。
+        .onReceive(NotificationCenter.default.publisher(for: .guideTourCopySummary)) { _ in
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(document.plainText, forType: .string)
+            copied = true
+        }
+        #endif
         .onChange(of: environment.navigation.destination) { _, destination in
             if destination != .summary { cancelAI() }
         }
@@ -296,6 +304,7 @@ struct SummaryWorkspaceView: View {
                     NSPasteboard.general.setString(document.plainText, forType: .string)
                     copied = true
                 }
+                .guideTourAnchor("summary.footer.复制")
             }
             .buttonStyle(.borderless).foregroundStyle(WFColors.secondaryText).frame(height: 30)
         }
@@ -308,6 +317,7 @@ struct SummaryWorkspaceView: View {
             if compact { Image(systemName: symbol).frame(width: 22, height: 24) }
             else { Label(title, systemImage: symbol).font(WFType.supporting) }
         }.help(title).accessibilityLabel(title).workflowActionAnchor("summary.footer." + title)
+            .guideTourAnchor("summary.footer." + title)
     }
 
     private func beginSaveTemplate() {

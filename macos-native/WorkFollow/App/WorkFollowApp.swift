@@ -13,6 +13,7 @@ struct WorkFollowApp: App {
 
     init() {
         let environment = AppEnvironment()
+        environment.ensureWelcomeGuideIfNeeded()
         let windowLaunch = WidgetMainWindowLaunchPolicy()
         // 先把全部存储属性初始化完，才能碰 `self.`（属性包装器的 wrapped 访问
         // 也算 self 访问；lifecycle 的接线放在最后）。

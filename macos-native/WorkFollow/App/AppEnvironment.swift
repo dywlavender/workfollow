@@ -55,9 +55,14 @@ final class AppEnvironment: ObservableObject {
     private var subscriptions = Set<AnyCancellable>()
     private var loadFailed = false
     private var calendarNeedsSync = false
+    /// 本次启动前是否已有落盘工作区：区分真正的新装首启与老用户升级。
+    private(set) var hadStoredWorkspace = false
+    /// 新手引导只在存储可用时种入，避免读档失败时覆盖或产生只存在于内存的数据。
+    var canSeedWelcomeGuide: Bool { !loadFailed && !storageNeedsReload && !storageReplacementPending }
     var documentReadCount: Int { repository.documentReadCount }
     var originalContentReadCount: Int { repository.originalContentReadCount }
     @Published var commandPalettePresented = false
+    @Published var welcomeGuideWelcomePresented = false
     @Published var settingsSection: SettingsSection = .general
     @Published private(set) var quickAddRequest = 0
     @Published var appearance: NativeAppearance {
@@ -81,6 +86,7 @@ final class AppEnvironment: ObservableObject {
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
         do { snapshot = try repository.loadDeferred() } catch { failure = error }
+        hadStoredWorkspace = snapshot != nil
         let feedback = FeedbackCenter(
             completionSoundEnabled: preferences.object(forKey: "completionSoundEnabled") as? Bool ?? true,
             playSound: { Self.playFeedbackSound($0) })

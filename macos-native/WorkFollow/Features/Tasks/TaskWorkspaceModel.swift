@@ -1816,6 +1816,170 @@ final class TaskWorkspaceModel: ObservableObject {
         }
     }
 
+    // MARK: - 新手引导（滴答式「👋欢迎」预设清单）
+
+    /// 创建欢迎清单、三个分组和引导任务。已有引导任务时返回 false，避免重复种入。
+    @discardableResult
+    func installWelcomeGuide() -> Bool {
+        guard !store.tasks.contains(where: { $0.guideAction != nil }) else { return false }
+        var created = false
+        var actionsByTask: [UUID: String] = [:]
+        store.transaction {
+            if !store.lists.contains(WelcomeGuide.listName) {
+                actions.renameList(nil, to: WelcomeGuide.listName)
+            }
+            for title in WelcomeGuide.sectionTitles
+            where !store.listSections.contains(where: {
+                $0.listName == WelcomeGuide.listName && $0.title == title
+            }) {
+                _ = actions.addListSection(WelcomeGuide.listName, title: title)
+            }
+            let sectionIDs = Dictionary(store.listSections
+                .filter { $0.listName == WelcomeGuide.listName }
+                .map { ($0.title, $0.id) }, uniquingKeysWith: { first, _ in first })
+            for item in WelcomeGuide.items {
+                let result = actions.createDraft(
+                    title: item.title,
+                    list: WelcomeGuide.listName,
+                    schedule: TaskSchedule(),
+                    priority: .none,
+                    tags: [],
+                    reminder: nil,
+                    frequency: .never,
+                    document: WelcomeGuide.document(for: item)
+                )
+                guard let id = result.taskID else { continue }
+                if let sectionID = sectionIDs[item.section.title] {
+                    _ = actions.setTaskSection(id, sectionID: sectionID)
+                }
+                actionsByTask[id] = item.action.rawValue
+                created = true
+            }
+            if !actionsByTask.isEmpty {
+                store.commit(store.tasks.map { task in
+                    guard let raw = actionsByTask[task.id] else { return task }
+                    var value = task
+                    value.guideAction = raw
+                    return value
+                })
+            }
+        }
+        store.clearUndo()
+        if created { revision += 1 }
+        return created
+    }
+
+    /// 内容升级：按 `guideAction` 原位刷新标题和正文，补齐新版本新增的条目。
+    /// 完成状态、日期、提醒、子任务和用户自己的任务都不动；用户删掉的条目不会复活。
+    @discardableResult
+    func upgradeWelcomeGuide() -> Bool {
+        let liveGuideTasks = store.tasks.filter { $0.guideAction != nil && $0.deletedAt == nil }
+        guard !liveGuideTasks.isEmpty else { return false }
+        let listExists = store.lists.contains(WelcomeGuide.listName)
+        var changed = false
+        var createdActions: [UUID: String] = [:]
+        var updates: [UUID: (title: String, document: NativeDocument)] = [:]
+
+        store.transaction {
+            if listExists {
+                for title in WelcomeGuide.sectionTitles
+                where !store.listSections.contains(where: {
+                    $0.listName == WelcomeGuide.listName && $0.title == title
+                }) {
+                    _ = actions.addListSection(WelcomeGuide.listName, title: title)
+                }
+            }
+            let sectionIDs = Dictionary(store.listSections
+                .filter { $0.listName == WelcomeGuide.listName }
+                .map { ($0.title, $0.id) }, uniquingKeysWith: { first, _ in first })
+
+            for item in WelcomeGuide.items {
+                if let task = liveGuideTasks.first(where: { $0.guideAction == item.action.rawValue }) {
+                    if task.title != item.title || !WelcomeGuide.documentMatches(task.document, item: item) {
+                        updates[task.id] = (item.title, WelcomeGuide.document(for: item))
+                    }
+                    continue
+                }
+                guard listExists else { continue }
+                let result = actions.createDraft(
+                    title: item.title,
+                    list: WelcomeGuide.listName,
+                    schedule: TaskSchedule(),
+                    priority: .none,
+                    tags: [],
+                    reminder: nil,
+                    frequency: .never,
+                    document: WelcomeGuide.document(for: item)
+                )
+                guard let id = result.taskID else { continue }
+                if let sectionID = sectionIDs[item.section.title] {
+                    _ = actions.setTaskSection(id, sectionID: sectionID)
+                }
+                createdActions[id] = item.action.rawValue
+                changed = true
+            }
+
+            if !updates.isEmpty || !createdActions.isEmpty {
+                let now = clock()
+                store.commit(store.tasks.map { task in
+                    if let update = updates[task.id] {
+                        var value = task
+                        value.title = update.title
+                        value.document = update.document
+                        value.updatedAt = now
+                        return value
+                    }
+                    if let raw = createdActions[task.id] {
+                        var value = task
+                        value.guideAction = raw
+                        return value
+                    }
+                    return task
+                }, undoPolicy: .skip)
+                changed = true
+            }
+        }
+
+        if changed {
+            store.clearUndo()
+            revision += 1
+        }
+        return changed
+    }
+
+    /// 只删除引导任务；用户自己加进「👋欢迎」的任务保留。清单空了才移除清单和分组。
+    @discardableResult
+    func resetWelcomeGuide() -> Bool {
+        let guideIDs = Set(store.tasks.filter { $0.guideAction != nil }.map(\.id))
+        if !guideIDs.isEmpty {
+            var removed = guideIDs
+            var expanded = true
+            while expanded {
+                expanded = false
+                for task in store.tasks
+                where task.parentID.map({ removed.contains($0) }) == true && !removed.contains(task.id) {
+                    removed.insert(task.id)
+                    expanded = true
+                }
+            }
+            var lists = store.lists
+            var metas = store.listMetas
+            var sections = store.listSections
+            let remaining = store.tasks.filter { !removed.contains($0.id) }
+            if remaining.allSatisfy({ $0.list.name != WelcomeGuide.listName }) {
+                lists.removeAll { $0 == WelcomeGuide.listName }
+                metas.removeAll { $0.name == WelcomeGuide.listName }
+                sections.removeAll { $0.listName == WelcomeGuide.listName }
+                if activeList == WelcomeGuide.listName { activeList = nil }
+            }
+            store.commit(remaining, undoPolicy: .skip, lists: lists, listMetas: metas,
+                         listSections: sections)
+            store.clearUndo()
+            revision += 1
+        }
+        return installWelcomeGuide()
+    }
+
     private func seed() {
         let today = calendar.startOfDay(for: clock())
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today

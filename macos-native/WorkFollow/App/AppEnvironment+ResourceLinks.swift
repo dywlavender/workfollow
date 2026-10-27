@@ -27,6 +27,9 @@ extension AppEnvironment {
             }
             return true
         }
+        if let action = WelcomeGuide.Action(url: url) {
+            return openGuideAction(action)
+        }
         guard let link = NativeResourceLink(url: url) else { return false }
         if let reference = CalendarTaskReference(url: url) {
             if !openCalendarTask(reference) { feedback.show(FeedbackEvent(kind: .error, message: "该周期已不可用")) }

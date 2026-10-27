@@ -297,6 +297,7 @@ private struct SidebarListRowView: View {
         .overlay(RoundedRectangle(cornerRadius: WFMetrics.corner)
             .strokeBorder(dragTargeted ? WFColors.accent : Color.clear, lineWidth: 1))
         .contentShape(Rectangle())
+        .guideTourAnchor("list." + name)
         .onHover { hovering = $0 }
         .businessContextMenu { menuItems }
         // 拖拽：任务拖进来 = 移入本清单（HUD 由 workspace 自动上报）；

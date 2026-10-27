@@ -97,6 +97,14 @@ struct RootShellView: View {
             CommandPaletteView(navigation: navigation, session: environment.searchSession, workspace: workspace, notes: environment.notesWorkspace)
                 .environmentObject(environment)
         }
+        .sheet(isPresented: $environment.welcomeGuideWelcomePresented) {
+            WelcomeGuideWelcomeView(
+                onStart: {
+                    environment.welcomeGuideWelcomePresented = false
+                    environment.openWelcomeGuide()
+                },
+                onSkip: { environment.welcomeGuideWelcomePresented = false })
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 // HUD 放在安全区内：有提示时把页面顶上去，不浮在底栏按钮上抢点击

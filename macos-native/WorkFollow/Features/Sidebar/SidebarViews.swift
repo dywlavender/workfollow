@@ -93,6 +93,7 @@ struct IconRailView: View {
             return .handled
         }
         .help(title).accessibilityLabel(title)
+        .guideTourAnchor("rail." + title)
     }
 
     /// 日历的实心 glyph 不存在于 SF Symbols（circle.fill 是整列唯一圆底，2026-10-07
@@ -377,6 +378,7 @@ struct NavigationColumnView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(destination.title)
+        .guideTourAnchor("nav." + destination.title)
     }
 }
 
