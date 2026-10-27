@@ -86,7 +86,7 @@ final class TaskFocusSubmenuTests: XCTestCase {
 
         try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
         let more = try InspectorPanelTestSupport.actionPanel(in: window)
-        XCTAssertEqual(more.frame.width, 208, accuracy: 0.5)
+        XCTAssertEqual(more.frame.width, 176, accuracy: 0.5)
         XCTAssertEqual(more.title, InspectorPanelTestSupport.actionPanelTitle)
         let originalFrame = more.frame
 
@@ -164,7 +164,7 @@ final class TaskFocusSubmenuTests: XCTestCase {
         for iteration in 0..<20 {
             try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
             let more = try InspectorPanelTestSupport.actionPanel(in: window)
-            XCTAssertEqual(more.frame.width, 208, accuracy: 0.5, "More round \(iteration + 1)")
+            XCTAssertEqual(more.frame.width, 176, accuracy: 0.5, "More round \(iteration + 1)")
 
             // The main-window schedule anchor remains measurable; the button's AX frame
             // supplies the screen point for one real mouse-down/mouse-up sequence.

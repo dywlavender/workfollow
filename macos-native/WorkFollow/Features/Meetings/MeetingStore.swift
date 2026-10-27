@@ -36,19 +36,27 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private let turnTracker = MeetingSpeechTurnTracker()
     private var finalDeadlineTasks: [String: _Concurrency.Task<Void, Never>] = [:]
     private var minutesTask: _Concurrency.Task<Void, Never>?
+    static let automaticMinutesInterval: TimeInterval = 5 * 60
+    private let automaticallyUpdateMinutes: Bool
+    private let minutesTimer: (TimeInterval) -> AnyPublisher<Date, Never>
+    private var automaticMinutesMeetingID: UUID?
+    private var minutesEditRevisions: [UUID: Int] = [:]
     private var recordingOffset: TimeInterval = 0
     private var localRecording: (meetingID: UUID, chunkID: UUID)?
     /// At most 60 seconds, including the request currently being processed.
     static let maximumAudioBytes = 60 * 32_000
     var bufferedAudioBytes: Int { transport?.pendingByteCount ?? 0 }
-    private var pendingMinutes: Set<UUID> = []
-    private var blockedMinutes: Set<UUID> = []
     private var blockedAudio: Set<UUID> = []
     private var heartbeat: AnyCancellable?
 
     init(directory: URL = JSONFileStore<MeetingRecord>.moduleDirectory,
-         ai: MeetingAIClient = MeetingPiClient(), automaticallyUpdate: Bool = true) {
+         ai: MeetingAIClient = MeetingPiClient(), automaticallyUpdate: Bool = true,
+         minutesTimer: @escaping (TimeInterval) -> AnyPublisher<Date, Never> = { interval in
+             Timer.publish(every: interval, on: .main, in: .common).autoconnect().eraseToAnyPublisher()
+         }) {
         self.ai = ai
+        automaticallyUpdateMinutes = automaticallyUpdate
+        self.minutesTimer = minutesTimer
         storageDirectory = directory
         persistence = JSONFileStore(filename: "meetings.json", directory: directory)
         if let snapshot = persistence.load() {
@@ -63,23 +71,6 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         recorder.onTranscriptionError = { [weak self] error in
             guard let self, let id = self.recordingID else { return }
             self.pauseTranscription(meetingID: id, message: error.localizedDescription)
-        }
-        if automaticallyUpdate {
-            // 产品决定（验收评审）：纪要不再自动生成，改为**按钮点击生成**
-            // （`updateMinutesNow`）。25 秒心跳的自动触发在此断开——长录可靠
-            // 性测试（MEETING-AUDIO-RELIABILITY）之前，录音中额外启动 Pi/模型
-            // 请求会造成资源竞争，也不再符合产品定义。心跳代码保留在此，
-            // 恢复自动生成时从这里接回；纪要 UI 与历史数据不动。
-            // heartbeat = Timer.publish(every: 25, on: .main, in: .common).autoconnect()
-            //     .sink { [weak self] _ in
-            //         guard let self else { return }
-            //         for meeting in self.meetings where !meeting.minutesIsManual &&
-            //             meeting.summarizedLineCount < meeting.transcript.count &&
-            //             !self.blockedMinutes.contains(meeting.id) {
-            //             self.pendingMinutes.insert(meeting.id)
-            //         }
-            //         self.pumpMinutes()
-            //     }
         }
     }
 
@@ -109,7 +100,8 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         guard let index = meetings.firstIndex(where: { $0.id == id }), canDelete(id) else { return false }
         meetings.remove(at: index)
         streamDrafts.removeValue(forKey: id)
-        pendingMinutes.remove(id); blockedMinutes.remove(id); blockedAudio.remove(id)
+        if automaticMinutesMeetingID == id { stopAutomaticMinutes() }
+        minutesEditRevisions.removeValue(forKey: id); blockedAudio.remove(id)
         if selectedID == id {
             selectedID = meetings.isEmpty ? nil : meetings[min(index, meetings.count - 1)].id
         }
@@ -175,6 +167,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             localRecording = (id, chunkID)
             change(id) { $0.audio.append(chunk) }
             recordingID = id
+            startAutomaticMinutes(for: id)
         } catch {
             guard generation == permissionGeneration else { return }
             requestingPermission = false; closeInputStream(); transport?.cancel(); transport = nil; transportMeetingID = nil
@@ -183,6 +176,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
 
     func stopRecording() {
+        stopAutomaticMinutes()
         if requestingPermission && inputStream == nil { streamToken = UUID() }
         permissionGeneration += 1; requestingPermission = false
         let saved = localRecording; localRecording = nil
@@ -208,8 +202,6 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
         transport?.stopAccepting()
         if inputStream != nil { streamStopping = true; transport?.stopAccepting(); return }
-        // 产品决定：停止录音不再自动生成纪要（见 init 里的心跳断开说明）。
-        // if let id, !blockedMinutes.contains(id) { pendingMinutes.insert(id); pumpMinutes() }
     }
 
     /// Separate connection lifecycle from microphone capture; also permits deterministic transport tests.
@@ -318,38 +310,50 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
 
     func updateMinutesNow() {
         guard let id = selectedID else { return }
-        error = nil; blockedMinutes.remove(id); pendingMinutes.insert(id); pumpMinutes()
+        generateMinutes(for: id, automatically: false)
     }
 
-    /// 用户在纪要栏里直接编辑。第一笔输入就把这条会议标成「手动」，
-    /// 之后 Pi 不再写它——否则下一次心跳（25 秒）就会把刚敲的字冲掉。
+    func canGenerateMinutes(for meeting: MeetingRecord) -> Bool {
+        !updatingMinutes && !meeting.transcript.isEmpty
+    }
+
+    /// Recording owns the automatic schedule; historical meetings remain manual.
+    func startAutomaticMinutes(for id: UUID) {
+        guard automaticallyUpdateMinutes, meetings.contains(where: { $0.id == id }) else { return }
+        automaticMinutesMeetingID = id
+        scheduleAutomaticMinutes()
+    }
+
+    private func stopAutomaticMinutes() {
+        automaticMinutesMeetingID = nil
+        heartbeat?.cancel(); heartbeat = nil
+    }
+
+    private func scheduleAutomaticMinutes() {
+        heartbeat?.cancel(); heartbeat = nil
+        guard !updatingMinutes, let id = automaticMinutesMeetingID,
+              let meeting = meetings.first(where: { $0.id == id }), !meeting.minutesIsManual else { return }
+        heartbeat = minutesTimer(Self.automaticMinutesInterval).prefix(1).sink { [weak self] _ in
+            guard let self, self.automaticMinutesMeetingID == id else { return }
+            self.heartbeat = nil
+            if !self.generateMinutes(for: id, automatically: true) { self.scheduleAutomaticMinutes() }
+        }
+    }
+
+    /// Editing pauses automatic replacement. An explicit AI request can regenerate it.
     func editMinutes(_ text: String) {
         guard let id = selectedID else { return }
-        pendingMinutes.remove(id)
+        minutesEditRevisions[id, default: 0] += 1
+        if automaticMinutesMeetingID == id { heartbeat?.cancel(); heartbeat = nil }
         change(id) {
             $0.minutes = text
             $0.minutesEditedByUser = true
         }
     }
 
-    /// 把手动编辑过的纪要交回给 Pi。
-    ///
-    /// 交回时**不清空**用户写的内容：它会作为「已有纪要」成为下一次更新的基底
-    /// （`MeetingMinutesPrompt.make(minutes:lines:)` 就是这么用的），
-    /// 所以手动补充的事实不会被丢掉。
-    ///
-    /// 也要 `blockedMinutes.remove`：之前 Pi 失败过一次的话这一条是被封住的，
-    /// 光清标记它也不会再跑——「交回自动更新」就会变成一个点了没反应的按钮。
+    /// Compatibility for callers that explicitly hand edited minutes back to AI.
     func resumeAutomaticMinutes() {
-        guard let id = selectedID else { return }
-        error = nil
-        blockedMinutes.remove(id)
-        change(id) { $0.minutesEditedByUser = nil }
-        // 只有还有没进纪要的发言时才需要立刻跑一次；否则交给心跳即可。
-        if let meeting = meetings.first(where: { $0.id == id }),
-           meeting.summarizedLineCount < meeting.transcript.count {
-            pendingMinutes.insert(id); pumpMinutes()
-        }
+        updateMinutesNow()
     }
 
     /// 测试注入缝与批量路径入口。实时录音的采集数据**不经过这里**——
@@ -417,10 +421,6 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             await MainActor.run { [weak self] in
                 guard let self, self.streamToken == token else { return }
                 self.closeInputStream()
-                // 产品决定：流式收尾不再自动生成纪要（见 init 里的心跳断开说明）。
-                // if !self.blockedMinutes.contains(meetingID) {
-                //     self.pendingMinutes.insert(meetingID); self.pumpMinutes()
-                // }
             }
         }
         wireTransportCallbacks(transport, meetingID: meetingID)
@@ -454,9 +454,6 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             $0.transcript.sort { $0.offset < $1.offset }
         }
         // 产品决定：转写完成不再自动触发纪要（见 init 里的心跳断开说明）。
-        // if recordingID != meetingID, !blockedMinutes.contains(meetingID) {
-        //     pendingMinutes.insert(meetingID); pumpMinutes()
-        // }
     }
 
     /// 队列超限：显式失败（原 backpressure 分支）。已排队的包照常送完。
@@ -479,38 +476,41 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         error = recordingID == meetingID ? "实时转写已暂停，本地录音继续保存。\(message)" : message
     }
 
-    private func pumpMinutes() {
-        guard minutesTask == nil, !pendingMinutes.isEmpty else { return }
+    @discardableResult
+    private func generateMinutes(for id: UUID, automatically: Bool) -> Bool {
+        guard minutesTask == nil, !updatingMinutes,
+              let meeting = meetings.first(where: { $0.id == id }), !meeting.transcript.isEmpty,
+              !automatically || !meeting.minutesIsManual else { return false }
+        let lines = meeting.transcript
+        let revision = minutesEditRevisions[id, default: 0]
+        let configuration = configuration
+        // Both triggers acquire the same slot immediately. Busy ticks/clicks are
+        // discarded instead of queued, and the five-minute interval restarts on completion.
+        heartbeat?.cancel(); heartbeat = nil
+        error = nil
         updatingMinutes = true
         minutesTask = _Concurrency.Task { [weak self] in
             guard let self else { return }
-            defer { self.minutesTask = nil; self.updatingMinutes = false }
-            while let id = self.pendingMinutes.first {
-                self.pendingMinutes.remove(id)
-                // 手动编辑过的纪要不由 Pi 覆盖。守卫放在这里而不是各个调用点，
-                // 心跳 / 停止录音 / 转写完成 / 手动触发四条路径就都覆盖到了。
-                guard let meeting = self.meetings.first(where: { $0.id == id }),
-                      !meeting.minutesIsManual,
-                      meeting.summarizedLineCount < meeting.transcript.count else { continue }
-                let done = Set(meeting.summarizedLineIDs)
-                let newLines = meeting.transcript.filter { !done.contains($0.id) }
-                do {
-                    let minutes = try await self.ai.updateMinutes(configuration: self.configuration,
-                                                                  minutes: meeting.minutes, lines: newLines)
-                    guard !minutes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MeetingPiError.invalidResult }
-                    // 请求在飞行途中用户可能已经动手编辑了：那种情况下这一份结果作废，
-                    // 否则会把刚敲的字盖回去。
-                    guard self.meetings.first(where: { $0.id == id })?.minutesIsManual != true else { continue }
-                    self.change(id) {
-                        $0.minutes = minutes
-                        $0.summarizedLineIDs.append(contentsOf: newLines.map(\.id))
-                        $0.minutesUpdatedAt = Date()
-                    }
-                } catch {
-                    self.error = error.localizedDescription; self.blockedMinutes.insert(id)
+            defer {
+                self.minutesTask = nil; self.updatingMinutes = false
+                self.scheduleAutomaticMinutes()
+            }
+            do {
+                let minutes = try await self.ai.updateMinutes(configuration: configuration, minutes: "", lines: lines)
+                guard !minutes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MeetingPiError.invalidResult }
+                // Keep edits made while the model request was running.
+                guard self.minutesEditRevisions[id, default: 0] == revision else { return }
+                self.change(id) {
+                    $0.minutes = minutes
+                    $0.summarizedLineIDs = lines.map(\.id)
+                    $0.minutesUpdatedAt = Date()
+                    $0.minutesEditedByUser = nil
                 }
+            } catch {
+                self.error = error.localizedDescription
             }
         }
+        return true
     }
 
     private func change(_ id: UUID, _ mutation: (inout MeetingRecord) -> Void) {

@@ -103,7 +103,7 @@ final class TaskBatchInteractionTests: XCTestCase {
 
         XCTAssertTrue(workspace.bulkSelection.isEmpty)
         XCTAssertEqual(environment.navigation.destination, destination)
-        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty)
+        XCTAssertEqual(Set(environment.notesWorkspace.notes.map(\.id)), Set(before.map(\.id)))
         for original in before {
             let changed = try XCTUnwrap(workspace.task(for: original.id))
             XCTAssertEqual(changed.kind, .note)
@@ -117,15 +117,18 @@ final class TaskBatchInteractionTests: XCTestCase {
 
         workspace.undo()
         XCTAssertEqual(workspace.allTasks, before)
+        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty)
         XCTAssertFalse(workspace.canUndo, "转换没有留下隐藏的逐项历史")
         workspace.redo()
         XCTAssertEqual(workspace.allTasks, after)
+        XCTAssertEqual(Set(environment.notesWorkspace.notes.map(\.id)), Set(before.map(\.id)))
         workspace.setBulkSelection(in: [first.id, child.id, second.id])
         InspectorPanelTestSupport.settle(window)
         try InspectorPanelTestSupport.click(try XCTUnwrap(actions["转换为任务"]),
                                              in: try XCTUnwrap(window.contentView), window: window)
         XCTAssertTrue(workspace.bulkSelection.isEmpty)
         XCTAssertTrue(workspace.allTasks.allSatisfy { $0.kind == .text })
+        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty)
         workspace.undo()
         XCTAssertEqual(workspace.allTasks, after)
     }

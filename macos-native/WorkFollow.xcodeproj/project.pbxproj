@@ -17,11 +17,11 @@
 			productRefGroup = A00000000000000000000004;
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A00000000000000000000006, B00000000000000000000001, D00000000000000000000001);
+			targets = (A00000000000000000000006, B00000000000000000000001, D00000000000000000000001, F00000000000000000000001);
 		};
 		A00000000000000000000002 = {
 			isa = PBXGroup;
-			children = (A00000000000000000000003, B00000000000000000000002, A00000000000000000000004, C00000000000000000000001, D00000000000000000000002, E00000000000000000000002);
+			children = (A00000000000000000000003, B00000000000000000000002, A00000000000000000000004, C00000000000000000000001, D00000000000000000000002, E00000000000000000000002, F00000000000000000000002, F00000000000000000000013, F00000000000000000000018);
 			sourceTree = "<group>";
 		};
 		A00000000000000000000003 = {
@@ -31,7 +31,7 @@
 		};
 		A00000000000000000000004 = {
 			isa = PBXGroup;
-			children = (A00000000000000000000005, B00000000000000000000003, D00000000000000000000003);
+			children = (A00000000000000000000005, B00000000000000000000003, D00000000000000000000003, F00000000000000000000003);
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -45,10 +45,10 @@
 		A00000000000000000000006 = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000012;
-			buildPhases = (A00000000000000000000008, A00000000000000000000009, A00000000000000000000010, D00000000000000000000011);
+			buildPhases = (A00000000000000000000008, A00000000000000000000009, A00000000000000000000010, D00000000000000000000011, F00000000000000000000011, F00000000000000000000014, F00000000000000000000017);
 			buildRules = ();
-			dependencies = (D00000000000000000000009);
-			fileSystemSynchronizedGroups = (A00000000000000000000003, E00000000000000000000002);
+			dependencies = (D00000000000000000000009, F00000000000000000000009);
+			fileSystemSynchronizedGroups = (A00000000000000000000003, E00000000000000000000002, F00000000000000000000013);
 			name = WorkFollow;
 			packageProductDependencies = ();
 			productName = WorkFollow;
@@ -217,6 +217,34 @@
         D00000000000000000000011 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (D00000000000000000000012); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
         D00000000000000000000012 = { isa = PBXBuildFile; fileRef = D00000000000000000000003; settings = { ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy); }; };
 
+		F00000000000000000000001 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F00000000000000000000004;
+			buildPhases = (F00000000000000000000007, F00000000000000000000008);
+			buildRules = (); dependencies = ();
+			fileSystemSynchronizedGroups = (F00000000000000000000002, F00000000000000000000013);
+			name = WorkFollowCLI; productName = workfollowctl;
+			productReference = F00000000000000000000003;
+			productType = "com.apple.product-type.tool";
+		};
+		F00000000000000000000002 = { isa = PBXFileSystemSynchronizedRootGroup; path = WorkFollowCLI; sourceTree = "<group>"; };
+		F00000000000000000000013 = { isa = PBXFileSystemSynchronizedRootGroup; path = AutomationShared; sourceTree = "<group>"; };
+		F00000000000000000000003 = { isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; path = workfollowctl; sourceTree = BUILT_PRODUCTS_DIR; };
+		F00000000000000000000004 = { isa = XCConfigurationList; buildConfigurations = (F00000000000000000000005, F00000000000000000000006); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		F00000000000000000000005 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { PRODUCT_NAME = workfollowctl; PRODUCT_BUNDLE_IDENTIFIER = com.workfollow.native.cli; CODE_SIGN_STYLE = Automatic; SKIP_INSTALL = YES; }; };
+		F00000000000000000000006 = { isa = XCBuildConfiguration; name = Release; buildSettings = { PRODUCT_NAME = workfollowctl; PRODUCT_BUNDLE_IDENTIFIER = com.workfollow.native.cli; CODE_SIGN_STYLE = Automatic; SKIP_INSTALL = YES; }; };
+		F00000000000000000000007 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000008 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000009 = { isa = PBXTargetDependency; target = F00000000000000000000001; targetProxy = F00000000000000000000010; };
+		F00000000000000000000010 = { isa = PBXContainerItemProxy; containerPortal = A00000000000000000000001; proxyType = 1; remoteGlobalIDString = F00000000000000000000001; remoteInfo = WorkFollowCLI; };
+		F00000000000000000000011 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 6; files = (F00000000000000000000012); name = "Embed Command Line Tool"; runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000012 = { isa = PBXBuildFile; fileRef = F00000000000000000000003; settings = { ATTRIBUTES = (CodeSignOnCopy); }; };
+		F00000000000000000000014 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = "Skills/workfollow-cli"; dstSubfolderSpec = 7; files = (F00000000000000000000016); name = "Embed CLI Skill"; runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000015 = { isa = PBXFileReference; lastKnownFileType = text; name = "CLI Skill"; path = "../.agents/skills/workfollow-cli/SKILL.md"; sourceTree = "<group>"; };
+		F00000000000000000000016 = { isa = PBXBuildFile; fileRef = F00000000000000000000015; };
+		F00000000000000000000017 = { isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = Automation; dstSubfolderSpec = 7; files = (F00000000000000000000019); name = "Embed CLI Installer"; runOnlyForDeploymentPostprocessing = 0; };
+		F00000000000000000000018 = { isa = PBXFileReference; lastKnownFileType = text.script.sh; name = "CLI Installer"; path = "scripts/install-native-cli.sh"; sourceTree = "<group>"; };
+		F00000000000000000000019 = { isa = PBXBuildFile; fileRef = F00000000000000000000018; };
 	};
 	rootObject = A00000000000000000000001;
 }

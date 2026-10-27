@@ -25,6 +25,8 @@ enum InspectorRenderAnchor: Hashable {
     case kind
     case moreMenu, focusMenuRow, parentMenuRow, parentPicker, duplicateMenuRow, tagsMenuRow, tagPicker, activityMenuRow
     case noteConversionMenuRow
+    case aiBreakdownMenuRow
+    case agentCopyInstructions, agentCopyCommand
     case focusPomodoro, focusStopwatch, focusEstimate, focusEstimateClear
 }
 struct InspectorFramesKey: PreferenceKey {

@@ -371,10 +371,8 @@ struct NavigationColumnView: View {
             .padding(.leading, 11)
             .padding(.trailing, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
-            .background(navigation.destination == destination
-                        ? WFColors.listSelection : .clear,
-                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
+            .rowHoverBackground(selected: navigation.destination == destination)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(destination.title)
@@ -446,8 +444,8 @@ private struct NotesNavigationSection: View {
             }
             .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: NavigationMetrics.rowHeight)
             .foregroundStyle(WFColors.text)
-            .background(selected ? WFColors.listSelection : .clear, in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
+            .rowHoverBackground(selected: selected)
         }.buttonStyle(.plain)
     }
 }
@@ -527,9 +525,8 @@ private struct TaskFiltersSectionView: View {
             .padding(.leading, 11)
             .padding(.trailing, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
-            .background(selected ? WFColors.listSelection : .clear,
-                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             .contentShape(Rectangle())
+            .rowHoverBackground(selected: selected)
         }
         .businessContextMenu {
             Button("编辑") {

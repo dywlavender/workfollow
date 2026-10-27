@@ -47,6 +47,20 @@ struct QuickAddScheduleDraft: Equatable, Codable {
                   recurrenceRule: parsed.recurrenceRule)
     }
 
+    /// A newly typed date replaces an older calendar draft. Title-only edits
+    /// keep the calendar selection; relative dates are compared by source text.
+    static func scheduleTextChanged(from previous: String, to current: String,
+                                    now: Date, calendar: Calendar, knownLists: Set<String>,
+                                    dismissedTokenIDs: Set<String> = []) -> Bool {
+        func scheduleTokens(in text: String) -> [String] {
+            QuickAddParser.parse(text, now: now, calendar: calendar, knownLists: knownLists,
+                                 dismissedTokenIDs: dismissedTokenIDs).tokens
+                .filter { $0.kind == .date || $0.kind == .time || $0.kind == .recurrence }
+                .map { $0.kind.rawValue + ":" + $0.raw }
+        }
+        return scheduleTokens(in: previous) != scheduleTokens(in: current)
+    }
+
     /// 直接由面板产出的 `SchedulePlan` 构造，宿主不再逐字段手抄
     /// （手抄就是丢字段的地方：`dueEndAt` / `reminderOffsets` / `rule.month` 都丢过）。
     init(_ plan: SchedulePlan) {

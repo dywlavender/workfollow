@@ -27,6 +27,34 @@ final class SummaryPiOptimizerTests: XCTestCase {
         XCTAssertTrue(prompt.contains("只输出改写后的正文"))
     }
 
+    func testSummaryPromptPreservesGroupHeadingsInsteadOfAddingWeeklySections() {
+        let prompt = SummaryPiOptimizer.prompt(text: "已完成\n- 写周报", options: SummaryAIOptions())
+        XCTAssertTrue(prompt.contains("保留原文的日期范围"))
+        XCTAssertTrue(prompt.contains("不要新增或删除分组标题"))
+        XCTAssertTrue(prompt.contains("Markdown 标题与列表"))
+        XCTAssertFalse(prompt.contains("本周成果"))
+        XCTAssertFalse(prompt.contains("进展与调整"))
+    }
+
+    func testMarkdownHeadingsKeepFlatSummaryStructure() {
+        let title = "10月19日-10月25日"
+        let response = """
+        # \(title)
+        ## 已完成
+        - [10月20日] 写周报
+        ### 备注
+        - 手写补充
+        ## 未完成
+        - 整理文档
+        """
+        let document = WeeklyReportBuilder.aiDocument(text: response, title: title)
+        XCTAssertEqual(document.blocks.first?.kind, .heading(1))
+        XCTAssertEqual(document.blocks.filter { $0.plainText == title }.count, 1)
+        XCTAssertEqual(document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText), ["已完成", "未完成"])
+        XCTAssertTrue(document.blocks.contains { $0.kind == .heading(3) && $0.plainText == "备注" })
+        XCTAssertEqual(document.blocks.filter { $0.kind == .bullet }.count, 3)
+    }
+
     func testFormattedResponseKeepsOneDateTitleAndEditableReflection() {
         let title = "10月19日-10月25日"
         let response = """

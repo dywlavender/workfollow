@@ -102,8 +102,10 @@ struct FocusPresetLibraryPane: View {
             }
         }
         .padding(.horizontal, 10).frame(height: FocusLayoutMetrics.libraryRowHeight)
-        .background(store.browsedPresetID == preset.id ? theme.chipBackground : .clear,
-                    in: RoundedRectangle(cornerRadius: 13))
+        .rowHoverBackground(selected: store.browsedPresetID == preset.id,
+                            cornerRadius: 13,
+                            selectedFill: theme.chipBackground,
+                            hoverFill: theme.chipBackground.opacity(0.55))
         .businessContextMenu {
             if preset.archivedAt == nil {
                 Button("编辑") { editingPreset = preset }

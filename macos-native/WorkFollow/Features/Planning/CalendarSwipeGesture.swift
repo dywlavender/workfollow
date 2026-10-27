@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 日历页的触控板/滚轮手势（2026-10-07）：**横扫 = 前后翻整月**（周模式
 /// 翻周）。**纵向已由月网格的 ScrollView 原生接管**——按周连续滚动、带
-/// 惯性、松手按行对齐（Apple 日历式），监听器只处理横向。
+/// 惯性、松手保留当前偏移，监听器只处理横向。
 ///
 /// 实现走 `NSEvent` 本地监听器而非 SwiftUI 手势：部署目标 14.0 没有
 /// `onScrollGesture`（15+ 才有），而 `DragGesture` 不响应触控板双指滚动。
@@ -20,7 +20,7 @@ import SwiftUI
 /// 事件，累积到阈值才翻一页，冷却防止一次长扫连翻多页。
 struct CalendarSwipeGestureModifier: ViewModifier {
     /// ±1 翻到下/上一周期。**仅横向**：纵向滚动已由月网格的 ScrollView 原生
-    /// 接管（连续、惯性、按周对齐），监听器不再掺和纵向，避免双重移动。
+    /// 接管（连续、惯性），监听器不再掺和纵向，避免双重移动。
     let onSwipe: (_ direction: Int) -> Void
 
     /// 方向校正位：实测与预期相反时改 -1。

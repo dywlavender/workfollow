@@ -87,6 +87,7 @@ struct CommandPaletteView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain).workflowActionAnchor("search." + entry.id)
+                            .onHover { inside in if inside { selectedIndex = index } }
                             .padding(.horizontal, WFSpace.sm)
                         }
                     }

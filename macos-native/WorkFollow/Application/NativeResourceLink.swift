@@ -1,7 +1,7 @@
 import AppKit
 
 enum NativeResourceLink: Equatable {
-    case task(UUID), note(UUID)
+    case task(UUID), note(UUID), meeting(UUID)
 
     init?(url: URL) {
         guard url.scheme?.lowercased() == "workfollow",
@@ -10,6 +10,7 @@ enum NativeResourceLink: Equatable {
         switch url.host?.lowercased() {
         case "task": self = .task(id)
         case "note": self = .note(id)
+        case "meeting": self = .meeting(id)
         default: return nil
         }
     }
@@ -18,6 +19,7 @@ enum NativeResourceLink: Equatable {
         switch self {
         case let .task(id): return URL(string: "workfollow://task/\(id.uuidString)")!
         case let .note(id): return URL(string: "workfollow://note/\(id.uuidString)")!
+        case let .meeting(id): return URL(string: "workfollow://meeting/\(id.uuidString)")!
         }
     }
 }
@@ -26,9 +28,14 @@ enum NativeResourceLink: Equatable {
 enum NativeResourceLinkRouter {
     @discardableResult
     static func open(_ link: NativeResourceLink, tasks: TaskWorkspaceModel,
-                     notes: NotesWorkspaceModel, navigation: AppNavigation) -> Bool {
+                     notes: NotesWorkspaceModel, navigation: AppNavigation, meetings: MeetingStore? = nil) -> Bool {
         switch link {
         case let .task(id):
+            // Old task links keep pointing at the same row after the in-place
+            // note conversion; follow that row into its current projection.
+            if let task = tasks.task(for: id), task.isNoteTask {
+                return open(.note(id), tasks: tasks, notes: notes, navigation: navigation, meetings: meetings)
+            }
             guard let task = tasks.task(for: id), task.deletedAt == nil,
                   task.skippedAt == nil, !task.isConverted else { return false }
             if let parentID = task.parentID {
@@ -51,6 +58,10 @@ enum NativeResourceLinkRouter {
             navigation.destination = .notes
             tasks.select(nil)
             notes.selectedID = id
+        case let .meeting(id):
+            guard let meetings, meetings.meetings.contains(where: { $0.id == id }) else { return false }
+            meetings.selectedID = id
+            navigation.destination = .meetings
         }
         return true
     }

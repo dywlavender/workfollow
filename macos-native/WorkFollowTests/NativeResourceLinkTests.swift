@@ -87,7 +87,7 @@ final class NativeResourceLinkTests: XCTestCase {
 
         try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
         let more = try InspectorPanelTestSupport.actionPanel(in: window)
-        XCTAssertEqual(more.frame.width, 208, accuracy: 1)
+        XCTAssertEqual(more.frame.width, 176, accuracy: 1)
         try InspectorPanelTestSupport.clickButton(containing: "创建副本", in: more)
         XCTAssertFalse(InspectorPanelTestSupport.visibleWindows(below: window)
             .contains { $0.title == InspectorPanelTestSupport.actionPanelTitle })

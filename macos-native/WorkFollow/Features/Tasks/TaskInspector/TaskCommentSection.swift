@@ -127,6 +127,8 @@ struct TaskCommentSection: View {
         }
         .padding(.vertical, 2)
         .padding(.leading, depth == 0 ? 0 : 16)
+        .padding(.horizontal, 4)
+        .rowHoverBackground(cornerRadius: 6)
     }
 
     private func editingRow(_ comment: TaskComment) -> some View {

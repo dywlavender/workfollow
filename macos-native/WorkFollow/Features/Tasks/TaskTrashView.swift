@@ -170,8 +170,6 @@ private struct TrashTaskRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .background(workspace.selectedTaskID == task.id ? WFColors.listSelection : .clear,
-                        in: RoundedRectangle(cornerRadius: WFMetrics.corner))
             Button { workspace.restoreDeleted(task.id) } label: {
                 Image(systemName: "arrow.uturn.backward")
             }.buttonStyle(.plain).help("恢复任务")
@@ -180,6 +178,8 @@ private struct TrashTaskRow: View {
                 .buttonStyle(.plain).help("永久删除任务")
         }
         .padding(.horizontal, WFSpace.sm)
+        .contentShape(Rectangle())
+        .rowHoverBackground(selected: workspace.selectedTaskID == task.id)
     }
 
     private var deletedLabel: String {

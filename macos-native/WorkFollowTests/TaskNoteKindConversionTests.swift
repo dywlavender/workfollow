@@ -35,7 +35,7 @@ final class TaskNoteKindConversionTests: XCTestCase {
         XCTAssertEqual(workspace.task(for: id)?.kind, .note)
         XCTAssertEqual(workspace.task(for: id)?.document, body)
         XCTAssertEqual(workspace.task(for: child)?.parentID, id)
-        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty)
+        XCTAssertEqual(environment.notesWorkspace.notes.map(\.id), [id])
         XCTAssertNil(workspace.task(for: id)?.convertedNoteID)
         try InspectorPanelTestSupport.click(try XCTUnwrap(frames[.footerMore]), in: host, window: window)
         panel = try InspectorPanelTestSupport.actionPanel(in: window)
@@ -43,8 +43,10 @@ final class TaskNoteKindConversionTests: XCTestCase {
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(workspace.task(for: id)?.kind, .text)
         XCTAssertEqual(workspace.task(for: id)?.document, body)
+        XCTAssertTrue(environment.notesWorkspace.notes.isEmpty)
         workspace.undo()
         XCTAssertEqual(workspace.task(for: id)?.kind, .note)
         XCTAssertEqual(workspace.task(for: id)?.document, body)
+        XCTAssertEqual(environment.notesWorkspace.notes.map(\.id), [id])
     }
 }

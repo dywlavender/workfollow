@@ -391,7 +391,14 @@ private struct GlobalQuickAddPanelView: View {
                 )
         )
         .onPreferenceChange(GlobalPanelHeightKey.self) { onHeightChange($0) }
-        .onChange(of: text) { _, _ in candidate.textDidChange() }
+        .onChange(of: text) { previous, current in
+            candidate.textDidChange()
+            if QuickAddScheduleDraft.scheduleTextChanged(from: previous, to: current,
+                now: composer.workspace.clock(), calendar: composer.workspace.calendar,
+                knownLists: Set(composer.workspace.availableListNames), dismissedTokenIDs: dismissedTokens) {
+                scheduleOverride = nil
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
             tagsOverride = QuickAddPropertiesOverrides.renamedTags(tagsOverride, notification: notification)
         }

@@ -130,7 +130,7 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         environment.flush { error in XCTAssertNil(error); saved.fulfill() }
         wait(for: [saved], timeout: 5)
         let snapshot = try XCTUnwrap(NativePreviewRepository(directory: directory).load())
-        let document = try XCTUnwrap(snapshot.notes.first { $0.id == id }?.document)
+        let document = try XCTUnwrap(snapshot.tasks.first { $0.id == id }?.document)
         XCTAssertEqual(document.plainText, "标题\n甲组合输入")
         XCTAssertEqual(document.blocks[0].kind, .heading(1))
         XCTAssertTrue(document.blocks[0].runs[0].marks.contains(.bold))

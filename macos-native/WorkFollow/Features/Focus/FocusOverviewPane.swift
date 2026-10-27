@@ -211,15 +211,15 @@ struct FocusOverviewPane: View {
             Rectangle().fill(theme.hairline).frame(height: 1)
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            selectedRecord = record
-        }
-        .onHover { hovering in
+        .rowHoverBackground(cornerRadius: 8, onHoverChanged: { hovering in
             if hovering {
                 hoveredRecordID = record.id
             } else if hoveredRecordID == record.id {
                 hoveredRecordID = nil
             }
+        })
+        .onTapGesture {
+            selectedRecord = record
         }
         .accessibilityIdentifier("focus-record-\(record.id.uuidString)")
         .businessContextMenu {

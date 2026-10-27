@@ -7,7 +7,16 @@ struct WelcomeGuideActionView: View {
 
     @State private var hovering = false
 
+    @ViewBuilder
     var body: some View {
+        if action == .agentAccess {
+            AgentAccessGuideView()
+        } else {
+            navigationAction
+        }
+    }
+
+    private var navigationAction: some View {
         Button(action: perform) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.up.right.square")

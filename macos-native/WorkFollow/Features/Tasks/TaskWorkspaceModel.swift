@@ -165,7 +165,8 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     var listNames: [String] {
-        Array(Set(store.lists + allTasks.map { $0.list.name })).filter { $0 != TaskList.inbox.name }.sorted()
+        Array(Set(store.lists + allTasks.filter { !$0.isNoteTask }.map { $0.list.name }))
+            .filter { $0 != TaskList.inbox.name && $0 != TaskList.notes.name }.sorted()
     }
 
     func refreshDates() {
@@ -186,7 +187,7 @@ final class TaskWorkspaceModel: ObservableObject {
     var tasksInActiveLists: [Task] {
         _ = revision
         let archived = store.archivedListNames
-        return store.tasks.filter { !archived.contains($0.list.name) }
+        return store.tasks.filter { !$0.isNoteTask && !archived.contains($0.list.name) }
     }
     var taskTags: [TaskTag] { _ = revision; return store.tags }
     var orderedTags: [TaskTag] { TaskTag.ordered(taskTags) }
@@ -729,11 +730,16 @@ final class TaskWorkspaceModel: ObservableObject {
                      repeatFrequency: TaskRepeat,
                      recurrenceRule: RecurrenceRule? = nil,
                      document: NativeDocument = .empty, selectCreatedTask: Bool = true,
-                     focusTitle: Bool = false) -> TaskActionResult {
-        let result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
+                     focusTitle: Bool = false, sectionID: String? = nil) -> TaskActionResult {
+        if let sectionID, store.listSection(sectionID)?.listName != list { return .failure(.invalidList) }
+        var result = TaskActionResult.failure(.missingTask)
+        store.transaction {
+            result = actions.createDraft(title: title, list: list, schedule: schedule, priority: priority,
                                          tags: tags, reminder: reminder, reminderOffsets: reminderOffsets,
                                          frequency: repeatFrequency,
                                          recurrenceRule: recurrenceRule, document: document)
+            if let id = result.taskID, let sectionID { result = actions.setTaskSection(id, sectionID: sectionID) }
+        }
         didMutate(result)
         if selectCreatedTask, let id = result.taskID { select(id) }
         // 标题还没被用户起过的创建（命令面板空查询落「无标题」）直接把焦点给标题
@@ -949,6 +955,37 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
 
+    /// One external edit shares the existing domain mutation, undo and persistence path.
+    func applyAutomationEdit(_ id: UUID, title: String?, list: TaskList?, priority: TaskPriority?,
+                             schedule: TaskSchedule, document: NativeDocument?,
+                             sectionID: String? = nil, clearsSection: Bool = false) -> TaskActionResult {
+        let result = withMaterializedTask(id) { id in
+            var result = TaskActionResult.success(id)
+            store.transaction {
+                result = actions.updateAttributes(id, priority: priority, schedule: schedule, list: list)
+                guard result.taskID != nil else { return }
+                if sectionID != nil || clearsSection { result = actions.setTaskSection(id, sectionID: sectionID) }
+                guard result.taskID != nil else { return }
+                if let title { result = actions.setTitle(id, title) }
+                if let document { result = actions.setDocument(id, document) }
+            }
+            return result
+        }
+        didMutate(result)
+        return result
+    }
+
+    func createAutomationList(_ name: String, group: String?) -> Bool {
+        let previousList = activeList
+        defer { activeList = previousList }
+        var created = false
+        store.transaction {
+            created = saveList(name)
+            if created, let group { _ = setListFolder(name, group) }
+        }
+        return created
+    }
+
     @discardableResult
     func setFocusEstimate(_ id: UUID, _ estimate: TaskFocusEstimate?) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.setFocusEstimate($0, estimate) }
@@ -1044,7 +1081,7 @@ final class TaskWorkspaceModel: ObservableObject {
         return result
     }
     var deletedTasks: [Task] {
-        allTasks.filter { $0.deletedAt != nil }.sorted {
+        allTasks.filter { $0.deletedAt != nil && !$0.isNoteTask }.sorted {
             if $0.deletedAt == $1.deletedAt { return $0.createdAt > $1.createdAt }
             return $0.deletedAt! > $1.deletedAt!
         }
@@ -1280,6 +1317,40 @@ final class TaskWorkspaceModel: ObservableObject {
         let result = actions.createChild(parentID, title: title)
         didMutate(result)
         return result
+    }
+
+    func createAITasks(_ drafts: [AITaskDraft], request: AITaskRequest,
+                       list: String = TaskList.inbox.name, sectionID: String? = nil) throws -> [UUID] {
+        var target = list
+        if case let .task(id) = request.source {
+            guard let parent = task(for: id), parent.deletedAt == nil, !parent.isClosed, !parent.isNoteTask else {
+                throw AITaskError.sourceMissing
+            }
+            target = parent.list.name
+        }
+        guard availableListNames.contains(target), sectionID == nil || listSections.contains(where: { $0.id == sectionID && $0.listName == target }) else {
+            throw AITaskError.invalidTarget
+        }
+        var known = Set(allTasks.filter { task in
+            guard task.deletedAt == nil, !task.isNoteTask else { return false }
+            switch request.source {
+            case let .note(id): return task.sourceNoteID == id
+            case let .meeting(id): return task.sourceMeetingID == id
+            case let .task(id): return task.parentID == id
+            }
+        }.map { AITaskDraft.normalizedTitle($0.title) })
+        let selected = drafts.filter {
+            $0.selected && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && known.insert(AITaskDraft.normalizedTitle($0.title)).inserted
+        }
+        let ids = actions.createAITasks(selected, request: request, list: target, sectionID: sectionID)
+        if !ids.isEmpty {
+            if case let .task(id) = request.source { collapsedTaskIDs.remove(id) }
+            revision += 1
+            report(FeedbackEvent(kind: .undoable, message: "已创建 \(ids.count) 项\(request.isBreakdown ? "子任务" : "待办")",
+                actionTitle: "撤销", action: undoStep()))
+        }
+        return ids
     }
 
     @discardableResult
@@ -1519,8 +1590,14 @@ final class TaskWorkspaceModel: ObservableObject {
     /// 任务形态切换（TI2-05b），内容映射见 `TaskActions.document(_:convertingTo:)`。
     @discardableResult
     func setKind(_ id: UUID, _ kind: TaskKind) -> TaskActionResult {
+        let previousKind = task(for: id)?.kind
         let result = withMaterializedTask(id) { actions.setKind($0, kind) }
         didMutate(result)
+        if result.taskID != nil, previousKind != kind, kind == .note || previousKind == .note {
+            report(FeedbackEvent(kind: .undoable,
+                                 message: kind == .note ? "已转换为笔记" : "已转换为任务",
+                                 actionTitle: "撤销", action: undoStep()))
+        }
         return result
     }
 
@@ -1533,6 +1610,69 @@ final class TaskWorkspaceModel: ObservableObject {
                              message: "已将 \(changed.count) 项转换为\(kind == .note ? "笔记" : "任务")",
                              actionTitle: "撤销", action: undoStep()))
         return changed
+    }
+
+    // MARK: - Notes as tasks
+
+    /// The Notes page projects these rows; task projections filter them out.
+    var noteTasks: [Task] { allTasks.filter(\.isNoteTask) }
+
+    @discardableResult
+    func createNote(title: String = "", document: NativeDocument = .empty,
+                    folder: String = "未归档", folderID: String? = nil) -> UUID? {
+        let result = actions.createNote(title: title, document: document,
+                                        folder: folder, folderID: folderID)
+        didMutate(result)
+        return result.taskID
+    }
+
+    @discardableResult
+    func editNote(_ id: UUID, allowDeleted: Bool = false,
+                  _ mutation: (inout Task) -> Void) -> TaskActionResult {
+        let result = actions.editNote(id, allowDeleted: allowDeleted, mutation: mutation)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func deleteNote(_ id: UUID) -> TaskActionResult {
+        editNote(id) { $0.deletedAt = clock() }
+    }
+
+    @discardableResult
+    func restoreNote(_ id: UUID) -> TaskActionResult {
+        editNote(id, allowDeleted: true) { $0.deletedAt = nil }
+    }
+
+    @discardableResult
+    func purgeNote(_ id: UUID) -> TaskActionResult {
+        let result = actions.purgeNote(id)
+        didMutate(result)
+        return result
+    }
+
+    @discardableResult
+    func emptyNoteTrash() -> Int {
+        let count = actions.emptyNoteTrash()
+        if count > 0 { revision += 1 }
+        return count
+    }
+
+    @discardableResult
+    func sortNotes(byTitle: Bool) -> Bool {
+        let changed = actions.sortNotes(byTitle: byTitle)
+        if changed { revision += 1 }
+        return changed
+    }
+
+    func discardNoteForCompensation(_ id: UUID) {
+        actions.discardNoteForCompensation(id)
+        revision += 1
+    }
+
+    func restoreNoteForCompensation(_ note: Note) {
+        actions.insertNoteForCompensation(note.migratedTask())
+        revision += 1
     }
 
     /// 合并子任务到正文（底栏 mergeButton）：子任务标题并入正文后软删子任务。

@@ -51,6 +51,9 @@ struct TaskList: Equatable, Codable {
     let name: String
     init(name: String) { self.name = name.trimmingCharacters(in: .whitespacesAndNewlines) }
     static let inbox = TaskList(name: "收集箱")
+    /// Notes are tasks too. New notes live in this hidden list; the Notes page
+    /// projects them by kind, so the task list never shows it.
+    static let notes = TaskList(name: "笔记")
 }
 
 struct TaskListMeta: Equatable, Codable {
@@ -229,6 +232,7 @@ struct Task: Identifiable, Equatable, Codable {
     var skippedAt: Date? = nil
     var convertedNoteID: UUID? = nil
     var sourceNoteID: UUID? = nil
+    var sourceMeetingID: UUID? = nil
     /// 所属清单分组（`TaskListSection.id`）。nil = 未分组。
     var sectionID: String? = nil
     var focusEstimate: TaskFocusEstimate? = nil
@@ -237,6 +241,9 @@ struct Task: Identifiable, Equatable, Codable {
     var occurrenceOverride: OccurrenceOverride? = nil
     /// 任务形态（TI2-05b）。additive：旧快照缺键 → `.text`。
     var kind: TaskKind = .text
+    /// 笔记形态的附加字段。`kind == .note` 时才有意义；切换形态时保留，
+    /// 便于在笔记和任务之间往返。
+    var note: TaskNoteMetadata? = nil
     var weeklyPlanning: TaskWeeklyPlanning? = nil
     /// 新手引导动作键（仅「👋欢迎」预设任务使用）；nil = 普通任务。
     var guideAction: String? = nil
@@ -245,6 +252,8 @@ struct Task: Identifiable, Equatable, Codable {
     var isClosed: Bool { status == .completed || isAbandoned }
     var closedAt: Date? { status == .completed ? completedAt : abandonedAt }
     var isConverted: Bool { convertedNoteID != nil }
+    /// 笔记是任务的一种形态，不再是独立实体。
+    var isNoteTask: Bool { kind == .note }
 }
 
 // Native preview snapshots are independent from Flutter storage, but they
@@ -255,8 +264,8 @@ extension Task {
         case id, title, document, tags, recurrence, recurrenceRule, reminderAt, reminderOffsets
         case attachments, list, listID, tagReferences, priority, schedule, status, parentID, childOrder
         case createdAt, updatedAt, completedAt, deletedAt, isPinned, abandonedAt, skippedAt, convertedNoteID
-        case sourceNoteID, sectionID, focusEstimate, series, occurrenceKey, occurrenceOverride, kind, weeklyPlanning
-        case guideAction
+        case sourceNoteID, sourceMeetingID, sectionID, focusEstimate, series, occurrenceKey, occurrenceOverride, kind, weeklyPlanning
+        case note, guideAction
     }
 
     init(from decoder: Decoder) throws {
@@ -287,12 +296,14 @@ extension Task {
         skippedAt = try values.decodeIfPresent(Date.self, forKey: .skippedAt)
         convertedNoteID = try values.decodeIfPresent(UUID.self, forKey: .convertedNoteID)
         sourceNoteID = try values.decodeIfPresent(UUID.self, forKey: .sourceNoteID)
+        sourceMeetingID = try values.decodeIfPresent(UUID.self, forKey: .sourceMeetingID)
         sectionID = try values.decodeIfPresent(String.self, forKey: .sectionID)
         focusEstimate = try values.decodeIfPresent(TaskFocusEstimate.self, forKey: .focusEstimate)
         series = try values.decodeIfPresent(TaskSeries.self, forKey: .series)
         occurrenceKey = try values.decodeIfPresent(OccurrenceKey.self, forKey: .occurrenceKey)
         occurrenceOverride = try values.decodeIfPresent(OccurrenceOverride.self, forKey: .occurrenceOverride)
         kind = try values.decodeIfPresent(TaskKind.self, forKey: .kind) ?? .text
+        note = try values.decodeIfPresent(TaskNoteMetadata.self, forKey: .note)
         weeklyPlanning = try values.decodeIfPresent(TaskWeeklyPlanning.self, forKey: .weeklyPlanning)
         guideAction = try values.decodeIfPresent(String.self, forKey: .guideAction)
     }
@@ -301,12 +312,14 @@ extension Task {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(id, forKey: .id)
         try values.encodeIfPresent(sourceNoteID, forKey: .sourceNoteID)
+        try values.encodeIfPresent(sourceMeetingID, forKey: .sourceMeetingID)
         try values.encodeIfPresent(sectionID, forKey: .sectionID)
         try values.encodeIfPresent(focusEstimate, forKey: .focusEstimate)
         try values.encodeIfPresent(series, forKey: .series)
         try values.encodeIfPresent(occurrenceKey, forKey: .occurrenceKey)
         try values.encodeIfPresent(occurrenceOverride, forKey: .occurrenceOverride)
         try values.encode(kind, forKey: .kind)
+        try values.encodeIfPresent(note, forKey: .note)
         try values.encodeIfPresent(weeklyPlanning, forKey: .weeklyPlanning)
         try values.encodeIfPresent(guideAction, forKey: .guideAction)
         try values.encode(title, forKey: .title)

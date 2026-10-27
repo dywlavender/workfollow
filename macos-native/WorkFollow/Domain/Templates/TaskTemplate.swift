@@ -63,6 +63,9 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
     /// 模板种类标记。`nil` / `"task"` = 任务模板（旧数据都落在这里）；
     /// `"summary"` = 摘要模板，只出现在摘要页的模板菜单里。
     var kind: String? = nil
+    /// 摘要模板保存的是筛选与显示配置；正文在套用时按当时任务重新生成。
+    /// 旧摘要模板没有该字段，套用时回落到标准配置。
+    var summaryOptions: SummaryDocumentOptions? = nil
 
     var isSummaryTemplate: Bool { kind == "summary" }
 
@@ -70,7 +73,8 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
          document: NativeDocument = .empty, tags: [String] = [],
          listName: String? = nil, priority: TaskPriority? = nil,
          schedule: TaskTemplateScheduleOffset? = nil,
-         childTitles: [String] = [], createdAt: Date, kind: String? = nil) {
+         childTitles: [String] = [], createdAt: Date, kind: String? = nil,
+         summaryOptions: SummaryDocumentOptions? = nil) {
         self.id = id
         self.name = name
         self.title = title
@@ -82,6 +86,7 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
         self.childTitles = childTitles
         self.createdAt = createdAt
         self.kind = kind
+        self.summaryOptions = summaryOptions
     }
 }
 
@@ -89,7 +94,7 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
 // changes, so every aspect except the name decodes to its neutral default.
 extension TaskTemplate {
     private enum CodingKeys: String, CodingKey {
-        case id, name, title, document, tags, listName, priority, schedule, childTitles, createdAt, kind
+        case id, name, title, document, tags, listName, priority, schedule, childTitles, createdAt, kind, summaryOptions
     }
 
     init(from decoder: Decoder) throws {
@@ -105,6 +110,7 @@ extension TaskTemplate {
         childTitles = try values.decodeIfPresent([String].self, forKey: .childTitles) ?? []
         createdAt = try values.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
         kind = try values.decodeIfPresent(String.self, forKey: .kind)
+        summaryOptions = try values.decodeIfPresent(SummaryDocumentOptions.self, forKey: .summaryOptions)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -120,5 +126,6 @@ extension TaskTemplate {
         try values.encode(childTitles, forKey: .childTitles)
         try values.encode(createdAt, forKey: .createdAt)
         try values.encodeIfPresent(kind, forKey: .kind)
+        try values.encodeIfPresent(summaryOptions, forKey: .summaryOptions)
     }
 }

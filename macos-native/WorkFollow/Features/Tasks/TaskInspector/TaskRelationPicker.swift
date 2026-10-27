@@ -57,6 +57,7 @@ struct TaskRelationPicker: View {
                                     Image(systemName: "checkmark")
                                 }
                             }.padding(.vertical, 8).contentShape(Rectangle())
+                                .rowHoverBackground(cornerRadius: 6)
                         }.buttonStyle(.plain).relationPickerAnchor(.target(target.id))
                     }
                 }

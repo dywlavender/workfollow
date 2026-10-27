@@ -53,6 +53,9 @@ private struct AttachmentRow: View {
             Button(action: onRemove) { Image(systemName: "xmark") }
                 .help("移除附件关联")
         }
+        .padding(.horizontal, 6).padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .rowHoverBackground(cornerRadius: 6)
         .buttonStyle(.borderless)
     }
 

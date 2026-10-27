@@ -112,7 +112,7 @@ final class SummaryPopupLayoutTests: XCTestCase {
         defer { coordinator.close(); owner.close() }
         let small = try XCTUnwrap(coordinator.panel).frame.size
         XCTAssertEqual(small.width, SummaryPopoverMetrics.listWidth, accuracy: 0.5)
-        XCTAssertLessThan(small.height, 270, "少量清单不能仍占一个大滚动面板")
+        XCTAssertLessThan(small.height, SummaryPopoverMetrics.maximumListHeight, "少量清单应贴合内容而不是占满滚动上限")
         coordinator.close(); coordinator.presented = true
         coordinator.root = content(["收集箱"] + (1...20).map { "项目清单 \($0)" })
         coordinator.update(); settle(coordinator.host)

@@ -108,7 +108,7 @@ final class MeetingStoreTests: XCTestCase {
         XCTAssertEqual(output, "原纪要\n")
     }
 
-    func testAlreadySummarizedLinesDoNotTriggerAnotherUpdate() async throws {
+    func testManualGenerationCanRegenerateAlreadySummarizedTranscript() async throws {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
         store.create(); store.appendTranscriptForTesting("已确认决定", speaker: "A")
@@ -116,8 +116,10 @@ final class MeetingStoreTests: XCTestCase {
         let previous = store.selected?.minutes
         store.updateMinutesNow(); try await waitForSummary(store)
         let calls = await ai.calls()
-        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.count, 2)
         XCTAssertEqual(store.selected?.minutes, previous)
+        XCTAssertTrue(calls.allSatisfy { $0.0.isEmpty && $0.1.map(\.text) == ["已确认决定"] })
+        XCTAssertEqual(store.selected?.summarizedLineIDs, store.selected?.transcript.map(\.id))
     }
 
     private func directory() throws -> URL {
@@ -135,7 +137,7 @@ final class MeetingStoreTests: XCTestCase {
         XCTFail("Summary did not settle")
     }
 
-    func testRollingMinutesOnlySendNewLinesAndKeepExistingMinutes() async throws {
+    func testFullRegenerationIncludesEarlierSpeechAndDoesNotQueueBusyClicks() async throws {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
         store.create(); store.appendTranscriptForTesting("明确下周提交", speaker: "A")
@@ -145,13 +147,18 @@ final class MeetingStoreTests: XCTestCase {
             try await _Concurrency.Task.sleep(nanoseconds: 1_000_000)
         }
         store.appendTranscriptForTesting("期限改为周五", speaker: "B")
-        store.updateMinutesNow() // coalesces while first request is in flight
+        store.updateMinutesNow() // Busy requests are discarded, not queued.
+        try await waitForSummary(store)
+        let firstCalls = await ai.calls()
+        XCTAssertEqual(firstCalls.count, 1)
+        XCTAssertEqual(store.selected?.summarizedLineCount, 1)
+        store.updateMinutesNow()
         try await waitForSummary(store)
         let calls = await ai.calls()
         XCTAssertEqual(calls.count, 2)
         XCTAssertEqual(calls[0].1.map(\.text), ["明确下周提交"])
-        XCTAssertEqual(calls[1].1.map(\.text), ["期限改为周五"])
-        XCTAssertTrue(calls[1].0.contains("明确下周提交"))
+        XCTAssertEqual(calls[1].1.map(\.text), ["明确下周提交", "期限改为周五"])
+        XCTAssertEqual(calls[1].0, "")
         XCTAssertEqual(store.selected?.summarizedLineCount, 2)
     }
 
@@ -180,11 +187,11 @@ final class MeetingStoreTests: XCTestCase {
         store.updateMinutesNow(); try await waitForSummary(store)
         XCTAssertEqual(store.selected?.summarizedLineCount, 2)
         let calls = await ai.calls()
-        XCTAssertEqual(calls.last?.1.map(\.text), ["新决议"])
-        XCTAssertEqual(calls.last?.0, previous)
+        XCTAssertEqual(calls.last?.1.map(\.text), ["旧决议", "新决议"])
+        XCTAssertEqual(calls.last?.0, "")
     }
 
-    func testManualEditStopsAutomaticMinutesAndResumeHandsItBack() async throws {
+    func testExplicitAIRequestRegeneratesEditedMinutesFromTranscript() async throws {
         let ai = MeetingAITestDouble()
         let store = MeetingStore(directory: try directory(), ai: ai, automaticallyUpdate: false)
         store.create()
@@ -194,21 +201,13 @@ final class MeetingStoreTests: XCTestCase {
         XCTAssertEqual(store.selected?.minutes, "我手写的纪要")
         XCTAssertTrue(store.selected?.minutesIsManual == true)
 
-        // 手动接管后 Pi 一个字都不该写，哪怕显式触发。
+        // An explicit AI request authorizes regeneration even after direct editing.
         store.updateMinutesNow()
-        try await _Concurrency.Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertEqual(store.selected?.minutes, "我手写的纪要")
-        // ⚠️ `await` 不能写在 `XCTAssertEqual` 里（autoclosure 不支持并发），先取出来。
-        let callsWhileManual = await ai.calls()
-        XCTAssertEqual(callsWhileManual.count, 0)
-
-        // 交回自动：用户写的内容成为下一次更新的基底，不被丢掉。
-        store.resumeAutomaticMinutes()
-        XCTAssertNil(store.selected?.minutesEditedByUser)
         try await waitForSummary(store)
         let calls = await ai.calls()
         XCTAssertEqual(calls.count, 1)
-        XCTAssertEqual(calls[0].0, "我手写的纪要")
+        XCTAssertEqual(calls[0].0, "")
+        XCTAssertNil(store.selected?.minutesEditedByUser)
         XCTAssertTrue(store.selected?.minutes.contains("原始发言") == true)
     }
 

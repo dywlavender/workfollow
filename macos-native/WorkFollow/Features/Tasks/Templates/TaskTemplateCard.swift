@@ -30,7 +30,9 @@ struct TaskTemplateCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
-        .background(WFColors.secondarySurface.opacity(0.44))
+        .rowHoverBackground(cornerRadius: 18,
+                            idleFill: WFColors.secondarySurface.opacity(0.44),
+                            hoverFill: WFColors.listRowHover)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }

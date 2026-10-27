@@ -249,10 +249,10 @@ struct FocusTaskPickerPopover: View {
             }
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, minHeight: FocusTaskPickerMetrics.taskRowHeight)
-            .background(task.id == selectedTaskID
-                        ? WFColors.selection.opacity(0.55) : .clear,
-                        in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
+            .rowHoverBackground(selected: task.id == selectedTaskID,
+                                cornerRadius: 7,
+                                selectedFill: WFColors.selection.opacity(0.55))
         }
         .buttonStyle(.plain)
         .focusTaskPickerAnchor("task-\(task.id.uuidString)")

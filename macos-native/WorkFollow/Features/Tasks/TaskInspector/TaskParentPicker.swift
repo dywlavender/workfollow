@@ -31,7 +31,7 @@ enum TaskParentPickerProjection {
         guard !sources.isEmpty, sources.count == taskIDs.count else { return [] }
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return tasks.filter { candidate in
-            !taskIDs.contains(candidate.id) &&
+            !taskIDs.contains(candidate.id) && !candidate.isNoteTask &&
             sources.allSatisfy({ TaskParentPolicy.canAssign(task: $0, parent: candidate, tasks: tasks) }) &&
             (text.isEmpty || candidate.title.localizedCaseInsensitiveContains(text) ||
              candidate.list.name.localizedCaseInsensitiveContains(text))
@@ -99,6 +99,7 @@ struct TaskParentPicker: View {
                                 if selectedID == task.id { Image(systemName: "checkmark").foregroundStyle(WFColors.accent) }
                             }.frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                                 .padding(.horizontal, 12).contentShape(Rectangle())
+                                .rowHoverBackground(cornerRadius: 6)
                         }.buttonStyle(.plain).parentPickerAnchor(.candidate(task.id))
                     }
                 }

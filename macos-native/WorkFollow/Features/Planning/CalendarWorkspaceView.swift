@@ -355,10 +355,8 @@ struct ToolbarPill<Content: View>: View {
 
 // MARK: - 月网格
 
-/// 月网格 = **真正的滚动容器**（2026-10-07，用户要"连续性，滑顺自然"）：
-/// 一条以今天所在周为原点 ±2 年的周行流装进 `ScrollView`，视口露出 5 行，
-/// 松手按行对齐（`viewAligned`）——手指带多少内容走多少、带惯性和回弹，
-/// 这是 Apple 日历的手感。手指滑动时 `topWeek` 被实时回写，标题月跟随。
+/// 月网格按像素连续滚动，视口露出 5 行，松手可停在一周中间。
+/// `topWeek` 只同步浏览日期与标题；按钮导航单独发起程序化跳转。
 ///
 /// 月从它开始的那一天开始，所以网格开头是上月收尾的日子、结尾是下月开头的日子。
 /// 那些日子是真的格子：有自己的任务、也能被投放。
@@ -444,10 +442,8 @@ struct CalendarMonthGridView: View {
                                                    showCompleted: showCompleted, calendar: calendar))
     }
 
-    /// 以今天所在周为原点 ±30 周的周起点。**刻意不用 LazyVStack**：
-    /// scrollPosition(id:) 在懒加载内容上会被未实体化的 id 卡住（快速滚动时
-    /// 绑定停在最后已实体化的行，标题与网格脱节——2026-10-07 实测）。61 行
-    /// ×7 格全部实体化，绑定才可靠；±30 周（约 7 个月）对日历足够。
+    /// 以浏览周为原点的 ±30 周。macOS 15+ 使用懒布局与偏移回写，
+    /// macOS 14 使用实体化布局，保持 scrollPosition 的日期跟踪可靠。
     private static func buildWeeks(today: Date, calendar: Calendar) -> [Date] {
         let origin = startOfWeek(containing: today, calendar: calendar)
         return (-30...30).compactMap {
@@ -492,8 +488,6 @@ struct CalendarMonthGridView: View {
                     // 回写失灵的坑；程序化跳转走 scrollTo + 跳转哨。
                     ScrollViewReader { proxy in
                         lazyColumn(rowHeight: rowHeight)
-                            .scrollTargetLayout()
-                            .scrollTargetBehavior(.viewAligned)
                             .defaultScrollAnchor(.center)
                             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                                 geometry.contentOffset.y
@@ -507,10 +501,10 @@ struct CalendarMonthGridView: View {
                                     proxy.scrollTo(topWeek, anchor: .top)
                                 }
                             }
-                            .onChange(of: topWeek) { _, target in
-                                // 只跳"父级程序化跳转"（哨匹配）；用户滚动的
-                                // 回写不匹配哨，不会打断惯性。
-                                guard programmaticTarget == target else { return }
+                            .onChange(of: programmaticTarget) { _, target in
+                                // 导航请求与浏览日期分开：半行滚动后即使目标
+                                // 仍是当前周，“今天”也需要执行定位。
+                                guard let target else { return }
                                 ensureWindow(containing: target)
                                 DispatchQueue.main.async {
                                     programmaticTarget = nil
@@ -524,12 +518,8 @@ struct CalendarMonthGridView: View {
                     // macOS 14 回退：非 lazy（scrollPosition 绑定在懒内容上会
                     // 回写停住，标题脱节——2026-10-07 实测），回写靠绑定。
                     ScrollViewReader { proxy in
-                        ScrollView {
-                            solidColumn(rowHeight: rowHeight)
-                        }
-                        .scrollTargetLayout()
+                        solidColumn(rowHeight: rowHeight)
                         .scrollPosition(id: positionBinding, anchor: .top)
-                        .scrollTargetBehavior(.viewAligned)
                         .onAppear {
                             DispatchQueue.main.async { proxy.scrollTo(topWeek, anchor: .top) }
                         }
@@ -587,6 +577,7 @@ struct CalendarMonthGridView: View {
                     weekRow(weekStart, rowHeight: rowHeight)
                 }
             }
+            .scrollTargetLayout()
         }
     }
 
@@ -597,6 +588,7 @@ struct CalendarMonthGridView: View {
                     weekRow(weekStart, rowHeight: rowHeight)
                 }
             }
+            .scrollTargetLayout()
         }
     }
 
@@ -605,7 +597,7 @@ struct CalendarMonthGridView: View {
         Binding(get: { topWeek }, set: { if let value = $0 { topWeek = value } })
     }
 
-    /// 滚动偏移 → 顶行周。snap 对齐后 offset 恰为行高整倍数；半行容差取整。
+    /// 偏移只更新邻近顶行的日期，不改动像素位置，保留任意幅度的滚动。
     private func syncTopWeek(fromOffset offset: CGFloat, rowHeight: CGFloat) {
         guard rowHeight > 0 else { return }
         let index = min(max(Int((offset + rowHeight / 2) / rowHeight), 0), weeks.count - 1)
@@ -1379,8 +1371,9 @@ struct CalendarWeekPillButton: View {
         .padding(.leading, WFSpace.compact - hitPadding)
         .padding(.trailing, WFSpace.compact)
         .padding(.vertical, WFSpace.inline - hitPadding)
-        .background(color.opacity(WFCalendarMetrics.taskBarFill(completed: completed)),
-                    in: RoundedRectangle(cornerRadius: WFCalendarMetrics.controlRadius))
+        .rowHoverBackground(cornerRadius: WFCalendarMetrics.controlRadius,
+                            idleFill: color.opacity(WFCalendarMetrics.taskBarFill(completed: completed)),
+                            hoverFill: color.opacity(min(1, WFCalendarMetrics.taskBarFill(completed: completed) + 0.08)))
         .overlay {
             RoundedRectangle(cornerRadius: WFCalendarMetrics.controlRadius)
                 .stroke(color.opacity(WFCalendarMetrics.taskBarBorderAlpha), lineWidth: 1)

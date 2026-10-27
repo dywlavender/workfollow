@@ -61,14 +61,15 @@ final class TemplateStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
-    /// 摘要模板：只存正文骨架（`kind = "summary"`），不会出现在任务的模板选择器里。
+    /// 摘要模板：保存筛选与显示配置（`kind = "summary"`），
+    /// 不会出现在任务的模板选择器里；套用时按当时任务重新生成正文。
     @discardableResult
-    func saveDocumentTemplate(name: String, document: NativeDocument,
-                              forceReplace: Bool = false) -> Bool {
+    func saveSummaryTemplate(name: String, options: SummaryDocumentOptions,
+                             forceReplace: Bool = false) -> Bool {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return false }
-        let template = TaskTemplate(name: cleaned, title: cleaned, document: document,
-                                    createdAt: clock(), kind: "summary")
+        let template = TaskTemplate(name: cleaned, title: cleaned, createdAt: clock(),
+                                    kind: "summary", summaryOptions: options)
         if let index = templates.firstIndex(where: { Self.isSameName($0.name, cleaned) }) {
             guard forceReplace else { return false }
             templates[index] = template

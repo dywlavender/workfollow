@@ -18,7 +18,7 @@ struct FocusPresetEditor: View {
                     Toggle("正计时", isOn: $preset.stopwatch)
                     if !preset.stopwatch { Stepper("\(preset.minutes) 分钟", value: $preset.minutes, in: PomodoroSettings.focusRange) }
                     BusinessPicker("关联任务", selection: $preset.taskID, options:
-                        [BusinessChoice(nil, "不关联")] + (workspace?.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned } ?? []).map {
+                        [BusinessChoice(nil, "不关联")] + (workspace?.allTasks.filter { !$0.isNoteTask && $0.deletedAt == nil && !$0.isAbandoned } ?? []).map {
                             BusinessChoice(Optional($0.id), $0.title.isEmpty ? "未命名任务" : $0.title, symbol: "checklist")
                         }, width: PopupMetrics.relationPickerWidth)
                 }.padding(PopupMetrics.formInset)

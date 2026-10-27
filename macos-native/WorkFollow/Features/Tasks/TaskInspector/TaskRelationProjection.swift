@@ -73,6 +73,6 @@ enum TaskRelationProjection {
     }
 
     private static func isLinkable(_ task: Task) -> Bool {
-        task.deletedAt == nil && task.skippedAt == nil && !task.isConverted
+        task.deletedAt == nil && task.skippedAt == nil && !task.isConverted && !task.isNoteTask
     }
 }

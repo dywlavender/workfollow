@@ -201,6 +201,9 @@ def build(output, build_number, identity):
         if identity == "-":
             widget = package / "Contents/PlugIns/WorkFollowWidgets.appex"
             host_entitlements, widget_entitlements = configure_local_widgets(package, Path(folder))
+            # The embedded CLI must be signed before sealing the containing app.
+            cli = package / "Contents/MacOS/workfollowctl"
+            run_logged(["/usr/bin/codesign", "--force", "--sign", identity, str(cli)], log)
             run_logged(["/usr/bin/codesign", "--force", "--sign", identity,
                         "--entitlements", str(widget_entitlements), str(widget)], log)
             run_logged(["/usr/bin/codesign", "--force", "--sign", identity,

@@ -54,6 +54,7 @@ struct TaskListView: View {
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var draft = ""
     @State private var restoredCaptureDraft = false
+    @State private var scheduleSourceText = ""
     private var captureStorageKey: String { "listQuickAddDraft.v1." + navigation.destination.rawValue }
     private var capturePersistenceValue: GlobalQuickAddDraft.Snapshot {
         .init(text: draft, description: descriptionDraft, dismissedTokens: dismissedQuickAddTokens,
@@ -68,6 +69,7 @@ struct TaskListView: View {
         guard !restoredCaptureDraft else { return }
         let saved = GlobalQuickAddDraft(storageKey: captureStorageKey)
         draft = saved.text; descriptionDraft = saved.description
+        scheduleSourceText = saved.text
         quickAddScheduleOverride = saved.schedule; quickAddPriorityOverride = saved.priority
         quickAddListOverride = saved.list; quickAddTagsOverride = saved.tags
         dismissedQuickAddTokens = saved.dismissedTokens; quickAddAttachments = saved.attachments
@@ -244,6 +246,12 @@ struct TaskListView: View {
         .onChange(of: draft) { _, _ in
             // 文本一变，「已被忽略」和候选高亮都作废：候选列表要按新的查询重开。
             candidate.textDidChange()
+            if QuickAddScheduleDraft.scheduleTextChanged(from: scheduleSourceText, to: draft,
+                now: workspace.clock(), calendar: workspace.calendar,
+                knownLists: Set(workspace.availableListNames), dismissedTokenIDs: dismissedQuickAddTokens) {
+                quickAddScheduleOverride = nil
+            }
+            scheduleSourceText = draft
         }
         .onChange(of: quickAddFocused) { _, focused in
             if focused { listFocused = false }
@@ -1645,8 +1653,9 @@ struct TaskRowView: View {
         // 选中底色用中性灰（`listSelection`，滴答实测 #F2F2F2），不用强调色。
         // 滴答的选中行也没有任何描边；可视底色左右各内缩 16pt，但追踪区域仍是整行，
         // 这样鼠标移到左侧拖拽柄上时底色和柄不会一起消失。
-        .background(TaskRowHoverBackground(selected: selected || recentlyCreated, pointer: pointer,
-                                           horizontalInset: TaskListMetrics.rowHorizontalPadding))
+        .rowHoverBackground(selected: selected || recentlyCreated,
+                            horizontalInset: TaskListMetrics.rowHorizontalPadding,
+                            onHoverChanged: { pointer.update($0) })
         // 整行可点（含左右内缩留白）：标题旁的留白、行内空隙、元数据区点下去也能选中；
         // 行内按钮（勾选框/日期）优先级更高。
         .contentShape(Rectangle())

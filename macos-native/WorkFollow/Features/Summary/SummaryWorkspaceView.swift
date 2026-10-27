@@ -1,13 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// Week planning and reviewing share one selection. Saved reports are snapshots;
-/// changing tasks or filters never silently replaces an edited document.
+/// 摘要只负责回顾与产出；计划动作在日历周视图里完成，这里不再提供计划页。
+/// Saved reports are snapshots; changing tasks or filters never silently replaces an edited document.
 struct SummaryWorkspaceView: View {
     @ObservedObject var store: SummaryStore
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var context: WeeklyPlanningContext
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var rangeOverride: SummaryDateRange?
     @State private var listOverride: Set<String>?
@@ -15,7 +16,8 @@ struct SummaryWorkspaceView: View {
     @State private var focusedTaskIDs: Set<UUID> = []
     @State private var options = SummaryDocumentOptions.standard
     @State private var appliedOptions = SummaryDocumentOptions.standard
-    @State private var aiEnabled = true
+    @State private var aiEnabled = false
+    @State private var aiOptions = SummaryAIOptions()
     @State private var showsConfiguration = false
     @State private var configurationDismissAction: (() -> Void)?
     @State private var showsSaveTemplate = false
@@ -32,11 +34,11 @@ struct SummaryWorkspaceView: View {
     @State private var aiError: String?
     @State private var aiJob: _Concurrency.Task<Void, Never>?
     @State private var aiGeneration = UUID()
-    @State private var showsAISetup = false
     @State private var selectedDraftSections: Set<Int> = []
     @State private var adoptedDocument: NativeDocument?
     @State private var adoptionAvailable = false
     @State private var copied = false
+    @State private var copyFeedbackTask: _Concurrency.Task<Void, Never>?
     @State private var journalMode = false
     @State private var journalDay: Date
     @State private var journalText = ""
@@ -96,16 +98,24 @@ struct SummaryWorkspaceView: View {
         environment.navigation.destination = .calendar
     }
     private var builder: WeeklyReportBuilder { WeeklyReportBuilder(calendar: workspace.calendar) }
+    private var listFolders: [String: String] {
+        var result: [String: String] = [:]
+        for meta in workspace.listMetas {
+            if let folder = meta.folderName, !folder.isEmpty { result[meta.name] = folder }
+        }
+        return result
+    }
     private var report: WeeklyReport {
         return builder.report(tasks: workspace.tasksInActiveLists, weekOf: range.start,
             filter: options.filter, tagDirectory: workspace.taskTags, focusRecords: focusRecords,
-            range: range, listNames: selectedLists, startedTaskIDs: focusedTaskIDs)
+            range: range, listNames: selectedLists, startedTaskIDs: focusedTaskIDs,
+            listFolders: listFolders)
     }
     private var linkProfile: DocumentProfile {
         DocumentProfile(onOpenLink: { target in
             guard let url = URL(string: target), let resource = NativeResourceLink(url: url) else { return false }
             return NativeResourceLinkRouter.open(resource, tasks: workspace,
-                notes: environment.notesWorkspace, navigation: environment.navigation)
+                notes: environment.notesWorkspace, navigation: environment.navigation, meetings: environment.meetingStore)
         })
     }
 
@@ -128,7 +138,12 @@ struct SummaryWorkspaceView: View {
         }
         .background(WFColors.content)
         .onAppear { loadWeekly(); loadJournal() }
-        .onDisappear { cancelAI(); saveWeekly(); saveJournal() }
+        .onDisappear {
+            cancelAI()
+            copyFeedbackTask?.cancel()
+            saveWeekly()
+            saveJournal()
+        }
         .onChange(of: selection) { _, _ in
             cancelAI(); adoptionAvailable = false
             guard environment.navigation.destination == .summary else { return }
@@ -148,25 +163,24 @@ struct SummaryWorkspaceView: View {
             DispatchQueue.main.async { refreshFocus() }
         }
         #if DEBUG
-        // 录制引导演示时直接走复制路径，避免在非前台测试宿主里展开菜单。
+        // 录制引导演示时直接走真实复制路径，避免在非前台测试宿主里展开菜单。
         .onReceive(NotificationCenter.default.publisher(for: .guideTourCopySummary)) { _ in
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(document.plainText, forType: .string)
-            copied = true
+            copySummary(as: .markdown)
         }
         #endif
         .onChange(of: environment.navigation.destination) { _, destination in
             if destination != .summary { cancelAI() }
         }
         .onChange(of: journalMode) { _, _ in cancelAI(); saveWeekly(); saveJournal() }
+        .onChange(of: aiEnabled) { _, enabled in if !enabled { cancelAI() } }
         .onChange(of: journalDay) { _, _ in saveJournal(); loadJournal() }
         .onChange(of: journalText) { _, _ in saveJournal() }
         .onChange(of: document) { _, updated in
             copied = false
+            copyFeedbackTask?.cancel()
             if adoptedDocument != updated { adoptionAvailable = false }
         }
         .sheet(item: $preview) { draft in previewSheet(draft) }
-        .sheet(isPresented: $showsAISetup) { aiSetupSheet }
         .sheet(isPresented: $showsHistory) { historySheet }
         .sheet(isPresented: $showsSources) {
             VStack(spacing: 0) {
@@ -194,17 +208,19 @@ struct SummaryWorkspaceView: View {
                 }
             }.frame(width: 400, height: 690)
         }
-        .alert("保存为摘要模板", isPresented: $showsSaveTemplate) {
+        .alert("存为摘要模板", isPresented: $showsSaveTemplate) {
             TextField("模板名称", text: $templateName)
             Button("取消", role: .cancel) {}
             Button(templateStore.contains(name: templateName) ? "替换同名模板" : "保存") {
-                templateStore.saveDocumentTemplate(name: templateName, document: document, forceReplace: true)
+                templateStore.saveSummaryTemplate(name: templateName, options: options, forceReplace: true)
             }.disabled(templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("保存当前筛选与显示配置；再次套用时按当时任务重新生成正文。")
         }
     }
 
     private var configuration: some View {
-        SummaryConfigurationView(options: $options, aiEnabled: $aiEnabled,
+        SummaryConfigurationView(options: $options, aiEnabled: $aiEnabled, aiOptions: $aiOptions,
             range: range, selectedLists: selectedLists, calendar: workspace.calendar, now: workspace.clock(),
             lists: [TaskList.inbox.name] + workspace.orderedListNames, listMetas: workspace.listMetas, folders: workspace.listFolders,
             tags: workspace.orderedTags.map(\.name),
@@ -212,15 +228,12 @@ struct SummaryWorkspaceView: View {
             templates: templateStore.templates.filter(\.isSummaryTemplate),
             aiRunning: aiRunning, canGenerate: !document.isEmpty, aiError: aiError,
             onTemplate: { template in
-                afterConfiguration {
-                    if let template {
-                        preview = DraftPreview(title: "模板预览 · " + template.name, selection: selection,
-                            document: template.document, options: appliedOptions)
-                    } else { options = .standard; showLatestDraft() }
-                }
+                cancelAI()
+                options = template?.summaryOptions ?? .standard
+                afterConfiguration { showLatestDraft() }
             }, onSaveTemplate: { afterConfiguration { beginSaveTemplate() } },
             onGenerateAI: { afterConfiguration { startAI() } },
-            onCancelAI: cancelAI, onConfigureAI: { afterConfiguration { showsAISetup = true } })
+            onCancelAI: cancelAI, onConfigureAI: { afterConfiguration { openAISettings() } })
     }
 
     private func pageHeader(showsInspector: Bool) -> some View {
@@ -264,7 +277,7 @@ struct SummaryWorkspaceView: View {
                 HStack {
                     Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).lineLimit(2)
                     Spacer()
-                    Button("AI 接入设置…") { showsAISetup = true }.buttonStyle(.borderless)
+                    Button("AI 模型设置…", action: openAISettings).buttonStyle(.borderless)
                 }
             }
             VStack(spacing: 0) {
@@ -277,6 +290,7 @@ struct SummaryWorkspaceView: View {
                         Spacer(minLength: 4)
                         Button("还原") { options = appliedOptions }
                         Button("预览更新") { showLatestDraft() }
+                            .workflowActionAnchor("summary.options.preview")
                     }
                     .buttonStyle(.borderless).font(WFType.supporting)
                     .padding(.horizontal, 16).padding(.vertical, 9)
@@ -301,12 +315,43 @@ struct SummaryWorkspaceView: View {
                     }
                 }
                 Spacer(minLength: 0)
-                footerAction("保存为", symbol: "square.and.arrow.down", compact: compact, action: beginSaveTemplate)
-                footerAction(copied ? "已复制" : "复制", symbol: copied ? "checkmark" : "doc.on.clipboard", compact: compact) {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(document.plainText, forType: .string)
-                    copied = true
+                BusinessMenu(title: "保存为", prefersAbove: true) {
+                    ForEach(SummaryExportFormat.allCases, id: \.self) { format in
+                        Button(format.menuTitle) { saveSummary(as: format) }
+                    }
+                    Divider().padding(.vertical, 4)
+                    Button("发送邮件") { emailSummary() }
+                        .disabled(document.isEmpty)
+                        .workflowActionAnchor("summary.export.email")
+                } label: {
+                    if compact {
+                        Image(systemName: "square.and.arrow.down").frame(width: 22, height: 24)
+                    } else {
+                        Label("保存为", systemImage: "square.and.arrow.down").font(WFType.supporting)
+                    }
                 }
+                .help("保存为")
+                .accessibilityLabel("保存为")
+                .workflowActionAnchor("summary.footer.保存为")
+                BusinessMenu(title: "复制", prefersAbove: true) {
+                    ForEach(SummaryCopyFormat.allCases, id: \.self) { format in
+                        Button(format.menuTitle) { copySummary(as: format) }
+                            .disabled(document.isEmpty)
+                            .workflowActionAnchor("summary.copy." + format.anchor)
+                    }
+                } label: {
+                    if compact {
+                        Image(systemName: copied ? "checkmark" : "doc.on.clipboard")
+                            .frame(width: 22, height: 24)
+                    } else {
+                        Label(copied ? "已复制" : "复制",
+                              systemImage: copied ? "checkmark" : "doc.on.clipboard")
+                            .font(WFType.supporting)
+                    }
+                }
+                .help("复制")
+                .accessibilityLabel("复制")
+                .workflowActionAnchor("summary.footer.复制")
                 .guideTourAnchor("summary.footer.复制")
             }
             .buttonStyle(.borderless).foregroundStyle(WFColors.secondaryText).frame(height: 30)
@@ -325,9 +370,90 @@ struct SummaryWorkspaceView: View {
 
     private func beginSaveTemplate() {
         showsConfiguration = false
-        editorHandle.prepareForDocumentChange()
-        templateName = (selection.listName.map { $0 + " · " } ?? "") + "摘要 " + range.title(calendar: workspace.calendar)
+        templateName = "摘要模板"
         showsSaveTemplate = true
+    }
+
+    private func copySummary(as format: SummaryCopyFormat) {
+        editorHandle.prepareForDocumentChange()
+        do {
+            try SummaryCopyService.copy(document, format: format)
+            markCopied()
+        } catch {
+            environment.feedback.show(FeedbackEvent(kind: .error,
+                message: error.localizedDescription))
+        }
+    }
+
+    private func markCopied() {
+        copyFeedbackTask?.cancel()
+        copied = true
+        copyFeedbackTask = _Concurrency.Task { @MainActor in
+            try? await _Concurrency.Task.sleep(for: .seconds(1.5))
+            guard !_Concurrency.Task.isCancelled else { return }
+            copied = false
+        }
+    }
+
+    private func emailSummary() {
+        editorHandle.prepareForDocumentChange()
+        let scope = selection.listName.map { $0 + " " } ?? ""
+        let subject = "摘要 " + scope + range.title(calendar: workspace.calendar)
+        guard let draft = SummaryMailDraft.make(
+            subject: subject,
+            body: SummaryExportService.plainText(document)
+        ) else {
+            environment.feedback.show(FeedbackEvent(kind: .error,
+                message: SummaryExportError.emptyDocument.localizedDescription))
+            return
+        }
+        if draft.copiesBodyToPasteboard {
+            copyMailBody(draft.body)
+        }
+        guard let url = draft.url, NSWorkspace.shared.open(url) else {
+            copyMailBody(draft.body)
+            environment.feedback.show(FeedbackEvent(kind: .error,
+                message: "没有可用的邮件应用，摘要已复制到剪贴板"))
+            return
+        }
+        if draft.copiesBodyToPasteboard {
+            environment.feedback.show(FeedbackEvent(kind: .info,
+                message: "内容较长，已复制到剪贴板，请粘贴到邮件"))
+        }
+    }
+
+    private func copyMailBody(_ body: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(body, forType: .string)
+    }
+
+    private func saveSummary(as format: SummaryExportFormat) {
+        editorHandle.prepareForDocumentChange()
+        let exportDocument = document
+        let scope = selection.listName.map { $0 + " " } ?? ""
+        let baseName = "摘要 " + scope + range.title(calendar: workspace.calendar)
+        let panel = NSSavePanel()
+        panel.title = "保存摘要"
+        panel.prompt = "保存"
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [format.contentType]
+        panel.nameFieldStringValue = format.suggestedFileName(for: baseName)
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            _Concurrency.Task { @MainActor in
+                do {
+                    let data = try SummaryExportService.data(for: exportDocument, format: format)
+                    try data.write(to: url, options: .atomic)
+                    environment.feedback.show(FeedbackEvent(kind: .success,
+                        message: "已导出 " + url.lastPathComponent))
+                } catch {
+                    let message = (error as? SummaryExportError) == .imageTooLong
+                        ? error.localizedDescription
+                        : "导出失败：" + error.localizedDescription
+                    environment.feedback.show(FeedbackEvent(kind: .error, message: message))
+                }
+            }
+        }
     }
 
     private func afterConfiguration(_ action: @escaping () -> Void) {
@@ -419,6 +545,9 @@ struct SummaryWorkspaceView: View {
         Button { showsSources = false; environment.openTask(task.id) } label: {
             Text(task.title).font(WFType.supporting).foregroundStyle(WFColors.text)
                 .multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 3).padding(.horizontal, 6)
+                .contentShape(Rectangle())
+                .rowHoverBackground(cornerRadius: 6)
         }.help("打开原任务")
     }
 
@@ -451,6 +580,9 @@ struct SummaryWorkspaceView: View {
                                 Text(entry.document.plainText.replacingOccurrences(of: "\n", with: " "))
                                     .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).lineLimit(2)
                             }.frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 6).padding(.horizontal, 8)
+                                .contentShape(Rectangle())
+                                .rowHoverBackground(cornerRadius: 8)
                         }
                     }
                 }.padding(PopupMetrics.formInset)
@@ -492,9 +624,16 @@ struct SummaryWorkspaceView: View {
                     }
                 }
             }.padding(PopupMetrics.formInset)
-            DialogFooter(primaryTitle: "采用所选", canSubmit: draft.selection == selection && !selectedDraftSections.isEmpty, primaryIdentifier: "summary.preview.adopt",
+            DialogFooter(primaryTitle: "采用所选", canSubmit: draft.selection == selection &&
+                (review.changedIDs.isEmpty ? draft.options != appliedOptions : !selectedDraftSections.isEmpty),
+                primaryIdentifier: "summary.preview.adopt",
                 onCancel: { preview = nil }, onSubmit: {
                     guard draft.selection == selection else { preview = nil; return }
+                    if review.changedIDs.isEmpty {
+                        options = draft.options; appliedOptions = draft.options
+                        saveWeekly(); preview = nil
+                        return
+                    }
                     let next = review.applying(selectedDraftSections)
                     let previousDocument = document
                     let previousOptions = appliedOptions
@@ -512,7 +651,7 @@ struct SummaryWorkspaceView: View {
                         preview = nil
                         DispatchQueue.main.async { editorHandle.focusEditor() }
                     }
-                }) { Text("\(selectedDraftSections.count) 处改动") }
+                }) { Text(review.changedIDs.isEmpty ? "应用配置" : "\(selectedDraftSections.count) 处改动") }
         }.background(WFColors.content).frame(width: 700, height: 590)
             .onAppear { selectedDraftSections = review.changedIDs }
     }
@@ -525,27 +664,9 @@ struct SummaryWorkspaceView: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var aiSetupSheet: some View {
-        VStack(spacing: 0) {
-            DialogHeader(title: "AI 接入设置")
-            VStack(alignment: .leading, spacing: 12) {
-                Text("摘要与会议共用本机 Pi 和文字模型。模型的登录信息由 Pi 管理。")
-                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                Text("Pi 程序").font(WFType.supporting)
-                TextField("Pi 可执行文件路径", text: Binding(
-                    get: { environment.meetingStore.configuration.executable },
-                    set: { environment.meetingStore.configuration.executable = $0 }))
-                    .textFieldStyle(.roundedBorder)
-                Text("文字模型").font(WFType.supporting)
-                TextField("留空使用 Pi 当前文字模型", text: Binding(
-                    get: { environment.meetingStore.configuration.minutesModel ?? "" },
-                    set: { environment.meetingStore.configuration.minutesModel = $0 }))
-                    .textFieldStyle(.roundedBorder)
-                Text("若提示登录或认证失败，请先在本机 Pi 完成登录，再返回重试。")
-                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-            }.padding(PopupMetrics.formInset)
-            DialogCloseFooter { showsAISetup = false }
-        }.frame(width: 460)
+    private func openAISettings() {
+        environment.settingsSection = .ai
+        openSettings()
     }
 
     private func showLatestDraft() {
@@ -570,15 +691,16 @@ struct SummaryWorkspaceView: View {
         let original = document
         let source = builder.document(for: report, options: requestedOptions, preserving: document)
         let title = range.title(calendar: workspace.calendar)
-        var aiOptions = SummaryAIOptions.weeklyReview
-        aiOptions.isWeeklyPeriod = range.kind == .week
+        var request = aiOptions
+        request.weeklyStructure = false
+        request.isWeeklyPeriod = range.kind == .week
         aiRunning = true; aiError = nil
         defer { if aiGeneration == generation { aiRunning = false; aiJob = nil } }
         do {
             var optimizer = SummaryPiOptimizer()
             optimizer.executable = environment.meetingStore.configuration.executable
             optimizer.model = environment.meetingStore.configuration.resolvedMinutesModel
-            let text = try await optimizer.optimize(text: source.plainText, options: aiOptions)
+            let text = try await optimizer.optimize(text: source.plainText, options: request)
             try _Concurrency.Task.checkCancellation()
             guard aiGeneration == generation, target == selection, !journalMode,
                   environment.navigation.destination == .summary else { return }
@@ -606,7 +728,7 @@ struct SummaryWorkspaceView: View {
         options = saved?.options ?? (saved == nil ? options : .standard)
         appliedOptions = options
         document = saved?.document ?? builder.document(for: report, options: options)
-        editorID = UUID(); copied = false
+        editorID = UUID(); copied = false; copyFeedbackTask?.cancel()
         saveWeekly()
     }
 

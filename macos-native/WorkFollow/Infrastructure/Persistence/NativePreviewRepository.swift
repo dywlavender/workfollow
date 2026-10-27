@@ -16,6 +16,9 @@ struct NativeWorkspaceSnapshot: Codable {
     var noteFolders: [String]? = nil
     /// Full stable folder records; additive so older preview snapshots still decode.
     var noteFolderMetadata: [NoteFolderMeta]? = nil
+    /// Once notes are migrated into tasks the legacy `notes` table stays for
+    /// rollback, but must never be imported a second time.
+    var notesMergedIntoTasks: Bool? = nil
 }
 
 /// Snapshot backup overview for the settings page.
@@ -30,6 +33,13 @@ struct SnapshotBackupInfo: Equatable {
 final class NativePreviewRepository {
     static var directory: URL {
         #if DEBUG
+        // A test host shares the app bundle, but must never read or mutate the
+        // daily app's live data or a running Focus session.
+        if NSClassFromString("XCTestCase") != nil {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("WorkFollowTests-\(ProcessInfo.processInfo.processIdentifier)",
+                                        isDirectory: true)
+        }
         // Dedicated acceptance builds can use a separate bundle identity and
         // scratch data without replacing a user's active Focus session.
         if let path = Bundle.main.object(forInfoDictionaryKey: "WorkFollowAcceptanceStorageRoot") as? String,
@@ -60,6 +70,7 @@ final class NativePreviewRepository {
     func load() throws -> NativeWorkspaceSnapshot? { try database.load() }
     func save(_ snapshot: NativeWorkspaceSnapshot) throws { try database.replace(snapshot) }
     func apply(_ batch: SQLiteWorkspaceRepository.Batch) throws { try database.apply(batch) }
+    func mergeNotesAsTasks(_ tasks: [Task]) throws { try database.mergeNotesAsTasks(tasks) }
 
     // MARK: 快照备份（对齐 Flutter LocalWorkspaceStore：每日备份 + 立即备份 + 恢复）
 

@@ -17,7 +17,8 @@ final class WelcomeGuideMediaTests: XCTestCase {
         let actions = Set(WelcomeGuide.items.map(\.action))
         XCTAssertEqual(actions.count, WelcomeGuide.items.count,
                        "每条引导都需要独立动作，否则会共用同一张演示")
-        for action in actions {
+        // 接入说明提供实际可复制的文本和命令，其余功能引导保留演示。
+        for action in actions where action != .agentAccess {
             let url = try XCTUnwrap(WelcomeGuide.mediaURL(for: action),
                                     "Missing " + WelcomeGuide.mediaResourceName(for: action) + ".gif")
             let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))

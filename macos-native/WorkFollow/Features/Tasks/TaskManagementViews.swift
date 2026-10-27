@@ -102,6 +102,7 @@ struct TaskCollectionsView: View {
                 .padding(.horizontal, WFSpace.sm)
                 .frame(height: NavigationMetrics.rowHeight)
                 .contentShape(Rectangle())
+                .rowHoverBackground()
             }
             .accessibilityLabel((archivedExpanded ? "收起" : "展开") + "已归档的清单")
             if archivedExpanded {
@@ -117,8 +118,7 @@ struct TaskCollectionsView: View {
                         .padding(.horizontal, WFSpace.sm)
                         .frame(height: NavigationMetrics.rowHeight)
                         .contentShape(Rectangle())
-                        .background(workspace.activeList == name ? WFColors.listSelection : .clear,
-                                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+                        .rowHoverBackground(selected: workspace.activeList == name)
                     }
                     .padding(.leading, Self.folderIndent)
                     .accessibilityLabel("已归档清单：" + name)
@@ -164,6 +164,7 @@ struct TaskCollectionsView: View {
             .padding(.horizontal, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
             .contentShape(Rectangle())
+            .rowHoverBackground()
         }
         .buttonStyle(.plain)
         .businessContextMenu {
@@ -242,7 +243,7 @@ private struct SidebarListRowView: View {
     }
     private var openCount: Int {
         workspace.allTasks.filter {
-            $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil
+            !$0.isNoteTask && $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil
         }.count
     }
 
@@ -291,14 +292,12 @@ private struct SidebarListRowView: View {
         // 所以这里不再加 leading，落到行内 8（滴答 7，差 1pt 由色点框宽吸收）。
         .padding(.trailing, WFSpace.sm)
         .frame(height: NavigationMetrics.rowHeight)
-        .background(selected || dragTargeted ? WFColors.listSelection : .clear,
-                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        .contentShape(Rectangle())
+        .rowHoverBackground(selected: selected || dragTargeted, onHoverChanged: { hovering = $0 })
+        .guideTourAnchor("list." + name)
         // 拖拽悬停高亮描边（对齐 Flutter dragActive 的 accent 边框）。
         .overlay(RoundedRectangle(cornerRadius: WFMetrics.corner)
             .strokeBorder(dragTargeted ? WFColors.accent : Color.clear, lineWidth: 1))
-        .contentShape(Rectangle())
-        .guideTourAnchor("list." + name)
-        .onHover { hovering = $0 }
         .businessContextMenu { menuItems }
         // 拖拽：任务拖进来 = 移入本清单（HUD 由 workspace 自动上报）；
         // 清单拖进来 = 建文件夹（滴答主手势：拖动一个清单到另一个清单上方）。

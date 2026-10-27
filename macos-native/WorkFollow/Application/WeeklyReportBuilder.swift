@@ -28,6 +28,7 @@ struct WeeklyReport {
     let tasksByID: [UUID: Task]
     let facts: [UUID: SummaryTaskFacts]
     let filteredTaskIDs: Set<UUID>
+    let listFolders: [String: String]
 }
 
 struct WeeklyReportBuilder {
@@ -36,9 +37,10 @@ struct WeeklyReportBuilder {
     func report(tasks: [Task], weekOf: Date, listName: String? = nil,
                 filter: SummaryFilter = .all, tagDirectory: [TaskTag] = [],
                 focusRecords: [PomodoroRecord] = [], range selectedRange: SummaryDateRange? = nil,
-                listNames: Set<String> = [], startedTaskIDs: Set<UUID> = []) -> WeeklyReport {
+                listNames: Set<String> = [], startedTaskIDs: Set<UUID> = [],
+                listFolders: [String: String] = [:]) -> WeeklyReport {
         let range = selectedRange ?? .week(containing: weekOf, calendar: calendar)
-        let start = range.start, end = range.end
+        let start = range.start
         let projection = WeeklyPlanProjection(weekStart: start, calendar: calendar)
         let scopeList = listName ?? filter.listName
         let scopeLists = listNames.isEmpty ? scopeList.map { Set([$0]) } ?? [] : listNames
@@ -108,14 +110,14 @@ struct WeeklyReportBuilder {
                 return entry.schedule != task.schedule
             }), progress: progresses,
             nextWeek: topLevel(valid.filter { !$0.isClosed && includes($0, in: next) }), focusSeconds: seconds,
-            range: range, tasksByID: byID, facts: facts, filteredTaskIDs: validIDs)
+            range: range, tasksByID: byID, facts: facts, filteredTaskIDs: validIDs,
+            listFolders: listFolders)
     }
 
     func document(for report: WeeklyReport, options: SummaryDocumentOptions = .standard,
                   preserving existing: NativeDocument? = nil) -> NativeDocument {
         struct Row { let task: Task; var suffix = "" }
         let isWeek = report.range.kind == .week
-        let resultTitle = isWeek ? "本周成果" : "本期成果"
         let reviewTitle = isWeek ? "本周复盘" : "本期复盘"
         let nextTitle = isWeek ? "下周重点" : "下一周期任务"
         var blocks = [DocumentBlock(kind: .heading(1), runs: [DocumentRun(text: report.title)])]
@@ -131,55 +133,141 @@ struct WeeklyReportBuilder {
         }
         func appendRow(_ row: Row) {
             let task = row.task, fields = options.content, fact = report.facts[task.id]
-            var runs: [DocumentRun] = []
-            func append(_ text: String, link: UUID? = nil) {
-                if !runs.isEmpty { runs.append(DocumentRun(text: " · ")) }
-                runs.append(DocumentRun(text: text, marks: link.map { [.link(NativeResourceLink.task($0).url.absoluteString)] } ?? []))
+            let styles = options.contentStyles
+            let order = options.contentOrder.isEmpty ? SummaryContentField.inlineOrder : options.contentOrder
+            var prefix: String?
+            var parts: [(text: String, link: UUID?)] = []
+            func add(_ text: String, link: UUID? = nil) { parts.append((text, link)) }
+            if fields.contains(.completedTime) {
+                let stamp = task.status == .completed ? task.completedAt
+                    : (task.isAbandoned ? task.abandonedAt : nil)
+                if let stamp {
+                    prefix = "[" + date(stamp, time: styles.completedTime == .dateTime) + "]"
+                }
             }
-            if fields.contains(.status), let status = fact?.status { append(status.rawValue) }
-            if fields.contains(.taskName) { append(task.title, link: task.id) }
-            if fields.contains(.progress), let fact {
-                append(fact.totalSteps > 0 ? "进度 \(fact.completedSteps)/\(fact.totalSteps)" : "进度 \(task.status == .completed ? 100 : 0)%")
+            for field in order where fields.contains(field) {
+                switch field {
+                case .taskName:
+                    add(task.title, link: task.id)
+                case .status:
+                    if let status = fact?.status { add(status.rawValue) }
+                case .progress:
+                    if let fact, fact.totalSteps > 0 {
+                        add("进度 \(fact.completedSteps)/\(fact.totalSteps)")
+                    }
+                case .taskTime:
+                    if let due = task.schedule.dueAt {
+                        let time = styles.taskTime == .dateTime && task.schedule.hasTime
+                        var schedule = date(due, time: time)
+                        if let end = task.schedule.dueEndAt {
+                            schedule += "–" + date(end, time: time)
+                        }
+                        add("任务时间 " + schedule)
+                    } else {
+                        add("未安排日期")
+                    }
+                case .parentTask:
+                    if let parent = task.parentID.flatMap({ report.tasksByID[$0] }) {
+                        add("主任务：" + parent.title, link: parent.id)
+                    }
+                case .tags:
+                    if !task.tags.isEmpty {
+                        add(task.tags.map { "#" + $0 }.joined(separator: " "))
+                    }
+                case .focus:
+                    if let fact {
+                        add("专注 \(fact.focusSeconds / 60)分\(fact.focusSeconds % 60)秒 / \(fact.pomodoros)个番茄")
+                    }
+                case .list:
+                    let folder = report.listFolders[task.list.name]?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if styles.list == .listGroup, let folder, !folder.isEmpty {
+                        add("（\(task.list.name) / \(folder)）")
+                    } else {
+                        add("（\(task.list.name)）")
+                    }
+                case .completedTime, .detail:
+                    break
+                }
             }
-            if fields.contains(.completedTime), let completed = task.completedAt, task.status == .completed {
-                append("完成于 " + date(completed, time: true))
-            }
-            if fields.contains(.taskTime) {
-                if let due = task.schedule.dueAt {
-                    var schedule = date(due, time: task.schedule.hasTime)
-                    if let end = task.schedule.dueEndAt { schedule += "–" + date(end, time: task.schedule.hasTime) }
-                    append("任务时间 " + schedule)
-                } else { append("未安排日期") }
-            }
-            if fields.contains(.parentTask), let parent = task.parentID.flatMap({ report.tasksByID[$0] }) {
-                append("主任务：" + parent.title, link: parent.id)
-            }
-            if fields.contains(.tags), !task.tags.isEmpty { append(task.tags.map { "#" + $0 }.joined(separator: " ")) }
-            if fields.contains(.focus), let fact { append("专注 \(fact.focusSeconds / 60)分\(fact.focusSeconds % 60)秒 / \(fact.pomodoros)个番茄") }
-            if fields.contains(.list) { append("（" + task.list.name + "）") }
-            if !row.suffix.isEmpty { append(row.suffix) }
-            if !runs.isEmpty {
+            if !row.suffix.isEmpty { add(row.suffix) }
+            let hasHeader = prefix != nil || !parts.isEmpty
+            if hasHeader {
+                var runs: [DocumentRun] = []
+                if let prefix { runs.append(DocumentRun(text: parts.isEmpty ? prefix : prefix + " ")) }
+                for (index, part) in parts.enumerated() {
+                    if index > 0 { runs.append(DocumentRun(text: " · ")) }
+                    runs.append(DocumentRun(text: part.text,
+                        marks: part.link.map { [.link(NativeResourceLink.task($0).url.absoluteString)] } ?? []))
+                }
                 // Keep the source reachable when its name is hidden.
-                if !fields.contains(.taskName) { runs[0].marks.insert(.link(NativeResourceLink.task(task.id).url.absoluteString)) }
+                if !fields.contains(.taskName), !runs.isEmpty {
+                    runs[0].marks.insert(.link(NativeResourceLink.task(task.id).url.absoluteString))
+                }
                 blocks.append(DocumentBlock(kind: .bullet, runs: runs))
             }
             if fields.contains(.detail) {
-                if runs.isEmpty && !task.document.isEmpty {
+                let detailBlocks: [DocumentBlock]
+                switch styles.detail {
+                case .formatted:
+                    detailBlocks = task.document.blocks
+                        .filter { !$0.plainText.isEmpty || $0.runs.contains(where: { $0.attachment != nil }) }
+                        .map { DocumentBlock(kind: .quote, runs: $0.runs) }
+                case .plain:
+                    detailBlocks = task.document.blocks.compactMap { block in
+                        let text = block.plainText
+                        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+                        return DocumentBlock(kind: .quote, runs: [DocumentRun(text: text)])
+                    }
+                }
+                let hasDetailContent = styles.detail == .plain ? !detailBlocks.isEmpty : !task.document.isEmpty
+                if !hasHeader && hasDetailContent {
                     blocks.append(DocumentBlock(kind: .bullet, runs: [DocumentRun(text: "任务详情",
                         marks: [.link(NativeResourceLink.task(task.id).url.absoluteString)])]))
                 }
-                for block in task.document.blocks where !block.plainText.isEmpty || block.runs.contains(where: { $0.attachment != nil }) {
-                    blocks.append(DocumentBlock(kind: .quote, runs: block.runs))
-                }
+                blocks += detailBlocks
             }
         }
-        func appendRows(_ rows: [Row]) {
+        var rows = report.completed.map { Row(task: $0) }
+        let progressIDs = Set(report.progress.map(\.id))
+        let movedIDs = Set(report.carried.map(\.id))
+        rows += report.progress.flatMap { progress in
+            progress.completedChildren.filter { report.filteredTaskIDs.contains($0.id) }.map { Row(task: $0) }
+        }
+        rows += report.progress.map { Row(task: $0.task) }
+        rows += report.pending.filter { !progressIDs.contains($0.id) && !movedIDs.contains($0.id) }
+            .map { Row(task: $0) }
+        rows += report.abandoned.map { Row(task: $0) }
+        rows += report.carried.map { move in
+            let range = SummaryStore.date(fromDayKey: move.destinationWeek, calendar: calendar)
+                .map { SummaryReviewBuilder.weekTitle(for: $0, calendar: calendar) } ?? move.destinationWeek
+            return Row(task: move.task, suffix: "已结转到 " + range)
+        }
+        var seen = Set<UUID>()
+        rows = rows.filter { seen.insert($0.task.id).inserted }
+
+        var sections: [(String, [Row])] = []
+        if options.grouping == .completion {
+            var buckets: [String: [Row]] = [:]
+            for row in rows {
+                let key: String
+                switch report.facts[row.task.id]?.status {
+                case .completed: key = "已完成"
+                case .abandoned: key = "已放弃"
+                case .inProgress, .uncompleted, .all, .none: key = "未完成"
+                }
+                buckets[key, default: []].append(row)
+            }
+            sections = ["已完成", "已放弃", "未完成"].compactMap { key in
+                buckets[key].map { (key, $0) }
+            }
+        } else {
             var buckets: [String: [Row]] = [:]
             for row in rows {
                 let task = row.task
                 let keys: [String]
                 switch options.grouping {
-                case .completion: keys = [report.facts[task.id]?.status.rawValue ?? "未完成"]
+                case .completion: keys = []
                 case .list: keys = [task.list.name]
                 case .priority: keys = [task.priority.title]
                 case .tag: keys = task.tags.isEmpty ? ["无标签"] : task.tags
@@ -192,8 +280,6 @@ struct WeeklyReportBuilder {
             let keys: [String]
             if options.grouping == .priority {
                 keys = TaskPriority.menuOrder.map(\.title).filter { buckets[$0] != nil }
-            } else if options.grouping == .completion {
-                keys = SummaryFilter.Status.allCases.filter { $0 != .all }.map(\.rawValue).filter { buckets[$0] != nil }
             } else if options.grouping == .completedTime || options.grouping == .taskTime {
                 keys = buckets.keys.sorted { first, second in
                     func anchor(_ key: String) -> Date {
@@ -203,42 +289,34 @@ struct WeeklyReportBuilder {
                     return anchor(first) < anchor(second)
                 }
             } else { keys = buckets.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
-            for key in keys { heading(key, level: 3); (buckets[key] ?? []).forEach(appendRow) }
+            sections = keys.map { ($0, buckets[$0] ?? []) }
         }
-        var outcomes = report.completed.map { Row(task: $0) }
-        outcomes += report.progress.map { Row(task: $0.task) }
-        outcomes += report.progress.flatMap { $0.completedChildren.filter { report.filteredTaskIDs.contains($0.id) }.map { Row(task: $0) } }
-        let progressIDs = Set(report.progress.map(\.id))
-        let movedIDs = Set(report.carried.map(\.id))
-        var adjustments = report.pending.filter { !progressIDs.contains($0.id) && !movedIDs.contains($0.id) }.map { Row(task: $0) }
-        adjustments += report.abandoned.map { Row(task: $0) }
-        adjustments += report.carried.map { move in
-            let range = SummaryStore.date(fromDayKey: move.destinationWeek, calendar: calendar)
-                .map { SummaryReviewBuilder.weekTitle(for: $0, calendar: calendar) } ?? move.destinationWeek
-            return Row(task: move.task, suffix: "已结转到 " + range)
-        }
-        let next = options.includesNextWeek ? report.nextWeek.map { Row(task: $0) } : []
-        let reflection = Self.reflection(in: existing)
-        if outcomes.isEmpty && adjustments.isEmpty && next.isEmpty
-            && reflection.allSatisfy({ $0.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-            paragraph("当前范围内没有符合条件的任务")
-            return NativeDocument(blocks: blocks)
-        }
+
         if options.content.isEmpty {
             paragraph("未选择显示内容，请在“显示内容”中勾选需要的项目。")
-        } else if options.grouping == .completion {
-            if !outcomes.isEmpty { heading(resultTitle); appendRows(outcomes) }
-            if !adjustments.isEmpty { heading("进展与调整"); appendRows(adjustments) }
         } else {
-            heading("任务摘要")
-            appendRows(outcomes + adjustments)
+            for section in sections {
+                heading(section.0)
+                section.1.forEach(appendRow)
+            }
         }
-        heading(reviewTitle)
-        if reflection.isEmpty { paragraph("") } else { blocks += reflection }
-        if options.includesNextWeek || (isWeek && options.filter.status == .all) {
+        let reflection = Self.reflection(in: existing)
+        if !reflection.isEmpty {
+            heading(reviewTitle)
+            blocks += reflection
+        }
+        if options.includesNextWeek {
             heading(nextTitle)
-            if next.isEmpty || options.content.isEmpty { paragraph("") }
-            else { appendRows(next) }
+            if report.nextWeek.isEmpty {
+                paragraph("下一周期暂无任务")
+            } else if options.content.isEmpty {
+                paragraph("未选择显示内容")
+            } else {
+                report.nextWeek.map { Row(task: $0) }.forEach(appendRow)
+            }
+        }
+        if blocks.count == 1 {
+            paragraph("当前范围内没有符合条件的任务")
         }
         return NativeDocument(blocks: blocks)
     }
@@ -250,21 +328,47 @@ struct WeeklyReportBuilder {
         if let index = document.blocks.firstIndex(where: { $0.kind == .heading(2) && ["本周复盘", "本期复盘"].contains($0.plainText) }) {
             return Array(document.blocks.dropFirst(index + 1).prefix { $0.kind != .heading(2) })
         }
+        // A generated summary has its own section headings; don't re-append it
+        // wholesale as "原有记录" on every refresh. Purely hand-written
+        // documents still ride along so nothing written by the user is lost.
+        let generated: Set<String> = ["已完成", "已放弃", "未完成", "本周成果", "本期成果",
+                                      "进展与调整", "下周重点", "下一周期任务"]
+        let hasGeneratedSections = document.blocks.contains { block in
+            if case .heading(let level) = block.kind, level >= 2 { return generated.contains(block.plainText) }
+            return false
+        }
+        guard !hasGeneratedSections else { return [] }
         return [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "原有记录：")])] + document.blocks
     }
 
     static func aiDocument(text: String, title: String) -> NativeDocument {
-        let sections: Set<String> = ["本周成果", "本期成果", "进展与调整", "本周复盘", "本期复盘", "下周重点", "下一周期任务"]
+        let knownSections: Set<String> = ["已完成", "已放弃", "未完成", "本周成果", "本期成果",
+                                          "进展与调整", "本周复盘", "本期复盘", "下周重点", "下一周期任务"]
         var blocks = [DocumentBlock(kind: .heading(1), runs: [DocumentRun(text: title)])]
-        for line in text.components(separatedBy: .newlines) {
-            let candidate = line.trimmingCharacters(in: CharacterSet(charactersIn: "#* ").union(.whitespaces))
-            // The model can echo the supplied range before its sections.
-            if blocks.count == 1 && candidate == title { continue }
-            if sections.contains(candidate) {
-                blocks.append(DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: candidate)]))
-            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                blocks.append(DocumentBlock(kind: .bullet, runs: [DocumentRun(text: String(line.dropFirst(2)))]))
-            } else { blocks.append(DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: line)])) }
+        func appendHeading(_ text: String, level: Int) {
+            guard text != title else { return }
+            let clamped = min(max(level, 2), 3)
+            blocks.append(DocumentBlock(kind: .heading(clamped), runs: [DocumentRun(text: text)]))
+        }
+        for rawLine in text.components(separatedBy: .newlines) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+            if line.hasPrefix("#") {
+                let depth = line.prefix { $0 == "#" }.count
+                let text = String(line.dropFirst(depth)).trimmingCharacters(in: .whitespaces)
+                if !text.isEmpty { appendHeading(text, level: depth) }
+                continue
+            }
+            let candidate = line.trimmingCharacters(in: CharacterSet(charactersIn: "* ").union(.whitespaces))
+            guard !candidate.isEmpty, candidate != title else { continue }
+            if knownSections.contains(candidate) {
+                appendHeading(candidate, level: 2)
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("• ") {
+                let item = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                if !item.isEmpty { blocks.append(DocumentBlock(kind: .bullet, runs: [DocumentRun(text: item)])) }
+            } else {
+                blocks.append(DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: line)]))
+            }
         }
         return NativeDocument(blocks: blocks)
     }

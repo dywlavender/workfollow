@@ -115,6 +115,7 @@ final class SQLiteWorkspaceRepository {
             let tasks = try db.rows("SELECT id,metadata,document_summary FROM tasks ORDER BY position").map { row -> Task in
                 var task = try decoder.decode(Task.self, from: row[1]!)
                 task.document = try deferredDocument(id: task.id, summary: row[2]!, notes: false)
+                attachLegacyOriginal(to: &task)
                 return task
             }
             let notes = try db.rows("SELECT id,metadata,document_summary FROM notes ORDER BY position").map { row -> Note in
@@ -138,6 +139,7 @@ final class SQLiteWorkspaceRepository {
         let tasks = try db.rows("SELECT t.metadata, d.document FROM tasks t JOIN task_documents d ON d.id=t.id ORDER BY t.position").map { row -> Task in
             var task = try decoder.decode(Task.self, from: row[0]!)
             task.document = try decoder.decode(NativeDocument.self, from: row[1]!)
+            attachLegacyOriginal(to: &task)
             return task
         }
         let notes = try db.rows("SELECT n.metadata, d.document, d.original_content FROM notes n JOIN note_documents d ON d.id=n.id ORDER BY n.position").map { row -> Note in
@@ -154,7 +156,8 @@ final class SQLiteWorkspaceRepository {
             taskLists: metadata.taskLists, taskListMeta: metadata.taskListMeta,
             taskListFolders: metadata.taskListFolders, taskListSections: metadata.taskListSections,
             taskTags: metadata.taskTags,
-            noteFolders: metadata.noteFolders, noteFolderMetadata: metadata.noteFolderMetadata)
+            noteFolders: metadata.noteFolders, noteFolderMetadata: metadata.noteFolderMetadata,
+            notesMergedIntoTasks: metadata.notesMergedIntoTasks)
     }
 
     /// Bulk replacement is reserved for migration, explicit import and restore.
@@ -178,6 +181,60 @@ final class SQLiteWorkspaceRepository {
                         userInfo: [NSLocalizedDescriptionKey: "旧数据导入校验失败，未切换存储。"])
                 }
             }
+        }
+    }
+
+    /// One-time upgrade of legacy notes into task rows. Documents are copied as
+    /// BLOBs so no note body is materialized during launch. The legacy notes
+    /// table is deliberately left untouched for rollback; the metadata flag
+    /// prevents a second import.
+    func mergeNotesAsTasks(_ tasks: [Task]) throws {
+        guard !tasks.isEmpty else { return }
+        let db = try database()
+        try db.transaction {
+            for task in tasks {
+                let id = SQLiteDatabase.Value.text(task.id.uuidString)
+                let exists = try db.rows("SELECT 1 FROM tasks WHERE id=?", [id]).first != nil
+                if exists { continue }
+                guard try db.rows("SELECT 1 FROM note_documents WHERE id=?", [id]).first != nil else {
+                    throw NSError(domain: "WorkFollow.Storage", code: 5,
+                        userInfo: [NSLocalizedDescriptionKey: "笔记正文缺失，已取消笔记合并。"])
+                }
+                var metadata = task
+                metadata.document = .empty
+                try db.execute("""
+                    INSERT INTO tasks(id,position,title,list,parent_id,status,due_at,deleted_at,metadata)
+                    VALUES (?,(SELECT COALESCE(MAX(position)+1,0) FROM tasks),?,?,?,?,?,?,?)
+                    """, [id, .text(task.title), .text(task.list.name),
+                          task.parentID.map { .text($0.uuidString) } ?? .null,
+                          .integer(task.status == .completed ? 1 : 0),
+                          task.schedule.dueAt.map { .real($0.timeIntervalSince1970) } ?? .null,
+                          task.deletedAt.map { .real($0.timeIntervalSince1970) } ?? .null,
+                          .blob(try encoder.encode(metadata))])
+                try db.execute("""
+                    INSERT OR REPLACE INTO task_documents(id,document,plain_text)
+                    SELECT id,document,plain_text FROM note_documents WHERE id=?
+                    """, [id])
+                try db.execute("""
+                    UPDATE tasks SET document_summary=(SELECT document_summary FROM notes WHERE id=?)
+                    WHERE id=?
+                    """, [id, id])
+            }
+            let merged: NativeWorkspaceSnapshot
+            if let metadata = try state(db) {
+                merged = NativeWorkspaceSnapshot(version: metadata.version,
+                    tasks: metadata.tasks, notes: metadata.notes,
+                    taskLists: metadata.taskLists, taskListMeta: metadata.taskListMeta,
+                    taskListFolders: metadata.taskListFolders,
+                    taskListSections: metadata.taskListSections,
+                    taskTags: metadata.taskTags,
+                    noteFolders: metadata.noteFolders,
+                    noteFolderMetadata: metadata.noteFolderMetadata,
+                    notesMergedIntoTasks: true)
+            } else {
+                merged = NativeWorkspaceSnapshot(tasks: [], notes: [], notesMergedIntoTasks: true)
+            }
+            try writeMetadata(merged, db: db)
         }
     }
 
@@ -250,7 +307,9 @@ final class SQLiteWorkspaceRepository {
         if document {
             try db.execute("INSERT INTO task_documents(id,document,plain_text) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET document=excluded.document,plain_text=excluded.plain_text",
                 [id, .blob(try encoder.encode(task.document)), .text(task.document.plainText)])
-            try db.execute("UPDATE tasks SET document_summary=? WHERE id=?", [.blob(try encoder.encode(DocumentSummary(task.document))), id])
+            let summary = DocumentSummary(task.document,
+                hasOriginalContent: task.isNoteTask ? task.note?.hasPreservedRichContent : nil)
+            try db.execute("UPDATE tasks SET document_summary=? WHERE id=?", [.blob(try encoder.encode(summary)), id])
         }
     }
 
@@ -281,6 +340,26 @@ final class SQLiteWorkspaceRepository {
         }, search: { [self] query, lowercase in
             try searchMatches(query, notes: notes, lowercase: lowercase).contains(id.uuidString)
         }, report: { [self] error in reportDocumentFailure(error) }))
+    }
+
+    /// Migrated notes keep their protected source in the legacy note document
+    /// table. Attach it lazily so loading the workspace does not read bodies.
+    private func attachLegacyOriginal(to task: inout Task) {
+        guard task.isNoteTask, var note = task.note, note.needsDeferredOriginal else { return }
+        let id = task.id
+        note.deferOriginalContent(DeferredOriginalContent(isPresent: true) { [self] in
+            do {
+                let db = try SQLiteDatabase(url: url, readOnly: true)
+                guard let row = try db.rows("SELECT original_content FROM note_documents WHERE id=?",
+                                            [.text(id.uuidString)]).first else { return nil }
+                readsLock.lock(); originalReads += 1; readsLock.unlock()
+                return row[0].flatMap { String(data: $0, encoding: .utf8) }
+            } catch {
+                reportDocumentFailure(error)
+                throw error
+            }
+        })
+        task.note = note
     }
     private func reportDocumentFailure(_ error: Error) {
         readsLock.lock(); documentFailure = error; readsLock.unlock()

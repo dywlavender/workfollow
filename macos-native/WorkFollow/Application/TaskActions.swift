@@ -45,6 +45,19 @@ final class TaskActions {
         return .success(task.id)
     }
 
+    /// Notes share the task entity; they only differ by kind and note metadata.
+    func createNote(title: String = "", document: NativeDocument = .empty,
+                    folder: String = "未归档", folderID: String? = nil) -> TaskActionResult {
+        let now = clock()
+        var task = Task(id: UUID(), title: title, document: document,
+                        list: .notes, priority: .none, schedule: TaskSchedule(),
+                        parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
+        task.kind = .note
+        task.note = TaskNoteMetadata(folder: folder, folderID: folderID)
+        store.commit([task] + store.tasks)
+        return .success(task.id)
+    }
+
     func createCaptures(_ drafts: [QuickCaptureDraft]) -> [UUID] {
         var ids: [UUID] = []
         store.transaction {
@@ -52,6 +65,35 @@ final class TaskActions {
                 let result = createDraft(title: draft.title, list: draft.list, plan: draft.plan,
                     priority: draft.priority, tags: draft.tags, document: draft.document)
                 if let id = result.taskID { ids.append(id) }
+            }
+        }
+        return ids
+    }
+
+    func createAITasks(_ drafts: [AITaskDraft], request: AITaskRequest, list: String, sectionID: String?) -> [UUID] {
+        var ids: [UUID] = []
+        store.transaction {
+            for draft in drafts {
+                let result: TaskActionResult
+                if case let .task(parentID) = request.source {
+                    result = createChild(parentID, title: draft.title)
+                    if let id = result.taskID {
+                        _ = updateAttributes(id, priority: draft.priority, schedule: draft.schedule)
+                        _ = setDocument(id, draft.document(for: request))
+                    }
+                } else {
+                    result = createDraft(title: draft.title, list: list, schedule: draft.schedule,
+                        priority: draft.priority, tags: [], reminder: nil, frequency: .never,
+                        document: draft.document(for: request))
+                    if let id = result.taskID, let sectionID { _ = setTaskSection(id, sectionID: sectionID) }
+                }
+                guard let id = result.taskID else { continue }
+                switch request.source {
+                case let .note(noteID): _ = setSourceNote(id, noteID)
+                case let .meeting(meetingID): _ = edit(id) { $0.sourceMeetingID = meetingID }
+                case .task: break
+                }
+                ids.append(id)
             }
         }
         return ids
@@ -367,6 +409,7 @@ final class TaskActions {
         spawn.sectionID = task.sectionID
         spawn.focusEstimate = task.focusEstimate
         spawn.sourceNoteID = task.sourceNoteID
+        spawn.sourceMeetingID = task.sourceMeetingID
         let children = store.children(of: task.id).enumerated().map { order, child -> Task in
             var value = Task(id: UUID(), title: child.title, document: child.document,
                              tags: child.tags, list: child.list, priority: child.priority,
@@ -387,6 +430,7 @@ final class TaskActions {
             value.attachments = child.attachments
             value.convertedNoteID = child.convertedNoteID
             value.sourceNoteID = child.sourceNoteID
+            value.sourceMeetingID = child.sourceMeetingID
             // Fresh defaults: status .active, recurrence .never, rule nil —
             // only the parent drives the chain of occurrences.
             return value
@@ -547,6 +591,84 @@ final class TaskActions {
         return result
     }
 
+    /// Notes use the task history, but may be edited while sitting in the
+    /// trash (folder moves and restore). Callers opt into that explicitly.
+    @discardableResult
+    func editNote(_ id: UUID, allowDeleted: Bool = false,
+                  mutation: (inout Task) -> Void) -> TaskActionResult {
+        var snapshot = store.tasks
+        guard let index = snapshot.firstIndex(where: { $0.id == id }) else {
+            return .failure(.missingTask)
+        }
+        guard snapshot[index].isNoteTask else { return .failure(.missingTask) }
+        guard allowDeleted || snapshot[index].deletedAt == nil else {
+            return .failure(.deletedTask)
+        }
+        var after = snapshot[index]
+        mutation(&after)
+        guard after != snapshot[index] else { return .success(id) }
+        after.updatedAt = clock()
+        snapshot[index] = after
+        store.commit(snapshot)
+        return .success(id)
+    }
+
+    @discardableResult
+    func purgeNote(_ id: UUID) -> TaskActionResult {
+        guard let task = store.task(id), task.isNoteTask, task.deletedAt != nil else {
+            return .failure(.notDeleted)
+        }
+        store.commit(store.tasks.filter { $0.id != id })
+        store.clearUndo()
+        return .success(id)
+    }
+
+    @discardableResult
+    func emptyNoteTrash() -> Int {
+        let removed = store.tasks.filter { $0.isNoteTask && $0.deletedAt != nil }
+        guard !removed.isEmpty else { return 0 }
+        store.commit(store.tasks.filter { !($0.isNoteTask && $0.deletedAt != nil) })
+        store.clearUndo()
+        return removed.count
+    }
+
+    /// Undo/redo compensations for note creation must not add another history
+    /// frame of their own.
+    func discardNoteForCompensation(_ id: UUID) {
+        guard store.task(id)?.isNoteTask == true else { return }
+        store.commit(store.tasks.filter { $0.id != id }, undoPolicy: .skip)
+    }
+
+    func insertNoteForCompensation(_ task: Task) {
+        guard task.isNoteTask, store.task(task.id) == nil else { return }
+        store.commit([task] + store.tasks, undoPolicy: .skip)
+    }
+
+    /// Reorders note slots only; task slots keep their relative order, so the
+    /// task page cannot jump when the Notes page is sorted.
+    @discardableResult
+    func sortNotes(byTitle: Bool) -> Bool {
+        let noteSlots = store.tasks.indices.filter { store.tasks[$0].isNoteTask }
+        guard noteSlots.count > 1 else { return false }
+        let notes = noteSlots.map { store.tasks[$0] }
+        let sorted = notes.enumerated().sorted { lhs, rhs in
+            if byTitle {
+                if lhs.element.title != rhs.element.title { return lhs.element.title < rhs.element.title }
+            } else if lhs.element.updatedAt != rhs.element.updatedAt {
+                return lhs.element.updatedAt > rhs.element.updatedAt
+            }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+        guard sorted != notes else { return false }
+        var reordered = store.tasks
+        var iterator = sorted.makeIterator()
+        for index in noteSlots {
+            if let next = iterator.next() { reordered[index] = next }
+        }
+        store.commit(reordered)
+        return true
+    }
+
     /// A note is another task kind. Changing between text and note preserves
     /// its rich body, inline checklists and attachments without remapping them.
     @discardableResult
@@ -556,6 +678,8 @@ final class TaskActions {
         guard let before = try? current.document.materialized() else {
             return edit(id) { task in
                 task.kind = kind
+                Self.applyKindTransition(to: &task, from: current.kind, to: kind,
+                                         currentList: current.list)
                 if kind == .checklist || (current.kind == .checklist && kind == .text) {
                     task.document = Self.document(task.document, convertingTo: kind)
                 }
@@ -566,6 +690,8 @@ final class TaskActions {
         store.transaction {
             result = edit(id) { task in
                 task.kind = kind
+                Self.applyKindTransition(to: &task, from: current.kind, to: kind,
+                                         currentList: current.list)
                 if kind == .checklist || (current.kind == .checklist && kind == .text) {
                     converted = Self.document(before, convertingTo: kind)
                     if kind == .checklist {
@@ -583,6 +709,21 @@ final class TaskActions {
             }
         }
         return result
+    }
+
+    /// `TaskKind.note` is the in-place note form. Leaving that form must put a
+    /// note back into a visible task list; entering it keeps the original list
+    /// so switching back is lossless.
+    private static func applyKindTransition(to task: inout Task, from old: TaskKind,
+                                            to kind: TaskKind, currentList: TaskList) {
+        if kind == .note, task.note == nil {
+            let folder = currentList == .notes ? "未归档" : currentList.name
+            task.note = TaskNoteMetadata(folder: folder)
+        }
+        if old == .note, kind != .note, task.list == .notes {
+            task.list = .inbox
+            task.listID = nil
+        }
     }
 
     /// The complete selection changes kind in one undo step; parent/child
@@ -943,6 +1084,10 @@ final class TaskActions {
                 snapshot[index].list = list
                 snapshot[index].listID = listReferenceID(list.name)
                 if list != current.list { snapshot[index].sectionID = nil }
+                let listID = snapshot[index].listID, sectionID = snapshot[index].sectionID
+                snapshot[index].series?.template.list = list
+                snapshot[index].series?.template.listID = listID
+                snapshot[index].series?.template.sectionID = sectionID
             }
             if snapshot[index] != store.tasks[index] { snapshot[index].updatedAt = now }
         }
@@ -1232,7 +1377,7 @@ final class TaskActions {
             createdAt: clock(), updatedAt: clock())
         value.listID = source.listID; value.tagReferences = source.tagReferences
         value.sectionID = source.sectionID; value.focusEstimate = source.focusEstimate
-        value.sourceNoteID = source.sourceNoteID; value.series = source.series
+        value.sourceNoteID = source.sourceNoteID; value.sourceMeetingID = source.sourceMeetingID; value.series = source.series
         value.occurrenceKey = source.occurrenceKey; value.occurrenceOverride = source.occurrenceOverride
         return value
     }
@@ -1314,7 +1459,8 @@ final class TaskActions {
     }
 
     func emptyTrash() {
-        store.commit(store.tasks.filter { $0.deletedAt == nil })
+        // The task trash and the notes trash are separate views over one store.
+        store.commit(store.tasks.filter { $0.deletedAt == nil || $0.isNoteTask })
         store.clearUndo()
     }
 
@@ -1397,9 +1543,18 @@ final class TaskActions {
         guard name != TaskList.inbox.name else { return }
         store.commit(store.tasks.map { task in
             var value = task
-            if task.list.name == name { value.list = .inbox; value.listID = listReferenceID(TaskList.inbox.name); value.sectionID = nil; value.updatedAt = clock() }
+            if task.list.name == name {
+                value.list = .inbox
+                value.listID = listReferenceID(TaskList.inbox.name)
+                value.sectionID = nil
+                value.series?.template.list = .inbox
+                value.series?.template.listID = value.listID
+                value.series?.template.sectionID = nil
+                value.updatedAt = clock()
+            }
             return value
-        }, lists: store.lists.filter { $0 != name })
+        }, lists: store.lists.filter { $0 != name },
+           listSections: store.listSections.filter { $0.listName != name })
     }
 
     @discardableResult
@@ -1668,7 +1823,7 @@ final class TaskActions {
                  status: .active, parentID: parent, childOrder: childOrder,
                  createdAt: now, updatedAt: now, completedAt: nil, deletedAt: nil,
                  isPinned: false, abandonedAt: nil, skippedAt: nil,
-                 convertedNoteID: nil, sourceNoteID: source.sourceNoteID)
+                 convertedNoteID: nil, sourceNoteID: source.sourceNoteID, sourceMeetingID: source.sourceMeetingID)
             value.tagReferences = source.tagReferences
             value.kind = source.kind
             if source.kind == .checklist {
@@ -2110,8 +2265,19 @@ final class TaskActions {
         sections[index].sortOrder = (sections.filter { $0.listName == target && $0.id != id }
             .map(\.sortOrder).max() ?? -1) + 1
         var tasks = store.tasks
-        for taskIndex in tasks.indices where tasks[taskIndex].sectionID == id {
-            tasks[taskIndex].list = TaskList(name: target)
+        let parents = Set(tasks.filter { $0.sectionID == id && $0.parentID == nil }.map(\.id))
+        let targetList = TaskList(name: target)
+        let listID = listReferenceID(target)
+        let now = clock()
+        for taskIndex in tasks.indices where tasks[taskIndex].sectionID == id || tasks[taskIndex].parentID.map(parents.contains) == true {
+            tasks[taskIndex].list = targetList
+            tasks[taskIndex].listID = listID
+            if tasks[taskIndex].sectionID != id { tasks[taskIndex].sectionID = nil }
+            let sectionID = tasks[taskIndex].sectionID
+            tasks[taskIndex].series?.template.list = targetList
+            tasks[taskIndex].series?.template.listID = listID
+            tasks[taskIndex].series?.template.sectionID = sectionID
+            tasks[taskIndex].updatedAt = now
         }
         store.commit(tasks, listSections: sections)
         return true
@@ -2141,6 +2307,8 @@ final class TaskActions {
         var tasks = store.tasks
         for index in tasks.indices where tasks[index].sectionID == id {
             tasks[index].sectionID = nil
+            tasks[index].series?.template.sectionID = nil
+            tasks[index].updatedAt = clock()
         }
         store.commit(tasks, listSections: sections)
         return true
@@ -2151,10 +2319,15 @@ final class TaskActions {
     func setTaskSection(_ id: UUID, sectionID: String?) -> TaskActionResult {
         guard let index = store.tasks.firstIndex(where: { $0.id == id }) else { return .failure(.missingTask) }
         guard store.tasks[index].deletedAt == nil else { return .failure(.deletedTask) }
+        if let sectionID {
+            guard let section = store.listSection(sectionID), section.listName == store.tasks[index].list.name,
+                  !store.archivedListNames.contains(section.listName) else { return .failure(.invalidList) }
+        }
         guard store.tasks[index].sectionID != sectionID else { return .success(id) }
         var tasks = store.tasks
         tasks[index].sectionID = sectionID
         tasks[index].series?.template.sectionID = sectionID
+        tasks[index].updatedAt = clock()
         store.commit(tasks)
         return .success(id)
     }

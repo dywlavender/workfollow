@@ -10,6 +10,8 @@ Native macOS 实验版本，不是 Flutter 的替代版本。要求 macOS 14+、
 
 固定安装到 `/Applications/WorkFollow.app`，沿用标识 `com.workfollow.native.preview`，任务及模块数据继续位于 `~/Library/Application Support/WorkFollowNativePreview`。日用版使用 Release 配置，打包时移除验收配置，不包含测试插件。
 
+日用更新应从当前工作区的最新完整代码构建。其他任务较早保存的源码副本可能遗漏后来修复，即使构建号更高也会覆盖这些功能；请先整合到当前工作区再打包。安装后应确认本次修复的实际行为，版本号和签名检查只证明安装状态。
+
 先从 WorkFollow 菜单正常退出，等待保存完成，然后在仓库根目录运行：
 
 ```sh
@@ -52,6 +54,16 @@ open /private/tmp/workfollow-native-build/Build/Products/Debug/WorkFollow.app
 - 全局快速添加在本次应用运行期间保留未提交草稿，收起再打开可继续输入；成功提交或点击“清空草稿”后清除。
 - 未选择任务时收起空详情区，列表使用更宽的阅读区域；选择任务后恢复分栏，返回列表时保留滚动位置。
 
+## Codex 与命令行
+
+App 内附 `workfollowctl`，可查询、新建、修改待办与笔记，完成/恢复待办及追加笔记正文，也可管理清单、侧边栏清单分组、清单内任务分组及任务归属。命令由原生 App 执行并保存；App 未运行时后台启动。更新 App 后，在仓库根目录运行 `macos-native/scripts/install-native-cli.sh /Applications/WorkFollow.app`，安装 CLI 链接及 Codex Skill。命令、版本校验和验收范围见 [原生 CLI](../docs/native-cli-2026-10-26.md)。
+
+## AI 待办操作
+
+笔记更多菜单与会议纪要操作区提供“提取待办”，任务详情更多菜单提供“拆分子任务”。共用候选预览，勾选或改标题后一次创建，日期和优先级按需展开。结果保留来源，创建可一次撤销；沿用统一 AI 设置中的文字模型。当前真实生成服务复测尚未通过，交互及验证边界见 [AI 待办的简化交互](../docs/native-ai-task-actions-2026-10-26.md)。
+
+“设置 → AI 模型”分别选择语音转写、文字处理模型。列表自动从 Pi 查询，也可手动刷新；模型和认证在 Pi 中维护。会议、周报和待办 AI 的设置入口统一跳转到此页，详见 [统一模型设置](../docs/native-ai-model-settings-2026-10-26.md)。
+
 ## Apple 同步与 iPhone
 
 在「设置 → Apple 同步」开启「同步任务到 Apple 提醒事项」，首次按系统提示允许访问；这项权限独立于日历。固定使用 iCloud 的 WorkFollow 清单，没有时自动创建。开启后自动同步所有未完成任务，包含未安排日期的任务以及以后新增的清单；已同步任务完成后保留完成记录，已归档或删除的任务不再同步。
@@ -93,7 +105,7 @@ Mac 与 iPhone 使用同一 Apple 账户，并在两端的 iCloud 中开启「�
 
 ## 会议实时转写
 
-内置会议扩展使用 `qwen-audio-3.1-asr-flash-streaming` 持续转写；Pi 管理音频连接与认证。会议设置分别选择转写模型和纪要文字模型，纪要模型留空沿用 Pi 当前文字模型。点击“生成/更新纪要”只处理新增定稿，讲话人暂未区分。
+内置会议扩展使用 `qwen-audio-3.1-asr-flash-streaming` 持续转写；Pi 管理音频连接与认证。在“设置 → AI 模型”分别选择转写和文字模型，文字也可跟随 Pi 默认模型。点击“AI 编写纪要”根据全部已定稿对话重新编写；录音中每 5 分钟自动编写一次。两种触发互斥，生成时按钮置灰，期间不排队，完成后重新计时 5 分钟。手动编辑正文会暂停自动替换，显式点击 AI 编写后恢复。讲话人暂未区分。详见 [纪要定时编写](../docs/meeting-minutes-scheduling-2026-10-26.md)。
 
 录音保存在模块数据目录的 `meeting-audio/<会议ID>/`：原始麦克风音频为 CAF，转写输入为 16kHz 单声道 PCM16 WAV。停止后点击“录音文件”在 Finder 查看。转写连接失败或积压时仅暂停转写，本地录音继续；暂停/继续分别保存新文件。复测工具与验收见 [本地录音方案](../docs/meeting-local-recording-2026-10-13.md)。
 

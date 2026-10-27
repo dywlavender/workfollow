@@ -239,7 +239,7 @@ final class SQLitePersistenceTests: XCTestCase {
         let prepared = expectation(description: "ready for restore")
         environment.prepareStorageReplacement { error in XCTAssertNil(error); prepared.fulfill() }
         wait(for: [prepared], timeout: 5)
-        XCTAssertEqual(try repository.load()?.notes.first?.document.plainText, "笔记最终正文")
+        XCTAssertEqual(try repository.load()?.tasks.first { $0.id == id }?.document.plainText, "笔记最终正文")
         let replacement = task("恢复后的任务")
         try repository.save(NativeWorkspaceSnapshot(tasks: [replacement], notes: []))
         environment.finishStorageReplacement(succeeded: true)

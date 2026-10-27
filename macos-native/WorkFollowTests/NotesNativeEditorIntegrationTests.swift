@@ -18,10 +18,19 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
 
     private func host(_ environment: AppEnvironment,
                       onToolbarFrames: @escaping ([String: CGRect]) -> Void = { _ in },
-                      onToolbarBounds: @escaping (CGRect) -> Void = { _ in }) -> NSHostingView<some View> {
+                      onToolbarBounds: @escaping (CGRect) -> Void = { _ in },
+                      onMenuTriggers: @escaping ([String: CGRect]) -> Void = { _ in },
+                      onPopupRows: @escaping ([BusinessMenuRowFrame]) -> Void = { _ in }) -> NSHostingView<some View> {
         NSHostingView(rootView: NotesWorkspaceView(notes: environment.notesWorkspace,
             navigation: environment.navigation, tasks: environment.taskWorkspace)
             .environmentObject(environment)
+            .coordinateSpace(name: "business-menu")
+            .environment(\.popupContentObservation, { content in
+                AnyView(content
+                    .coordinateSpace(name: "business-menu")
+                    .onPreferenceChange(BusinessMenuRowFrames.self, perform: onPopupRows))
+            })
+            .onPreferenceChange(BusinessMenuTriggerFrames.self, perform: onMenuTriggers)
             .onPreferenceChange(EditorToolbarCommandFramesKey.self, perform: onToolbarFrames)
             .onPreferenceChange(DocumentFormattingToolbarBoundsKey.self, perform: onToolbarBounds))
     }
@@ -103,8 +112,35 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         wait(for: [saved], timeout: 5)
         let directory = try XCTUnwrap(directories[ObjectIdentifier(environment)])
         let reopened = try XCTUnwrap(NativePreviewRepository(directory: directory).load())
-        XCTAssertEqual(reopened.notes.first { $0.id == first }?.document.plainText, "甲组合输入")
-        XCTAssertEqual(reopened.notes.first { $0.id == second }?.document.plainText, "乙续写")
+        XCTAssertEqual(reopened.tasks.first { $0.id == first }?.document.plainText, "甲组合输入")
+        XCTAssertEqual(reopened.tasks.first { $0.id == second }?.document.plainText, "乙续写")
+    }
+
+    func testNoteActionsMenuConvertsNoteToTaskInPlace() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        let id = notes.create()
+        notes.edit(id) { $0.title = "待转任务"; $0.document = NativeDocument(plainText: "保留正文") }
+        var menuTriggers: [String: CGRect] = [:]
+        var menuRows: [BusinessMenuRowFrame] = []
+        let host = host(environment, onMenuTriggers: { menuTriggers = $0 },
+                        onPopupRows: { menuRows = $0 })
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+
+        try InspectorPanelTestSupport.click(try XCTUnwrap(menuTriggers["笔记操作"]), in: host, window: window)
+        let menu = try InspectorPanelTestSupport.panel(title: "笔记操作", below: window)
+        XCTAssertEqual(menuRows.count, 4)
+        // Rows: 收藏 / 复制笔记正文 / 转换为任务 / 移到垃圾桶.
+        let convert = try XCTUnwrap(menuRows.dropLast().last)
+        try InspectorPanelTestSupport.click(convert.rect,
+                                            in: try XCTUnwrap(menu.contentView), window: menu)
+
+        XCTAssertTrue(notes.notes.isEmpty)
+        XCTAssertNil(notes.selectedID)
+        XCTAssertEqual(environment.taskWorkspace.task(for: id)?.kind, .text)
+        XCTAssertEqual(environment.taskWorkspace.task(for: id)?.document.plainText, "保留正文")
+        XCTAssertEqual(environment.taskWorkspace.tasksInActiveLists.map(\.id), [id])
     }
 
     func testLongNoteUsesOuterCompactScrollView() throws {

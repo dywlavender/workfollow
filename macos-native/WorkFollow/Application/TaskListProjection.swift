@@ -222,6 +222,9 @@ enum TaskListProjection {
         let matchingTags = query.tag.map { TaskTagHierarchy(tags).names(includingDescendantsOf: $0) }
         return tasks.filter { task in
             guard task.deletedAt == nil && task.skippedAt == nil && !task.isConverted else { return false }
+            // Notes live in the same store, but the task page is their other
+            // projection. They only appear when explicitly included.
+            guard !task.isNoteTask else { return false }
             guard !archivedLists.contains(task.list.name)
                 || (scope == .allTasks && query.list == task.list.name) else { return false }
             guard query.matches(task, matchingTags: matchingTags) else { return false }

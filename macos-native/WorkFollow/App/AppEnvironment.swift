@@ -48,6 +48,7 @@ final class AppEnvironment: ObservableObject {
     private let repository: NativePreviewRepository
     private let persistence: PersistenceCoordinator
     private var taskWidget: TaskWidgetBridge?
+    private var automation: NativeAutomationBridge?
     lazy var widgetQuickAdd = WidgetQuickAddController(workspace: taskWorkspace,
         appearance: { [weak self] in self?.appearance ?? .system })
     @Published private(set) var storageNeedsReload = false
@@ -91,12 +92,30 @@ final class AppEnvironment: ObservableObject {
             completionSoundEnabled: preferences.object(forKey: "completionSoundEnabled") as? Bool ?? true,
             playSound: { Self.playFeedbackSound($0) })
         self.feedback = feedback
-        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar, initialTasks: snapshot?.tasks, initialLists: snapshot?.taskLists ?? [], initialListMeta: snapshot?.taskListMeta, initialListFolders: snapshot?.taskListFolders, initialListSections: snapshot?.taskListSections, initialTags: snapshot?.taskTags)
+        // Notes are tasks now. Import legacy note rows once; afterwards the
+        // metadata flag tells us to ignore the retained notes table.
+        let legacyNotes: [Note] = snapshot?.notesMergedIntoTasks == true
+            ? [] : (snapshot?.notes ?? [])
+        let existingTaskIDs = Set(snapshot?.tasks.map(\.id) ?? [])
+        let legacyNoteTasks = legacyNotes
+            .filter { !existingTaskIDs.contains($0.id) }
+            .map { $0.migratedTask() }
+        taskWorkspace = TaskWorkspaceModel(clock: clock, calendar: calendar,
+            initialTasks: (snapshot?.tasks ?? []) + legacyNoteTasks,
+            initialLists: snapshot?.taskLists ?? [],
+            initialListMeta: snapshot?.taskListMeta,
+            initialListFolders: snapshot?.taskListFolders,
+            initialListSections: snapshot?.taskListSections,
+            initialTags: snapshot?.taskTags)
         StickyNoteWindowController.shared.attach(workspace: taskWorkspace)
-        notesWorkspace = NotesWorkspaceModel(initialNotes: snapshot?.notes ?? [],
+        notesWorkspace = NotesWorkspaceModel(taskWorkspace: taskWorkspace,
                                              folders: snapshot?.noteFolders ?? [],
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],
                                              clock: clock)
+        if !legacyNoteTasks.isEmpty {
+            do { try repository.mergeNotesAsTasks(legacyNoteTasks) }
+            catch { failure = error }
+        }
         focusStore = FocusStore(clock: clock, calendar: calendar, directory: directory.appendingPathComponent("modules"))
         taskActivityStore = TaskActivityStore(clock: clock, directory: directory.appendingPathComponent("modules"))
         taskCommentStore = TaskCommentStore(clock: clock, directory: directory.appendingPathComponent("modules"))
@@ -111,7 +130,7 @@ final class AppEnvironment: ObservableObject {
         countdownStore = CountdownStore(clock: clock)
         meetingStore = MeetingStore()
         filterStore = FilterStore(clock: clock)
-        viewPreferences = TaskViewPreferenceStore()
+        viewPreferences = TaskViewPreferenceStore(directory: directory.appendingPathComponent("modules"))
         taskWorkspace.attachFilterStore(filterStore)
         taskWorkspace.feedbackSink = feedback
 
@@ -239,10 +258,6 @@ final class AppEnvironment: ObservableObject {
         notesWorkspace.$selectedID.compactMap { $0 }.sink { [weak self] id in
             self?.searchSession.recordNote(id)
         }.store(in: &subscriptions)
-        notesWorkspace.persistenceChanges.sink { [weak self] changes in
-            guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
-            self.persistence.schedule(notes: changes)
-        }.store(in: &subscriptions)
         notesWorkspace.$revision.dropFirst().sink { [weak self] _ in self?.savePreview() }.store(in: &subscriptions)
         // 倒计时记录也要重排提醒。上面那条只跟着任务走——倒计时改了不触发任务
         // revision，光靠那条订阅，新建一条带提醒的纪念日要等到下次动任务才排上。
@@ -269,7 +284,10 @@ final class AppEnvironment: ObservableObject {
             if let snapshot {
                 // Hydration runs before change listeners are installed. Persist
                 // its stable references with the directory on the first load.
-                let hydration = TaskChangeSet(before: snapshot.tasks, after: taskWorkspace.allTasks)
+                // Migrated note rows already exist in the tasks table, so they
+                // belong to the "before" side and must not be inserted again.
+                let hydration = TaskChangeSet(before: snapshot.tasks + legacyNoteTasks,
+                                              after: taskWorkspace.allTasks)
                 if !hydration.entries.isEmpty || hydration.order != nil {
                     persistence.schedule(changes: hydration)
                 }
@@ -290,6 +308,15 @@ final class AppEnvironment: ObservableObject {
                 self?.refreshSystemIntegrations()
             }.store(in: &subscriptions)
         }
+        automation = NativeAutomationBridge(channel: AutomationChannel(workspaceDirectory: directory),
+            service: NativeAutomationService(tasks: taskWorkspace, notes: notesWorkspace, directory: directory),
+            canProcess: { [weak self] in
+                guard let self else { return false }
+                return !self.loadFailed && !self.storageNeedsReload && !self.storageReplacementPending
+            }, flush: { [weak self] completion in
+                guard let self else { completion(AutomationFailure(code: "unavailable", message: "App 已关闭。")); return }
+                self.persistence.flush(completion: completion)
+            })
         if !loadFailed {
             // Acceptance and unit-test workspaces never publish real data to
             // the system widget's shared container.
@@ -312,7 +339,8 @@ final class AppEnvironment: ObservableObject {
 
     private func syncRemindersNow() {
         guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
-        systemReminders.requestSync(tasks: taskWorkspace.allTasks, activeLists: taskWorkspace.availableListNames)
+        systemReminders.requestSync(tasks: taskWorkspace.tasksInActiveLists,
+                                    activeLists: taskWorkspace.availableListNames)
     }
     func retryRemindersSync() {
         flushThenSyncReminders()
@@ -373,7 +401,9 @@ final class AppEnvironment: ObservableObject {
         navigation.destination = destination
         // `--wf-select-first`：程序化选中一个任务，验收检查器时不需要点击。
         guard arguments.contains("--wf-select-first") || NativeAcceptanceConfiguration.selectsFirstTask else { return }
-        let pool = taskWorkspace.allTasks.filter { $0.deletedAt == nil && $0.skippedAt == nil }
+        let pool = taskWorkspace.allTasks.filter {
+            !$0.isNoteTask && $0.deletedAt == nil && $0.skippedAt == nil
+        }
         let pick = pool.first { $0.title.contains("编辑栏主控验收") }
             ?? pool.first { !$0.isClosed && !$0.title.isEmpty }
             ?? pool.first
@@ -389,21 +419,23 @@ final class AppEnvironment: ObservableObject {
             taskListFolders: taskWorkspace.listFolders, taskListSections: taskWorkspace.listSections,
             taskTags: taskWorkspace.taskTags,
             noteFolders: notesWorkspace.folders,
-            noteFolderMetadata: notesWorkspace.folderMetadataForPersistence)
+            noteFolderMetadata: notesWorkspace.folderMetadataForPersistence,
+            notesMergedIntoTasks: true)
         persistence.schedule(metadata: metadata)
     }
 
     private func makePreviewSnapshot() -> NativeWorkspaceSnapshot? {
         guard !loadFailed else { return nil }
         return NativeWorkspaceSnapshot(tasks: taskWorkspace.allTasks,
-                                       notes: notesWorkspace.notes,
+                                       notes: [],
                                        taskLists: taskWorkspace.listNames,
                                        taskListMeta: taskWorkspace.listMetas,
                                        taskListFolders: taskWorkspace.listFolders,
                                        taskListSections: taskWorkspace.listSections,
                                        taskTags: taskWorkspace.taskTags,
                                        noteFolders: notesWorkspace.folders,
-                                       noteFolderMetadata: notesWorkspace.folderMetadataForPersistence)
+                                       noteFolderMetadata: notesWorkspace.folderMetadataForPersistence,
+                                       notesMergedIntoTasks: true)
     }
 
     /// ⌘\ 显示或隐藏侧栏。

@@ -262,97 +262,74 @@ struct SettingsDataView: View {
     @State private var showingRestoreSheet = false
     @State private var restoreEntries: [SnapshotRestoreEntry] = []
     @State private var restoreCandidate: SnapshotRestoreEntry?
+    @State private var showFileDetails = false
 
     private var dataDirectory: URL { NativePreviewRepository.directory }
     private var attachmentDirectory: URL { NativeAttachmentFiles.directory }
     private var repository: NativePreviewRepository { NativePreviewRepository() }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: WFSpace.lg) {
-                WFFormSection("存储位置") {
+        SettingsPage {
+            WFFormSection("导入与导出") {
+                HStack {
+                    Button {
+                        pickImportFile()
+                    } label: {
+                        Label("导入备份…", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(importBusy)
+                    .help("包含任务、笔记、清单和本地附件")
+
+                    Button {
+                        runMigrationExport()
+                    } label: {
+                        Label("导出全部数据…", systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(importBusy)
+                }
+                if let pendingImport {
+                    importPreview(pendingImport)
+                }
+                feedbackLine(.export)
+                feedbackLine(.importData)
+            }
+            WFFormSection("备份") {
+                HStack {
+                    Button("立即备份") { runBackup() }
+                        .buttonStyle(.bordered)
+                        .disabled(importBusy)
+                    Button("恢复备份…") { openRestoreSheet() }
+                        .buttonStyle(.bordered)
+                        .disabled(importBusy)
+                }
+                Text(backupSummaryText)
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.secondaryText)
+                    .help("每天首次修改时自动备份，保留最近 7 天")
+                feedbackLine(.backup)
+                feedbackLine(.restore)
+            }
+
+            DisclosureGroup("文件与高级选项", isExpanded: $showFileDetails) {
+                VStack(alignment: .leading, spacing: 16) {
                     directoryRow(title: "数据目录", url: dataDirectory)
                     if attachmentDirectoryExists {
                         directoryRow(title: "附件目录", url: attachmentDirectory)
                     }
                     inventoryRows
                     HStack {
-                        Button {
-                            refresh()
-                        } label: {
-                            Label("刷新", systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        Spacer()
-                    }
-                    feedbackLine(.copiedPath)
-                }
-                WFFormSection("导入与导出") {
-                    HStack {
-                        Button {
-                            pickImportFile()
-                        } label: {
-                            Label("导入…（打勾备份）", systemImage: "square.and.arrow.down")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(importBusy)
-
-                        Button {
-                            runMigrationExport()
-                        } label: {
-                            Label("导出全部数据…", systemImage: "square.and.arrow.up")
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(importBusy)
-                    }
-                    if let pendingImport {
-                        importPreview(pendingImport)
-                    }
-                    Text("导出文件包含任务、笔记、清单和本地附件（base64 内嵌），可在打勾个人版与本机之间互相迁移。")
-                        .font(WFType.supporting)
-                        .foregroundStyle(WFColors.tertiaryText)
-                    HStack {
+                        Button("刷新") { refresh() }
                         Button("导出工作区快照…") { runExport() }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                        Text("旧入口：导出工作区与模块记录，不含附件。")
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.tertiaryText)
-                    }
-                    feedbackLine(.export)
-                    feedbackLine(.importData)
-                }
-                WFFormSection("备份") {
-                    HStack(alignment: .firstTextBaseline) {
-                        Button("立即备份") { runBackup() }
-                            .buttonStyle(.bordered)
                             .disabled(importBusy)
-                        Button("恢复备份…") { openRestoreSheet() }
-                            .buttonStyle(.bordered)
-                            .disabled(importBusy)
-                        Spacer()
-                        Text(backupSummaryText)
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.secondaryText)
+                            .help("工作区及模块记录，不含附件")
                     }
-                    Text("每天首次修改会自动备份工作区数据库，保留最近 7 天；恢复前会先备份当前内容。")
-                        .font(WFType.supporting)
-                        .foregroundStyle(WFColors.tertiaryText)
-                    feedbackLine(.backup)
-                    feedbackLine(.restore)
-                }
+                    .buttonStyle(.bordered).controlSize(.small)
+                    feedbackLine(.copiedPath)
+                }.padding(.top, 12)
             }
-            .padding(WFSpace.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .safeAreaInset(edge: .bottom) {
-            Text("数据仅保存在本机。导入或恢复备份后需重启应用才会重新加载；执行前都会先自动备份当前内容。")
-                .font(WFType.supporting)
-                .foregroundStyle(WFColors.tertiaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, WFSpace.lg)
-                .padding(.bottom, WFSpace.md)
+            .font(WFType.body)
         }
         .sheet(isPresented: $showingRestoreSheet) {
             restoreSheet
@@ -361,7 +338,7 @@ struct SettingsDataView: View {
             Button("清空并导入", role: .destructive) { performImport(mode: .replace) }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("以文件内容为准，本机当前任务和笔记会被清空。执行前会先自动备份当前数据。")
+            Text("以文件内容为准，本机当前任务和笔记会被清空。执行前会先自动备份，导入后需重启应用。")
         }
         .confirmationDialog("恢复这份备份？", isPresented: Binding(
             get: { restoreCandidate != nil },
@@ -369,7 +346,7 @@ struct SettingsDataView: View {
             Button("恢复") { if let candidate = restoreCandidate { performRestore(candidate) } }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("任务和笔记将恢复到备份时的状态。恢复前会先备份当前内容。")
+            Text("任务和笔记将恢复到备份时的状态。恢复前会先备份当前内容，完成后需重启应用。")
         }
         .onAppear(perform: refresh)
     }
@@ -379,9 +356,6 @@ struct SettingsDataView: View {
     @ViewBuilder
     private func importPreview(_ bundle: MigrationBundle) -> some View {
         VStack(alignment: .leading, spacing: WFSpace.xs) {
-            Text("文件来自打勾个人版，包含：")
-                .font(WFType.supporting)
-                .foregroundStyle(WFColors.secondaryText)
             Text("任务 \(bundle.tasks.count) · 笔记 \(bundle.notes.count) · 清单 \(bundle.lists.count) · 文件夹 \(bundle.folders.count) · 附件 \(bundle.attachmentCount)")
                 .font(WFType.supporting)
                 .monospacedDigit()
@@ -401,7 +375,7 @@ struct SettingsDataView: View {
                         .foregroundStyle(WFColors.tertiaryText)
                 }
             }
-            Text("合并会保留本地已有内容，相同 ID 的记录跳过；清空后导入以文件内容为准。")
+            Text("合并保留已有内容，清空后导入会替换本机内容。执行前自动备份，导入后需重启应用。")
                 .font(WFType.supporting)
                 .foregroundStyle(WFColors.tertiaryText)
         }
@@ -517,8 +491,8 @@ struct SettingsDataView: View {
     }
 
     private var backupSummaryText: String {
-        guard let info = backupInfo, info.count > 0, let name = info.latestName else { return "每日自动备份：暂无" }
-        return "每日自动备份：\(info.count) 份，最新 \(name)"
+        guard let info = backupInfo, info.count > 0, let day = info.latestDateStamp else { return "暂无自动备份" }
+        return "\(info.count) 份自动备份 · 最近 \(day)"
     }
 
     // MARK: Actions

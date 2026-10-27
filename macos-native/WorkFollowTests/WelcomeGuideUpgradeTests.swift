@@ -63,4 +63,22 @@ final class WelcomeGuideUpgradeTests: XCTestCase {
         XCTAssertFalse(workspace.upgradeWelcomeGuide())
         XCTAssertTrue(workspace.allTasks.contains { $0.id == userTask })
     }
+
+    func testUpgradeAddsAgentInstructionsAndKeepsExistingProgress() throws {
+        let workspace = makeWorkspace()
+        XCTAssertTrue(workspace.installWelcomeGuide())
+        let agent = try XCTUnwrap(workspace.allTasks.first { $0.guideAction == WelcomeGuide.Action.agentAccess.rawValue })
+        let existing = try XCTUnwrap(workspace.allTasks.first { $0.guideAction == WelcomeGuide.Action.quickAdd.rawValue })
+        _ = workspace.delete(agent.id)
+        _ = workspace.complete(existing.id)
+
+        XCTAssertTrue(workspace.upgradeWelcomeGuide())
+        XCTAssertEqual(workspace.task(for: existing.id)?.status, .completed)
+        let instructions = try XCTUnwrap(workspace.allTasks.first {
+            $0.guideAction == WelcomeGuide.Action.agentAccess.rawValue && $0.deletedAt == nil
+        })
+        XCTAssertTrue(instructions.document.plainText.contains("复制给 AI"))
+        XCTAssertTrue(instructions.document.plainText.contains("终端手动执行"))
+        XCTAssertEqual(workspace.allTasks.filter { $0.guideAction != nil && $0.deletedAt == nil }.count, WelcomeGuide.items.count)
+    }
 }

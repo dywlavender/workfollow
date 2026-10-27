@@ -75,4 +75,42 @@ struct Note: Identifiable, Equatable, Codable {
 
     /// Flutter hasPreservedRichContent 语义：存在保留的原始内容即视为受保护。
     var hasPreservedRichContent: Bool { deferredOriginal?.isPresent ?? (originalContentJson != nil) }
+    var storedOriginalContentForMigration: String? { originalContent }
+    var deferredOriginalReference: DeferredOriginalContent? { deferredOriginal }
+    mutating func adoptDeferredOriginal(_ reference: DeferredOriginalContent?) { deferredOriginal = reference }
+}
+
+// MARK: - Task projection
+
+/// Notes are tasks with `kind == .note`. These adapters keep the existing
+/// note UI/test surface while the authoritative entity becomes `Task`.
+extension Note {
+    init(task: Task) {
+        let meta = task.note ?? TaskNoteMetadata(folder: "未归档")
+        self.init(id: task.id, title: task.title, document: task.document,
+                  folder: meta.folder, folderID: meta.folderID,
+                  favorite: meta.isFavorite, linkedTaskIDs: meta.linkedTaskIDs,
+                  attachments: task.attachments, updatedAt: task.updatedAt,
+                  deletedAt: task.deletedAt,
+                  originalContentJson: meta.storedOriginalContentForMigration)
+        deferredOriginal = meta.deferredOriginalReference
+    }
+
+    /// Migration path: preserve the note id so floating windows, links and
+    /// search history keep pointing at the same object.
+    func migratedTask() -> Task {
+        var task = Task(id: id, title: title, document: document, attachments: attachments,
+                        list: .notes, priority: .none, schedule: TaskSchedule(),
+                        parentID: nil, childOrder: 0, createdAt: updatedAt, updatedAt: updatedAt,
+                        deletedAt: deletedAt)
+        task.kind = .note
+        var meta = TaskNoteMetadata(folder: folder, folderID: folderID, isFavorite: favorite,
+                                    linkedTaskIDs: linkedTaskIDs,
+                                    originalContentJson: storedOriginalContentForMigration)
+        if storedOriginalContentForMigration == nil, let reference = deferredOriginal {
+            meta.deferOriginalContent(reference)
+        }
+        task.note = meta
+        return task
+    }
 }

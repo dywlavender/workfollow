@@ -164,7 +164,7 @@ struct FocusWorkspaceView: View {
                 }
                 if let workspace {
                     BusinessPicker("关联任务", selection: $addTimerTaskID, options:
-                        [BusinessChoice(nil, "不关联")] + workspace.allTasks.filter { $0.deletedAt == nil && !$0.isAbandoned }.map { task in
+                        [BusinessChoice(nil, "不关联")] + workspace.allTasks.filter { !$0.isNoteTask && $0.deletedAt == nil && !$0.isAbandoned }.map { task in
                             BusinessChoice(Optional(task.id), task.title.isEmpty ? "未命名任务" : task.title, symbol: "checklist")
                         }, width: PopupMetrics.relationPickerWidth)
                 }

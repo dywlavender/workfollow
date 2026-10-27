@@ -80,7 +80,7 @@ final class TaskTagPickerInteractionTests: XCTestCase {
         func open() throws {
             try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
             let more = try InspectorPanelTestSupport.actionPanel(in: window)
-            XCTAssertEqual(more.frame.width, 208, accuracy: 1)
+            XCTAssertEqual(more.frame.width, 176, accuracy: 1)
             try InspectorPanelTestSupport.clickButton(containing: "标签", in: more)
             XCTAssertFalse(more.isVisible)
             let picker = try InspectorPanelTestSupport.actionPanel(in: window)

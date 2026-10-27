@@ -66,13 +66,13 @@ final class SummaryPresentationTests: XCTestCase {
         let report = builder.report(tasks: [first, second], weekOf: day(21))
         var options = SummaryDocumentOptions.standard
         options.grouping = .priority
-        let priorities = builder.document(for: report, options: options).blocks.filter { $0.kind == .heading(3) }.map(\.plainText)
+        let priorities = builder.document(for: report, options: options).blocks.filter { $0.kind == .heading(2) }.map(\.plainText)
         XCTAssertEqual(priorities, ["高优先级", "低优先级"])
         options.grouping = .list
-        let lists = builder.document(for: report, options: options).blocks.filter { $0.kind == .heading(3) }.map(\.plainText)
+        let lists = builder.document(for: report, options: options).blocks.filter { $0.kind == .heading(2) }.map(\.plainText)
         XCTAssertEqual(Set(lists), ["工作", "学习"])
         options.grouping = .tag
-        let tags = builder.document(for: report, options: options).blocks.filter { $0.kind == .heading(3) }.map(\.plainText)
+        let tags = builder.document(for: report, options: options).blocks.filter { $0.kind == .heading(2) }.map(\.plainText)
         XCTAssertEqual(Set(tags), ["紧急", "项目"])
         XCTAssertEqual(report.completed.count, 2)
     }
@@ -82,13 +82,14 @@ final class SummaryPresentationTests: XCTestCase {
         let future = task("下周访谈", due: 28)
         let report = builder.report(tasks: [current, future], weekOf: day(21))
         var document = builder.document(for: report)
-        let reflection = try XCTUnwrap(document.blocks.firstIndex { $0.plainText == "本周复盘" })
-        document.blocks[reflection + 1].runs = [DocumentRun(text: "下次提前沟通评审时间。", marks: [.bold])]
+        document.blocks.append(DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "本周复盘")]))
+        document.blocks.append(DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "下次提前沟通评审时间。", marks: [.bold])]))
+        let reflection = document.blocks.count - 1
         XCTAssertFalse(document.plainText.contains(future.title))
         var options = SummaryDocumentOptions.standard; options.includesNextWeek = true
         let draft = builder.document(for: report, options: options, preserving: document)
         XCTAssertTrue(draft.plainText.contains(future.title))
-        XCTAssertEqual(WeeklyReportBuilder.reflection(in: draft).first?.runs, document.blocks[reflection + 1].runs)
+        XCTAssertEqual(WeeklyReportBuilder.reflection(in: draft).first?.runs, document.blocks[reflection].runs)
         XCTAssertFalse(document.plainText.contains(future.title))
     }
 

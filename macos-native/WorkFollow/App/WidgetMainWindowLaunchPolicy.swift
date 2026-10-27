@@ -23,12 +23,14 @@ enum NativeMainWindowPresenter {
 @MainActor
 final class WidgetMainWindowLaunchPolicy: ObservableObject {
     let startedForWidget: Bool
+    let startedForAutomation: Bool
     @Published private(set) var suppressInitialMainWindow: Bool
     private var legacyWindows: [NSWindow] = []
 
     init(arguments: [String] = ProcessInfo.processInfo.arguments) {
         startedForWidget = arguments.contains(WidgetQuickAddLaunch.argument)
-        suppressInitialMainWindow = startedForWidget
+        startedForAutomation = arguments.contains(AutomationChannel.launchArgument)
+        suppressInitialMainWindow = startedForWidget || startedForAutomation
     }
 
     // macOS 14 has no Scene.defaultLaunchBehavior. Prepare its initial window

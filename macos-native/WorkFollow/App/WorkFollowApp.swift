@@ -56,7 +56,7 @@ struct WorkFollowApp: App {
         if #available(macOS 15, *) {
             return SceneBuilder.buildOptional(SceneBuilder.buildLimitedAvailability(mainWindow
                 .defaultLaunchBehavior(windowLaunch.suppressInitialMainWindow ? .suppressed : .automatic)
-                .restorationBehavior(windowLaunch.startedForWidget ? .disabled : .automatic)))
+                .restorationBehavior(windowLaunch.startedForWidget || windowLaunch.startedForAutomation ? .disabled : .automatic)))
         }
         return SceneBuilder.buildOptional(SceneBuilder.buildLimitedAvailability(mainWindow))
     }

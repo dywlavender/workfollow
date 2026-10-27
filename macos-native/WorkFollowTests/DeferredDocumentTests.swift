@@ -64,10 +64,11 @@ final class DeferredDocumentTests: XCTestCase {
         XCTAssertEqual(environment.documentReadCount, 0)
         XCTAssertEqual(environment.originalContentReadCount, 0)
         let restored = try XCTUnwrap(repository.load())
-        XCTAssertEqual(restored.tasks.first?.document, original.document)
-        XCTAssertEqual(restored.notes.first?.document, note.document)
-        XCTAssertEqual(restored.notes.first?.originalContentJson, note.originalContentJson)
-        XCTAssertEqual(restored.notes.first?.folder, "另一文件夹")
+        XCTAssertEqual(restored.tasks.first { !$0.isNoteTask }?.document, original.document)
+        let restoredNote = try XCTUnwrap(restored.tasks.first { $0.isNoteTask && $0.id == note.id })
+        XCTAssertEqual(restoredNote.document, note.document)
+        XCTAssertEqual(restoredNote.note?.originalContentJson, note.originalContentJson)
+        XCTAssertEqual(restoredNote.note?.folder, "另一文件夹")
     }
 
     func testFirstReadCachesRichBlocksAndValueEditsKeepOriginalDocument() throws {
@@ -128,11 +129,15 @@ final class DeferredDocumentTests: XCTestCase {
         XCTAssertEqual(environment.documentReadCount, 2)
         XCTAssertEqual(environment.originalContentReadCount, 0)
         flush(environment)
-        XCTAssertEqual(try repository.load()?.notes.first { $0.id == note.id }?.originalContentJson, note.originalContentJson)
+        let persistedNote = try XCTUnwrap(repository.load()?.tasks.first { $0.isNoteTask && $0.id == note.id })
+        XCTAssertEqual(persistedNote.note?.originalContentJson, note.originalContentJson)
+        // Copy creation and the legacy archive command are separate task
+        // history steps now that notes share the task store.
+        environment.taskWorkspace.undo()
         environment.taskWorkspace.undo()
         flush(environment)
         XCTAssertFalse(environment.notesWorkspace.notes.contains { $0.id == convertedID })
-        XCTAssertEqual(try repository.load()?.tasks.first?.document, original.document)
+        XCTAssertEqual(try repository.load()?.tasks.first { !$0.isNoteTask }?.document, original.document)
     }
 
     func testBodySearchCacheRefreshesAfterDocumentChange() throws {

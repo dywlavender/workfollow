@@ -47,6 +47,7 @@ struct TaskInspectorShell: View {
     @State private var showKindMenu = false
     /// 切到清单会压平标题/引用/代码/分割线时的确认目标。
     @State private var pendingChecklistTaskID: UUID?
+    @State private var aiTaskRequest: AITaskRequest?
     @StateObject private var editorHandle = DocumentEditorHandle()
     @ObservedObject private var floatingTasks = StickyNoteWindowController.shared
 
@@ -87,6 +88,7 @@ struct TaskInspectorShell: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
+        .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
         .documentFormattingToolbar(isPresented: showFormattingToolbar && !selectedTaskHasFloatingEditor,
                                    handle: editorHandle)
         .onReceive(workspace.selectionWillChange) { nextID in
@@ -326,6 +328,17 @@ struct TaskInspectorShell: View {
         VStack(spacing: 2) {
             moreAction("添加子任务", symbol: "list.bullet.indent") {
                 workspace.requestChildTitleEditor(for: task.id)
+            }
+            if !task.isNoteTask {
+                moreAction("拆分子任务…", symbol: "sparkles") {
+                    editorHandle.prepareForDocumentChange()
+                    do {
+                        let current = workspace.task(for: task.id) ?? task
+                        aiTaskRequest = try environment.aiTaskRequest(for: current)
+                    } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
+                }.disabled(task.isClosed || task.deletedAt != nil ||
+                    (task.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && task.document.isEmpty))
+                .inspectorRenderAnchor(.aiBreakdownMenuRow)
             }
             moreAction("关联主任务", symbol: "rectangle.3.group") {
                 openActionPanel(.parent)

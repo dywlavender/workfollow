@@ -27,6 +27,7 @@ enum WelcomeGuide {
         case allTasks = "all-tasks"
         case summary
         case commandPalette = "command-palette"
+        case agentAccess = "agent-access"
 
         var title: String {
             switch self {
@@ -43,6 +44,7 @@ enum WelcomeGuide {
             case .allTasks: return "打开所有任务"
             case .summary: return "打开摘要"
             case .commandPalette: return "快速打开"
+            case .agentAccess: return "查看 AI 接入说明"
             }
         }
 
@@ -174,6 +176,15 @@ enum WelcomeGuide {
                 "打开「摘要」，选择本周范围。",
                 "生成后可以复制为纯文本 / 富文本 / Markdown，或直接发邮件。",
                 "常用格式可以存成摘要模板，下次一键复用。"
+             ]),
+        Item(section: .explore,
+             title: "🤖 让 AI 操作任务和笔记",
+             action: .agentAccess,
+             summary: "把接入说明交给本机 AI 助手，之后用一句话管理 WorkFollow。",
+             steps: [
+                "点击「复制给 AI」，把说明粘贴到 WorkBuddy、Codex 等本机 AI 助手，让它完成配置。",
+                "也可以在下方选择助手，复制命令到终端手动执行。",
+                "接入后试着说：「把这段讨论保存成笔记，再建一个明天下午三点跟进的待办。」"
              ]),
         Item(section: .explore,
              title: "💡 帮助与快捷键",

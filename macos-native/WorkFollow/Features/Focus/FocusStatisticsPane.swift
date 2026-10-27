@@ -41,7 +41,7 @@ struct FocusStatisticsPane: View {
                         [BusinessChoice(nil, "全部来源"), BusinessChoice(FocusRecordSource.timer, "计时"),
                          BusinessChoice(.manual, "补记"), BusinessChoice(.legacy, "历史记录")])
                     BusinessPicker("任务", selection: $taskID, options:
-                        [BusinessChoice(nil, "全部任务")] + (workspace?.allTasks.filter { $0.deletedAt == nil } ?? []).map { task in
+                        [BusinessChoice(nil, "全部任务")] + (workspace?.allTasks.filter { !$0.isNoteTask && $0.deletedAt == nil } ?? []).map { task in
                             BusinessChoice(Optional(task.id), task.title.isEmpty ? "未命名任务" : task.title, symbol: "checklist")
                         }, width: PopupMetrics.relationPickerWidth)
                 }

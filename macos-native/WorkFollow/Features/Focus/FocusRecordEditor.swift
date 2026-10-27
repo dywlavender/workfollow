@@ -80,7 +80,7 @@ struct FocusRecordEditor: View {
         }.frame(minHeight: 26)
     }
     private var candidates: [Task] {
-        (workspace?.allTasks ?? []).filter { $0.deletedAt == nil && !$0.isAbandoned }
+        (workspace?.allTasks ?? []).filter { !$0.isNoteTask && $0.deletedAt == nil && !$0.isAbandoned }
     }
 }
 

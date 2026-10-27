@@ -125,6 +125,13 @@ extension AppEnvironment {
             navigate(to: .summary)
         case .commandPalette:
             commandPalettePresented = true
+        case .agentAccess:
+            openWelcomeGuide()
+            if let task = taskWorkspace.allTasks.first(where: {
+                $0.guideAction == action.rawValue && $0.deletedAt == nil
+            }) {
+                taskWorkspace.select(task.id)
+            }
         }
         NativeMainWindowPresenter.activate()
         return true

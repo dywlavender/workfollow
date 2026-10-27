@@ -94,7 +94,8 @@ final class WorkspaceSearchSession: ObservableObject {
     }
     private func buildEntries(workspace: TaskWorkspaceModel, notes: [Note], destination: NativeDestination) -> [CommandPaletteEntry] {
         let tasks = workspace.allTasks.filter {
-            (!showAll || list == nil || $0.list.name == list)
+            !$0.isNoteTask
+                && (!showAll || list == nil || $0.list.name == list)
                 && (!showAll || status == .all || (status == .completed ? $0.status == .completed : !$0.isClosed))
         }
         let values = CommandPaletteProjection.entries(query: query,

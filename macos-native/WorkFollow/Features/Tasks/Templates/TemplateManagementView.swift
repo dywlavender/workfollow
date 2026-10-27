@@ -73,6 +73,7 @@ struct TemplateManagementView: View {
         }
         .padding(.vertical, 13)
         .contentShape(Rectangle())
+        .rowHoverBackground(cornerRadius: 8)
     }
 
     @MainActor

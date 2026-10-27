@@ -48,7 +48,7 @@ enum CommandPaletteProjection {
 
         let loweredQuery = query.lowercased()
         let taskResults = tasks
-            .filter { $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted }
+            .filter { !$0.isNoteTask && $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted }
             .filter {
                 $0.document.matches(loweredQuery, prefix: $0.title + " " + $0.list.name + " ",
                                     suffix: " " + $0.tags.joined(separator: " "), lowercase: true)

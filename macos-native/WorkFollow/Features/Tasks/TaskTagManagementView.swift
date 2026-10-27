@@ -133,8 +133,7 @@ struct TaskTagsSectionView: View {
         .padding(.leading, 11)
         .padding(.trailing, WFSpace.sm)
         .padding(.leading, CGFloat(workspace.tagDepth(tag.name)) * 16)
-        .background(workspace.activeTag == tag.name ? WFColors.listSelection : .clear,
-                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
+        .rowHoverBackground(selected: workspace.activeTag == tag.name)
         .draggable("workfollow-tag:" + tag.id.uuidString)
         .overlay(alignment: .top) {
             Rectangle().fill(targeted == tag.id ? WFColors.accent : .clear)

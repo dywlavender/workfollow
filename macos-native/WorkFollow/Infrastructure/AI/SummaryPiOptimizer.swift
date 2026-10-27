@@ -56,8 +56,11 @@ struct SummaryPiOptimizer {
     var model: String = ""
 
     func optimize(text: String, options: SummaryAIOptions) async throws -> String {
-        let control = SummaryProcessControl()
-        let prompt = Self.prompt(text: text, options: options)
+        try await generate(prompt: Self.prompt(text: text, options: options))
+    }
+
+    func generate(prompt: String) async throws -> String {
+        let control = PiProcessControl()
         return try await withTaskCancellationHandler {
             try _Concurrency.Task.checkCancellation()
             return try await _Concurrency.Task.detached(priority: .userInitiated) {
@@ -68,7 +71,7 @@ struct SummaryPiOptimizer {
 
     static func prompt(text: String, options: SummaryAIOptions) -> String {
         var lines = [
-            "把下面这份工作周报改写成一段连贯的总结文字。",
+            "把下面这份任务摘要改写得更连贯、简洁，保留原有结构。",
             "长度：\(options.length.rawValue)",
             "语言风格：\(options.style.rawValue)",
         ]
@@ -84,6 +87,13 @@ struct SummaryPiOptimizer {
                 "保留手写复盘的意思，缺少复盘时留空，不补写评价。",
                 "每个标题单独一行，任务用短列表，避免空话。"
             ]
+        } else {
+            lines += [
+                "保留原文的日期范围、分段标题（如已完成、已放弃、未完成）和条目对应关系，不要新增或删除分组标题。",
+                "只能使用原文中的事实，不编造成果、原因、数字、完成状态或安排。",
+                "子任务推进不能描述成整个父任务已完成；结转任务不能描述成成果。",
+                "按原有标题分条输出，每条以“- ”开头，不要额外解释。"
+            ]
         }
         if !options.profession.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             lines.append("职业：\(options.profession)")
@@ -93,14 +103,14 @@ struct SummaryPiOptimizer {
         }
         lines.append(options.weeklyStructure
             ? "只输出改写后的正文，使用上述四个标题，不要额外解释。"
-            : "只输出改写后的正文，不要解释、不要重复原文、不要加标题。")
+            : "只输出改写后的正文，使用 Markdown 标题与列表，不要重复原文。")
         lines.append("")
         lines.append("原文：")
         lines.append(text)
         return lines.joined(separator: "\n")
     }
 
-    private static func run(executable: String, model: String, prompt: String, timeout: TimeInterval, control: SummaryProcessControl) throws -> String {
+    private static func run(executable: String, model: String, prompt: String, timeout: TimeInterval, control: PiProcessControl) throws -> String {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
             throw SummaryPiError.unavailable
         }
@@ -155,7 +165,7 @@ struct SummaryPiOptimizer {
     }
 }
 
-private final class SummaryProcessControl: @unchecked Sendable {
+final class PiProcessControl: @unchecked Sendable {
     private let lock = NSLock()
     private var process: Process?
     private var cancelled = false

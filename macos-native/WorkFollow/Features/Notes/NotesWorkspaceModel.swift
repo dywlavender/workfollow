@@ -1,29 +1,56 @@
 import Combine
 import Foundation
 
+/// Notes are `Task(kind: .note)` now. This model is the Notes-page projection:
+/// it keeps the folder/favorite/linked-task API used by the view, while every
+/// read and write goes through the same task store and history as the task page.
 @MainActor
 final class NotesWorkspaceModel: ObservableObject {
-    private let store: NoteStore
+    private let taskWorkspace: TaskWorkspaceModel
     private let clock: () -> Date
     private var savedFolders: [String]
     private var folderRecords: [NoteFolderMeta]
-    let persistenceChanges = PassthroughSubject<NotePersistenceChange, Never>()
+    private var taskSubscription: AnyCancellable?
 
+    /// Standalone initializer used by notes-only tests and previews. The app
+    /// injects its shared `TaskWorkspaceModel` through the initializer below.
     init(initialNotes: [Note] = [], folders: [String] = [],
          folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init) {
-        store = NoteStore(notes: initialNotes, clock: clock)
+        self.clock = clock
+        taskWorkspace = TaskWorkspaceModel(clock: clock, seedDemoData: false,
+                                          initialTasks: initialNotes.map { $0.migratedTask() })
         savedFolders = folders
         folderRecords = folderMetadata
+        bootstrapFolders(initialNotes: initialNotes)
+        bindTaskWorkspace()
+    }
+
+    init(taskWorkspace: TaskWorkspaceModel, folders: [String] = [],
+         folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init) {
         self.clock = clock
-        let allNames = folders + folderMetadata.map(\.name) + initialNotes.map(\.folder)
+        self.taskWorkspace = taskWorkspace
+        savedFolders = folders
+        folderRecords = folderMetadata
+        bootstrapFolders(initialNotes: taskWorkspace.noteTasks.map(Note.init(task:)))
+        bindTaskWorkspace()
+    }
+
+    private func bootstrapFolders(initialNotes: [Note]) {
+        let allNames = savedFolders + folderRecords.map(\.name) + initialNotes.map(\.folder)
         var knownNames = Set(folderRecords.map(\.name))
         for name in allNames where name != "未归档" && knownNames.insert(name).inserted {
             folderRecords.append(NoteFolderMeta(id: UUID().uuidString, parentID: nil,
                                                 name: name, sortOrder: folderRecords.count,
                                                 createdAt: nil, updatedAt: nil))
         }
-        store.onChange = { [weak self] change in self?.persistenceChanges.send(change) }
     }
+
+    private func bindTaskWorkspace() {
+        taskSubscription = taskWorkspace.$revision.dropFirst().sink { [weak self] _ in
+            self?.revision += 1
+        }
+    }
+
     @Published var selectedID: UUID?
     @Published var folderFilter: String?
     @Published var favoritesOnly = false
@@ -66,6 +93,7 @@ final class NotesWorkspaceModel: ObservableObject {
         revision += 1
         return true
     }
+
     @discardableResult func renameFolder(_ old: String, to rawName: String) -> Bool {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name != "未归档", name != old, !folders.contains(name) else { return false }
@@ -74,21 +102,41 @@ final class NotesWorkspaceModel: ObservableObject {
             folderRecords[index].name = name
         }
         savedFolders = folders.map { $0 == old ? name : $0 }
-        store.moveFolder(old, to: name, destinationID: folderID)
+        for note in notes where note.folder == old {
+            taskWorkspace.editNote(note.id, allowDeleted: true) { task in
+                var meta = task.note ?? TaskNoteMetadata()
+                meta.folder = name
+                meta.folderID = folderID
+                task.note = meta
+            }
+        }
         if folderFilter == old { folderFilter = name }
         revision += 1
         return true
     }
+
     func removeFolder(_ name: String) {
         savedFolders = folders.filter { $0 != name }
-        store.moveFolder(name, to: "未归档", destinationID: nil)
+        for note in notes where note.folder == name {
+            taskWorkspace.editNote(note.id, allowDeleted: true) { task in
+                var meta = task.note ?? TaskNoteMetadata()
+                meta.folder = "未归档"
+                meta.folderID = nil
+                task.note = meta
+            }
+        }
         folderRecords.removeAll { $0.name == name }
         if folderFilter == name { folderFilter = "未归档" }
         revision += 1
     }
+
     @Published private(set) var revision = 0
-    var notes: [Note] { _ = revision; return store.notes }
+    var notes: [Note] {
+        _ = revision
+        return taskWorkspace.noteTasks.map(Note.init(task:))
+    }
     var selected: Note? { notes.first { $0.id == selectedID } }
+
     func rows(trash: Bool, query: String, folder: String?, favorites: Bool) -> [Note] {
         let filtered = notes.filter {
             ($0.deletedAt != nil) == trash &&
@@ -98,20 +146,16 @@ final class NotesWorkspaceModel: ObservableObject {
         }
         return trash ? filtered.sorted { $0.deletedAt! > $1.deletedAt! } : filtered
     }
+
     func sort(_ order: NoteListSort) {
-        store.sort(order)
+        _ = taskWorkspace.sortNotes(byTitle: order == .title)
         revision += 1
     }
+
     @discardableResult
     func create(folder: String? = nil, select: Bool = true) -> UUID {
-        let id = store.create()
-        if let folder {
-            let folderID = self.folderID(named: folder)
-            store.edit(id) {
-                $0.folder = folder
-                $0.folderID = folderID
-            }
-        }
+        let name = folder ?? "未归档"
+        let id = taskWorkspace.createNote(folder: name, folderID: folderID(named: name)) ?? UUID()
         if select { selectedID = id }
         revision += 1
         return id
@@ -125,7 +169,7 @@ final class NotesWorkspaceModel: ObservableObject {
               note.deletedAt == nil,
               note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               note.document.isEmpty else { return false }
-        store.removeCreatedNote(id)
+        taskWorkspace.discardNoteForCompensation(id)
         if selectedID == id { selectedID = nil }
         revision += 1
         return true
@@ -133,11 +177,14 @@ final class NotesWorkspaceModel: ObservableObject {
 
     func moveNoteToFolder(_ id: UUID, named folder: String) {
         let folderID = self.folderID(named: folder)
-        edit(id) {
-            $0.folder = folder
-            $0.folderID = folderID
+        taskWorkspace.editNote(id) { task in
+            var meta = task.note ?? TaskNoteMetadata()
+            meta.folder = folder
+            meta.folderID = folderID
+            task.note = meta
         }
     }
+
     @discardableResult
     func createFromTask(_ task: Task, children: [Task], clock: () -> Date) -> UUID {
         var blocks = task.document.blocks
@@ -151,30 +198,80 @@ final class NotesWorkspaceModel: ObservableObject {
             blocks.append(DocumentBlock(kind: .paragraph,
                                         runs: [DocumentRun(text: task.tags.map { "#" + $0 }.joined(separator: " "))]))
         }
-        let note = Note(id: UUID(), title: task.title, document: NativeDocument(blocks: blocks),
-                        folder: "未归档", linkedTaskIDs: [task.id], attachments: task.attachments,
-                        updatedAt: clock())
-        store.insert(note)
-        selectedID = note.id
+        let noteID = taskWorkspace.createNote(title: task.title,
+                                              document: NativeDocument(blocks: blocks),
+                                              folder: "未归档") ?? UUID()
+        taskWorkspace.editNote(noteID) { noteTask in
+            noteTask.attachments = task.attachments
+            var meta = noteTask.note ?? TaskNoteMetadata()
+            meta.linkedTaskIDs = [task.id]
+            noteTask.note = meta
+        }
+        selectedID = noteID
         revision += 1
-        return note.id
+        return noteID
     }
+
     func discardCreatedNoteForUndo(_ id: UUID) {
-        store.removeCreatedNote(id)
+        taskWorkspace.discardNoteForCompensation(id)
         if selectedID == id { selectedID = nil }
         revision += 1
     }
+
     func restoreCreatedNoteForRedo(_ note: Note) {
         guard !notes.contains(where: { $0.id == note.id }) else { return }
-        store.insert(note)
+        taskWorkspace.restoreNoteForCompensation(note)
         selectedID = note.id
         revision += 1
     }
-    func edit(_ id: UUID, _ mutation: (inout Note) -> Void) { store.edit(id, mutation); revision += 1 }
-    func delete(_ id: UUID) { store.delete(id); selectedID = nil; revision += 1 }
-    func restore(_ id: UUID) { store.restore(id); selectedID = nil; revision += 1 }
-    func purge(_ id: UUID) { store.purge(id); selectedID = nil; revision += 1 }
-    func emptyTrash() { store.emptyTrash(); selectedID = nil; revision += 1 }
+
+    func edit(_ id: UUID, _ mutation: (inout Note) -> Void) {
+        taskWorkspace.editNote(id) { task in
+            var note = Note(task: task)
+            mutation(&note)
+            Self.apply(note: note, to: &task)
+        }
+    }
+
+    private static func apply(note: Note, to task: inout Task) {
+        task.title = note.title
+        task.document = note.document
+        task.attachments = note.attachments
+        task.deletedAt = note.deletedAt
+        var meta = task.note ?? TaskNoteMetadata()
+        meta.folder = note.folder.isEmpty ? "未归档" : note.folder
+        meta.folderID = note.folderID
+        meta.isFavorite = note.favorite
+        meta.linkedTaskIDs = note.linkedTaskIDs
+        let storedChanged = note.storedOriginalContentForMigration != meta.storedOriginalContentForMigration
+        let referenceChanged = note.deferredOriginalReference !== meta.deferredOriginalReference
+        if storedChanged || referenceChanged {
+            if let stored = note.storedOriginalContentForMigration {
+                meta.adoptStoredOriginalContent(stored)
+            } else if let reference = note.deferredOriginalReference {
+                meta.deferOriginalContent(reference)
+            } else {
+                meta.adoptStoredOriginalContent(nil)
+            }
+        }
+        task.note = meta
+    }
+
+    /// Note → task keeps the same id and body; the task page projection picks
+    /// the row up again in its original list (or the inbox for `.notes`).
+    @discardableResult
+    func convertToTask(_ id: UUID) -> TaskActionResult {
+        guard taskWorkspace.task(for: id)?.isNoteTask == true else { return .failure(.missingTask) }
+        let result = taskWorkspace.setKind(id, .text)
+        if result.taskID != nil, selectedID == id { selectedID = nil }
+        revision += 1
+        return result
+    }
+
+    func delete(_ id: UUID) { _ = taskWorkspace.deleteNote(id); selectedID = nil }
+    func restore(_ id: UUID) { _ = taskWorkspace.restoreNote(id); selectedID = nil }
+    func purge(_ id: UUID) { _ = taskWorkspace.purgeNote(id); selectedID = nil }
+    func emptyTrash() { _ = taskWorkspace.emptyNoteTrash(); selectedID = nil }
 
     // MARK: - 任务数据接缝（Round B2 迁移）
 
@@ -195,7 +292,11 @@ final class NotesWorkspaceModel: ObservableObject {
     /// 导入/迁移侧写入原始富文本 JSON；写入后该笔记进入受保护状态
     /// （MigrationSnapshot 属禁改文件，未来接入时调用这里）。
     func preserveOriginalContent(_ id: UUID, json: String) {
-        edit(id) { $0.originalContentJson = json }
+        taskWorkspace.editNote(id) { task in
+            var meta = task.note ?? TaskNoteMetadata()
+            meta.originalContentJson = json
+            task.note = meta
+        }
     }
 
     /// Flutter convertNoteToPlainText：显式创建可独立编辑的纯文本副本。
@@ -205,17 +306,20 @@ final class NotesWorkspaceModel: ObservableObject {
     func createPlainTextCopy(_ id: UUID) -> UUID? {
         guard let source = notes.first(where: { $0.id == id }),
               source.hasPreservedRichContent, (try? source.document.materialized()) != nil else { return nil }
-        let copy = Note(id: UUID(),
-                        title: notePlainTextCopyTitle(source.title),
-                        document: NativeDocument(plainText: notePlainTextBody(source.document)),
-                        folder: source.folder,
-                        folderID: source.folderID,
-                        favorite: source.favorite,
-                        updatedAt: clock())
-        store.insert(copy)
-        selectedID = copy.id
+        guard let copyID = taskWorkspace.createNote(
+            title: notePlainTextCopyTitle(source.title),
+            document: NativeDocument(plainText: notePlainTextBody(source.document)),
+            folder: source.folder, folderID: source.folderID) else { return nil }
+        if source.favorite {
+            taskWorkspace.editNote(copyID) { task in
+                var meta = task.note ?? TaskNoteMetadata()
+                meta.isFavorite = true
+                task.note = meta
+            }
+        }
+        selectedID = copyID
         revision += 1
-        return copy.id
+        return copyID
     }
 }
 

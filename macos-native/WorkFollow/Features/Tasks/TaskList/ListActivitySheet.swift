@@ -14,7 +14,7 @@ struct ListActivitySheet: View {
 
     @StateObject private var history = TaskActivityPageModel()
     private var taskIDs: [UUID] {
-        workspace.allTasks.filter { $0.list.name == listName }.map(\.id)
+        workspace.allTasks.filter { !$0.isNoteTask && $0.list.name == listName }.map(\.id)
     }
     private var events: [TaskActivityEvent] { history.events }
     private var queryKey: ActivityPageQueryKey {

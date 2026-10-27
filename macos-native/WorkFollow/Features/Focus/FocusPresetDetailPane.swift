@@ -168,6 +168,7 @@ struct FocusPresetDetailPane: View {
             }
         }
         .padding(.bottom, 20).contentShape(Rectangle()).onTapGesture { selectedRecord = record }
+        .rowHoverBackground(cornerRadius: 8)
         .accessibilityIdentifier("focus-preset-record-\(record.id.uuidString)")
         .businessContextMenu {
             Button("查看详情") { selectedRecord = record }

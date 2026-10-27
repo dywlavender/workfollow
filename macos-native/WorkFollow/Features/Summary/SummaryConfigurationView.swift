@@ -1,8 +1,11 @@
+import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SummaryConfigurationView: View {
     @Binding var options: SummaryDocumentOptions
     @Binding var aiEnabled: Bool
+    @Binding var aiOptions: SummaryAIOptions
     let range: SummaryDateRange
     let selectedLists: Set<String>
     let calendar: Calendar
@@ -25,7 +28,7 @@ struct SummaryConfigurationView: View {
     @State private var activePopover: Control?
 
     enum Control: String {
-        case date, list, status, more, grouping, content
+        case date, list, status, more, grouping, content, aiLength, aiStyle
         var width: CGFloat {
             switch self {
             case .date: SummaryPopoverMetrics.dateWidth
@@ -34,6 +37,7 @@ struct SummaryConfigurationView: View {
             case .more: SummaryPopoverMetrics.moreWidth
             case .grouping: SummaryPopoverMetrics.groupingWidth
             case .content: SummaryPopoverMetrics.contentWidth
+            case .aiLength, .aiStyle: SummaryPopoverMetrics.aiOptionWidth
             }
         }
     }
@@ -69,7 +73,7 @@ struct SummaryConfigurationView: View {
     private func control(_ title: String, value: String, kind: Control) -> some View {
         SummarySettingControl(title: title, value: value,
             isPresented: Binding(get: { activePopover == kind }, set: { activePopover = $0 ? kind : nil }),
-            width: kind.width) {
+            width: kind.width, anchor: "summary.setting." + kind.rawValue) {
             popover(kind).tint(WFColors.summaryAction)
         }
     }
@@ -101,15 +105,28 @@ struct SummaryConfigurationView: View {
                     .disabled(!grouping.isAvailable)
                     .help(grouping.isAvailable ? grouping.rawValue : "指派人分组需要协作成员，当前不可用。")
                 }
-            }.padding(6).frame(width: SummaryPopoverMetrics.groupingWidth)
+            }.padding(SummaryPopoverMetrics.contentPadding)
+                .frame(width: SummaryPopoverMetrics.groupingWidth)
         case .content:
+            SummaryContentPopover(options: $options)
+        case .aiLength:
             VStack(spacing: 2) {
-                ForEach(SummaryContentField.allCases, id: \.self) { field in
-                    SummaryChoiceRow(title: field.rawValue, selected: options.content.contains(field), checkOnLeft: true) {
-                        if !options.content.insert(field).inserted { options.content.remove(field) }
+                ForEach(SummaryAIOptions.Length.allCases, id: \.self) { length in
+                    SummaryChoiceRow(title: length.rawValue, selected: aiOptions.length == length) {
+                        aiOptions.length = length; activePopover = nil
                     }
                 }
-            }.padding(6).frame(width: SummaryPopoverMetrics.contentWidth)
+            }.padding(SummaryPopoverMetrics.contentPadding)
+                .frame(width: SummaryPopoverMetrics.aiOptionWidth)
+        case .aiStyle:
+            VStack(spacing: 2) {
+                ForEach(SummaryAIOptions.Style.allCases, id: \.self) { style in
+                    SummaryChoiceRow(title: style.rawValue, selected: aiOptions.style == style) {
+                        aiOptions.style = style; activePopover = nil
+                    }
+                }
+            }.padding(SummaryPopoverMetrics.contentPadding)
+                .frame(width: SummaryPopoverMetrics.aiOptionWidth)
         }
     }
 
@@ -134,15 +151,15 @@ struct SummaryConfigurationView: View {
             Text("模板").font(WFType.sectionSemibold)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    Button { onTemplate(nil) } label: { templateLabel("标准摘要") }.help("预览标准任务摘要")
+                    Button { onTemplate(nil) } label: { templateLabel("标准摘要") }.help("套用标准摘要配置")
                     ForEach(templates) { template in
-                        Button { onTemplate(template) } label: { templateLabel(template.name) }.help("预览模板：" + template.name)
+                        Button { onTemplate(template) } label: { templateLabel(template.name) }.help("套用模板：" + template.name)
                     }
                     Button(action: onSaveTemplate) {
                         Image(systemName: "plus").font(.system(size: 16, weight: .light))
                             .foregroundStyle(WFColors.secondaryText).frame(width: 30, height: 30)
                             .background(WFColors.panelFill, in: Circle())
-                    }.help("将当前摘要保存为模板").accessibilityLabel("添加摘要模板")
+                    }.help("将当前筛选与显示配置存为模板").accessibilityLabel("添加摘要模板")
                 }.buttonStyle(.borderless).padding(.vertical, 1)
             }
         }
@@ -162,23 +179,47 @@ struct SummaryConfigurationView: View {
                 Spacer()
                 Toggle("内容优化", isOn: $aiEnabled).toggleStyle(.switch).labelsHidden().controlSize(.mini)
             }
-            Text("根据所选日期的任务与复盘整理简洁摘要，先预览再采用。")
-                .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).fixedSize(horizontal: false, vertical: true)
-            if let aiError {
-                Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).fixedSize(horizontal: false, vertical: true)
-                Button("AI 接入设置…", action: onConfigureAI).buttonStyle(.borderless)
+            if aiEnabled {
+                Text("按当前任务重新组织摘要，先预览再采用。")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 0) {
+                    control("长度", value: aiOptions.length.rawValue, kind: .aiLength)
+                    aiRowDivider
+                    control("语言风格", value: aiOptions.style.rawValue, kind: .aiStyle)
+                    aiRowDivider
+                    aiTextRow("职业", placeholder: "可选，如产品经理", text: $aiOptions.profession)
+                    aiRowDivider
+                    aiTextRow("补充要求", placeholder: "可选，如不要用第一人称", text: $aiOptions.hint)
+                }.background(WFColors.panelFill, in: RoundedRectangle(cornerRadius: 8))
+                if let aiError {
+                    Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).fixedSize(horizontal: false, vertical: true)
+                    Button("AI 接入设置…", action: onConfigureAI).buttonStyle(.borderless)
+                }
+                if aiRunning { Button("取消生成", action: onCancelAI).buttonStyle(.borderless) }
+                Button(action: onGenerateAI) {
+                    HStack(spacing: 8) {
+                        if aiRunning { ProgressView().controlSize(.small).tint(.white) }
+                        Text(aiRunning ? "正在整理…" : "AI 优化").font(WFType.body)
+                    }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
+                        .background(WFColors.summaryAction, in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                }.buttonStyle(.plain).disabled(aiRunning || !canGenerate)
+                    .opacity(canGenerate ? 1 : 0.45)
             }
-            if aiRunning { Button("取消生成", action: onCancelAI).buttonStyle(.borderless) }
-            Button(action: onGenerateAI) {
-                HStack(spacing: 8) {
-                    if aiRunning { ProgressView().controlSize(.small).tint(.white) }
-                    Text(aiRunning ? "正在整理…" : "AI 优化").font(WFType.body)
-                }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
-                    .background(WFColors.summaryAction, in: RoundedRectangle(cornerRadius: 8))
-                    .contentShape(RoundedRectangle(cornerRadius: 8))
-            }.buttonStyle(.plain).disabled(!aiEnabled || aiRunning || !canGenerate)
-                .opacity(aiEnabled && canGenerate ? 1 : 0.45)
         }
+    }
+    private var aiRowDivider: some View {
+        Divider().overlay(WFColors.border).padding(.leading, 16)
+    }
+    private func aiTextRow(_ title: String, placeholder: String, text: Binding<String>) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(WFType.body).foregroundStyle(WFColors.text)
+            Spacer(minLength: 8)
+            TextField(placeholder, text: text).textFieldStyle(.plain)
+                .multilineTextAlignment(.trailing).font(WFType.body)
+                .foregroundStyle(WFColors.secondaryText).frame(maxWidth: 190)
+                .accessibilityLabel(title)
+        }.padding(.horizontal, 16).frame(height: 38)
     }
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -194,6 +235,7 @@ struct SummarySettingControl<Content: View>: View {
     let value: String
     @Binding var isPresented: Bool
     let width: CGFloat
+    var anchor = ""
     @ViewBuilder let content: () -> Content
     @State private var hovered = false
 
@@ -214,6 +256,7 @@ struct SummarySettingControl<Content: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain).accessibilityLabel(title + "：" + value)
+            .workflowActionAnchor(anchor)
             .onHover { hovered = $0 }
             .background {
                 AnchoredPropertyPanel(isPresented: $isPresented, width: width,
@@ -233,6 +276,18 @@ struct SummaryChoiceFrames: PreferenceKey {
 }
 #endif
 
+/// 摘要弹层统一的勾选样式，与 BusinessMenu 的菜单勾一致。
+struct SummaryCheckmark: View {
+    let selected: Bool
+    var body: some View {
+        Image(systemName: "checkmark")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(WFColors.accent)
+            .frame(width: 16)
+            .opacity(selected ? 1 : 0)
+    }
+}
+
 struct SummaryChoiceRow: View {
     let title: String
     let selected: Bool
@@ -245,15 +300,16 @@ struct SummaryChoiceRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                if checkOnLeft { Image(systemName: "checkmark").opacity(selected ? 1 : 0).frame(width: 16) }
+                if checkOnLeft { SummaryCheckmark(selected: selected) }
                 if let emoji { Text(emoji).frame(width: 18) }
                 else if let symbol { Image(systemName: symbol).frame(width: 18) }
                 Text(title).lineLimit(2).multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if !checkOnLeft { Image(systemName: "checkmark").opacity(selected ? 1 : 0).frame(width: 16) }
+                if !checkOnLeft { SummaryCheckmark(selected: selected) }
             }
             .font(WFType.body).foregroundStyle(selected ? WFColors.accent : WFColors.text)
-            .padding(.horizontal, 10).frame(maxWidth: .infinity, minHeight: PopupMetrics.menuRowHeight, alignment: .leading)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: SummaryPopoverMetrics.rowHeight, alignment: .leading)
             .background(hovered && isEnabled ? WFColors.hover : Color.clear,
                         in: RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius))
             .contentShape(Rectangle())
@@ -320,7 +376,7 @@ struct SummaryDatePopover: View {
                         SummaryChoiceRow(title: label(preset, value), selected: value == range) { onApply(value) }
                     }
                     SummaryChoiceRow(title: "自定义", selected: range.kind == .custom) { custom = true }
-                }.padding(6)
+                }.padding(SummaryPopoverMetrics.contentPadding)
             }
         }.frame(width: SummaryPopoverMetrics.dateWidth).environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
     }
@@ -344,7 +400,7 @@ struct SummaryStatusPopover: View {
                     SummaryChoiceRow(title: status.rawValue, selected: draft == status) { draft = status }
                         .help(status == .inProgress ? "已有子任务、检查项进展或专注记录。" : status.rawValue)
                 }
-            }.padding(6)
+            }.padding(SummaryPopoverMetrics.contentPadding)
             SummaryPopoverActions(onCancel: onCancel) { onApply(draft) }
         }.frame(width: SummaryPopoverMetrics.statusWidth)
     }
@@ -421,7 +477,7 @@ struct SummaryListPopover: View {
                             }.padding(.leading, 8)
                         }
                     }.padding(.horizontal, 10).padding(.bottom, 6)
-                }.padding(6).fixedSize(horizontal: false, vertical: true)
+                }.padding(SummaryPopoverMetrics.contentPadding).fixedSize(horizontal: false, vertical: true)
                     .background(GeometryReader { geometry in
                         Color.clear
                             .onAppear { updateContentHeight(geometry.size.height) }
@@ -436,7 +492,7 @@ struct SummaryListPopover: View {
         if height > 0 && abs(height - (contentHeight ?? 0)) > 0.5 { contentHeight = height }
     }
     private var estimatedHeight: CGFloat {
-        80 + (expanded ? CGFloat(topLevel.count + visibleFolders.count + (matches(TaskList.inbox.name) ? 1 : 0)) * 34 : 0)
+        80 + (expanded ? CGFloat(topLevel.count + visibleFolders.count + (matches(TaskList.inbox.name) ? 1 : 0)) * SummaryPopoverMetrics.rowHeight : 0)
     }
     private func matches(_ name: String) -> Bool { query.isEmpty || name.localizedCaseInsensitiveContains(query) }
     private var topLevel: [String] {
@@ -462,5 +518,263 @@ struct SummaryListPopover: View {
             all = false
             if !draft.insert(name).inserted { draft.remove(name) }
         }.padding(.leading, 8)
+    }
+}
+
+/// 显示内容弹层：固定槽位（完成时间前缀、详细内容尾随）+ 可排序的行内字段。
+struct SummaryContentPopover: View {
+    @Binding var options: SummaryDocumentOptions
+    @State private var expandedStyle: SummaryContentField?
+    @State private var dragging: SummaryContentField?
+    @State private var dropTarget: SummaryContentField?
+    @State private var hoveredField: SummaryContentField?
+    @State private var hoveredStyleChoice: String?
+
+    var body: some View {
+        VStack(spacing: 2) {
+            row(.completedTime)
+            ForEach(options.contentOrder, id: \.self) { field in
+                row(field)
+            }
+            row(.detail)
+        }
+        .padding(SummaryPopoverMetrics.contentPadding)
+        .onDisappear {
+            expandedStyle = nil
+            dragging = nil
+            dropTarget = nil
+            hoveredField = nil
+            hoveredStyleChoice = nil
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ field: SummaryContentField) -> some View {
+        VStack(spacing: 2) {
+            if field.isInline {
+                surface(field)
+                    .onDrop(of: [UTType.text], delegate: SummaryContentDropDelegate(
+                        target: field, order: $options.contentOrder,
+                        dragging: $dragging, dropTarget: $dropTarget))
+                    .contextMenu {
+                        Button("上移") { options.moveContentField(field, by: -1) }
+                            .disabled(index(of: field) == 0)
+                        Button("下移") { options.moveContentField(field, by: 1) }
+                            .disabled(index(of: field) >= options.contentOrder.count - 1)
+                    }
+            } else {
+                surface(field)
+            }
+            if expandedStyle == field {
+                styleChoices(for: field)
+            }
+        }
+    }
+
+    private func surface(_ field: SummaryContentField) -> some View {
+        HStack(spacing: 6) {
+            handle(field)
+            toggle(field)
+            styleControl(field)
+        }
+        .padding(.horizontal, 6)
+        .frame(height: SummaryPopoverMetrics.rowHeight)
+        .background((hoveredField == field || dropTarget == field) ? WFColors.hover : .clear,
+                    in: RoundedRectangle(cornerRadius: 6))
+        .contentShape(Rectangle())
+        .onHover { inside in
+            if inside { hoveredField = field }
+            else if hoveredField == field { hoveredField = nil }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private func handle(_ field: SummaryContentField) -> some View {
+        if field.isInline {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(WFColors.tertiaryText)
+                .frame(width: 14, height: 28)
+                .contentShape(Rectangle())
+                .onDrag {
+                    dragging = field
+                    return NSItemProvider(object: field.rawValue as NSString)
+                }
+                .help("拖动调整顺序")
+                .accessibilityLabel("调整\(field.rawValue)顺序")
+        } else {
+            Color.clear.frame(width: 14, height: 28)
+        }
+    }
+
+    private func toggle(_ field: SummaryContentField) -> some View {
+        Button { toggleField(field) } label: {
+            HStack(spacing: 8) {
+                SummaryCheckmark(selected: options.content.contains(field))
+                Text(field.rawValue)
+                    .font(WFType.body)
+                    .foregroundStyle(options.content.contains(field) ? WFColors.accent : WFColors.text)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("显示内容：\(field.rawValue)")
+        .accessibilityValue(options.content.contains(field) ? "已选中" : "未选中")
+        .workflowActionAnchor("summary.content.field." + field.anchor)
+    }
+
+    @ViewBuilder
+    private func styleControl(_ field: SummaryContentField) -> some View {
+        if let label = options.contentStyles.styleLabel(for: field) {
+            Button { expandedStyle = expandedStyle == field ? nil : field } label: {
+                HStack(spacing: 4) {
+                    Text(label)
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.secondaryText)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(WFColors.tertiaryText)
+                }
+                .padding(.horizontal, 6)
+                .frame(height: 28)
+                .background(expandedStyle == field ? WFColors.border.opacity(0.5) : .clear,
+                            in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(field.rawValue)样式：\(label)")
+            .workflowActionAnchor("summary.content.style." + field.anchor)
+        }
+    }
+
+    private func styleChoices(for field: SummaryContentField) -> some View {
+        VStack(spacing: 2) {
+            ForEach(choices(for: field)) { choice in
+                Button(action: choice.apply) {
+                    HStack(spacing: 8) {
+                        SummaryCheckmark(selected: choice.selected)
+                        Text(choice.title)
+                            .font(WFType.supporting)
+                            .foregroundStyle(WFColors.text)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: SummaryPopoverMetrics.styleRowHeight)
+                    .background(hoveredStyleChoice == choice.id ? WFColors.hover : .clear,
+                                in: RoundedRectangle(cornerRadius: 5))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { inside in
+                    if inside { hoveredStyleChoice = choice.id }
+                    else if hoveredStyleChoice == choice.id { hoveredStyleChoice = nil }
+                }
+                .accessibilityLabel(choice.title)
+                .accessibilityValue(choice.selected ? "已选中" : "未选中")
+                .workflowActionAnchor("summary.content.style.\(field.anchor).\(choice.id)")
+            }
+        }
+        .padding(.leading, 38)
+    }
+
+    private struct StyleChoice: Identifiable {
+        let id: String
+        let title: String
+        let selected: Bool
+        let apply: () -> Void
+    }
+
+    private func choices(for field: SummaryContentField) -> [StyleChoice] {
+        switch field {
+        case .completedTime:
+            return SummaryDateStyle.allCases.map { style in
+                StyleChoice(id: style.anchor, title: style.rawValue,
+                            selected: options.contentStyles.completedTime == style) {
+                    apply(style, to: field)
+                }
+            }
+        case .taskTime:
+            return SummaryDateStyle.allCases.map { style in
+                StyleChoice(id: style.anchor, title: style.rawValue,
+                            selected: options.contentStyles.taskTime == style) {
+                    apply(style, to: field)
+                }
+            }
+        case .list:
+            return SummaryListStyle.allCases.map { style in
+                StyleChoice(id: style.anchor, title: style.rawValue,
+                            selected: options.contentStyles.list == style) {
+                    options.contentStyles.list = style
+                    enable(field)
+                }
+            }
+        case .detail:
+            return SummaryDetailStyle.allCases.map { style in
+                StyleChoice(id: style.anchor, title: style.rawValue,
+                            selected: options.contentStyles.detail == style) {
+                    options.contentStyles.detail = style
+                    enable(field)
+                }
+            }
+        default:
+            return []
+        }
+    }
+
+    private func apply(_ style: SummaryDateStyle, to field: SummaryContentField) {
+        options.contentStyles.setDateStyle(style, for: field)
+        enable(field)
+    }
+
+    private func enable(_ field: SummaryContentField) {
+        options.content.insert(field)
+        expandedStyle = nil
+    }
+
+    private func toggleField(_ field: SummaryContentField) {
+        if !options.content.insert(field).inserted { options.content.remove(field) }
+        if !options.content.contains(field), expandedStyle == field { expandedStyle = nil }
+    }
+
+    private func index(of field: SummaryContentField) -> Int {
+        options.contentOrder.firstIndex(of: field) ?? 0
+    }
+}
+
+private struct SummaryContentDropDelegate: DropDelegate {
+    let target: SummaryContentField
+    @Binding var order: [SummaryContentField]
+    @Binding var dragging: SummaryContentField?
+    @Binding var dropTarget: SummaryContentField?
+
+    func dropEntered(info: DropInfo) {
+        guard dragging != nil else { return }
+        dropTarget = target
+    }
+
+    func dropExited(info: DropInfo) {
+        if dropTarget == target { dropTarget = nil }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            dragging = nil
+            dropTarget = nil
+        }
+        guard let dragging, dragging != target,
+              let from = order.firstIndex(of: dragging),
+              let to = order.firstIndex(of: target) else { return false }
+        let moved = order.remove(at: from)
+        order.insert(moved, at: to)
+        return true
     }
 }

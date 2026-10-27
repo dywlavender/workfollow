@@ -1,6 +1,14 @@
 import AppKit
 import SwiftUI
 
+struct MeetingMinutesButtonFrameKey: PreferenceKey {
+    static let defaultValue = CGRect.zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isEmpty { value = next }
+    }
+}
+
 /// 会议纪要工作区：左栏会议列表 + 右栏详情。
 ///
 /// **结构照 `NotesWorkspaceView` 抄**——两者是同一类页面（一列 + 一详情 + 中间一条线），
@@ -12,15 +20,17 @@ import SwiftUI
 /// 更新纪要的），核对时要对着看，tab 强制你来回切。数据里的 `summarizedLineIDs`
 /// 还让「哪些行还没进纪要」本来就可识别——分栏之后这条信息才用得上。
 ///
-/// 右栏纪要可直接编辑。Pi 仅在点击生成/更新时整理定稿文字；
-/// 手动修改作为下一次明确请求整理时的基础，不自动覆盖。
+/// 右栏纪要可直接编辑。录音中每五分钟或点击按钮时，AI 根据全部定稿重新编写；
+/// 两种触发互斥，手动编辑暂停自动替换。
 ///
 /// 这一页在 `RootShellView` 里是 **rail-only 目的地**（和日历 / 四象限 / 倒数一样，
 /// 不挂导航栏），所以它自带列表列是合理的；不合理的只是那一列的实现方式。
 struct MeetingWorkspaceView: View {
     @ObservedObject var store: MeetingStore
+    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.openSettings) private var openSettings
+    @State private var aiTaskRequest: AITaskRequest?
 
-    @State private var settingsPresented = false
     /// 窄窗口下只显示一栏时的「当前在哪一栏」。宽窗口下恒为 false（两栏都在）。
     @State private var detailOnly = false
     @State private var hoveredMeetingID: UUID?
@@ -80,8 +90,9 @@ struct MeetingWorkspaceView: View {
                 }
             }
         }
+        .coordinateSpace(name: "meeting-minutes-workspace")
         .background(WFColors.content)
-        .sheet(isPresented: $settingsPresented) { settings }
+        .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
     }
 
     /// 列表列与详情栏之间那条线。与任务页/笔记页同一条可拖分隔条（原来是系统
@@ -176,19 +187,20 @@ struct MeetingWorkspaceView: View {
 
             // 原来是一个裸 `Button("Pi 接入设置")` 贴在白条上，像个走错片场的链接。
             // 它是这一模块的设置入口，按「导航行」的样子做：图标 + 文字 + 整行可点。
-            Button { settingsPresented = true } label: {
+            Button { environment.settingsSection = .ai; openSettings() } label: {
                 HStack(spacing: WFSpace.inline) {
                     Image(systemName: "gearshape")
-                    Text("Pi 接入设置").font(WFType.supporting)
+                    Text("AI 模型设置").font(WFType.supporting)
                     Spacer(minLength: 0)
                 }
                 .foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.md)
                 .frame(height: 30)
                 .contentShape(Rectangle())
+                .rowHoverBackground(cornerRadius: 6)
             }
             .buttonStyle(.plain)
-            .help("配置 Pi 可执行文件、模型与音频扩展")
+            .help("打开设置中的 AI 模型页面")
         }
         .padding(.horizontal, WFSpace.control)
         .padding(.bottom, WFSpace.lg)
@@ -242,13 +254,11 @@ struct MeetingWorkspaceView: View {
           .help(store.canDelete(meeting.id) ? "删除会议记录" : "请结束录音及转写后再删除")
           .padding(.trailing, WFSpace.md)
         }
-        .background(selected ? WFColors.listSelection : .clear,
-                    in: RoundedRectangle(cornerRadius: WFMetrics.corner))
         .contentShape(Rectangle())
-        .onHover { inside in
+        .rowHoverBackground(selected: selected, onHoverChanged: { inside in
             if inside { hoveredMeetingID = meeting.id }
             else if hoveredMeetingID == meeting.id { hoveredMeetingID = nil }
-        }
+        })
         // 选中行不画分割线：选中行有自己的圆角底色，线会横穿底边。
         // 与笔记列表同一条线、同一个左右内缩。
         .overlay(alignment: .bottom) {
@@ -383,7 +393,7 @@ struct MeetingWorkspaceView: View {
             }
             if store.updatingMinutes {
                 ProgressView().controlSize(.small)
-                Text("Pi 更新纪要中").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                Text("AI 编写纪要中").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
             }
         }
         .padding(.horizontal, WFSpace.xl)
@@ -402,7 +412,7 @@ struct MeetingWorkspaceView: View {
                  ? (store.configuration.usesHTTPTranscription
                     ? "分段转写：每 3 秒提交音频，等待整段识别结果。讲话人标签仅在当前片段内有效；纪要使用独立模型生成。"
                     : (!store.configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                       ? "使用自定义音频扩展进行分段转写。原始录音及转写输入 WAV 保存在本地，纪要按按钮生成。"
+                       ? "使用自定义音频扩展进行分段转写。录音保存在本地，录音中每 5 分钟自动编写纪要，也可手动触发。"
                        : "实时转写：文字随讲话更新，定稿后保存。原始录音及转写输入 WAV 保存在本地；讲话人暂未区分。"))
                  : "本地录音可用。配置 Pi 音频扩展后可同时转写；录音文件可用于回放和复测。")
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
@@ -606,7 +616,23 @@ struct MeetingWorkspaceView: View {
 
     private func minutesColumn(_ meeting: MeetingRecord) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            columnHeader("滚动纪要", trailing: minutesHeaderTrailing(meeting))
+            HStack(spacing: WFSpace.sm) {
+                Text("滚动纪要").font(WFType.sectionSemibold)
+                Spacer(minLength: WFSpace.sm)
+                Button(store.updatingMinutes ? "AI 编写中…" : "AI 编写纪要") {
+                    store.updateMinutesNow()
+                }
+                .controlSize(.small)
+                .disabled(!store.canGenerateMinutes(for: meeting))
+                .accessibilityIdentifier("meeting.generate-minutes")
+                .help("根据全部已定稿对话重新编写完整纪要；生成期间暂停定时任务，完成后重新计时 5 分钟")
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: MeetingMinutesButtonFrameKey.self,
+                        value: geometry.frame(in: .named("meeting-minutes-workspace")))
+                })
+            }
+            .padding(.horizontal, WFSpace.md)
+            .frame(height: MeetingMetrics.columnHeaderHeight)
             Divider()
             minutesEditor(meeting)
             Divider()
@@ -643,7 +669,7 @@ struct MeetingWorkspaceView: View {
             // `TextEditor` 没有 placeholder，按项目里既有的做法自己叠一层
             // （`SummaryWorkspaceView` 的日记/周报两处都是这个写法）。
             if meeting.minutes.isEmpty {
-                Text("有定稿文字后，点击“生成纪要”整理会议内容；也可以直接在这里写。")
+                Text("有定稿文字后，点击“AI 编写纪要”；录音中每 5 分钟自动编写，也可以直接在这里写。")
                     .font(WFType.body).foregroundStyle(WFColors.tertiaryText)
                     .padding(.top, WFSpace.sm)
                     .padding(.leading, WFSpace.xs)
@@ -654,23 +680,30 @@ struct MeetingWorkspaceView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Generation is explicit; only finalized, unsummarized speech is consumed.
+    /// Both generation triggers consume the full finalized transcript and share one slot.
     private func minutesFooter(_ meeting: MeetingRecord) -> some View {
         HStack(spacing: WFSpace.sm) {
-            Button(meeting.minutes.isEmpty ? "生成纪要" : "更新纪要") {
-                if meeting.minutesIsManual { store.resumeAutomaticMinutes() }
-                else { store.updateMinutesNow() }
+            Button("提取待办") {
+                aiTaskRequest = environment.aiTaskRequest(for: store.selected ?? meeting)
             }
             .controlSize(.small)
-            .disabled(store.updatingMinutes || meeting.summarizedLineCount >= meeting.transcript.count)
-            .help("使用已有纪要和新增定稿文字整理内容；手动修改会作为本次整理的基础")
-            Button("复制纪要") {
+            .guideTourAnchor("meeting.extract")
+            .disabled(meeting.minutes.isEmpty && meeting.transcript.isEmpty)
+            Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(meeting.minutes, forType: .string)
-            }
+            } label: { Image(systemName: "doc.on.doc") }
             .controlSize(.small)
             .disabled(meeting.minutes.isEmpty)
+            .help("复制纪要").accessibilityLabel("复制纪要")
             Spacer(minLength: WFSpace.sm)
+            if meeting.minutesIsManual {
+                Text("自动编写已暂停").font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
+            } else if store.recordingID == meeting.id {
+                Text("每 5 分钟自动编写").font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
+            } else if let updated = minutesHeaderTrailing(meeting) {
+                Text(updated).font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
+            }
         }
         .padding(.horizontal, WFSpace.md)
         .frame(height: MeetingMetrics.columnFooterHeight)
@@ -706,45 +739,7 @@ struct MeetingWorkspaceView: View {
         return "\(total / 60):\(String(format: "%02d", total % 60))"
     }
 
-    // MARK: - Pi 接入设置
 
-    private var settings: some View {
-        VStack(alignment: .leading, spacing: WFSpace.lg) {
-            Text("Pi 会议接入").font(WFType.detailTitle)
-            Text("转写模型负责持续识别语音，纪要模型负责整理定稿文字。两个模型的连接与认证均由本机 Pi 管理。")
-                .font(WFType.body).foregroundStyle(WFColors.secondaryText)
-            VStack(alignment: .leading, spacing: WFSpace.lg) {
-                settingField("Pi 可执行文件", placeholder: "Pi 可执行文件",
-                             text: $store.configuration.executable)
-                settingField("转写模型", placeholder: MeetingPiConfiguration.defaultTranscriptionModel,
-                             text: Binding(get: { store.configuration.transcriptionModel ?? store.configuration.resolvedTranscriptionModel },
-                                           set: { store.configuration.transcriptionModel = $0 }))
-                settingField("纪要模型", placeholder: "留空使用 Pi 当前文字模型",
-                             text: Binding(get: { store.configuration.minutesModel ?? store.configuration.resolvedMinutesModel },
-                                           set: { store.configuration.minutesModel = $0 }))
-                settingField("Pi 音频扩展（可选覆盖）", placeholder: "留空使用内置 Pi 音频扩展",
-                             text: $store.configuration.audioExtension)
-            }
-            .disabled(store.transcribing || store.updatingMinutes || store.recordingID != nil)
-            Text("推荐转写模型为 qwen-audio-3.1-asr-flash-streaming，需在 Pi 注册并配置百炼认证。原始录音及转写输入 WAV 保存在本地；转写失败时仍继续录音。实时转写暂不区分讲话人。")
-                .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
-            HStack {
-                Spacer()
-                Button("完成") { settingsPresented = false }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(WFSpace.xxl)
-        .frame(width: 550)
-    }
-
-    private func settingField(_ label: String, placeholder: String,
-                              text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: WFSpace.sm) {
-            Text(label).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-            TextField(placeholder, text: text).accessibilityLabel(label)
-        }
-    }
 }
 
 /// 对话记录贴底跟随的两个量：内容底边在滚动区坐标里的位置，和视口高度。

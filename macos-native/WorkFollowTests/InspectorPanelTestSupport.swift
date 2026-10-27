@@ -110,6 +110,7 @@ enum InspectorPanelTestSupport {
         try click(screenFrame: frame, in: window)
     }
 
+
     static func clickElement(containing label: String, in window: NSWindow) throws {
         let frame = try accessibilityFrame(containing: label, role: nil, in: window)
         try click(screenFrame: frame, in: window)
@@ -215,7 +216,8 @@ enum InspectorPanelTestSupport {
                 "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch,
                 "设置预计专注": .focusEstimate, "截止日期": .deadlineLabel,
                 "任务类型": .kind, "笔记信息": .noteInfo, "打开便签": .detach, "评论": .footerComment,
-                "转换为笔记": .noteConversionMenuRow, "转换为任务": .noteConversionMenuRow
+                "转换为笔记": .noteConversionMenuRow, "转换为任务": .noteConversionMenuRow,
+                "拆分子任务…": .aiBreakdownMenuRow
             ]
             let frames = window === owner ? probe.main : probe.popup
             var rect = anchors[labelFragment].flatMap { frames[$0] }

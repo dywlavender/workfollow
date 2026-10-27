@@ -344,45 +344,71 @@ final class TaskTemplateTests: XCTestCase {
         let template = try JSONDecoder().decode(TaskTemplate.self,
                                                from: Data(legacy.utf8))
         XCTAssertNil(template.kind)
+        XCTAssertNil(template.summaryOptions)
         XCTAssertFalse(template.isSummaryTemplate)
     }
 
-    func testSummaryTemplateKindSurvivesRoundTrip() throws {
+    func testLegacySummaryTemplateWithoutOptionsStillDecodes() throws {
+        let legacy = """
+        {"id":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","name":"旧摘要","title":"旧摘要",
+        "document":{"blocks":[]},"tags":[],"childTitles":[],
+        "createdAt":0,"kind":"summary"}
+        """
+        let template = try JSONDecoder().decode(TaskTemplate.self, from: Data(legacy.utf8))
+        XCTAssertTrue(template.isSummaryTemplate)
+        XCTAssertNil(template.summaryOptions)
+    }
+
+    func testSummaryTemplateKindAndOptionsSurviveRoundTrip() throws {
+        var options = SummaryDocumentOptions.standard
+        options.grouping = .list
+        options.filter.status = .completed
+        options.includesNextWeek = true
+        options.content = [.taskName, .list, .detail]
+        options.contentOrder = [.list, .taskName, .status, .progress,
+                                .taskTime, .parentTask, .tags, .focus]
+        options.contentStyles.completedTime = .dateTime
+        options.contentStyles.taskTime = .date
+        options.contentStyles.list = .listGroup
+        options.contentStyles.detail = .plain
         let template = TaskTemplate(name: "摘要模板 本周", title: "摘要模板 本周",
-                                    document: NativeDocument(plainText: "本周总结"),
-                                    createdAt: now, kind: "summary")
+                                    document: NativeDocument(plainText: "旧版正文"),
+                                    createdAt: now, kind: "summary", summaryOptions: options)
         XCTAssertTrue(template.isSummaryTemplate)
 
         let data = try JSONEncoder().encode(template)
         let decoded = try JSONDecoder().decode(TaskTemplate.self, from: data)
         XCTAssertEqual(decoded.kind, "summary")
         XCTAssertTrue(decoded.isSummaryTemplate)
-        XCTAssertEqual(decoded.document.plainText, "本周总结")
+        XCTAssertEqual(decoded.summaryOptions, options)
+        XCTAssertEqual(decoded.document.plainText, "旧版正文")
     }
 
-    func testSaveDocumentTemplateMarksKindAndStaysOutOfTaskTemplates() async throws {
+    func testSaveSummaryTemplateStoresConfigurationInsteadOfDocument() async throws {
         let directory = Self.makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
+        var options = SummaryDocumentOptions.standard
+        options.grouping = .priority
+        options.filter.status = .inProgress
+        options.includesNextWeek = true
+        options.content = [.taskName, .progress]
         try await MainActor.run {
             let store = TemplateStore(clock: { self.now }, directory: directory)
             XCTAssertTrue(store.save(name: "站会", from: Self.makeTask(title: "任务模板")))
-            XCTAssertTrue(store.saveDocumentTemplate(
-                name: "摘要模板 本周",
-                document: NativeDocument(plainText: "10月19日至25日这一周")))
+            XCTAssertTrue(store.saveSummaryTemplate(name: "摘要模板 本周", options: options))
 
             XCTAssertEqual(store.templates.count, 2)
             let summary = store.template(named: "摘要模板 本周")
             XCTAssertTrue(summary?.isSummaryTemplate == true)
+            XCTAssertEqual(summary?.summaryOptions, options)
+            XCTAssertTrue(summary?.document.isEmpty == true)
             // 任务侧只看非摘要模板，两个仓库互不污染。
             XCTAssertEqual(store.templates.filter { !$0.isSummaryTemplate }.map(\.name), ["站会"])
 
             // 空名字直接拒绝；同名不带 forceReplace 不覆盖。
-            XCTAssertFalse(store.saveDocumentTemplate(name: "  ", document: .empty))
-            XCTAssertFalse(store.saveDocumentTemplate(
-                name: "摘要模板 本周",
-                document: NativeDocument(plainText: "别的正文")))
-            XCTAssertEqual(store.template(named: "摘要模板 本周")?.document.plainText,
-                           "10月19日至25日这一周")
+            XCTAssertFalse(store.saveSummaryTemplate(name: "  ", options: .standard))
+            XCTAssertFalse(store.saveSummaryTemplate(name: "摘要模板 本周", options: .standard))
+            XCTAssertEqual(store.template(named: "摘要模板 本周")?.summaryOptions, options)
         }
     }
 }

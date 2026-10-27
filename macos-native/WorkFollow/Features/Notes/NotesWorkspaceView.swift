@@ -16,6 +16,7 @@ struct NotesWorkspaceView: View {
     @State private var detailOnly = false
     @State private var confirmClear = false
     @State private var purgeID: UUID?
+    @State private var aiTaskRequest: AITaskRequest?
     // 笔记页脚的浮动格式工具条（Round B2 迁移：Flutter DocumentEditorFooter + DocumentEditorToolbar）。
     @State private var showFormatToolbar = false
     @StateObject private var editorHandle = DocumentEditorHandle()
@@ -95,6 +96,7 @@ struct NotesWorkspaceView: View {
         }
         .onChange(of: navigation.noteRevealRequest) { _, _ in consumeNoteRevealRequest() }
         .onAppear { consumeNoteRevealRequest() }
+        .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
         .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
             Button("取消", role: .cancel) {}
             Button("全部删除", role: .destructive) { notes.emptyTrash() }
@@ -185,8 +187,6 @@ struct NotesWorkspaceView: View {
                                 .frame(minHeight: WFMetrics.rowHeight)
                                 // 行本身要撑满列表宽度，否则内部的 maxWidth: .infinity 拿不到额外空间。
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(visibleNote?.id == note.id ? WFColors.listSelection : .clear,
-                                            in: RoundedRectangle(cornerRadius: 8))
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain)
                         if trash {
@@ -209,6 +209,7 @@ struct NotesWorkspaceView: View {
                                                trailing: ListRowMetrics.notesDividerLeading)
                             }
                         }
+                        .rowHoverBackground(selected: visibleNote?.id == note.id, cornerRadius: 8)
                     }
                 }
             }
@@ -344,17 +345,27 @@ struct NotesWorkspaceView: View {
                 notes.edit(note.id) { $0.favorite.toggle() }
             }
             Button("复制笔记正文") { copyPlainText(note) }
+            Button("提取待办…") {
+                editorHandle.prepareForDocumentChange()
+                do {
+                    let current = notes.notes.first { $0.id == note.id } ?? note
+                    aiTaskRequest = try environment.aiTaskRequest(for: current)
+                } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
+            }.disabled(note.document.isEmpty && note.title.isEmpty)
             if note.hasPreservedRichContent {
                 Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
             }
+            Divider()
+            Button("转换为任务") { _ = notes.convertToTask(note.id) }
             Divider()
             Button("移到垃圾桶", role: .destructive) { notes.delete(note.id) }
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                 .contentShape(Rectangle())
+                .accessibilityLabel("更多笔记操作")
         }.fixedSize()
-        .help("更多操作").accessibilityLabel("更多笔记操作")
+        .help("更多操作")
     }
 
     private func copyPlainText(_ note: Note) {
