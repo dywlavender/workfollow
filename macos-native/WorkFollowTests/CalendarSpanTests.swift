@@ -4,7 +4,7 @@ import XCTest
 /// CalendarSpans：月/周视图跨天色带的纯布局逻辑——周行 lane 分配、跨周裁剪、
 /// 格内让位计数。
 ///
-/// 日历固定 GMT、周日为每周第一天（列 0），与打勾月网格的周起点一致。
+/// 日历固定 GMT；用例固定周日起始（列 0），应用默认是周一。
 /// 区间用 `dueEndAt` 表达：`deadlineAt` 是独立的截止点，永远不定义范围。
 final class CalendarSpanTests: XCTestCase {
     private var calendar: Calendar {

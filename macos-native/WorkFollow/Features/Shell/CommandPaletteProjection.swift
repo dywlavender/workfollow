@@ -214,7 +214,6 @@ enum CommandPaletteProjection {
 
     private static func commandEntries() -> [CommandPaletteEntry] {
         [
-            command("打开本周计划", "按周一到周日安排和回顾任务", "calendar.badge.checkmark", .navigate(.weekPlan)),
             command("打开最近 7 天", "查看逾期与未来七天", "calendar.badge.clock", .navigate(.nextSevenDays)),
             command("打开今天", "查看现在最重要的事", "sun.max", .navigate(.today)),
             command("打开收集箱", "稍后再安排", "tray", .navigate(.inbox)),

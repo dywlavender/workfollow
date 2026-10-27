@@ -22,7 +22,7 @@ final class WorkspaceSelectionMemory: ObservableObject {
         workspace.$selectedTaskID.sink { [weak self, weak navigation, weak workspace] id in
             guard let self, let navigation, let workspace, !self.restoring,
                   navigation.taskSelectionToPreserveOnNextNavigation == nil,
-                  TaskWorkspaceModel.scope(for: navigation.destination) != nil || navigation.destination == .weekPlan else { return }
+                  TaskWorkspaceModel.scope(for: navigation.destination) != nil else { return }
             self.tasks[navigation.destination] = TaskContext(selected: id, list: workspace.activeList, tag: workspace.activeTag, filter: workspace.activeFilterID)
         }.store(in: &subscriptions)
         navigation.$destination.dropFirst().sink { [weak self, weak navigation, weak workspace, weak noteWorkspace] destination in
@@ -35,7 +35,7 @@ final class WorkspaceSelectionMemory: ObservableObject {
             // Links carry an explicit target; the outgoing selection was already
             // remembered before the link selected that target.
             guard navigation.taskSelectionToPreserveOnNextNavigation == nil else { return }
-            if TaskWorkspaceModel.scope(for: old) != nil || old == .weekPlan {
+            if TaskWorkspaceModel.scope(for: old) != nil {
                 self.tasks[old] = TaskContext(selected: workspace.selectedTaskID, list: workspace.activeList, tag: workspace.activeTag, filter: workspace.activeFilterID)
             }
             let saved = self.tasks[destination]

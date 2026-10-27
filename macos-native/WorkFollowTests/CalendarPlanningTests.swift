@@ -128,6 +128,31 @@ final class CalendarPlanningTests: XCTestCase {
         XCTAssertFalse(workspace.canUndo)
         XCTAssertFalse(settings.canUndoConfiguration)
     }
+    @MainActor func testArrangePaneOpensOnceForExistingInstallThenRespectsTheToggle() throws {
+        let suite = "calendar-arrange-migration-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(try JSONEncoder().encode(CalendarPreferences(showArrangePane: false)),
+                     forKey: "workfollow.planning.calendar.v1")
+        let migrated = PlanningSettingsStore(defaults: defaults)
+        XCTAssertTrue(migrated.calendar.showArrangePane, "周计划页删除后，安排任务面板升级时应默认打开")
+        migrated.updateCalendar { $0.showArrangePane = false }
+        let reopened = PlanningSettingsStore(defaults: defaults)
+        XCTAssertFalse(reopened.calendar.showArrangePane, "用户手动关闭后不再被迁移覆盖")
+    }
+    @MainActor func testWeekStartMigratesFromSundayToMondayOnce() throws {
+        let suite = "calendar-monday-migration-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var legacy = CalendarPreferences()
+        legacy.firstWeekday = 1
+        defaults.set(try JSONEncoder().encode(legacy), forKey: "workfollow.planning.calendar.v1")
+        let migrated = PlanningSettingsStore(defaults: defaults)
+        XCTAssertEqual(migrated.calendar.firstWeekday, 2, "旧默认（周日）应一次性迁移到周一")
+        migrated.updateCalendar { $0.firstWeekday = 1 }
+        let reopened = PlanningSettingsStore(defaults: defaults)
+        XCTAssertEqual(reopened.calendar.firstWeekday, 1, "用户手动改回周日后面不再被迁移")
+    }
     func testDragRangeAndMovePreserveAnExplicitDurationAndDeadline() {
         var schedule = CalendarGestureDraft.creation(on: date(13), from: 600, to: 540, calendar: calendar)
         XCTAssertEqual(schedule.dueAt, date(13, hour: 9))

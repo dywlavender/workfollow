@@ -153,7 +153,8 @@ final class TaskWidgetTests: XCTestCase {
         environment.weeklyPlanning.shift(-1)
         environment.weeklyPlanning.listName = "之前浏览的清单"
         XCTAssertTrue(environment.openResourceLink(TaskWidgetLink.weekPlan))
-        XCTAssertEqual(environment.navigation.destination, .weekPlan)
+        XCTAssertEqual(environment.navigation.destination, .calendar)
+        XCTAssertEqual(environment.navigation.calendarRevealRequest, SummaryReviewBuilder.weekStart(of: now, calendar: calendar))
         XCTAssertEqual(environment.weeklyPlanning.weekStart, SummaryReviewBuilder.weekStart(of: now, calendar: calendar))
         XCTAssertNil(environment.weeklyPlanning.listName)
         XCTAssertTrue(environment.openResourceLink(TaskWidgetLink.countdowns))

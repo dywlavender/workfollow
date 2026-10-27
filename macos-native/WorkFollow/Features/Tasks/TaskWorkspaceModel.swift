@@ -1122,10 +1122,6 @@ final class TaskWorkspaceModel: ObservableObject {
     /// Sidebar badge count: intentionally ignores the saved filter (and the
     /// list/tag query) so destination badges stay stable while filtering.
     func count(for destination: NativeDestination) -> Int {
-        if destination == .weekPlan {
-            let projection = WeeklyPlanProjection(weekStart: SummaryReviewBuilder.weekStart(of: clock(), calendar: calendar), calendar: calendar)
-            return projection.tasks(from: tasksInActiveLists).filter { !$0.isClosed }.count
-        }
         if destination == .trash { return deletedTasks.count }
         guard let scope = Self.scope(for: destination) else { return 0 }
         prepareProjectionCache()

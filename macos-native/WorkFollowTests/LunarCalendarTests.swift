@@ -42,7 +42,7 @@ final class LunarCalendarTests: XCTestCase {
 
     func testGridPadsAdjacentMonthsAndStartsOnFirstWeekday() {
         var calendar = self.calendar
-        calendar.firstWeekday = 1 // Sunday, matching the design's 日一二三四五六 row
+        calendar.firstWeekday = 1 // 用例固定周日起始；leading 取决于传入的 firstWeekday
         // 2026-08 opens on a Saturday, so the grid starts on Sunday 7-26.
         let august = calendar.date(from: DateComponents(year: 2026, month: 8, day: 15))!
         let cells = MonthGridCalculator.cells(displayedMonth: august, calendar: calendar)

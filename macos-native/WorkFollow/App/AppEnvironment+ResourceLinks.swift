@@ -21,7 +21,8 @@ extension AppEnvironment {
             case .weekPlan:
                 weeklyPlanning.goCurrent()
                 weeklyPlanning.listName = nil
-                navigate(to: .weekPlan)
+                navigation.calendarRevealRequest = weeklyPlanning.weekStart
+                navigate(to: .calendar)
             case .quickAdd: break // Presented independently above.
             case .countdowns: navigate(to: .countdown)
             }

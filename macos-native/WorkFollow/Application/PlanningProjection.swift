@@ -115,13 +115,11 @@ enum PlanningProjection {
 
     // MARK: - 网格
 
-    /// 本工程的一周从周日开始。原版把这件事写死在两处（月网格的 `weekday % 7`
-    /// 与周视图的 `weekday % 7`），原生交给 `Calendar.firstWeekday`；注入系统的
-    /// `.current` 会随地区换周首日，所以日历页统一用这一份，周列与日号偏移不会
-    /// 各说各话。
-    static func sundayFirstWeek(_ base: Calendar) -> Calendar {
+    /// 应用默认以周一为一周起点（与摘要周界、日历页默认一致）。日历页仍由
+    /// `Calendar.firstWeekday` 偏好覆盖；日期选择器的月网格用这份固定口径。
+    static func mondayFirstWeek(_ base: Calendar) -> Calendar {
         var value = base
-        value.firstWeekday = 1
+        value.firstWeekday = 2
         return value
     }
 
@@ -140,7 +138,7 @@ enum PlanningProjection {
         return (0..<(rows * 7)).compactMap { calendar.date(byAdding: .day, value: $0, to: first) }
     }
 
-    /// 一周 7 天，周首日由 `calendar.firstWeekday` 决定（本工程为周日）。
+    /// 一周 7 天，周首日由 `calendar.firstWeekday` 决定（默认周一）。
     static func weekDays(containing date: Date, calendar: Calendar = .current) -> [Date] {
         let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
         return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }

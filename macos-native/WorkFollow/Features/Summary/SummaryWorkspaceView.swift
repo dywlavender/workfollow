@@ -90,7 +90,10 @@ struct SummaryWorkspaceView: View {
         context.listName = selectedLists.count == 1 ? selectedLists.first : nil
         rangeOverride = nil; listOverride = nil
         showsSources = false
-        environment.navigation.destination = .weekPlan
+        // 先放置一次性定位请求，再切页：日历可能被页面缓存复用，
+        // 依赖 onChange 消费请求而不是重新初始化。
+        environment.navigation.calendarRevealRequest = context.weekStart
+        environment.navigation.destination = .calendar
     }
     private var builder: WeeklyReportBuilder { WeeklyReportBuilder(calendar: workspace.calendar) }
     private var report: WeeklyReport {
@@ -289,7 +292,7 @@ struct SummaryWorkspaceView: View {
             .overlay { RoundedRectangle(cornerRadius: 8).stroke(WFColors.border, lineWidth: 1) }
             if let error = store.lastError { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
             HStack(spacing: 16) {
-                footerAction("周计划", symbol: "calendar", compact: compact) { openPlan(at: range.start) }
+                footerAction("在日历中查看", symbol: "calendar", compact: compact) { openPlan(at: range.start) }
                 footerAction("任务与结转", symbol: "checklist", compact: compact) { showsSources = true }
                 footerAction("更新摘要", symbol: "arrow.clockwise", compact: compact) { showLatestDraft() }
                 if adoptionAvailable {

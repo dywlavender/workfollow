@@ -17,9 +17,11 @@ struct CalendarPreferences: Equatable, Codable {
     var showCompleted = true
     var showFutureOccurrences = true
     var showSubtasks = true
-    var showArrangePane = false
+    var showArrangePane = true
     var colorSource: CalendarColorSource = .task
-    var firstWeekday = 1
+    /// 周一为一周起点：与摘要的周界一致（滴答中文环境同口径）。
+    /// 仍可在日历显示设置里改成其它周首日。
+    var firstWeekday = 2
     var hourHeight: Double = 64
     var allDayHeight: Double = 96
     var listNames: [String] = []

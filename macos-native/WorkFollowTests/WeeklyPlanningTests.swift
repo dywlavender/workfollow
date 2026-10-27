@@ -32,7 +32,6 @@ final class WeeklyPlanningTests: XCTestCase {
         XCTAssertNil(added.reminderAt)
         XCTAssertEqual(added.weeklyPlanning?.currentWeek, "2026-10-19")
         XCTAssertEqual(projection.tasks(from: model.allTasks).map(\.id), [id])
-        XCTAssertEqual(model.count(for: .weekPlan), 1)
         XCTAssertTrue(WeeklyPlanProjection(weekStart: day(12), calendar: calendar).includes(overdue))
         model.undo()
         XCTAssertNil(model.task(for: id))
@@ -168,8 +167,9 @@ final class WeeklyPlanningTests: XCTestCase {
         let builder = WeeklyReportBuilder(calendar: calendar)
         let report = builder.report(tasks: [source], weekOf: day(21))
         var document = builder.document(for: report)
-        let index = try XCTUnwrap(document.blocks.firstIndex { $0.plainText == "本周复盘" })
-        document.blocks[index + 1].runs = [DocumentRun(text: "评审应提前一天，已和团队约定。", marks: [.bold])]
+        document.blocks.append(DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "本周复盘")]))
+        document.blocks.append(DocumentBlock(kind: .paragraph,
+            runs: [DocumentRun(text: "评审应提前一天，已和团队约定。", marks: [.bold])]))
         let regenerated = builder.document(for: report, preserving: document)
         XCTAssertTrue(regenerated.plainText.contains("评审应提前一天，已和团队约定。"))
         XCTAssertEqual(WeeklyReportBuilder.reflection(in: regenerated).first?.runs.first?.marks, [.bold])

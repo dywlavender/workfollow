@@ -7,6 +7,7 @@ struct CalendarWorkspaceView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var settings: PlanningSettingsStore
     @ObservedObject private var integration: CalendarSyncCoordinator
+    @EnvironmentObject private var environment: AppEnvironment
     @State private var systemEventDetails: SystemCalendarEvent?
     @State private var viewport: CalendarViewport
     @State private var topWeek: Date
@@ -60,6 +61,14 @@ struct CalendarWorkspaceView: View {
         occurrenceCache.visibleTasks(tasks: workspace.tasksInActiveLists, preferences: settings.calendar, in: occurrenceWindow,
             revision: workspace.revision, dateRevision: workspace.dateRevision, calendar: calendar)
     }
+    /// 摘要「在日历中查看」与小组件「本周」共用的一次性定位：切到周视图并选中该日期。
+    private func consumeCalendarRevealRequest() {
+        guard let day = environment.navigation.calendarRevealRequest else { return }
+        environment.navigation.calendarRevealRequest = nil
+        if mode != .week { settings.updateCalendar { $0.mode = .week } }
+        viewport.mode = .week
+        viewport.select(day, calendar: calendar)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -91,8 +100,9 @@ struct CalendarWorkspaceView: View {
             CalendarDisplayOptions(settings: settings, lists: workspace.availableListNames, tags: workspace.tagNames)
         }
         .sheet(item: $systemEventDetails) { SystemCalendarEventDetails(event: $0) }
-        .onAppear { integration.showEvents(in: occurrenceWindow) }
+        .onAppear { integration.showEvents(in: occurrenceWindow); consumeCalendarRevealRequest() }
         .onChange(of: occurrenceWindow) { _, range in integration.showEvents(in: range) }
+        .onChange(of: environment.navigation.calendarRevealRequest) { _, _ in consumeCalendarRevealRequest() }
         .confirmationDialog("修改重复任务", isPresented: Binding(get: { pendingOccurrenceSchedule != nil },
             set: { if !$0 { pendingOccurrenceSchedule = nil } }), titleVisibility: .visible) {
             if let request = pendingOccurrenceSchedule {

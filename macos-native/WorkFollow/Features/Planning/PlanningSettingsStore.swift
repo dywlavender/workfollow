@@ -25,6 +25,25 @@ final class PlanningSettingsStore: ObservableObject {
             ?? CalendarPreferences()
         matrix = defaults.data(forKey: matrixKey).flatMap { try? JSONDecoder().decode(MatrixConfiguration.self, from: $0) }
             ?? .legacy
+        // 周计划页删除后，「安排任务」面板是待安排任务的唯一入口：升级时一次性打开，
+        // 之后仍尊重用户在显示设置里的开关。
+        let arrangeDefaultKey = namespace + ".calendar.arrange.default.v1"
+        if !defaults.bool(forKey: arrangeDefaultKey) {
+            defaults.set(true, forKey: arrangeDefaultKey)
+            if !calendar.showArrangePane {
+                calendar.showArrangePane = true
+                persist()
+            }
+        }
+        // 周首日统一到周一（与摘要周界一致）：只迁移仍然停留在旧默认值（周日）的设置。
+        let mondayWeekKey = namespace + ".calendar.mondayWeek.v1"
+        if !defaults.bool(forKey: mondayWeekKey) {
+            defaults.set(true, forKey: mondayWeekKey)
+            if calendar.firstWeekday == 1 {
+                calendar.firstWeekday = 2
+                persist()
+            }
+        }
         renameObserver = NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)
             .receive(on: RunLoop.main)
             .sink { [weak self] notification in

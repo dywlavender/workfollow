@@ -7,7 +7,7 @@ final class PlanningViewLogicTests: XCTestCase {
     private var calendar: Calendar {
         var value = Calendar(identifier: .gregorian)
         value.timeZone = TimeZone(secondsFromGMT: 0)!
-        value.firstWeekday = 1   // 周日，与打勾月网格一致
+        value.firstWeekday = 1   // 用例固定周日起始（应用默认周一）
         return value
     }
 
@@ -179,8 +179,8 @@ final class PlanningViewLogicTests: XCTestCase {
         XCTAssertNil(MatrixProjection.dateLabel(for: nil, now: now, calendar: calendar))
     }
 
-    /// 星期以**周一**起算，与日历页的周日起始是两件事：标签表读的是「本周三」
-    /// 这种口语说法，而口语里的本周从周一开始。
+    /// 星期以**周一**起算，与摘要周界和日历默认一致：标签读的是「本周三」
+    /// 这种口语说法，口语里的本周从周一开始。
     func testDateLabelUsesMondayBasedWeeks() {
         // 2026-09-26 是周六 → 本周一是 9/21，下周一是 9/28。
         let now = date(2026, 9, 26, hour: 10)

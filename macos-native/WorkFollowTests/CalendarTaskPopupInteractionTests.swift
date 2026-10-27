@@ -35,7 +35,8 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
             let seed = TaskWorkspaceModel(clock: { now }, calendar: calendar, seedDemoData: false)
             first = try XCTUnwrap(seed.createTask(title: "日历切换甲", in: .inbox).taskID)
             second = try XCTUnwrap(seed.createTask(title: "日历切换乙", in: .inbox).taskID)
-            _ = seed.setSchedule(first, TaskSchedule(dueAt: mode == .day ? day(23, hour: 8) : day(18), hasTime: mode == .day))
+            // 周一开头的一周（10/19–10/25）：月/周视图都要同时看到甲、乙。
+            _ = seed.setSchedule(first, TaskSchedule(dueAt: mode == .day ? day(23, hour: 8) : day(19), hasTime: mode == .day))
             if !arrangePool {
                 _ = seed.setSchedule(second, TaskSchedule(dueAt: mode == .day ? day(23, hour: 16) : day(24), hasTime: mode == .day))
             }
@@ -163,5 +164,47 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
         XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.second)
         XCTAssertEqual(fixture.workspace.task(for: fixture.first)?.document.plainText, "甲的正文，已补充")
         XCTAssertEqual(fixture.workspace.task(for: fixture.second)?.document.plainText, "乙的正文")
+    }
+
+    func testRevealRequestSwitchesToWeekAndConsumesTheRequest() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("calendar-reveal-" + UUID().uuidString)
+        let defaultsName = "calendar-reveal-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsName))
+        defer {
+            defaults.removePersistentDomain(forName: defaultsName)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 12))!
+        let target = calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 9))!
+        let environment = AppEnvironment(clock: { now }, calendar: calendar, directory: directory)
+        environment.focusStore.notifier = nil
+        let id = try XCTUnwrap(environment.taskWorkspace.createTask(title: "下周评审", in: .inbox).taskID)
+        _ = environment.taskWorkspace.setSchedule(id, TaskSchedule(dueAt: target, hasTime: true))
+        let settings = PlanningSettingsStore(defaults: defaults)
+        settings.updateCalendar { $0.mode = .month; $0.showArrangePane = false }
+        environment.navigation.calendarRevealRequest = target
+        let probe = FrameProbe()
+        let integration = CalendarSyncCoordinator(directory: directory.appendingPathComponent("calendar"),
+                                                  client: FakeSystemCalendarClient())
+        let host = NSHostingView(rootView: AnyView(CalendarWorkspaceView(workspace: environment.taskWorkspace,
+            settings: settings, systemCalendar: integration)
+            .environmentObject(environment).frame(width: 1200, height: 900)
+            .overlayPreferenceValue(PlanningTaskAnchorsKey.self) { anchors in
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { probe.frames = anchors.mapValues { $0.map { geometry[$0] } } }
+                        .onChange(of: anchors) { _, value in
+                            probe.frames = value.mapValues { $0.map { geometry[$0] } }
+                        }
+                }.allowsHitTesting(false)
+            }))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1200, height: 900)
+        defer { window.close() }
+        InspectorPanelTestSupport.settle(window, duration: 0.4)
+        XCTAssertNil(environment.navigation.calendarRevealRequest, "一次性定位请求应被消费")
+        XCTAssertEqual(settings.calendar.mode, .week)
+        XCTAssertNotNil(probe.frames[id], "定位到 10 月 28 日后，该周任务应出现在周视图里")
     }
 }

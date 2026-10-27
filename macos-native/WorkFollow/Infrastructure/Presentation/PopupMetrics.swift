@@ -25,8 +25,9 @@ enum PopupMetrics {
     /// 显示状态（有内容时显示 / 显示 / 隐藏）一类短菜单：160 会把长项截成
     /// 「有内…显示」，176 刚好放下且比 224 明显收窄（滴答实测 ≈160–190）。
     static let menuWidthNarrow: CGFloat = 176
-    /// 滴答右键菜单实测行高 34（图标 20 + 上下留白），全站菜单行共用。
-    static let menuRowHeight: CGFloat = 34
+    /// 全站菜单行共用行高。原按滴答右键菜单实测 34（图标 20 + 上下留白）取值，
+    /// 现与摘要弹层口径统一为 40，整站菜单疏密一致。
+    static let menuRowHeight: CGFloat = 40
     static let menuInset: CGFloat = 6
     static let menuMaximumHeight: CGFloat = 384
 

@@ -1512,12 +1512,8 @@ struct CalendarAnnotationOverlay: View {
 
     private static let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
-    /// The reference grid always lays out weeks from Sunday.
-    private var layoutCalendar: Calendar {
-        var value = calendar
-        value.firstWeekday = 1
-        return value
-    }
+    /// The reference grid always lays out weeks from Monday.
+    private var layoutCalendar: Calendar { PlanningProjection.mondayFirstWeek(calendar) }
 
     var body: some View {
         VStack(spacing: 4) {

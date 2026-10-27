@@ -4,18 +4,17 @@ import XCTest
 /// PlanningProjection：日历与四象限共用的纯投影。
 ///
 /// 口径逐条对齐 Flutter `task_projection.dart` / `workspace_controller.dart`：
-/// 哪天有哪条任务、一条任务覆盖几天、四象限怎么归类。日历固定 GMT、周日为
-/// 每周第一天，与打勾月网格的周起点一致。
+/// 哪天有哪条任务、一条任务覆盖几天、四象限怎么归类。日历固定 GMT；用例以
+/// 周日起始验证投影只依赖传入的 Calendar（应用默认周一）。
 final class PlanningProjectionTests: XCTestCase {
     private var baseCalendar: Calendar {
         var value = Calendar(identifier: .gregorian)
         value.timeZone = TimeZone(secondsFromGMT: 0)!
-        // 故意设成周一开头：用例要证明日历页自己把它掰回周日，而不是继承系统设置。
-        value.firstWeekday = 2
+        value.firstWeekday = 1
         return value
     }
 
-    private var calendar: Calendar { PlanningProjection.sundayFirstWeek(baseCalendar) }
+    private var calendar: Calendar { baseCalendar }
 
     /// 默认落在当天 00:00：投影吐出来的日期都是 `startOfDay`，用例里的期望值
     /// 必须与之同口径。需要「当天某个时点」的地方显式传 hour。
@@ -51,12 +50,12 @@ final class PlanningProjectionTests: XCTestCase {
 
     // MARK: - 周首日与月网格
 
-    func testSundayFirstWeekOverridesTheInjectedCalendar() {
-        // 2026-09-23 是周三；周一开头的日历会把它所在周的首日算成 9/21。
+    func testWeekProjectionFollowsTheInjectedCalendarStart() {
+        // 2026-09-23 是周三；周日起始的日历会把它所在周的首日算成 9/20。
         XCTAssertEqual(PlanningProjection.weekStart(containing: day(2026, 9, 23),
                                                      calendar: calendar),
                        day(2026, 9, 20))
-        // 掰过之后列 0 一定是周日，七天连续。
+        // 列 0 是周日，七天连续。
         let week = PlanningProjection.weekDays(containing: day(2026, 9, 23), calendar: calendar)
         XCTAssertEqual(week.count, 7)
         XCTAssertEqual(week.first, day(2026, 9, 20))

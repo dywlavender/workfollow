@@ -54,33 +54,6 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         }
     }
 
-    func testWeeklyPoolConfirmAndBatchDateThroughNativeButtons() throws {
-        let fixture = Fixture(destination: .weekPlan)
-        defer { fixture.close() }
-        let model = fixture.environment.taskWorkspace
-        let context = fixture.environment.weeklyPlanning
-        let id = try XCTUnwrap(model.createDraft(title: "任务池批量验收", list: "工作", schedule: .init(),
-            priority: .medium, tags: [], reminder: nil, repeatFrequency: .never, selectCreatedTask: false).taskID)
-        fixture.settle()
-        try fixture.click("weekly.pool")
-        let pool = try XCTUnwrap(fixture.window.attachedSheet)
-        try fixture.click("weekly.pool." + id.uuidString)
-        try fixture.click("weekly.pool.submit")
-        fixture.settle()
-        XCTAssertEqual(model.task(for: id)?.weeklyPlanning?.currentWeek, context.weekKey)
-        XCTAssertNil(model.task(for: id)?.schedule.dueAt)
-        try fixture.click("weekly.select")
-        try fixture.click("weekly.select." + id.uuidString)
-        try fixture.click("weekly.batch.schedule")
-        try fixture.click("weekly.day.4")
-        fixture.settle()
-        let friday = try XCTUnwrap(model.calendar.date(byAdding: .day, value: 4, to: context.weekStart))
-        XCTAssertEqual(model.task(for: id)?.schedule.dueAt, friday)
-        try fixture.screenshot("weekly-wide")
-        fixture.window.setContentSize(NSSize(width: 820, height: 760)); fixture.settle()
-        try fixture.screenshot("weekly-narrow")
-    }
-
     func testFullSearchOpensResultBeyondQuickLimitAndReturnsToRetainedResults() throws {
         let fixture = Fixture(destination: .today)
         defer { fixture.close() }

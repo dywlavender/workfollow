@@ -3,14 +3,13 @@ import Foundation
 
 enum NativeDestination: String, CaseIterable, Identifiable {
     case today, tomorrow, inbox, allTasks, nextSevenDays, completed, abandoned, trash, notes, notesTrash, calendar, matrix
-    case focus, summary, countdown, meetings, weekPlan
+    case focus, summary, countdown, meetings
     static let taskDestinations: [NativeDestination] = [
-        .weekPlan, .nextSevenDays, .today, .tomorrow, .inbox, .summary, .allTasks, .completed, .abandoned, .trash
+        .nextSevenDays, .today, .tomorrow, .inbox, .summary, .allTasks, .completed, .abandoned, .trash
     ]
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .weekPlan: return "本周计划"
         case .today: return "今天"
         case .tomorrow: return "明天"
         case .inbox: return "收集箱"
@@ -30,7 +29,6 @@ enum NativeDestination: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
-        case .weekPlan: return "calendar.badge.checkmark"
         case .today: return "sun.max"
         case .tomorrow: return "sunrise"
         case .inbox: return "tray"
@@ -58,6 +56,9 @@ final class AppNavigation: ObservableObject {
     /// 跨窗口“在主页打开笔记”的请求。NotesWorkspaceView 消费后清空，
     /// 同时清搜索与筛选，避免目标笔记被当前过滤条件挡在列表外。
     @Published var noteRevealRequest: UUID?
+    /// 从摘要或小组件“在日历中查看”时携带的一次性日期：日历消费后清空，
+    /// 切到周视图并定位到该日期所在周。
+    @Published var calendarRevealRequest: Date?
     init(destination: NativeDestination = .today) { self.destination = destination }
 
     var taskSelectionToPreserveOnNextNavigation: UUID?

@@ -15,13 +15,13 @@ final class CommandPaletteTests: XCTestCase {
             schedulesForToday: false, now: now, calendar: calendar)
 
         // 未输入搜索词时保留快速创建入口。
-        XCTAssertEqual(entries.count, 11)
+        XCTAssertEqual(entries.count, 10)
         XCTAssertEqual(entries.first?.kind, .createTask)
         XCTAssertEqual(entries.first?.title, "新建任务")
         XCTAssertEqual(entries.first?.subtitle, "保存到收集箱")
         XCTAssertEqual(entries.first?.action, .createTask(""))
         XCTAssertEqual(entries.dropFirst().map(\.title),
-                       ["打开本周计划", "打开最近 7 天", "打开今天", "打开收集箱", "打开所有任务",
+                       ["打开最近 7 天", "打开今天", "打开收集箱", "打开所有任务",
                         "打开日历", "打开笔记", "打开任务垃圾桶", "打开笔记垃圾桶", "切换外观"])
         XCTAssertFalse(entries.contains { $0.title == "已完成" || $0.title == "四象限" })
     }

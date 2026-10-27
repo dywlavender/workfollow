@@ -28,7 +28,6 @@ struct RootShellView: View {
         case .trash: return AnyView(TaskTrashView(workspace: workspace))
         case .summary: return AnyView(SummaryWorkspaceView(store: environment.summaryStore, workspace: workspace,
                                                           context: environment.weeklyPlanning))
-        case .weekPlan: return AnyView(WeeklyPlanningWorkspaceView(workspace: workspace, context: environment.weeklyPlanning))
         case .countdown: return AnyView(CountdownWorkspaceView(store: environment.countdownStore))
         case .meetings: return AnyView(MeetingWorkspaceView(store: environment.meetingStore))
         case .notes, .notesTrash:

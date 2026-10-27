@@ -1,7 +1,8 @@
 import Combine
 import Foundation
 
-/// One selection shared by planning and reviewing, including cached pages.
+/// 摘要的周次与清单选择。计划本身在日历周视图里完成，跳到日历时通过
+/// `AppNavigation.calendarRevealRequest` 一次性传递日期，不共享这份状态。
 @MainActor
 final class WeeklyPlanningContext: ObservableObject {
     @Published var weekStart: Date

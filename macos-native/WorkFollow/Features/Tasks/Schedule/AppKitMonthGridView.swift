@@ -18,11 +18,7 @@ struct AppKitMonthGridView: View {
 
     static let contentHeight: CGFloat = MonthGridCanvas.preferredHeight
 
-    private var layoutCalendar: Calendar {
-        var value = calendar
-        value.firstWeekday = 1
-        return value
-    }
+    private var layoutCalendar: Calendar { PlanningProjection.mondayFirstWeek(calendar) }
 
     private var monthTitle: String {
         let components = calendar.dateComponents([.year, .month], from: displayedMonth)
@@ -168,11 +164,7 @@ final class MonthGridCanvas: NSView {
 
     override var isFlipped: Bool { true }
 
-    private var layoutCalendar: Calendar {
-        var value = calendar
-        value.firstWeekday = 1
-        return value
-    }
+    private var layoutCalendar: Calendar { PlanningProjection.mondayFirstWeek(calendar) }
 
     private var gridTop: CGFloat { headerHeight + sectionGap + weekdayHeight + sectionGap }
 
