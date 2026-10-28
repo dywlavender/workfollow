@@ -111,6 +111,8 @@ extension NativeTextView {
         // 文末空段没有字符，主循环看不到：待定/模型级别是列表时常驻补画标记
         // （不随光标消失；标题角标才是"只随光标"的活动行标记）。
         drawTrailingListMarkerIfPresent(in: dirtyRect)
+        // 引用同理：文末空引用行的竖线也要在没有文字时可见。
+        drawTrailingQuoteRuleIfPresent(in: dirtyRect)
         // 标题角标与空行"+"是"光标所在行"的标记，单独走活动行这一趟。
         drawActiveLineMarker(in: dirtyRect)
         // 检查项行尾控件：优先跟随鼠标悬停行，其次光标所在行。
@@ -218,6 +220,17 @@ extension NativeTextView {
         case .bullet, .ordered, .checklist: return true
         default: return false
         }
+    }
+
+    /// 文末空引用行的竖线。零字符段不在主循环的段落枚举里，按光标行上的
+    /// 输入待定级别（`pendingTrailingBlock`）或模型同步级别补画。
+    private func drawTrailingQuoteRuleIfPresent(in dirtyRect: NSRect) {
+        guard let storage = textStorage, window != nil,
+              (pendingTrailingBlock ?? displayedTrailingBlock) == .quote else { return }
+        let anchor = storage.length
+        guard let lineRect = viewRect(forCharacterAt: anchor) else { return }
+        drawQuoteRule(paragraph: NSRange(location: anchor, length: 0),
+                      firstLine: lineRect, dirtyRect: dirtyRect)
     }
 
     /// 光标所在行的沟槽标记（滴答同款：只随光标出现，点了这行才显示）：
@@ -407,10 +420,14 @@ extension NativeTextView {
         // Adjacent quote paragraphs form one visual block. Bridge their spacing
         // without merging model blocks or changing Return/undo semantics.
         let next = NSMaxRange(paragraph)
-        if let storage = textStorage, next < storage.length,
-           storage.attribute(DocumentTextCodec.blockKey, at: next, effectiveRange: nil) as? String == "quote",
-           let nextLine = viewRect(forCharacterAt: next) {
-            bottom = nextLine.minY
+        // 文末零长段没有下一段：next 指向自己，桥接会把高度算成 0。
+        if let storage = textStorage, next > paragraph.location {
+            let nextIsQuote = next < storage.length
+                ? storage.attribute(DocumentTextCodec.blockKey, at: next, effectiveRange: nil) as? String == "quote"
+                : (pendingTrailingBlock ?? displayedTrailingBlock) == .quote
+            if nextIsQuote, let nextLine = viewRect(forCharacterAt: next) {
+                bottom = nextLine.minY
+            }
         }
         let rule = NSRect(x: firstLine.minX - DocumentEditorGeometry.quoteTextIndent
                             + DocumentEditorGeometry.quoteRuleInset, y: firstLine.minY,

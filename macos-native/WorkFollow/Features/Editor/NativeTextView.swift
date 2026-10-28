@@ -266,6 +266,7 @@ final class NativeTextView: NSTextView {
     /// 代码块卡片必须落在文字下面：NSTextView 自身不画背景（`drawsBackground=false`），
     /// 所以在 super.draw 之前补一层填充，再让文字与语法着色压在上面。
     override func draw(_ dirtyRect: NSRect) {
+        drawInlineCodeChips(in: dirtyRect)
         drawCodeBlockBackgrounds(in: dirtyRect)
         super.draw(dirtyRect)
     }
@@ -399,6 +400,8 @@ final class NativeTextView: NSTextView {
         pendingTrailingBlock = trailing
         displayedTrailingBlock = trailing
         needsDisplay = true
+        // 空行换块可能不增删字符，存储变更通知不会来，装饰层要自己重绘。
+        decorationOverlay?.needsDisplay = true
         didChangeText()
     }
 

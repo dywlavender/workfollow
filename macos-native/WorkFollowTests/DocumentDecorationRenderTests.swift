@@ -394,6 +394,109 @@ final class DocumentDecorationRenderTests: XCTestCase {
         XCTAssertTrue(gutterHasInk(rep, scale: scale), "非空正文行应画出块手柄")
     }
 
+    /// 引用左竖线是否画在指定行的中间高度上（竖线 x 由行首文字反推）。
+    @MainActor
+    private func quoteRuleColor(in view: NativeTextView, window: NSWindow,
+                                bitmap: NSBitmapImageRep, scale: CGFloat,
+                                line: NSRect) -> NSColor? {
+        let x = line.minX - DocumentEditorGeometry.quoteTextIndent
+            + DocumentEditorGeometry.quoteRuleInset + DocumentEditorGeometry.quoteRuleWidth / 2
+        let point = view.convert(NSPoint(x: x, y: line.midY), to: nil)
+        return bitmap.colorAt(x: Int(point.x * scale),
+                              y: Int((window.frame.height - point.y) * scale))
+    }
+
+    @MainActor
+    private func quoteHost(height: CGFloat = 240) throws -> (NativeTextView, NSWindow) {
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: height), textContainer: nil)
+        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.hasShadow = false
+        window.appearance = NSAppearance(named: .aqua)
+        window.backgroundColor = .white
+        window.contentView = view
+        window.orderFront(nil)
+        addTeardownBlock { window.close() }
+        return (view, window)
+    }
+
+    @MainActor
+    private func captureQuote(_ view: NativeTextView, _ window: NSWindow)
+        throws -> (bitmap: NSBitmapImageRep, scale: CGFloat) {
+        view.display()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        view.displayIfNeeded()
+        let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
+            CGWindowID(window.windowNumber), [.bestResolution]))
+        let bitmap = NSBitmapImageRep(cgImage: image)
+        return (bitmap, CGFloat(bitmap.pixelsWide) / window.frame.width)
+    }
+
+    /// 在引用行末尾按回车后，文末是零字符的引用空行：还没输入文字时
+    /// 竖线也必须出现（此前主循环只看有字符的段落，空行没有线）。
+    @MainActor
+    func testTrailingEmptyQuoteLineDrawsRuleBeforeTyping() throws {
+        let (view, window) = try quoteHost()
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
+            DocumentBlock(kind: .quote, runs: [DocumentRun(text: "上引")])
+        ])))
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: (view.string as NSString).length, length: 0))
+        view.typingAttributes = DocumentTextCodec.attributes(kind: .quote, marks: [])
+        view.insertNewline(nil)
+        view.syncPendingTrailingBlock()
+        XCTAssertEqual(view.string, "上引\n")
+        XCTAssertEqual(view.pendingTrailingBlock, .quote)
+
+        let (bitmap, scale) = try captureQuote(view, window)
+        let trailing = try XCTUnwrap(view.viewRect(forCharacterAt: (view.string as NSString).length))
+        let color = try XCTUnwrap(quoteRuleColor(in: view, window: window, bitmap: bitmap,
+                                                 scale: scale, line: trailing))
+        XCTAssertLessThan(color.redComponent, 0.95, "文末空引用行在输入前也应有竖线")
+        let first = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+        let firstColor = try XCTUnwrap(quoteRuleColor(in: view, window: window, bitmap: bitmap,
+                                                      scale: scale, line: first))
+        XCTAssertLessThan(firstColor.redComponent, 0.95, "上一引用行的竖线应保持")
+    }
+
+    /// 空文档上直接点引用：没有任何字符，竖线同样要可见。
+    @MainActor
+    func testQuoteOnEmptyDocumentDrawsRuleBeforeTyping() throws {
+        let (view, window) = try quoteHost()
+        view.textStorage?.setAttributedString(NSAttributedString(string: ""))
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        view.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        view.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.quote")))
+        XCTAssertEqual(view.string, "")
+        XCTAssertEqual(view.displayedTrailingBlock, .quote)
+
+        let (bitmap, scale) = try captureQuote(view, window)
+        let line = try XCTUnwrap(view.viewRect(forCharacterAt: 0))
+        let color = try XCTUnwrap(quoteRuleColor(in: view, window: window, bitmap: bitmap,
+                                                 scale: scale, line: line))
+        XCTAssertLessThan(color.redComponent, 0.95, "空文档上的引用在输入前也应画出竖线")
+    }
+
+    /// 段中的空引用行（只有一个换行）：竖线本来就可见，保证桥接改动没破坏它。
+    @MainActor
+    func testEmptyQuoteLineBetweenQuotesDrawsRule() throws {
+        let (view, window) = try quoteHost()
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
+            DocumentBlock(kind: .quote, runs: [DocumentRun(text: "上引")]),
+            DocumentBlock(kind: .quote, runs: [DocumentRun(text: "")]),
+            DocumentBlock(kind: .quote, runs: [DocumentRun(text: "下引")]),
+        ])))
+        window.makeFirstResponder(view)
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        let (bitmap, scale) = try captureQuote(view, window)
+        let emptyLine = try XCTUnwrap(view.viewRect(forCharacterAt: 3))
+        let color = try XCTUnwrap(quoteRuleColor(in: view, window: window, bitmap: bitmap,
+                                                 scale: scale, line: emptyLine))
+        XCTAssertLessThan(color.redComponent, 0.95, "段中的空引用行也应有竖线")
+    }
+
     /// 两个渲染在指定横向区间（pt）内，B 相对 A 新出现的非白像素数。
     /// 捕获图存在垂直翻转/底部锚定的不确定性与透明边缘，逐列差分比
     /// 固定坐标区域更稳。
