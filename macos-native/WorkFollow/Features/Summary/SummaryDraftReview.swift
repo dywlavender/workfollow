@@ -52,6 +52,7 @@ struct SummaryDraftReview {
             var value = block
             value.runs = block.runs.flatMap { run -> [DocumentRun] in
                 guard run.attachment == nil, run.diagram == nil,
+                      run.table == nil, run.formula == nil,
                       !run.marks.contains(where: { if case .link = $0 { return true }; return false }) else { return [run] }
                 var remainder = run.text[...]
                 var parts: [DocumentRun] = []

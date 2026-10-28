@@ -25,7 +25,7 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual(checklist.headIndent - plain.headIndent, 24, "17pt 勾选框 + 文字间距")
         XCTAssertEqual(checklist.paragraphSpacing, 19, "清单节距 37pt（滴答截图实测）")
         XCTAssertTrue(checklist.textLists.isEmpty)
-        XCTAssertEqual(plain.paragraphSpacing, 8)
+        XCTAssertEqual(plain.paragraphSpacing, 10, "正文换段留 10pt 段距（ima 实测 5+5）")
     }
 
     @MainActor
@@ -208,6 +208,8 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual(try lineBox(.heading(3)), 1.6 * 14, accuracy: 0.01, "三级标题行盒 22.4")
         XCTAssertEqual(try lineBox(.heading(6)), 1.6 * 14, accuracy: 0.01, "六级标题与三级同盒")
         XCTAssertEqual(try lineBox(.paragraph), 21, accuracy: 0.01, "正文行盒 1.5 倍字号")
+        XCTAssertEqual(try pitch(.paragraph, .paragraph), 31, accuracy: 1,
+                       "正文换段 31pt；自动折行/软换行仍 21pt（ima 段距 10）")
         for kind in [DocumentBlockKind.bullet, .ordered, .quote] {
             XCTAssertEqual(try lineBox(kind), 18, accuracy: 0.01, "\(kind) 行盒 18，配 2pt 段间距得 20")
         }
@@ -335,5 +337,22 @@ final class DocumentFormatStyleTests: XCTestCase {
             let typed = try XCTUnwrap(view.attributedString().attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
             XCTAssertEqual(typed.pointSize, size, "\(level) 级标题下实际输入的字号")
         }
+    }
+
+    /// 代码块必须和正文区分开：等宽 13pt、左右 12pt 内边距（负 tailIndent 收窄
+    /// 折行）、行间无段距，由视图层的圆角卡片背景成块。
+    @MainActor
+    func testCodeBlockUsesInsetCardTypography() throws {
+        let attributes = DocumentTextCodec.attributes(kind: .code, marks: [])
+        let font = try XCTUnwrap(attributes[.font] as? NSFont)
+        XCTAssertTrue(font.isFixedPitch)
+        XCTAssertEqual(font.pointSize, 13)
+        let style = try XCTUnwrap(attributes[.paragraphStyle] as? NSParagraphStyle)
+        XCTAssertEqual(style.firstLineHeadIndent,
+                       DocumentEditorGeometry.decorationLane + DocumentEditorGeometry.codeBlockTextInset)
+        XCTAssertEqual(style.headIndent, style.firstLineHeadIndent)
+        XCTAssertEqual(style.tailIndent, -DocumentEditorGeometry.codeBlockTextInset)
+        XCTAssertEqual(style.paragraphSpacing, 0)
+        XCTAssertGreaterThan(style.lineSpacing, 0, "13pt 等宽字要有舒展的行盒")
     }
 }

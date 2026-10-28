@@ -155,28 +155,38 @@ struct DocumentBlock: Identifiable, Equatable, Codable {
     let id: UUID
     var kind: DocumentBlockKind {
         didSet {
-            if !kind.isList { indentLevel = 0 }
+            // Quill 的 indent 属于行属性，不随段落类型切换丢失（列表 ↔ 正文同理）。
             if kind != .ordered { listStart = nil }
+            // 正文字号只属于正文段；切到标题/列表/引用/代码时清掉。
+            if kind != .paragraph { bodySize = nil }
         }
     }
     var runs: [DocumentRun]
     var indentLevel: Int
     var listStart: Int?
+    /// 段落对齐；nil = 默认左对齐（与 Quill 缺省口径一致）。
+    var align: DocumentAlignment?
+    /// 正文字号档位（正文 1/2/3）；nil = 默认 14pt。只对 `.paragraph` 生效。
+    var bodySize: DocumentBodySize?
     /// 检查项元数据。块换成普通段落/标题时保留，供切回清单时恢复。
     var checklist: ChecklistItemMeta?
 
     init(id: UUID = UUID(), kind: DocumentBlockKind, runs: [DocumentRun] = [],
-         indentLevel: Int = 0, listStart: Int? = nil,
-         checklist: ChecklistItemMeta? = nil) {
+         indentLevel: Int = 0, listStart: Int? = nil, align: DocumentAlignment? = nil,
+         bodySize: DocumentBodySize? = nil, checklist: ChecklistItemMeta? = nil) {
         self.id = id
         self.kind = kind
         self.runs = runs
-        self.indentLevel = kind.isList ? min(8, max(0, indentLevel)) : 0
+        self.indentLevel = min(8, max(0, indentLevel))
         self.listStart = kind == .ordered ? listStart.map { max(1, $0) } : nil
+        self.align = align == .left ? nil : align
+        self.bodySize = kind == .paragraph ? bodySize : nil
         self.checklist = checklist?.isEmpty == true ? nil : checklist
     }
 
-    private enum CodingKeys: String, CodingKey { case id, kind, runs, indentLevel, listStart, checklist }
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, runs, indentLevel, listStart, align, bodySize, checklist
+    }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         self.init(id: try values.decode(UUID.self, forKey: .id),
@@ -184,6 +194,8 @@ struct DocumentBlock: Identifiable, Equatable, Codable {
                   runs: try values.decode([DocumentRun].self, forKey: .runs),
                   indentLevel: try values.decodeIfPresent(Int.self, forKey: .indentLevel) ?? 0,
                   listStart: try values.decodeIfPresent(Int.self, forKey: .listStart),
+                  align: try values.decodeIfPresent(DocumentAlignment.self, forKey: .align),
+                  bodySize: try values.decodeIfPresent(DocumentBodySize.self, forKey: .bodySize),
                   checklist: try values.decodeIfPresent(ChecklistItemMeta.self, forKey: .checklist))
     }
     func encode(to encoder: Encoder) throws {
@@ -193,10 +205,53 @@ struct DocumentBlock: Identifiable, Equatable, Codable {
         try values.encode(runs, forKey: .runs)
         if indentLevel > 0 { try values.encode(indentLevel, forKey: .indentLevel) }
         try values.encodeIfPresent(listStart, forKey: .listStart)
+        try values.encodeIfPresent(align, forKey: .align)
+        try values.encodeIfPresent(bodySize, forKey: .bodySize)
         try values.encodeIfPresent(checklist, forKey: .checklist)
     }
 
     var plainText: String { runs.map(\.text).joined() }
+}
+
+/// 「正文」字号档位：默认正文 14pt 之外的三个可选正文字号。
+/// 标题有独立字阶，字号档位只作用于 `.paragraph`。
+enum DocumentBodySize: String, Codable, CaseIterable {
+    case small = "12"
+    case medium = "16"
+    case large = "18"
+
+    var pointSize: CGFloat { CGFloat(Int(rawValue) ?? 14) }
+
+    var title: String {
+        switch self {
+        case .small: "正文 1"
+        case .medium: "正文 2"
+        case .large: "正文 3"
+        }
+    }
+}
+
+/// 段落对齐。`left` 与 Quill 缺省一致，编码时不落键。
+enum DocumentAlignment: String, Codable, CaseIterable {
+    case left, center, right, justify
+
+    var title: String {
+        switch self {
+        case .left: "左对齐"
+        case .center: "居中"
+        case .right: "右对齐"
+        case .justify: "两端对齐"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .left: "text.alignleft"
+        case .center: "text.aligncenter"
+        case .right: "text.alignright"
+        case .justify: "text.justify"
+        }
+    }
 }
 
 enum DocumentBlockKind: Equatable, Codable {
@@ -227,13 +282,18 @@ struct DocumentRun: Equatable, Codable {
     var marks: Set<DocumentMark>
     var attachment: NativeAttachment?
     var diagram: NativeDiagram?
+    var table: NativeTable?
+    var formula: NativeFormula?
 
     init(text: String, marks: Set<DocumentMark> = [], attachment: NativeAttachment? = nil,
-         diagram: NativeDiagram? = nil) {
+         diagram: NativeDiagram? = nil, table: NativeTable? = nil,
+         formula: NativeFormula? = nil) {
         self.text = text
         self.marks = marks
         self.attachment = attachment
         self.diagram = diagram
+        self.table = table
+        self.formula = formula
     }
 }
 
@@ -245,4 +305,29 @@ enum DocumentMark: Hashable, Codable {
     case strikethrough
     case code
     case link(String)
+    /// 摘要等生成内容里的次级元信息（清单、标签、日期）；只影响展示，不参与编辑器工具栏。
+    case muted
+    /// Secondary annotation rows in generated documents; no toolbar command.
+    case caption
+    case symbol(DocumentInlineSymbol)
+    case ink(DocumentInk)
+    /// 用户选择的文字颜色（`#RRGGBB`）；与 Quill `color` 属性一一对应。
+    case textColor(String)
+    /// 用户选择的高亮色（`#RRGGBB`）；`.highlight` 保留为旧档/默认黄色。
+    case highlightColor(String)
+}
+
+extension Set where Element == DocumentMark {
+    var textColorHex: String? {
+        for mark in self { if case .textColor(let hex) = mark { return hex } }
+        return nil
+    }
+
+    /// 默认高亮（旧 `highlight` 布尔标记）折算成固定黄色。
+    var highlightHex: String? {
+        for mark in self { if case .highlightColor(let hex) = mark { return hex } }
+        return contains(.highlight) ? "#ffe98a" : nil
+    }
+
+    var hasAnyHighlight: Bool { contains(.highlight) || highlightHex != nil }
 }

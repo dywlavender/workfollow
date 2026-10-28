@@ -8,6 +8,71 @@ import AppKit
 /// macOS 14+ 的 TextKit 2 会自绘 NSTextList 标记并挤占行首空间，叠出"双点/1.1"。
 /// 模型不受影响：段落类型仍存在 blockKey 里，绘制只读不写。
 extension NativeTextView {
+    /// 代码块背景：画在文字层**之下**（`draw(_:)` 里先画背景再走 super），
+    /// 连续的代码行合成一块圆角浅灰卡片。装饰层在选区之上，不能承担这个填充。
+    func drawCodeBlockBackgrounds(in dirtyRect: NSRect) {
+        guard let storage = textStorage else { return }
+        let source = storage.string as NSString
+        guard source.length > 0 else { return }
+        // 按整篇归组、只画与脏矩形相交的卡片：按视口截断会让跨屏的代码块在
+        // 可视边界处露出圆角/描边，滚动时像被切断。
+        var offset = 0
+        let end = source.length
+        var group: (top: CGFloat, bottom: CGFloat, left: CGFloat, right: CGFloat)?
+        func flushGroup() {
+            guard let rect = group else { return }
+            group = nil
+            let frame = NSRect(x: rect.left, y: rect.top, width: max(1, rect.right - rect.left),
+                               height: max(1, rect.bottom - rect.top))
+            guard frame.intersects(dirtyRect) else { return }
+            let path = NSBezierPath(roundedRect: frame, xRadius: 6, yRadius: 6)
+            Self.codeBlockBackgroundColor.setFill()
+            path.fill()
+            Self.codeBlockBorderColor.setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        }
+        while offset < end {
+            let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
+            offset = NSMaxRange(paragraph)
+            guard paragraph.length > 0 else { continue }
+            let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                          effectiveRange: nil) as? String
+            let isCode = DocumentTextCodec.kind(token ?? "paragraph") == .code
+            if isCode, let first = viewRect(forCharacterAt: paragraph.location) {
+                let lastIndex = max(paragraph.location, NSMaxRange(paragraph) - 1)
+                let last = viewRect(forCharacterAt: lastIndex) ?? first
+                let inset = DocumentEditorGeometry.codeBlockTextInset
+                let right = bounds.maxX - (textContainer?.lineFragmentPadding ?? 5) - 2
+                if var current = group {
+                    current.bottom = last.maxY
+                    current.right = max(current.right, right)
+                    group = current
+                } else {
+                    group = (first.minY - DocumentEditorGeometry.codeBlockVerticalPadding,
+                             last.maxY,
+                             first.minX - inset, right)
+                }
+            } else {
+                flushGroup()
+            }
+        }
+        flushGroup()
+    }
+
+    /// 浅灰卡片：浅色下黑 5.5%，深色下白 8%（直接用动态 NSColor，切换外观自动重解析）。
+    static let codeBlockBackgroundColor = NSColor(name: nil) { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return dark ? NSColor.white.withAlphaComponent(0.08)
+            : NSColor.black.withAlphaComponent(0.055)
+    }
+
+    static let codeBlockBorderColor = NSColor(name: nil) { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return dark ? NSColor.white.withAlphaComponent(0.12)
+            : NSColor.black.withAlphaComponent(0.07)
+    }
+
     /// 由 `BlockDecorationOverlay` 调用（选区视图之上），不再走文本视图自己的 draw。
     func drawBlockDecorations(in dirtyRect: NSRect) {
         guard let storage = textStorage, window != nil else { return }

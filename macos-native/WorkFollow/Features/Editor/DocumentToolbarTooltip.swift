@@ -42,14 +42,12 @@ final class ToolbarTooltipState: ObservableObject {
 struct DocumentToolbarTooltip {
     /// 工具条坐标系的名字：各控件在这里报矩形，提示层也画在这里。
     static let space = "document-toolbar-tooltip"
-    /// 提示卡与控件之间的间距，以及卡自身的固定高度（标题宽度不定，高度恒定）。
-    static let gap: CGFloat = 6
-    static let cardHeight: CGFloat = 22
+    /// 提示卡与控件之间的间距，以及卡自身的固定高度；样式与全局 `HoverTipCard` 一致。
+    static let gap = HoverTipMetrics.gap
+    static let cardHeight = HoverTipMetrics.height
 
     static func width(for title: String) -> CGFloat {
-        ceil((title as NSString).size(withAttributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .medium)
-        ]).width) + WFSpace.sm * 2
+        HoverTipMetrics.width(for: title)
     }
 }
 
@@ -81,16 +79,15 @@ struct ToolbarTooltipCard: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 11, weight: .medium))
+            .font(.system(size: 12, weight: .medium))
             .foregroundStyle(WFColors.tooltipText)
             .lineLimit(1)
             .truncationMode(.tail)
-            .padding(.horizontal, WFSpace.sm)
+            .padding(.horizontal, HoverTipMetrics.horizontalPadding)
             .frame(height: DocumentToolbarTooltip.cardHeight)
             .frame(maxWidth: maximumWidth)
             .background(WFColors.tooltipSurface,
-                        in: RoundedRectangle(cornerRadius: WFSpace.inline))
-            .shadow(color: .black.opacity(0.18), radius: 6, y: 2)
+                        in: RoundedRectangle(cornerRadius: HoverTipMetrics.cornerRadius))
             .allowsHitTesting(false)
     }
 }
@@ -122,14 +119,39 @@ extension View {
 enum DocumentToolbarPicker: Equatable {
     case heading
     case time
+    case textColor
+    case highlightColor
+    case alignment
 
     /// 与 `ToolbarTooltipState.frames` 的键一致——用它取按钮矩形来定位。
     var tooltipTitle: String {
-        self == .heading ? "标题" : "插入当前时间"
+        switch self {
+        case .heading: "标题"
+        case .time: "插入当前时间"
+        case .textColor: "文字颜色"
+        case .highlightColor: "高亮颜色"
+        case .alignment: "对齐方式"
+        }
+    }
+
+    /// 子面板的窗口标题（不参与界面文案）。
+    var panelTitle: String {
+        switch self {
+        case .heading: "正文标题格式"
+        case .time: "正文插入时间"
+        case .textColor: "文字颜色"
+        case .highlightColor: "背景颜色"
+        case .alignment: "段落对齐"
+        }
     }
 
     var width: CGFloat {
-        self == .heading ? 150 : 222
+        switch self {
+        case .heading: 150
+        case .time: 222
+        case .textColor, .highlightColor: Self.textColorWidth
+        case .alignment: 150
+        }
     }
 
     /// 标题贴按钮左缘，时间贴按钮右缘（原版 `topStart` / `topEnd`）。
@@ -138,7 +160,12 @@ enum DocumentToolbarPicker: Equatable {
     var rowHeight: CGFloat { 36 }
     var verticalPadding: CGFloat { 6 }
 
-    var height: CGFloat { rowHeight * CGFloat(titles.count) + verticalPadding * 2 }
+    var height: CGFloat {
+        switch self {
+        case .textColor, .highlightColor: Self.textColorHeight
+        case .heading, .time, .alignment: rowHeight * CGFloat(titles.count) + verticalPadding * 2
+        }
+    }
 
     var titles: [String] {
         switch self {
@@ -146,6 +173,8 @@ enum DocumentToolbarPicker: Equatable {
             EditorCommandCatalog.format($0)?.descriptor.title
         }
         case .time: return Self.timeValues()
+        case .alignment: return DocumentAlignment.allCases.map(\.title)
+        case .textColor, .highlightColor: return []
         }
     }
 
@@ -153,12 +182,17 @@ enum DocumentToolbarPicker: Equatable {
     static let timeFormats = ["yyyy年M月d日 HH:mm", "yyyy年M月d日", "yyyy/M/d", "HH:mm"]
 
     /// Decorative labels never become document text or command identities.
-    static let headingBadges = ["H₁", "H₂", "H₃", "H₄", "H₅", "H₆"]
+    /// 字号档位在角标列显示实际 pt，标题显示 H₁–H₅（六级标题已移除）。
+    static let headingBadges: [String: String] = [
+        "format.body1": "12", "format.body2": "16", "format.body3": "18",
+        "format.heading1": "H₁", "format.heading2": "H₂", "format.heading3": "H₃",
+        "format.heading4": "H₄", "format.heading5": "H₅"
+    ]
 
     func headingBadge(at index: Int) -> String? {
-        guard self == .heading, index > 0, index < titles.count,
-              index - 1 < Self.headingBadges.count else { return nil }
-        return Self.headingBadges[index - 1]
+        guard self == .heading,
+              EditorCommandCatalog.headingPickerIDs.indices.contains(index) else { return nil }
+        return Self.headingBadges[EditorCommandCatalog.headingPickerIDs[index]]
     }
 
     /// 时间菜单显示的是**此刻的值**（原版把值当标签用：`2026年9月27日` /
@@ -194,6 +228,7 @@ struct DocumentToolbarPickerCard: View {
             ForEach(Array(picker.titles.enumerated()), id: \.offset) { index, title in
                 DocumentToolbarPickerRow(title: title,
                                          badge: picker.headingBadge(at: index),
+                                         symbol: picker == .alignment ? DocumentAlignment.allCases[index].symbol : nil,
                                          selected: selectedIndex == index) {
                     onPick(index)
                 }
@@ -211,11 +246,92 @@ struct DocumentToolbarPickerCard: View {
     }
 }
 
+/// 文字 / 高亮颜色调色板（仿 ima：无颜色 + 6×10 色格）。
+struct DocumentColorPickerCard: View {
+    let title: String
+    /// 清空这一行：文字颜色是恢复默认墨色，背景色才是真正的“无颜色”。
+    var defaultTitle = "无颜色"
+    let selectedHex: String?
+    let onPick: (String?) -> Void
+    @State private var hovering: Int?
+
+    private let columns = Array(repeating: GridItem(.fixed(20), spacing: 4), count: 10)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(WFColors.secondaryText)
+            Button { onPick(nil) } label: {
+                Text(defaultTitle)
+                    .font(WFType.menu)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 28)
+                    .contentShape(Rectangle())
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(selectedHex == nil ? WFColors.accent : WFColors.border,
+                                    lineWidth: selectedHex == nil ? 1.5 : 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(WFColors.text)
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(DocumentColorPalette.swatches) { swatch in
+                    Button { onPick(swatch.hex) } label: {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(nsColor: NSColor(documentHex: swatch.hex) ?? .clear))
+                            .frame(width: 20, height: 20)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .stroke(WFColors.border.opacity(swatch.hex == "#ffffff" ? 1 : 0.25),
+                                            lineWidth: 0.5)
+                            }
+                            .overlay {
+                                if selectedHex == swatch.hex {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(WFColors.accent, lineWidth: 1.5)
+                                        .padding(-3)
+                                } else if hovering == swatch.id {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(WFColors.secondaryText.opacity(0.5), lineWidth: 1)
+                                        .padding(-2)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { inside in
+                        if inside { hovering = swatch.id }
+                        else if hovering == swatch.id { hovering = nil }
+                    }
+                    .help(swatch.hex)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(width: DocumentToolbarPicker.textColorWidth, height: DocumentToolbarPicker.textColorHeight,
+               alignment: .top)
+        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius)
+                .stroke(WFColors.overlayBorder, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+    }
+}
+
+extension DocumentToolbarPicker {
+    static let textColorWidth: CGFloat = 260
+    static let textColorHeight: CGFloat = 250
+}
+
 /// 面板里的一行：14 regular，选中转强调色并在行尾打勾，悬停染中性灰
 /// （原版 `_PickerRow` + `WorkFollowInteractionStyles.overlay(menu: true)`）。
 struct DocumentToolbarPickerRow: View {
     let title: String
     var badge: String? = nil
+    var symbol: String? = nil
     let selected: Bool
     let action: () -> Void
 
@@ -229,6 +345,13 @@ struct DocumentToolbarPickerRow: View {
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(WFColors.secondaryText)
                         .frame(width: 26, alignment: .leading)
+                        .accessibilityHidden(true)
+                }
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 13))
+                        .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
+                        .frame(width: 24, alignment: .leading)
                         .accessibilityHidden(true)
                 }
                 Text(title)

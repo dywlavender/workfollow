@@ -79,7 +79,7 @@ extension NativeTextView {
         var nextKind = current.kind
         if case .checklist = nextKind { nextKind = .checklist(false) }
         var updated = DocumentTextCodec.decode(source, preserving: document, trailing: nextKind,
-            trailingIndentLevel: current.indentLevel)
+            trailingIndentLevel: current.indentLevel, trailingAlign: current.align)
         let nextIndex = min(index + 1, updated.blocks.count - 1)
         updated.blocks[nextIndex].kind = nextKind
         updated.blocks[nextIndex].indentLevel = current.indentLevel
@@ -93,7 +93,7 @@ extension NativeTextView {
         let marks = DocumentTextCodec.decode(NSAttributedString(string: " ", attributes: typingAttributes),
                                             preserving: .empty).blocks.first?.runs.first?.marks ?? []
         return DocumentTextCodec.attributes(kind: block.kind, marks: marks,
-            indentLevel: block.indentLevel, listStart: block.listStart)
+            indentLevel: block.indentLevel, listStart: block.listStart, align: block.align)
     }
 
     /// One semantic edit, one undo entry; no literal tabs or marker text enter

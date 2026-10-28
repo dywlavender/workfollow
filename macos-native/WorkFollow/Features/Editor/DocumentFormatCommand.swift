@@ -49,10 +49,11 @@ enum EditorCommandCatalog {
         "format.heading1", "format.heading2", "format.heading3", "format.bullet",
         "format.ordered", "format.checklist", "format.quote"
     ]
-    /// 标题级别选择器：滴答工具条 `md_header1..6`（Assets.car 实证）——本地此前只有 H1–H3。
-    static let headingPickerIDs = ["format.paragraph", "format.heading1", "format.heading2",
-                                   "format.heading3", "format.heading4", "format.heading5",
-                                   "format.heading6"]
+    /// 标题级别选择器：正文 → 三档正文字号（正文 1/2/3）→ H1–H5。
+    /// 六级标题按产品口径移除（命令仍保留，旧档可继续渲染/读取）。
+    static let headingPickerIDs = ["format.paragraph", "format.body1", "format.body2",
+                                   "format.body3", "format.heading1", "format.heading2",
+                                   "format.heading3", "format.heading4", "format.heading5"]
     static let selectionFormatIDs = [
         "format.bold", "format.italic", "format.underline", "format.strikethrough",
         "format.highlight", "format.inlineCode"
@@ -64,6 +65,8 @@ struct DocumentFormatCommand {
     let title: String
     let block: DocumentBlockKind?
     let mark: DocumentMark?
+    /// 段落命令附带的正文号档位（正文 1/2/3）；普通段落命令为 nil。
+    var bodySize: DocumentBodySize? = nil
     var descriptor: EditorCommandDescriptor {
         let glyph: SlashGlyphKind
         switch block {
@@ -72,6 +75,7 @@ struct DocumentFormatCommand {
         case .ordered: glyph = .ordered
         case .checklist: glyph = .checklist
         case .quote: glyph = .quote
+        case .paragraph where bodySize != nil: glyph = .symbol("textformat.size")
         default: glyph = .symbol("text.alignleft")
         }
         return EditorCommandDescriptor(id: id, title: title, keywords: keywords,
@@ -90,7 +94,8 @@ struct DocumentFormatCommand {
     }
     var keywords: String {
         switch block {
-        case .paragraph: return "paragraph text"
+        case .paragraph: return bodySize.map { "paragraph body \($0.title) font size \($0.rawValue)" }
+            ?? "paragraph text"
         case .heading: return "heading title h1 h2"
         case .quote: return "quote"
         case .code: return "code"
@@ -102,6 +107,9 @@ struct DocumentFormatCommand {
     }
     static let commands: [Self] = [
         .init(id: "format.paragraph", title: "正文", block: .paragraph, mark: nil),
+        .init(id: "format.body1", title: "正文 1", block: .paragraph, mark: nil, bodySize: .small),
+        .init(id: "format.body2", title: "正文 2", block: .paragraph, mark: nil, bodySize: .medium),
+        .init(id: "format.body3", title: "正文 3", block: .paragraph, mark: nil, bodySize: .large),
         .init(id: "format.heading1", title: "一级标题", block: .heading(1), mark: nil),
         .init(id: "format.heading2", title: "二级标题", block: .heading(2), mark: nil),
         .init(id: "format.quote", title: "引用", block: .quote, mark: nil),
@@ -118,7 +126,6 @@ struct DocumentFormatCommand {
         .init(id: "format.heading3", title: "三级标题", block: .heading(3), mark: nil),
         .init(id: "format.heading4", title: "四级标题", block: .heading(4), mark: nil),
         .init(id: "format.heading5", title: "五级标题", block: .heading(5), mark: nil),
-        .init(id: "format.heading6", title: "六级标题", block: .heading(6), mark: nil),
         .init(id: "format.inlineCode", title: "行内代码", block: nil, mark: .code)
     ]
 }
@@ -225,6 +232,12 @@ extension NativeTextView {
             }
             let current = DocumentTextCodec.kind(token)
             let resolved = resolvedBlock(command.block, current: current, lineStart: lineStart)
+            // 正文档位：块命令带档位就用它（同档再点一次取消回默认正文）；
+            // 纯标记命令沿用当前档位，不能因为加粗/斜体丢掉字号。
+            let resolvedBodySize: DocumentBodySize? = command.block != nil
+                ? (command.bodySize != nil && currentBlock?.kind == .paragraph
+                    && currentBlock?.bodySize == command.bodySize ? nil : command.bodySize)
+                : currentBlock?.bodySize
             // 这个分支只在"段落里一个字符都没有"时走（文末空行或空文档）。TextKit 把
             // 段落样式挂在字符上，而这里没有字符，所以把级别记成"待定"交给模型，并
             // 当场让协调器收到变更——否则在文末空行上选完标题、不输入就切走会丢掉
@@ -232,7 +245,9 @@ extension NativeTextView {
             replaceEmptyBlock(range: range, content: NSAttributedString(string: ""),
                               typing: DocumentTextCodec.attributes(kind: resolved, marks: marks,
                                   indentLevel: currentBlock?.indentLevel ?? 0,
-                                  listStart: currentBlock?.listStart),
+                                  listStart: currentBlock?.listStart,
+                                  align: currentBlock?.align,
+                                  bodySize: resolvedBodySize),
                               trailing: resolved == .paragraph ? nil : resolved)
             return
         }
@@ -257,8 +272,19 @@ extension NativeTextView {
                               DocumentTextCodec.blockToken($0.kind) == DocumentTextCodec.blockToken(block)
                           })
         }
+        // 同一个正文档位再点一次 = 取消档位、回到默认正文（与标题再点一次
+        // 回到正文同一口径）。
+        let targetBodySize: DocumentBodySize? = {
+            guard command.block != nil else { return nil }
+            guard let bodySize = command.bodySize, inlineRange == nil else { return command.bodySize }
+            let same = selectedBlocks.allSatisfy { $0.kind == .paragraph && $0.bodySize == bodySize }
+            return same ? nil : bodySize
+        }()
         for index in document.blocks.indices {
-            if let block = targetBlock { document.blocks[index].kind = block }
+            if let block = targetBlock {
+                document.blocks[index].kind = block
+                document.blocks[index].bodySize = targetBodySize
+            }
             if let mark = command.mark {
                 for run in document.blocks[index].runs.indices {
                     if remove { document.blocks[index].runs[run].marks.remove(mark) }
@@ -273,7 +299,9 @@ extension NativeTextView {
             var cleanTypingAttributes = DocumentTextCodec.attributes(
                 kind: document.blocks.first?.kind ?? .paragraph, marks: [],
                 indentLevel: document.blocks.first?.indentLevel ?? 0,
-                listStart: document.blocks.first?.listStart)
+                listStart: document.blocks.first?.listStart,
+                align: document.blocks.first?.align,
+                bodySize: document.blocks.first?.bodySize)
             cleanTypingAttributes.removeValue(forKey: DocumentTextCodec.completedChecklistPresentationKey)
             typingAttributes = cleanTypingAttributes
         }
@@ -310,7 +338,9 @@ extension NativeTextView {
                 kind: document.blocks.first?.kind ?? .paragraph,
                 marks: document.blocks.first?.runs.first?.marks ?? [],
                 indentLevel: document.blocks.first?.indentLevel ?? 0,
-                listStart: document.blocks.first?.listStart)
+                listStart: document.blocks.first?.listStart,
+                align: document.blocks.first?.align,
+                bodySize: document.blocks.first?.bodySize)
         } else {
             // Formatting expands to the paragraph, but must not replace the user's
             // caret/selection with that entire paragraph.
@@ -337,7 +367,7 @@ extension NativeTextView {
     /// 2. 原版 `formatText` 会把行格式留在输入位置上，之后敲进去的字就是标题字号。
     ///    原生只在"段落里一个字符都没有"时才设 `typingAttributes`，空行（有一个
     ///    换行）这条路上漏了，于是输入的字仍是旧字号。
-    private func syncParagraphStyleAfterEdit(at location: Int) {
+    func syncParagraphStyleAfterEdit(at location: Int) {
         guard let storage = textStorage else { return }
         let source = string as NSString
         guard source.length > 0 else { return }
@@ -350,7 +380,9 @@ extension NativeTextView {
         let attributes = DocumentTextCodec.attributes(kind: decoded.blocks.first?.kind ?? .paragraph,
                                                       marks: decoded.blocks.first?.runs.first?.marks ?? [],
                                                       indentLevel: decoded.blocks.first?.indentLevel ?? 0,
-                                                      listStart: decoded.blocks.first?.listStart)
+                                                      listStart: decoded.blocks.first?.listStart,
+                                                      align: decoded.blocks.first?.align,
+                                                      bodySize: decoded.blocks.first?.bodySize)
         typingAttributes = attributes
 
         // 段落分隔符（空行的唯一字符）承受整段的字号与段落样式。

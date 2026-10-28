@@ -11,6 +11,12 @@ struct DocumentSelectionStyle: Equatable {
     /// 选区里**每个** run 都带的标记（空选区取输入属性）。只有全选都是粗体才算
     /// 粗体激活——与原版 `isActive` 的口径一致。
     var marks: Set<DocumentMark> = []
+    var indentLevel: Int = 0
+    var align: DocumentAlignment?
+    /// 正文字号档位（正文 1/2/3）；nil = 默认正文。
+    var bodySize: DocumentBodySize?
+
+    var blockKind: DocumentBlockKind { DocumentTextCodec.kind(blockToken) }
 
     func isBlock(_ kind: DocumentBlockKind?) -> Bool {
         guard let kind else { return false }
@@ -35,8 +41,17 @@ final class DocumentEditorHandle: ObservableObject {
     weak var coordinator: DocumentEditorCoordinator?
     /// 工具条据此显示激活态；选区变化与每次格式化后都会重算。
     @Published private(set) var style = DocumentSelectionStyle()
+    @Published private(set) var canUndo = false
+    @Published private(set) var canRedo = false
+    /// 格式刷取格式后为 true，等待下一次选区落定。
+    @Published private(set) var formatPainterActive = false
     private var viewUpdateDepth = 0
     private var styleRefreshScheduled = false
+    private var painterStyle: DocumentSelectionStyle?
+    private var painterSourceSelection: NSRange?
+    private var painterWorkItem: DispatchWorkItem?
+    private var observedUndoManager: UndoManager?
+    private var undoObservers: [NSObjectProtocol] = []
 
     // AppKit emits selection callbacks while SwiftUI installs/rebinds storage.
     // Publish the final toolbar style after that update, not its transient styles.
@@ -44,6 +59,7 @@ final class DocumentEditorHandle: ObservableObject {
     func endViewUpdate() { viewUpdateDepth -= 1 }
 
     func prepareForDocumentChange() {
+        cancelFormatPainter()
         guard let textView, let coordinator,
               textView.documentIdentity == coordinator.documentID else { return }
         coordinator.prepareForDocumentChange(in: textView)
@@ -68,6 +84,149 @@ final class DocumentEditorHandle: ObservableObject {
         refreshStyle()
     }
 
+    // MARK: 基础格式批：撤销 / 清除 / 对齐 / 缩进 / 颜色 / 格式刷
+
+    func undo() {
+        textView?.undoDocumentEdit()
+        refreshStyle()
+    }
+
+    func redo() {
+        textView?.redoDocumentEdit()
+        refreshStyle()
+    }
+
+    func clearFormatting() {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.clearFormatting()
+        refreshStyle()
+    }
+
+    func applyAlignment(_ alignment: DocumentAlignment) {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.applyAlignment(alignment)
+        refreshStyle()
+    }
+
+    func adjustIndent(by delta: Int) {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.adjustIndent(by: delta)
+        refreshStyle()
+    }
+
+    func applyTextColor(_ hex: String?) {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.applyTextColor(hex)
+        refreshStyle()
+    }
+
+    func applyHighlightColor(_ hex: String?) {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.applyHighlightColor(hex)
+        refreshStyle()
+    }
+
+    /// 工具条高亮按钮：已有高亮就清掉，否则铺默认黄色。
+    func toggleHighlight() {
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.applyHighlightColor(style.marks.hasAnyHighlight ? nil : DocumentColorPalette.defaultHighlight)
+        refreshStyle()
+    }
+
+    /// 点一次取当前选区样式，下一次选区落定后应用并退出。
+    func toggleFormatPainter() {
+        if formatPainterActive {
+            cancelFormatPainter()
+            return
+        }
+        guard let textView else { return }
+        textView.window?.makeFirstResponder(textView)
+        refreshStyle()
+        painterStyle = style
+        painterSourceSelection = textView.selectedRange()
+        formatPainterActive = true
+    }
+
+    func cancelFormatPainter() {
+        painterWorkItem?.cancel()
+        painterWorkItem = nil
+        painterStyle = nil
+        painterSourceSelection = nil
+        if formatPainterActive { formatPainterActive = false }
+    }
+
+    /// 选区变化回调（`NativeTextView.onSelectionChanged`）：刷新工具条，并推进格式刷。
+    func selectionDidChange() {
+        refreshStyle()
+        scheduleFormatPainterApply()
+    }
+
+    private func scheduleFormatPainterApply() {
+        guard formatPainterActive, let textView,
+              textView.selectedRange() != painterSourceSelection else { return }
+        painterWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.applyFormatPainterNow() }
+        painterWorkItem = work
+        // 拖选过程中每一帧都会触发 selection change；等指针停稳再落格式。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
+
+    private func applyFormatPainterNow() {
+        guard formatPainterActive, let textView, let painterStyle else {
+            cancelFormatPainter()
+            return
+        }
+        guard textView.selectedRange() != painterSourceSelection else { return }
+        textView.window?.makeFirstResponder(textView)
+        textView.applyCapturedStyle(painterStyle)
+        cancelFormatPainter()
+        refreshStyle()
+    }
+
+    private func bindUndoManager(_ manager: UndoManager?) {
+        guard manager !== observedUndoManager else {
+            // 同一管理器的每次命令后也刷新一次：撤销组按事件收口，工具条按钮
+            // 不能等下一次组关闭通知才解除禁用。
+            updateUndoState()
+            return
+        }
+        for observer in undoObservers { NotificationCenter.default.removeObserver(observer) }
+        undoObservers.removeAll()
+        observedUndoManager = manager
+        guard let manager else {
+            setUndoState(canUndo: false, canRedo: false)
+            return
+        }
+        let center = NotificationCenter.default
+        for name in [Notification.Name.NSUndoManagerDidUndoChange,
+                     Notification.Name.NSUndoManagerDidRedoChange,
+                     Notification.Name.NSUndoManagerDidCloseUndoGroup] {
+            undoObservers.append(center.addObserver(forName: name, object: manager, queue: .main) {
+                [weak self] _ in self?.updateUndoState()
+            })
+        }
+        updateUndoState()
+    }
+
+    private func updateUndoState() {
+        guard let textView else {
+            setUndoState(canUndo: false, canRedo: false)
+            return
+        }
+        setUndoState(canUndo: textView.canUndoDocumentEdit, canRedo: textView.canRedoDocumentEdit)
+    }
+
+    private func setUndoState(canUndo nextUndo: Bool, canRedo nextRedo: Bool) {
+        if canUndo != nextUndo { canUndo = nextUndo }
+        if canRedo != nextRedo { canRedo = nextRedo }
+    }
+
     /// 从当前选区重算样式。空选区读 `typingAttributes`——那正是"接下来输入会是什么
     /// 样式"，所以空文档里点段落格式也能在工具条上看到反馈（原版同理）。
     func refreshStyle() {
@@ -83,8 +242,10 @@ final class DocumentEditorHandle: ObservableObject {
         }
         guard let textView, let storage = textView.textStorage else {
             if style != DocumentSelectionStyle() { style = DocumentSelectionStyle() }
+            setUndoState(canUndo: false, canRedo: false)
             return
         }
+        bindUndoManager(textView.undoManager)
         let range = textView.selectedRange()
         let sample = range.length == 0
             ? NSAttributedString(string: " ", attributes: textView.typingAttributes)
@@ -120,7 +281,10 @@ final class DocumentEditorHandle: ObservableObject {
     func editLink() { textView?.editDocumentLink(nil); refreshStyle() }
     func removeLink() { textView?.removeDocumentLink(nil); refreshStyle() }
     func insertAttachment() { textView?.insertDocumentAttachment(nil); refreshStyle() }
+    func insertImage() { textView?.insertDocumentImage(nil); refreshStyle() }
     func insertDiagram() { textView?.insertDocumentDiagram(at: nil); refreshStyle() }
+    func insertTable() { textView?.insertDocumentTable(at: nil); refreshStyle() }
+    func insertFormula() { textView?.insertDocumentFormula(at: nil); refreshStyle() }
     func insertTime(format: String) { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format); refreshStyle() }
     func insertDivider() { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider(); refreshStyle() }
     func insertReference(_ reference: EditorReference) {
@@ -189,6 +353,11 @@ enum DocumentEditorGeometry {
     static let structuredParagraphSpacing: CGFloat = 2
     static let quoteRuleInset: CGFloat = 4
     static let quoteRuleWidth: CGFloat = 2
+    /// 代码块左右内边距：文字距背景块边缘；背景绘制与段落缩进共用这一处。
+    static let codeBlockTextInset: CGFloat = 12
+    /// 代码块卡片向上探出的留白（落在上一段的段距里）；底边贴住行盒，
+    /// 避免压到下一段文字的字形。
+    static let codeBlockVerticalPadding: CGFloat = 4
 }
 
 struct DocumentEditor: View {
@@ -248,8 +417,13 @@ private struct DocumentEditorContent: NSViewRepresentable {
            listStart: document.blocks.last?.listStart)
         context.coordinator.didLoadDocument(in: textView, reparseInline: true)
         textView.onEscape = onEscape
+        textView.onCancelTransient = { [weak handle] in
+            guard handle?.formatPainterActive == true else { return false }
+            handle?.cancelFormatPainter()
+            return true
+        }
         textView.onEditingChanged = onEditingChanged
-        textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
+        textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
         textView.profile = profile
         textView.autoresizingMask = [.width]
         handle?.textView = textView
@@ -285,7 +459,12 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.decorationVisibleMinX = decorationVisibleMinX
         handle?.textView = textView
         handle?.coordinator = context.coordinator
-        textView.onSelectionChanged = { [weak handle] in handle?.refreshStyle() }
+        textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
+        textView.onCancelTransient = { [weak handle] in
+            guard handle?.formatPainterActive == true else { return false }
+            handle?.cancelFormatPainter()
+            return true
+        }
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,

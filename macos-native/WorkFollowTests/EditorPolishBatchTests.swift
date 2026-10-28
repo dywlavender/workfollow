@@ -9,13 +9,13 @@ final class EditorPolishBatchTests: XCTestCase {
 
     // MARK: - 块菜单（TI2-21 收尾）
 
-    func testBlockMenuOffersAllSixHeadingLevels() {
+    func testBlockMenuOffersHeadingLevelsUpToFive() {
         let commands = DocumentProfile.standardBlockMenuCommands
         let headings = commands.compactMap { command -> Int? in
             guard case .heading(let level)? = EditorCommandCatalog.format(command.id)?.block else { return nil }
             return level
         }
-        XCTAssertEqual(headings, [1, 2, 3, 4, 5, 6], "滴答 md_vertical_header1..6：块菜单要有六级标题")
+        XCTAssertEqual(headings, [1, 2, 3, 4, 5], "六级标题已按产品口径移除")
         XCTAssertEqual(commands.first?.id, "format.paragraph", "第一项是正文")
         XCTAssertTrue(commands.contains { $0.id == "shared.divider" })
         XCTAssertTrue(commands.contains { $0.id == "shared.attachment" })
@@ -42,11 +42,11 @@ final class EditorPolishBatchTests: XCTestCase {
             task: try XCTUnwrap(workspace.task(for: id)),
             host: TaskEditorHostActions(createChild: {}, openTags: {}, openRelation: {},
                                         openLink: { _ in true }))
-        // Slash 菜单保持实测的 12 项（标题只到 H3），块菜单另有六级。
+        // Slash 菜单保持实测的 12 项（标题只到 H3），块菜单另到 H5。
         XCTAssertEqual(profile.slashCommands.count, 13)
         XCTAssertFalse(profile.slashCommands.contains { $0.id == "format.heading4" })
-        XCTAssertEqual(profile.blockMenuCommands?.count, 13)
-        XCTAssertTrue(profile.blockMenuCommands?.contains { $0.id == "format.heading6" } == true)
+        XCTAssertEqual(profile.blockMenuCommands?.count, 12)
+        XCTAssertFalse(profile.blockMenuCommands?.contains { $0.id == "format.heading6" } == true)
     }
 
     func testGutterClickOpensBlockScope() throws {
@@ -68,7 +68,7 @@ final class EditorPolishBatchTests: XCTestCase {
                             y: line.midY)
         XCTAssertTrue(view.openBlockMenu(at: point))
         XCTAssertEqual(view.slashSession?.scope, .block)
-        XCTAssertEqual(view.commands(for: try XCTUnwrap(view.slashSession)).count, 13,
+        XCTAssertEqual(view.commands(for: try XCTUnwrap(view.slashSession)).count, 12,
                        "块菜单走自己的命令集，不是 Slash 的")
         view.dismissSlash()
     }

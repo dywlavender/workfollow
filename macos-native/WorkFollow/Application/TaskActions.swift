@@ -772,7 +772,8 @@ final class TaskActions {
     static func checklistConversionImpact(in document: NativeDocument) -> ChecklistConversionImpact {
         var impact = ChecklistConversionImpact()
         for block in document.blocks {
-            if block.runs.contains(where: { !$0.marks.isEmpty || $0.attachment != nil || $0.diagram != nil }) {
+            if block.runs.contains(where: { !$0.marks.isEmpty || $0.attachment != nil || $0.diagram != nil
+                || $0.table != nil || $0.formula != nil }) {
                 impact.richTextBlocks += 1
             }
             switch block.kind {

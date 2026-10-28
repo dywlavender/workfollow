@@ -16,6 +16,8 @@ final class NativeTextView: NSTextView {
     override var undoManager: UndoManager? { documentUndoManager }
 
     var onEscape: (() -> InspectorEscapeEffect)?
+    /// 编辑器自己的临时状态（如格式刷）先吃掉 Esc；返回 true 表示已处理。
+    var onCancelTransient: (() -> Bool)?
     var onEditingChanged: ((Bool) -> Void)?
     /// 选区或输入属性变了：工具条靠它刷新激活态（对齐原版 `_active` 的那条路）。
     var onSelectionChanged: (() -> Void)?
@@ -49,6 +51,7 @@ final class NativeTextView: NSTextView {
     var displayedTrailingBlock: DocumentBlockKind?
     var displayedTrailingIndentLevel = 0
     var displayedTrailingListStart: Int?
+    var displayedTrailingAlign: DocumentAlignment?
     var trailingIndentLevel: Int {
         pendingTrailingBlock != nil
             ? (typingAttributes[DocumentTextCodec.indentKey] as? Int ?? 0) : displayedTrailingIndentLevel
@@ -57,24 +60,33 @@ final class NativeTextView: NSTextView {
         pendingTrailingBlock != nil
             ? typingAttributes[DocumentTextCodec.listStartKey] as? Int : displayedTrailingListStart
     }
+    var trailingAlign: DocumentAlignment? {
+        pendingTrailingBlock != nil
+            ? (typingAttributes[DocumentTextCodec.alignKey] as? String)
+                .flatMap(DocumentAlignment.init(rawValue:)) : displayedTrailingAlign
+    }
     /// 输入期 Markdown 转换（块级/分割线/行内）的重入护栏：`applyFormat` 的
     /// 替换文本可能再次以触发字符结尾，不能让触发逻辑在替换过程中二次进入。
     var isApplyingTypedMarkdownInput = false
 
     /// 绑定文档时把模型里的文末级别带回输入属性（由协调器调用），这样切走再回来
     /// 接着在文末输入时，字号与级别都还在。
-    func seedTrailingParagraphKind(_ kind: DocumentBlockKind?, indentLevel: Int = 0, listStart: Int? = nil) {
+    func seedTrailingParagraphKind(_ kind: DocumentBlockKind?, indentLevel: Int = 0,
+                                   listStart: Int? = nil, align: DocumentAlignment? = nil) {
         pendingTrailingBlock = kind
         displayedTrailingBlock = kind
         displayedTrailingIndentLevel = indentLevel
         displayedTrailingListStart = listStart
+        displayedTrailingAlign = align
         guard let kind else { return }
         typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [],
-            indentLevel: indentLevel, listStart: listStart)
+            indentLevel: indentLevel, listStart: listStart, align: align)
     }
     var selectionPanel: NSPanel?
     var documentIdentity = UUID()
     var diagramEditor: DrawioEditorWindowController?
+    var tableEditor: TableEditorWindowController?
+    var formulaEditor: FormulaEditorWindowController?
     var needsHostCaretReveal = false
     /// A synchronous editor command may publish the document with host-owned
     /// fields in one commit. Never retained beyond that mutation.
@@ -96,6 +108,10 @@ final class NativeTextView: NSTextView {
     func resetDocumentInteraction(for documentID: UUID) {
         diagramEditor?.close()
         diagramEditor = nil
+        tableEditor?.close()
+        tableEditor = nil
+        formulaEditor?.close()
+        formulaEditor = nil
         dismissSlash()
         dismissSelectionToolbar()
         dismissChecklistReminderPanel()
@@ -105,6 +121,7 @@ final class NativeTextView: NSTextView {
         displayedTrailingBlock = nil
         displayedTrailingIndentLevel = 0
         displayedTrailingListStart = nil
+        displayedTrailingAlign = nil
         hoveredChecklistLine = nil
         lastBoundsOrigin = nil
         needsHostCaretReveal = false
@@ -127,7 +144,8 @@ final class NativeTextView: NSTextView {
             let sample = NSAttributedString(string: " ", attributes: typingAttributes)
             let block = DocumentTextCodec.decode(sample, preserving: .empty).blocks.first
             typingAttributes = DocumentTextCodec.attributes(kind: block?.kind ?? .paragraph,
-                                                            marks: block?.runs.first?.marks ?? [])
+                                                            marks: block?.runs.first?.marks ?? [],
+                                                            bodySize: block?.bodySize)
         }
         // 覆盖一段选中文本输入触发字符是普通编辑，不该开命令面板。
         let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
@@ -243,6 +261,13 @@ final class NativeTextView: NSTextView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         restyleAllCodeBlocks()
+    }
+
+    /// 代码块卡片必须落在文字下面：NSTextView 自身不画背景（`drawsBackground=false`），
+    /// 所以在 super.draw 之前补一层填充，再让文字与语法着色压在上面。
+    override func draw(_ dirtyRect: NSRect) {
+        drawCodeBlockBackgrounds(in: dirtyRect)
+        super.draw(dirtyRect)
     }
 
     /// 整篇重新着色（外观切换 / 加载完成时用）。
@@ -438,6 +463,13 @@ final class NativeTextView: NSTextView {
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        if isPointerOverSiblingOverlay(event.locationInWindow) {
+            // 格式工具条叠在正文上方，跟踪区仍会收到 mouseMoved；留箭头。
+            updateChecklistHover(at: nil)
+            NSCursor.arrow.set()
+            hideLinkHoverMenu()
+            return
+        }
         let point = convert(event.locationInWindow, from: nil)
         updateChecklistHover(at: point)
         guard isEditable else { hideLinkHoverMenu(); return }
@@ -445,6 +477,19 @@ final class NativeTextView: NSTextView {
         guard range != hoveredLinkRange || linkHoverPanel == nil else { return }
         hoveredLinkRange = range
         showLinkHoverMenu(for: range)
+    }
+
+    /// 指针是不是落在叠在正文上的兄弟视图里（格式工具条等）。
+    ///
+    /// 跟踪区是 `.inVisibleRect`，覆盖整个可见区——包括浮在正文上方的工具条。
+    /// 命中测试能区分"真的在正文上"与"工具条盖住了正文"。
+    private func isPointerOverSiblingOverlay(_ windowPoint: NSPoint) -> Bool {
+        guard let window, let content = window.contentView,
+              let hit = content.hitTest(windowPoint) else { return false }
+        if hit === self || hit.isDescendant(of: self) { return false }
+        // 正文外的空白命中层仍是编辑区域，保留它自己的 I-beam。
+        if hit is EditorWhitespaceHitTarget.TargetView { return false }
+        return true
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -465,8 +510,11 @@ final class NativeTextView: NSTextView {
         // 笔记里的检查项没有行尾控件，只把复选框本身和行首沟槽标成可点。
         if line != nil || overCheckbox || overGutter {
             NSCursor.arrow.set()
-        } else if isEditable {
+        } else if point != nil, isEditable {
             NSCursor.iBeam.set()
+        } else {
+            // 指针离开正文（例如移到下方工具条/页脚）不能把 I-beam 留在按钮上。
+            NSCursor.arrow.set()
         }
         guard hoveredChecklistLine != line else { return }
         hoveredChecklistLine = line
@@ -503,7 +551,13 @@ final class NativeTextView: NSTextView {
 
     private func updateChecklistHoverFromMouse() {
         guard let window, window.isKeyWindow else { updateChecklistHover(at: nil); return }
-        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let windowPoint = window.mouseLocationOutsideOfEventStream
+        if isPointerOverSiblingOverlay(windowPoint) {
+            updateChecklistHover(at: nil)
+            NSCursor.arrow.set()
+            return
+        }
+        let point = convert(windowPoint, from: nil)
         updateChecklistHover(at: bounds.contains(point) ? point : nil)
     }
 
@@ -1071,11 +1125,13 @@ final class NativeTextView: NSTextView {
             window.addChildWindow(panel, ordered: .above)
             selectionPanel = panel
         }
-        panel.contentView = NSHostingView(rootView: DocumentSelectionToolbarView(
-            actions: profile.selectionActions,
-            onInvoke: { [weak self] action in self?.invokeSelectionToolbarAction(action) },
-            onFormat: { [weak self] command in self?.invokeSelectionToolbarFormat(command) },
-            onLink: { [weak self] in self?.invokeSelectionToolbarLink() }))
+        let root = selectionToolbarRoot(for: range)
+        // 换颜色后只换 rootView：保住浮条宿主与子面板锚点，不闪一下重建整条。
+        if let host = panel.contentView as? NSHostingView<DocumentSelectionToolbarView> {
+            host.rootView = root
+        } else {
+            panel.contentView = NSHostingView(rootView: root)
+        }
         let content = panel.contentView ?? NSView()
         let size = content.fittingSize
         // firstRect 返回屏幕坐标，与子窗口 setFrame 同一坐标系。
@@ -1086,6 +1142,36 @@ final class NativeTextView: NSTextView {
         guard !frame.isEmpty else { closeSelectionPanel(); return }
         panel.setFrame(frame, display: true)
         panel.orderFront(nil)
+    }
+
+    /// 浮条上的颜色按钮读当前选区（多 run 交集）的墨色/底色。
+    private func selectionToolbarRoot(for range: NSRange) -> DocumentSelectionToolbarView {
+        let style = textStorage.map { DocumentTextCodec.style(of: $0.attributedSubstring(from: range)) }
+            ?? DocumentSelectionStyle()
+        return DocumentSelectionToolbarView(
+            actions: profile.selectionActions,
+            onInvoke: { [weak self] action in self?.invokeSelectionToolbarAction(action) },
+            onFormat: { [weak self] command in self?.invokeSelectionToolbarFormat(command) },
+            onLink: { [weak self] in self?.invokeSelectionToolbarLink() },
+            textColorHex: style.marks.textColorHex,
+            highlightHex: style.marks.highlightHex,
+            onTextColor: { [weak self] hex in self?.applySelectionToolbarTextColor(hex) },
+            onHighlightColor: { [weak self] hex in self?.applySelectionToolbarHighlightColor(hex) })
+    }
+
+    /// 上色后不收起浮条：选区还在，色板勾选态和小色条由刷新后的 rootView 跟上。
+    private func applySelectionToolbarTextColor(_ hex: String?) {
+        guard selectedRange().length > 0 else { dismissSelectionToolbar(); return }
+        window?.makeFirstResponder(self)
+        applyTextColor(hex)
+        refreshSelectionToolbar()
+    }
+
+    private func applySelectionToolbarHighlightColor(_ hex: String?) {
+        guard selectedRange().length > 0 else { dismissSelectionToolbar(); return }
+        window?.makeFirstResponder(self)
+        applyHighlightColor(hex)
+        refreshSelectionToolbar()
     }
 
     private func invokeSelectionToolbarAction(_ action: DocumentSelectionAction) {
@@ -1506,6 +1592,7 @@ final class NativeTextView: NSTextView {
         case .host:
             break
         }
+        if onCancelTransient?() == true { return }
         guard let onEscape else {
             super.cancelOperation(sender)
             return

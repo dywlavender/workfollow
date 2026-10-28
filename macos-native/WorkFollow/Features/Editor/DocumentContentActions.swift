@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 extension NativeTextView {
     @objc func editDocumentLink(_ sender: Any?) {
@@ -101,6 +102,45 @@ extension NativeTextView {
                 alert.runModal()
             }
         }
+    }
+
+    @objc func insertDocumentImage(_ sender: Any?) {
+        insertDocumentImage(at: nil)
+    }
+
+    /// 选一张图片，转成 data URL 附件内联插入（与粘贴图片同一条渲染管线）。
+    func insertDocumentImage(at offset: Int?) {
+        guard isEditable else { return }
+        let identity = documentIdentity
+        let source = string as NSString
+        let insertionRange = offset.map {
+            NSRange(location: min(max(0, $0), source.length), length: 0)
+        } ?? selectedRange()
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.begin { [weak self] response in
+            guard let self, self.documentIdentity == identity, response == .OK,
+                  let url = panel.url,
+                  let attachment = Self.imageAttachment(from: url) else { return }
+            let length = (self.string as NSString).length
+            let location = min(insertionRange.location, length)
+            let range = NSRange(location: location,
+                                length: min(insertionRange.length, length - location))
+            self.window?.makeFirstResponder(self)
+            self.insertAttachments([attachment], replacing: range)
+        }
+    }
+
+    /// 图片文件 → data URL 附件。等比缩到最长边 1600px，随文档持久化。
+    static func imageAttachment(from url: URL) -> NativeAttachment? {
+        guard let image = NSImage(contentsOf: url),
+              let tiff = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png = bitmap.representation(using: .png, properties: [:]) else { return nil }
+        let dataURL = "data:image/png;base64," + normalizedPNG(png).base64EncodedString()
+        return NativeAttachment(id: UUID(), name: url.lastPathComponent, storedName: dataURL)
     }
 
     func insertAttachments(_ files: [NativeAttachment], replacing range: NSRange? = nil) {

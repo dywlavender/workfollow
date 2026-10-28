@@ -3,26 +3,25 @@ import SwiftUI
 import XCTest
 @testable import WorkFollow
 
-/// TI2-16b：格式工具条「更多」溢出菜单。
-///
-/// 滴答证据：`TTMDActionButtonsViewController.moreButtonClicked:`、资源 `md_more`。
-/// 本地在工具条尾部给一个 `…` 菜单，窄列里横向滚动之外还有一条到达全部命令的出口。
+/// 正文格式工具条的「插入」浮条：固定在最右，只放入插入类动作。
+/// （文件名沿用旧“溢出”测试，避免工程文件引用变动。）
 @MainActor
-final class DocumentToolbarOverflowTests: XCTestCase {
+final class DocumentToolbarInsertTests: XCTestCase {
 
-    func testOverflowListsResolveToRealCommands() {
-        let ids = DocumentToolbarOverflow.paragraphIDs + DocumentToolbarOverflow.inlineIDs
-        XCTAssertEqual(ids.count, 9)
-        for id in ids {
-            let command = EditorCommandCatalog.format(id)
-            XCTAssertNotNil(command, "溢出菜单命令不存在：\(id)")
-            XCTAssertFalse(command?.title.isEmpty ?? true, "命令缺标题：\(id)")
+    func testInsertCatalogCoversAllExistingInsertActions() {
+        let items = DocumentInsertCatalog.items
+        XCTAssertEqual(items.map(\.id),
+                       ["insert.image", "insert.table", "insert.formula", "insert.link",
+                        "insert.codeBlock", "insert.divider", "insert.quote",
+                        "insert.attachment", "insert.diagram"])
+        XCTAssertEqual(Set(items.map(\.id)).count, items.count, "插入项 id 不得重复")
+        for item in items {
+            XCTAssertFalse(item.title.isEmpty, "插入项缺标题：\(item.id)")
+            XCTAssertFalse(item.symbol.isEmpty, "插入项缺图标：\(item.id)")
         }
-        XCTAssertEqual(DocumentToolbarOverflow.paragraphIDs,
-                       ["format.paragraph", "format.quote", "format.codeBlock"])
-        XCTAssertEqual(DocumentToolbarOverflow.inlineIDs,
-                       ["format.bold", "format.italic", "format.underline",
-                        "format.strikethrough", "format.highlight", "format.inlineCode"])
+        // 代码块 / 引用复用既有格式命令。
+        XCTAssertEqual(EditorCommandCatalog.format("format.codeBlock")?.title, "代码块")
+        XCTAssertEqual(EditorCommandCatalog.format("format.quote")?.title, "引用")
     }
 
     func testToolbarStillLaysOutAtTheContractSize() {

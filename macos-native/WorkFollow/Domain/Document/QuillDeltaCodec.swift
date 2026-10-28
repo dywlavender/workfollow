@@ -51,6 +51,8 @@ enum QuillDeltaCodec {
     private static func lineAttributes(of block: DocumentBlock) -> [String: JSONValue] {
         var attributes: [String: JSONValue] = ["wf-block-id": .string(block.id.uuidString)]
         if block.indentLevel > 0 { attributes["indent"] = .number(Double(block.indentLevel)) }
+        if let align = block.align, align != .left { attributes["align"] = .string(align.rawValue) }
+        if let bodySize = block.bodySize { attributes["wf-size"] = .string(bodySize.rawValue) }
         if let start = block.listStart { attributes["wf-list-start"] = .number(Double(start)) }
         if let checklist = block.checklist {
             if let completedAt = checklist.completedAt {
@@ -92,7 +94,25 @@ enum QuillDeltaCodec {
                 "png": .string(diagram.previewPNG.base64EncodedString())
             ])])))
         }
-        guard !run.text.isEmpty, run.text != "\u{FFFC}" || (run.attachment == nil && run.diagram == nil) else {
+        if let table = run.table {
+            let rows = (try? JSONEncoder().encode(table.rows))
+                .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+            ops.append(QuillDeltaOp(insert: .object([embedKey: .object([
+                "type": .string("table"),
+                "id": .string(table.id.uuidString),
+                "rows": .string(rows)
+            ])])))
+        }
+        if let formula = run.formula {
+            ops.append(QuillDeltaOp(insert: .object([embedKey: .object([
+                "type": .string("formula"),
+                "id": .string(formula.id.uuidString),
+                "latex": .string(formula.latex)
+            ])])))
+        }
+        guard !run.text.isEmpty,
+              run.text != "\u{FFFC}" || (run.attachment == nil && run.diagram == nil
+                  && run.table == nil && run.formula == nil) else {
             return ops
         }
         var attributes: [String: JSONValue] = [:]
@@ -103,8 +123,14 @@ enum QuillDeltaCodec {
             case .underline: attributes["underline"] = .bool(true)
             case .strikethrough: attributes["strike"] = .bool(true)
             case .highlight: attributes["background"] = .string(highlightBackground)
+            case .highlightColor(let hex): attributes["background"] = .string(normalizedColor(hex) ?? highlightBackground)
+            case .textColor(let hex): attributes["color"] = .string(normalizedColor(hex) ?? "#000000")
             case .code: attributes["code"] = .bool(true)
             case .link(let url): attributes["link"] = .string(url)
+            case .muted: attributes["wfMuted"] = .bool(true)
+            case .caption: attributes["wfCaption"] = .bool(true)
+            case .symbol(let symbol): attributes["wfSymbol"] = .string(symbol.rawValue)
+            case .ink(let ink): attributes["wfInk"] = .string(ink.token)
             }
         }
         // 代码块里的行内标记按 Quill 语义保持纯文本。
@@ -139,6 +165,8 @@ enum QuillDeltaCodec {
                                         runs: currentRuns,
                                         indentLevel: attributes["indent"]?.intValue ?? 0,
                                         listStart: attributes["wf-list-start"]?.intValue,
+                                        align: alignment(from: attributes),
+                                        bodySize: bodySize(from: attributes),
                                         checklist: checklistMeta(from: attributes)))
             currentRuns = []
         }
@@ -167,6 +195,10 @@ enum QuillDeltaCodec {
                         currentRuns.append(attachmentRun(from: blockEmbed))
                     case "diagram":
                         currentRuns.append(diagramRun(from: blockEmbed))
+                    case "table":
+                        currentRuns.append(tableRun(from: blockEmbed))
+                    case "formula":
+                        currentRuns.append(formulaRun(from: blockEmbed))
                     default:
                         currentRuns.append(DocumentRun(text: "[\(type)]"))
                     }
@@ -203,8 +235,23 @@ enum QuillDeltaCodec {
                 case "underline" where value.boolValue == true: marks.insert(.underline)
                 case "strike" where value.boolValue == true: marks.insert(.strikethrough)
                 case "code" where value.boolValue == true: marks.insert(.code)
-                case "background": marks.insert(.highlight)
+                case "background":
+                    if let hex = value.stringValue.flatMap(normalizedColor) {
+                        marks.insert(hex == highlightBackground ? .highlight : .highlightColor(hex))
+                    } else {
+                        marks.insert(.highlight)
+                    }
+                case "color":
+                    if let hex = value.stringValue.flatMap(normalizedColor) { marks.insert(.textColor(hex)) }
                 case "link": if let url = value.stringValue { marks.insert(.link(url)) }
+                case "wfMuted" where value.boolValue == true: marks.insert(.muted)
+                case "wfCaption" where value.boolValue == true: marks.insert(.caption)
+                case "wfInk":
+                    if let token = value.stringValue, let ink = DocumentInk(token: token) { marks.insert(.ink(ink)) }
+                case "wfSymbol":
+                    if let name = value.stringValue, let symbol = DocumentInlineSymbol(rawValue: name) {
+                        marks.insert(.symbol(symbol))
+                    }
                 default: break
                 }
             }
@@ -228,6 +275,37 @@ enum QuillDeltaCodec {
             title: embed["title"]?.stringValue ?? "未命名流程图",
             xml: embed["xml"]?.stringValue ?? "",
             previewPNG: png))
+    }
+
+    private static func tableRun(from embed: [String: JSONValue]) -> DocumentRun {
+        let id = embed["id"]?.stringValue.flatMap(UUID.init(uuidString:)) ?? UUID()
+        let rows = embed["rows"]?.stringValue
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? JSONDecoder().decode([[String]].self, from: $0) } ?? []
+        return DocumentRun(text: "\u{FFFC}", table: NativeTable(id: id, rows: rows))
+    }
+
+    private static func formulaRun(from embed: [String: JSONValue]) -> DocumentRun {
+        let id = embed["id"]?.stringValue.flatMap(UUID.init(uuidString:)) ?? UUID()
+        let latex = embed["latex"]?.stringValue ?? NativeFormula.empty.latex
+        return DocumentRun(text: "\u{FFFC}", formula: NativeFormula(id: id, latex: latex))
+    }
+
+    /// 只接受 `#rrggbb`，统一小写；其它 CSS 颜色表达式按缺省处理，旧档不会因为
+    /// 我们不认识的色值而丢掉整段格式。
+    static func normalizedColor(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hex = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        guard hex.count == 6, hex.allSatisfy({ $0.isHexDigit }) else { return nil }
+        return "#" + hex.lowercased()
+    }
+
+    private static func alignment(from attributes: [String: JSONValue]) -> DocumentAlignment? {
+        attributes["align"]?.stringValue.flatMap(DocumentAlignment.init(rawValue:))
+    }
+
+    private static func bodySize(from attributes: [String: JSONValue]) -> DocumentBodySize? {
+        attributes["wf-size"]?.stringValue.flatMap(DocumentBodySize.init(rawValue:))
     }
 
     private static func blockKind(from attributes: [String: JSONValue]) -> DocumentBlockKind {

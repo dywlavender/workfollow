@@ -2,19 +2,61 @@ import AppKit
 import XCTest
 @testable import WorkFollow
 
-/// TI2-16：标题级别 H4–H6（滴答工具条 `md_header4..6`）。
+/// TI2-16：标题级别 H4–H5 与三档正文字号（H6 已按产品口径移除）。
 @MainActor
 final class HeadingLevelTests: XCTestCase {
 
-    func testHeadingPickerOffersSixLevelsInOrder() {
+    func testHeadingPickerOffersBodySizesThenFiveLevels() {
         XCTAssertEqual(EditorCommandCatalog.headingPickerIDs,
-                       ["format.paragraph", "format.heading1", "format.heading2",
-                        "format.heading3", "format.heading4", "format.heading5",
-                        "format.heading6"])
-        for level in 4...6 {
+                       ["format.paragraph", "format.body1", "format.body2", "format.body3",
+                        "format.heading1", "format.heading2",
+                        "format.heading3", "format.heading4", "format.heading5"])
+        for level in 4...5 {
             let command = EditorCommandCatalog.format("format.heading\(level)")
             XCTAssertEqual(command?.block, .heading(level))
-            XCTAssertEqual(command?.title, ["四级标题", "五级标题", "六级标题"][level - 4])
+            XCTAssertEqual(command?.title, ["四级标题", "五级标题"][level - 4])
+        }
+        XCTAssertFalse(EditorCommandCatalog.headingPickerIDs.contains("format.heading6"),
+                       "六级标题不再出现在标题选择器里")
+        XCTAssertNil(EditorCommandCatalog.format("format.heading6"),
+                     "六级标题命令已按产品口径删除（旧档仍可渲染）")
+        XCTAssertEqual(DocumentToolbarPicker.heading.titles,
+                       ["正文", "正文 1", "正文 2", "正文 3",
+                        "一级标题", "二级标题", "三级标题", "四级标题", "五级标题"])
+    }
+
+    /// 正文 2 应用到段落：字号 16、块模型记住档位、Delta 往返不丢，再点一次回默认正文。
+    func testBodySizeAppliesTogglesAndRoundTripsThroughDelta() throws {
+        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 200), textContainer: nil)
+        view.textStorage?.setAttributedString(DocumentTextCodec.render(
+            NativeDocument(blocks: [DocumentBlock(kind: .paragraph,
+                                                  runs: [DocumentRun(text: "正文档位")])])))
+        view.setSelectedRange(NSRange(location: 0, length: 2))
+        let command = try XCTUnwrap(EditorCommandCatalog.format("format.body2"))
+        view.applyFormat(command)
+        let applied = DocumentTextCodec.decode(view.attributedString(), preserving: .empty)
+        XCTAssertEqual(applied.blocks.first?.bodySize, .medium)
+        XCTAssertEqual((view.attributedString().attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize,
+                       16)
+
+        let ops = QuillDeltaCodec.delta(from: applied)
+        XCTAssertEqual(QuillDeltaCodec.document(from: ops).blocks.first?.bodySize, .medium,
+                       "正文档位要写进 Delta 行属性并读回")
+
+        view.applyFormat(command)
+        let toggledOff = DocumentTextCodec.decode(view.attributedString(), preserving: .empty)
+        XCTAssertNil(toggledOff.blocks.first?.bodySize)
+        XCTAssertEqual((view.attributedString().attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize,
+                       14)
+    }
+
+    func testBodySizeCommandsMapToTwelveSixteenEighteenPoints() {
+        for (id, size, points) in [("format.body1", DocumentBodySize.small, CGFloat(12)),
+                                   ("format.body2", .medium, 16), ("format.body3", .large, 18)] {
+            let command = try? XCTUnwrap(EditorCommandCatalog.format(id))
+            XCTAssertEqual(command?.bodySize, size)
+            let attributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [], bodySize: size)
+            XCTAssertEqual((attributes[.font] as? NSFont)?.pointSize, points, id)
         }
     }
 

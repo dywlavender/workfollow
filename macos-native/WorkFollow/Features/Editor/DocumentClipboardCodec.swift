@@ -44,7 +44,9 @@ enum DocumentClipboardCodec {
 
     static func encodedData(for fragment: Fragment) throws -> Data {
         let blocks = fragment.document.blocks.map {
-            DocumentBlock(kind: $0.kind, runs: $0.runs, indentLevel: $0.indentLevel, listStart: $0.listStart)
+            DocumentBlock(kind: $0.kind, runs: $0.runs, indentLevel: $0.indentLevel,
+                          listStart: $0.listStart, align: $0.align, bodySize: $0.bodySize,
+                          checklist: $0.checklist)
         }
         return try JSONEncoder().encode(Payload(version: 1, blocks: blocks,
             startsAtParagraphBoundary: fragment.startsAtParagraphBoundary,
@@ -55,7 +57,9 @@ enum DocumentClipboardCodec {
         guard let payload = try? JSONDecoder().decode(Payload.self, from: data),
               payload.version == 1, !payload.blocks.isEmpty else { return nil }
         let blocks = payload.blocks.map {
-            DocumentBlock(kind: $0.kind, runs: $0.runs, indentLevel: $0.indentLevel, listStart: $0.listStart)
+            DocumentBlock(kind: $0.kind, runs: $0.runs, indentLevel: $0.indentLevel,
+                          listStart: $0.listStart, align: $0.align, bodySize: $0.bodySize,
+                          checklist: $0.checklist)
         }
         return Fragment(document: NativeDocument(blocks: blocks),
             startsAtParagraphBoundary: payload.startsAtParagraphBoundary,
@@ -111,6 +115,11 @@ enum DocumentClipboardCodec {
                 ? (atTrailing ? trailingIndentLevel : attributes[DocumentTextCodec.indentKey] as? Int ?? 0) : 0
             blocks[index].listStart = kind == .ordered
                 ? (atTrailing ? trailingListStart : attributes[DocumentTextCodec.listStartKey] as? Int) : nil
+            blocks[index].bodySize = kind == .paragraph
+                ? (attributes[DocumentTextCodec.bodySizeKey] as? String).flatMap(DocumentBodySize.init(rawValue:))
+                : nil
+            blocks[index].align = (attributes[DocumentTextCodec.alignKey] as? String)
+                .flatMap(DocumentAlignment.init(rawValue:))
         }
         if !firstIsWhole { adoptDestinationLayout(0, at: range.location, kind: leadingKind) }
         if !lastIsWhole, blocks.count > 1 {
@@ -188,6 +197,19 @@ enum DocumentClipboardCodec {
             let label = escape(diagram.title)
             guard !diagram.previewPNG.isEmpty else { return "[流程图：" + label + "]" }
             return "![" + label + "](<data:image/png;base64," + diagram.previewPNG.base64EncodedString() + ">)"
+        }
+        if let table = run.table {
+            let headerCells = (table.rows.first ?? Array(repeating: "", count: max(1, table.columnCount)))
+                .map { escape($0) }.joined(separator: " | ")
+            let header = "| " + headerCells + " |"
+            let divider = "|" + String(repeating: " --- |", count: max(1, table.columnCount))
+            let body = table.rows.dropFirst().map { row in
+                "| " + row.map { escape($0) }.joined(separator: " | ") + " |"
+            }
+            return ([header, divider] + body).joined(separator: "\n")
+        }
+        if let formula = run.formula {
+            return "$" + formula.latex + "$"
         }
         var text: String
         if run.marks.contains(.code) {

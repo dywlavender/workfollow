@@ -69,7 +69,8 @@ extension NativeTextView {
             let index = min(max(0, selectedRange().location - 1), storage.length - 1)
             var attributes = storage.attributes(at: index, effectiveRange: nil)
             for key in [NSAttributedString.Key.attachment, .toolTip,
-                        DocumentTextCodec.attachmentKey, DocumentTextCodec.diagramKey] {
+                        DocumentTextCodec.attachmentKey, DocumentTextCodec.diagramKey,
+                        DocumentTextCodec.tableKey, DocumentTextCodec.formulaKey] {
                 attributes.removeValue(forKey: key)
             }
             typingAttributes = attributes

@@ -129,7 +129,8 @@ final class DocumentProfileTests: XCTestCase {
                        ["bold", "italic", "underline", "strikethrough", "highlighter", "chevron.left.forwardslash.chevron.right"])
         XCTAssertEqual(descriptors.last?.formatToolbarTitle, "代码")
         XCTAssertEqual(DocumentToolbarPicker.heading.titles,
-                       ["正文", "一级标题", "二级标题", "三级标题", "四级标题", "五级标题", "六级标题"])
+                       ["正文", "正文 1", "正文 2", "正文 3",
+                        "一级标题", "二级标题", "三级标题", "四级标题", "五级标题"])
         for format in DocumentFormatCommand.commands {
             for style in [DocumentSelectionStyle(),
                           DocumentSelectionStyle(blockToken: DocumentTextCodec.blockToken(format.block ?? .paragraph),
@@ -147,10 +148,12 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(DocumentToolbarPicker.timeFormats,
                        ["yyyy年M月d日 HH:mm", "yyyy年M月d日", "yyyy/M/d", "HH:mm"])
         XCTAssertEqual(DocumentToolbarPicker.time.height, 156)
-        XCTAssertEqual(DocumentToolbarPicker.heading.height, 264, "7 行：正文 + H1–H6")
+        XCTAssertEqual(DocumentToolbarPicker.heading.height, 336, "9 行：正文 + 三档字号 + H1–H5")
         XCTAssertNil(DocumentToolbarPicker.heading.headingBadge(at: 0))
         XCTAssertEqual((1...6).map { DocumentToolbarPicker.heading.headingBadge(at: $0) },
-                       ["H₁", "H₂", "H₃", "H₄", "H₅", "H₆"])
+                       ["12", "16", "18", "H₁", "H₂", "H₃"])
+        XCTAssertEqual((7...8).map { DocumentToolbarPicker.heading.headingBadge(at: $0) },
+                       ["H₄", "H₅"])
         XCTAssertNil(DocumentToolbarPicker.time.headingBadge(at: 1))
         XCTAssertEqual(DocumentFormatToolbarMetrics.controlWidth, 26)
         XCTAssertEqual(DocumentFormatToolbarMetrics.controlHeight, 28)
@@ -198,9 +201,14 @@ final class DocumentProfileTests: XCTestCase {
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
         editor.setSelectedRange(NSRange(location: 0, length: 2))
         handle.textView = editor
-        let formatIDs = ["format.bold", "format.highlight", "format.checklist", "format.bullet",
-                         "format.ordered", "format.italic", "format.underline", "format.strikethrough",
-                         "format.inlineCode", "format.quote"]
+        // 高亮色板不再单占一个命令格：入口是 A 右下角的小箭头，随高亮控件一起
+        // 命中，所以这里只校验 A 本身的 26×28。
+        let formatIDs = ["format.undo", "format.redo", "format.formatPainter", "format.clearFormatting",
+                         "format.bold", "format.highlight", "format.textColor",
+                         "format.alignment", "format.indentDecrease", "format.indentIncrease",
+                         "format.checklist", "format.bullet", "format.ordered",
+                         "format.italic", "format.underline", "format.strikethrough",
+                         "format.inlineCode"]
         var formatFrames: [String: CGRect] = [:]
         let formatRoot = DocumentFormatToolbarView(handle: handle)
             .frame(width: 444, height: 38)
@@ -230,16 +238,20 @@ final class DocumentProfileTests: XCTestCase {
                                                              handle.format(command)
                                                          }, onLink: {})
             .onPreferenceChange(EditorToolbarCommandFramesKey.self) { selectionFrames = $0 }
-        let selectionWindow = renderToolbar(selectionRoot, size: NSSize(width: 200, height: 34))
+        let selectionWindow = renderToolbar(selectionRoot, size: NSSize(width: 240, height: 34))
         defer { selectionWindow.orderOut(nil); selectionWindow.contentView = nil; selectionWindow.close() }
-        settleToolbar(selectionWindow) { selectionFrames.count == 6 }
-        XCTAssertEqual(Set(selectionFrames.keys), Set(EditorCommandCatalog.selectionFormatIDs))
-        for id in EditorCommandCatalog.selectionFormatIDs {
+        // 选中文浮条：B I U S ｜ 背景色 A ｜ 文字颜色 A ｜ 行内代码。高亮不再单独
+        // 占格（整块 A 即色板入口），文字颜色是本次补进浮条的第 7 个快捷键。
+        let selectionIDs = ["format.bold", "format.italic", "format.underline", "format.strikethrough",
+                            "format.highlight", "format.textColor", "format.inlineCode"]
+        settleToolbar(selectionWindow) { selectionFrames.count == selectionIDs.count }
+        XCTAssertEqual(Set(selectionFrames.keys), Set(selectionIDs))
+        for id in selectionIDs {
             let frame = try XCTUnwrap(selectionFrames[id])
             XCTAssertEqual(frame.width, 24, accuracy: 0.5, id)
             XCTAssertEqual(frame.height, 26, accuracy: 0.5, id)
         }
-        for (left, right) in zip(EditorCommandCatalog.selectionFormatIDs, EditorCommandCatalog.selectionFormatIDs.dropFirst()) {
+        for (left, right) in zip(selectionIDs, selectionIDs.dropFirst()) {
             XCTAssertLessThan(try XCTUnwrap(selectionFrames[left]).midX,
                               try XCTUnwrap(selectionFrames[right]).midX)
         }
@@ -247,6 +259,37 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(selectionCommands, ["format.bold"])
         XCTAssertFalse(handle.style.has(.bold), "Both entry points toggle the same format on the same selection")
         XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
+    }
+
+    func testSelectionToolbarTextColorOpensPaletteAnchoredToTheButton() throws {
+        var frames: [String: CGRect] = [:]
+        var picks: [String?] = []
+        // 浮条在真机上只是编辑器窗口里的一条，色板的锚定边界是整窗；
+        // 测试宿主必须给出同样的整窗空间，否则色板会被 34pt 窗口夹扁。
+        let root = VStack(spacing: 0) {
+            DocumentSelectionToolbarView(
+                actions: [], onInvoke: { _ in }, onFormat: { _ in }, onLink: {},
+                textColorHex: "#ff3b30",
+                onTextColor: { picks.append($0) })
+                .onPreferenceChange(EditorToolbarCommandFramesKey.self) { frames = $0 }
+            Spacer(minLength: 0)
+        }
+        .frame(width: 360, height: 400, alignment: .top)
+        let window = renderToolbar(root, size: NSSize(width: 360, height: 400))
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
+        settleToolbar(window) { frames["format.textColor"] != nil }
+        try clickToolbarControl(try XCTUnwrap(frames["format.textColor"]), in: window)
+        let panel = try InspectorPanelTestSupport.panel(title: "文字颜色", below: window)
+        // 子面板先按首帧内容尺寸出现，色卡布局完成后才长到固定 260×250。
+        try InspectorPanelTestSupport.waitUntil("色板尺寸未落定") {
+            abs(panel.frame.width - DocumentToolbarPicker.textColorWidth) < 0.5 &&
+            abs(panel.frame.height - DocumentToolbarPicker.textColorHeight) < 0.5
+        }
+        XCTAssertEqual(panel.parent, window, "色板必须是浮条的子窗口，否则会抢走编辑器焦点")
+        XCTAssertTrue(picks.isEmpty, "只是打开色板，不能提前把颜色作用到选区")
+        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: window))
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertFalse(panel.isVisible)
     }
 
     private func clickToolbarControl(_ frame: CGRect, in window: NSWindow) throws {

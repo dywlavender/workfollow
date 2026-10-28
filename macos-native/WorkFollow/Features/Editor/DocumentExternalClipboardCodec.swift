@@ -368,9 +368,11 @@ enum DocumentExternalClipboardCodec {
     }
 
     private static func append(_ run: DocumentRun, to runs: inout [DocumentRun]) {
-        guard !run.text.isEmpty || run.attachment != nil || run.diagram != nil else { return }
+        guard !run.text.isEmpty || run.attachment != nil || run.diagram != nil
+                || run.table != nil || run.formula != nil else { return }
         if let last = runs.last, last.marks == run.marks, last.attachment == nil,
-           last.diagram == nil, run.attachment == nil, run.diagram == nil {
+           last.diagram == nil, last.table == nil, last.formula == nil,
+           run.attachment == nil, run.diagram == nil, run.table == nil, run.formula == nil {
             runs[runs.count - 1].text += run.text
         } else { runs.append(run) }
     }
@@ -378,6 +380,19 @@ enum DocumentExternalClipboardCodec {
     private static func escapeHTML(_ value: String) -> String {
         value.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
+    }
+
+    private static func htmlTable(_ table: NativeTable) -> String {
+        var html = "<table>"
+        for (row, cells) in table.rows.enumerated() {
+            html += "<tr>"
+            for cell in cells {
+                let tag = row == 0 ? "th" : "td"
+                html += "<\(tag)>" + escapeHTML(cell) + "</\(tag)>"
+            }
+            html += "</tr>"
+        }
+        return html + "</table>"
     }
 
     private static func htmlRun(_ run: DocumentRun) -> String {
@@ -389,6 +404,12 @@ enum DocumentExternalClipboardCodec {
         if let diagram = run.diagram {
             return diagram.previewPNG.isEmpty ? escapeHTML(diagram.title)
                 : "<img src=\"data:image/png;base64,\(diagram.previewPNG.base64EncodedString())\" alt=\"\(escapeHTML(diagram.title))\" />"
+        }
+        if let table = run.table {
+            return htmlTable(table)
+        }
+        if let formula = run.formula {
+            return "<code>" + escapeHTML(formula.latex) + "</code>"
         }
         var value = escapeHTML(run.text)
         for (mark, tag) in [(DocumentMark.bold, "strong"), (.italic, "em"), (.underline, "u"),

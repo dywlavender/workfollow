@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import WorkFollow
 
@@ -117,6 +118,44 @@ final class NativeTextViewTests: XCTestCase {
         XCTAssertFalse(editor.undoManager!.canUndo)
     }
 
+    func testSelectionToolbarReadsAndAppliesInlineColors() throws {
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.close() }
+        editor.profile = NoteDocumentProfile.make(host: NoteEditorHostActions(createTaskFromSelection: { _ in }))
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [
+                DocumentRun(text: "彩色正文", marks: [.textColor("#ff3b30"), .highlightColor("#ffe58a")])
+            ])
+        ])))
+        editor.setSelectedRange(NSRange(location: 0, length: 2))
+        editor.refreshSelectionToolbar()
+        let host = try XCTUnwrap(editor.selectionPanel?.contentView
+            as? NSHostingView<DocumentSelectionToolbarView>)
+        XCTAssertEqual(host.rootView.textColorHex, "#ff3b30")
+        XCTAssertEqual(host.rootView.highlightHex, "#ffe58a")
+
+        host.rootView.onTextColor("#0b7bff")
+        XCTAssertEqual(editor.textStorage?.attribute(DocumentTextCodec.textColorKey, at: 0,
+                                                     effectiveRange: nil) as? String, "#0b7bff")
+        let refreshed = try XCTUnwrap(editor.selectionPanel?.contentView
+            as? NSHostingView<DocumentSelectionToolbarView>)
+        XCTAssertTrue(refreshed === host, "上色只换 rootView，不能重建浮条宿主")
+        XCTAssertEqual(refreshed.rootView.textColorHex, "#0b7bff")
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
+
+        refreshed.rootView.onHighlightColor(nil)
+        let cleared = try XCTUnwrap(editor.selectionPanel?.contentView
+            as? NSHostingView<DocumentSelectionToolbarView>)
+        XCTAssertNil(cleared.rootView.highlightHex)
+        XCTAssertNil(editor.textStorage?.attribute(DocumentTextCodec.highlightColorKey,
+                                                   at: 0, effectiveRange: nil))
+    }
+
     func testUndoManagersAreDocumentScoped() {
         let first = NativeTextView(frame: .zero, textContainer: nil)
         let second = NativeTextView(frame: .zero, textContainer: nil)
@@ -154,8 +193,55 @@ final class NativeTextViewTests: XCTestCase {
         XCTAssertEqual(inspectorEscapes, 1)
     }
 
-    func testCompositionIsNotPublishedUntilCommitted() {
-        let editor = NativeTextView(frame: .zero, textContainer: nil)
+    func testHoveringOverlayAboveBodyDoesNotChangeTextCursor() throws {
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+        let scroll = NSScrollView(frame: root.bounds)
+        let editor = NativeTextView(frame: root.bounds, textContainer: nil)
+        editor.isEditable = true
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
+        scroll.documentView = editor
+        root.addSubview(scroll)
+        // 格式工具条是叠在正文上方的兄弟视图（真实宿主为 NSHostingView）。
+        let overlay = NSView(frame: NSRect(x: 0, y: 100, width: 300, height: 38))
+        root.addSubview(overlay)
+        let window = NSWindow(contentRect: root.frame, styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = root
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil); window.close() }
+
+        func move(toWindow point: NSPoint) throws {
+            let event = try XCTUnwrap(NSEvent.mouseEvent(
+                with: .mouseMoved, location: point, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 0, pressure: 0))
+            editor.mouseMoved(with: event)
+        }
+
+        try move(toWindow: NSPoint(x: 150, y: 119))
+        XCTAssertEqual(NSCursor.current, .arrow, "指针在工具条上不应出现文本 I-beam")
+        try move(toWindow: editor.convert(NSPoint(x: 30, y: 250), to: nil))
+        XCTAssertEqual(NSCursor.current, .iBeam, "正文区域仍保留文本光标")
+    }
+
+    /// 插入浮条是永不成为 key window 的非激活子面板：提示追踪必须用
+    /// `.activeAlways`，否则 hover 名称根本不出现。
+    func testHoverTipTrackingUsesActiveAlwaysForNonKeyPanels() {
+        let view = HoverTipTrackingView()
+        view.activeAlways = true
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 120, height: 40),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = view
+        view.updateTrackingAreas()
+        XCTAssertTrue(view.trackingAreas.contains { $0.options.contains(.activeAlways) })
+        XCTAssertFalse(view.trackingAreas.contains { $0.options.contains(.activeInKeyWindow) })
+        window.close()
+    }
+
+    func testCompositionIsNotPublishedUntilCommitted() {        let editor = NativeTextView(frame: .zero, textContainer: nil)
         var changes: [NativeDocument] = []
         let coordinator = DocumentEditorCoordinator(
             documentID: UUID(), document: .empty,

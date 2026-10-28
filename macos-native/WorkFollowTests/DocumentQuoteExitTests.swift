@@ -7,7 +7,6 @@ import XCTest
 final class DocumentQuoteExitTests: XCTestCase {
     @MainActor private final class Draft: ObservableObject {
         @Published var document: NativeDocument
-        var frames: [String: CGRect] = [:]
         init(_ document: NativeDocument) { self.document = document }
     }
 
@@ -21,7 +20,6 @@ final class DocumentQuoteExitTests: XCTestCase {
             VStack(spacing: 0) {
                 DocumentFormatToolbarView(handle: handle, maxWidth: 760)
                     .frame(height: 38)
-                    .onPreferenceChange(EditorToolbarCommandFramesKey.self) { draft.frames = $0 }
                 DocumentEditor(documentID: documentID, document: draft.document,
                     onDocumentChange: { draft.document = $0 }, onEscape: { .keepInspector },
                     onEditingChanged: { _ in }, profile: profile, handle: handle)
@@ -52,14 +50,13 @@ final class DocumentQuoteExitTests: XCTestCase {
         func close() { window.contentView = nil; window.close() }
     }
 
-    func testQuoteContinuesThenSecondReturnExitsFromToolbarAndMarkdownInTaskAndNoteProfiles() throws {
+    func testQuoteContinuesThenSecondReturnExitsFromCommandAndMarkdownInTaskAndNoteProfiles() throws {
         for profile in [DocumentProfile(taskSlash: true), DocumentProfile(noteSlash: true)] {
-            for useToolbar in [true, false] {
+            for useCommand in [true, false] {
                 let fixture = try Fixture(profile: profile)
                 defer { fixture.close() }
-                if useToolbar {
-                    let frame = try XCTUnwrap(fixture.draft.frames["format.quote"])
-                    try InspectorPanelTestSupport.click(frame, in: fixture.host, window: fixture.window)
+                if useCommand {
+                    fixture.handle.format(try XCTUnwrap(EditorCommandCatalog.format("format.quote")))
                 } else {
                     fixture.editor.insertText("> ", replacementRange: fixture.editor.selectedRange())
                 }

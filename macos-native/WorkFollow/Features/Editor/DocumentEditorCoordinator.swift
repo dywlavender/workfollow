@@ -13,6 +13,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private var committedTrailingBlock: DocumentBlockKind?
     private var committedTrailingIndentLevel = 0
     private var committedTrailingListStart: Int?
+    private var committedTrailingAlign: DocumentAlignment?
     private(set) var decodeCount = 0
 
     init(documentID: UUID, document: NativeDocument,
@@ -46,7 +47,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
             // 否则切回来接着在文末输入会退回正文。
             textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document),
-                indentLevel: document.blocks.last?.indentLevel ?? 0, listStart: document.blocks.last?.listStart)
+                indentLevel: document.blocks.last?.indentLevel ?? 0, listStart: document.blocks.last?.listStart,
+                align: document.blocks.last?.align)
             didLoadDocument(in: textView, reparseInline: true)
         } else if self.document != document {
             if Self.sameContent(self.document, document) {
@@ -73,6 +75,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         textView.displayedTrailingBlock = Self.trailingBlockKind(of: document)
         textView.displayedTrailingIndentLevel = document.blocks.last?.indentLevel ?? 0
         textView.displayedTrailingListStart = document.blocks.last?.listStart
+        textView.displayedTrailingAlign = document.blocks.last?.align
     }
 
 
@@ -103,6 +106,14 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             native.editDocumentDiagram(at: charIndex)
             return
         }
+        if let native = textView as? NativeTextView, native.table(at: charIndex) != nil {
+            native.editDocumentTable(at: charIndex)
+            return
+        }
+        if let native = textView as? NativeTextView, native.formula(at: charIndex) != nil {
+            native.editDocumentFormula(at: charIndex)
+            return
+        }
         guard let storage = textView.textStorage, charIndex < storage.length,
               let data = storage.attribute(DocumentTextCodec.attachmentKey, at: charIndex, effectiveRange: nil) as? Data,
               let attachment = try? JSONDecoder().decode(NativeAttachment.self, from: data) else { return }
@@ -122,7 +133,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
            committedStorageRevision == textView.storageRevision,
            committedTrailingBlock == trailing,
            committedTrailingIndentLevel == textView.trailingIndentLevel,
-           committedTrailingListStart == textView.trailingListStart { return }
+           committedTrailingListStart == textView.trailingListStart,
+           committedTrailingAlign == textView.trailingAlign { return }
         if textView.hasMarkedText() {
             textView.unmarkText()
         }
@@ -141,6 +153,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         committedTrailingBlock = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
         committedTrailingIndentLevel = textView.trailingIndentLevel
         committedTrailingListStart = textView.trailingListStart
+        committedTrailingAlign = textView.trailingAlign
         guard reparseInline else { return }
         // 渲染期解析（2026-10-17 口径）：加载/切换文档后把已有字面标记渲染成富文本。
         // 放到下一轮 runloop，避免在 SwiftUI update 过程中改模型。
@@ -156,6 +169,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         textView.resetDocumentInteraction(for: UUID())
         textView.delegate = nil
         textView.onEscape = nil
+        textView.onCancelTransient = nil
         textView.onEditingChanged = nil
         textView.onSelectionChanged = nil
         textView.profile = DocumentProfile()
@@ -169,15 +183,18 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         let native = textView as? NativeTextView
         let trailingIndent = native?.trailingIndentLevel ?? document.blocks.last?.indentLevel ?? 0
         let trailingStart = native != nil ? native?.trailingListStart : document.blocks.last?.listStart
+        let trailingAlign = native != nil ? native?.trailingAlign : document.blocks.last?.align
         decodeCount += 1
         let updated = DocumentTextCodec.decode(textView.attributedString(), preserving: document,
                                               trailing: pending ?? native?.displayedTrailingBlock ?? Self.trailingBlockKind(of: document),
-                                              trailingIndentLevel: trailingIndent, trailingListStart: trailingStart)
+                                              trailingIndentLevel: trailingIndent, trailingListStart: trailingStart,
+                                              trailingAlign: trailingAlign)
         if let native = textView as? NativeTextView {
             committedStorageRevision = native.storageRevision
             committedTrailingBlock = pending ?? Self.trailingBlockKind(of: updated)
             committedTrailingIndentLevel = trailingIndent
             committedTrailingListStart = trailingStart
+            committedTrailingAlign = trailingAlign
         }
         if let commit = (textView as? NativeTextView)?.documentCommandCommit {
             document = updated
@@ -198,6 +215,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         return zip(left, right).allSatisfy { lhs, rhs in
             lhs.id == rhs.id && lhs.kind == rhs.kind && lhs.runs == rhs.runs
                 && lhs.indentLevel == rhs.indentLevel && lhs.listStart == rhs.listStart
+                && lhs.align == rhs.align
         }
     }
 

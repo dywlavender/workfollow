@@ -232,8 +232,8 @@ final class SlashSessionTests: XCTestCase {
         var session = SlashSession(start: 3)
         XCTAssertTrue(session.update(text: "😀 /标题", selection: NSRange(location: 6, length: 0)))
         XCTAssertEqual(session.range, NSRange(location: 3, length: 3))
-        // 标题规则扩到六级后，查询「标题」匹配 6 条（一级~六级标题）。
-        XCTAssertEqual(session.results(in: DocumentProfile().slashCommands).count, 6)
+        // 标题只到五级：查询「标题」匹配 5 条（一~五级标题）。
+        XCTAssertEqual(session.results(in: DocumentProfile().slashCommands).count, 5)
         session.move(-1, count: 2)
         XCTAssertEqual(session.selectedIndex, 1)
         session.move(1, count: 2)

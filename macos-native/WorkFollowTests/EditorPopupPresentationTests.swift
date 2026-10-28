@@ -119,10 +119,51 @@ final class EditorPopupPresentationTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
-    private func makeShell(height: CGFloat = 380) -> (window: NSWindow, editor: NativeTextView,
+    func testHighlightPaletteOpensFromHighlightControlAndKeepsEditorSelection() throws {
+        let shell = makeShell()
+        defer { shell.window.close() }
+        let selection = shell.editor.selectedRange()
+        try shell.clickPicker("highlightColor")
+        let panel = try InspectorPanelTestSupport.panel(title: "背景颜色", below: shell.window)
+        XCTAssertEqual(panel.frame.width, DocumentToolbarPicker.textColorWidth, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.height, DocumentToolbarPicker.textColorHeight, accuracy: 0.5)
+        XCTAssertEqual(shell.editor.selectedRange(), selection)
+        XCTAssertTrue(shell.window.firstResponder === shell.editor)
+        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: shell.window))
+        InspectorPanelTestSupport.settle(shell.window)
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    func testInsertRowOpensBelowToolbarAndKeepsSelection() throws {
+        let shell = makeShell()
+        defer { shell.window.close() }
+        let selection = shell.editor.selectedRange()
+        try shell.clickPicker("insert")
+        let panel = try InspectorPanelTestSupport.panel(title: "插入", below: shell.window)
+        XCTAssertEqual(panel.frame.width,
+                       CGFloat(DocumentInsertCatalog.items.count)
+                           * DocumentFormatToolbarMetrics.controlWidth + 12,
+                       accuracy: 0.5)
+        let toolbarScreenFrame = shell.window.convertToScreen(toolbarFrame())
+        XCTAssertLessThan(panel.frame.maxY, toolbarScreenFrame.midY, "插入浮条应在工具条下方")
+        XCTAssertEqual(shell.editor.selectedRange(), selection)
+        XCTAssertTrue(shell.window.firstResponder === shell.editor)
+        XCTAssertTrue(PopupEscapeRegistry.shared.route(eventWindow: shell.window))
+        InspectorPanelTestSupport.settle(shell.window)
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    private func toolbarFrame(height: CGFloat = 460) -> NSRect {
+        NSRect(x: 12, y: height - 50, width: 700, height: DocumentFormatToolbarMetrics.height)
+    }
+
+    private func makeShell(height: CGFloat = 460) -> (window: NSWindow, editor: NativeTextView,
                                                      clickPicker: (String) throws -> Void) {
-        let root = NSView(frame: CGRect(x: 0, y: 0, width: 500, height: height))
-        let scroll = NSScrollView(frame: CGRect(x: 12, y: 56, width: 476, height: height - 68))
+        // 格式命令加插入入口一整排；测试宿主给足宽度，让每个触发按钮
+        // 都在可视区里（产品里 444 宽时靠横向滚动到达后面的格式命令）。
+        let root = NSView(frame: CGRect(x: 0, y: 0, width: 760, height: height))
+        // 工具条常驻在正文上方；正文宿主放在它下面。
+        let scroll = NSScrollView(frame: CGRect(x: 12, y: 12, width: 736, height: height - 74))
         let editor = NativeTextView(frame: scroll.bounds, textContainer: nil)
         editor.isEditable = true
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "选区正文")))
@@ -131,11 +172,11 @@ final class EditorPopupPresentationTests: XCTestCase {
         let handle = DocumentEditorHandle()
         handle.textView = editor
         var triggerFrames: [String: CGRect] = [:]
-        let toolbar = NSHostingView(rootView: DocumentFormatToolbarView(handle: handle)
+        let toolbar = NSHostingView(rootView: DocumentFormatToolbarView(handle: handle, maxWidth: 700)
             .onPreferenceChange(EditorPopupTriggerFramesKey.self) { triggerFrames = $0 })
-        toolbar.frame = CGRect(x: 12, y: 12, width: 444, height: 38)
+        toolbar.frame = toolbarFrame(height: height)
         root.addSubview(toolbar)
-        let window = InspectorPanelTestSupport.ownerWindow(for: root, width: 500, height: height)
+        let window = InspectorPanelTestSupport.ownerWindow(for: root, width: 760, height: height)
         let screen = window.screen?.visibleFrame ?? window.frame
         window.setFrameOrigin(CGPoint(x: screen.minX + 80, y: screen.minY + 80))
         window.makeFirstResponder(editor)
