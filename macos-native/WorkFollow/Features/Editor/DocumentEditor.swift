@@ -358,6 +358,10 @@ enum DocumentEditorGeometry {
     /// 代码块卡片向上探出的留白（落在上一段的段距里）；底边贴住行盒，
     /// 避免压到下一段文字的字形。
     static let codeBlockVerticalPadding: CGFloat = 4
+    /// 行内代码底片：水平探出字面 2pt、垂直从行盒里收进 2.5pt 画成小圆角底。
+    static let inlineCodeChipPaddingX: CGFloat = 2
+    static let inlineCodeChipPaddingY: CGFloat = 2.5
+    static let inlineCodeChipRadius: CGFloat = 3.5
 }
 
 struct DocumentEditor: View {

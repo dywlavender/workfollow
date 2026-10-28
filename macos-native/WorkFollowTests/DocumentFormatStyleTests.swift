@@ -51,6 +51,124 @@ final class DocumentFormatStyleTests: XCTestCase {
     }
 
     @MainActor
+    func testCodeBlockOnEmptyTrailingLineShowsCardBeforeTyping() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 320),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.close() }
+        let command = try XCTUnwrap(EditorCommandCatalog.format("format.codeBlock"))
+        for text in ["正文\n", ""] {
+            editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: text)))
+            let end = (text as NSString).length
+            editor.setSelectedRange(NSRange(location: end, length: 0))
+            editor.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+            editor.applyFormat(command)
+            window.contentView?.layoutSubtreeIfNeeded()
+            XCTAssertEqual(editor.string, text, "空块不输入内容时不能改正文")
+            XCTAssertEqual(editor.pendingTrailingBlock, .code)
+            let card = try XCTUnwrap(editor.codeBlockCardRects().first)
+            XCTAssertGreaterThan(card.height, 10, "空代码块也要立刻画出卡片")
+            XCTAssertGreaterThan(card.width, 300)
+            let trailing = try XCTUnwrap(editor.viewRect(forCharacterAt: end))
+            XCTAssertEqual(card.maxY, trailing.maxY, accuracy: 0.5)
+            XCTAssertEqual(card.minY, trailing.minY - DocumentEditorGeometry.codeBlockVerticalPadding,
+                           accuracy: 0.5)
+        }
+    }
+
+    @MainActor
+    func testInlineCodeDrawsChipBehindOnlyTheCodeRun() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 320),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.close() }
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+            DocumentRun(text: "前缀 "),
+            DocumentRun(text: "let x = 1", marks: [.code]),
+            DocumentRun(text: " 后缀")
+        ])])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        window.contentView?.layoutSubtreeIfNeeded()
+        let chips = editor.inlineCodeChipRects()
+        XCTAssertEqual(chips.count, 1)
+        let chip = try XCTUnwrap(chips.first)
+        let runLine = try XCTUnwrap(editor.viewRect(forCharacterAt: 3))
+        XCTAssertTrue(chip.intersects(runLine))
+        XCTAssertGreaterThan(chip.width, 40, "底片要盖住整段行内代码")
+        XCTAssertLessThan(chip.height, runLine.height, "底片收在行盒里，不能铺满整行高")
+        XCTAssertLessThan(chip.minX, runLine.minX, "底片比字面左右各探出一点")
+    }
+
+    @MainActor
+    func testCodeBlockParagraphDoesNotStackInlineChipsOnTopOfCard() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 520, height: 320),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.close() }
+        let document = NativeDocument(blocks: [DocumentBlock(kind: .code, runs: [
+            DocumentRun(text: "let value = 1", marks: [.code])
+        ])])
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertTrue(editor.inlineCodeChipRects().isEmpty, "代码块已有卡片，不再叠行内底片")
+        XCTAssertEqual(editor.codeBlockCardRects().count, 1)
+    }
+
+    /// 目检用：把行内底片与空代码块卡片渲染到 /tmp/wf-code-visual.png。
+    @MainActor
+    func testCodeVisualsRenderInlineChipAndEmptyCardPreview() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 240),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .aqua)
+        let editor = NativeTextView(frame: NSRect(x: 20, y: 20, width: 520, height: 200),
+                                    textContainer: nil)
+        editor.drawsBackground = false
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.close() }
+        let plain = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        let inline = DocumentTextCodec.attributes(kind: .paragraph, marks: [.code])
+        let code = DocumentTextCodec.attributes(kind: .code, marks: [])
+        let content = NSMutableAttributedString()
+        content.append(NSAttributedString(string: "普通正文 ", attributes: plain))
+        content.append(NSAttributedString(string: "let x = 1", attributes: inline))
+        content.append(NSAttributedString(string: " 与后面的文字\n", attributes: plain))
+        content.append(NSAttributedString(string: "print(\"hi\")\n", attributes: code))
+        editor.textStorage?.setAttributedString(content)
+        editor.pendingTrailingBlock = .code
+        editor.displayedTrailingBlock = .code
+        window.contentView?.layoutSubtreeIfNeeded()
+        editor.needsDisplay = true
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        print("DEBUG cards=\(editor.codeBlockCardRects())")
+        print("DEBUG chips=\(editor.inlineCodeChipRects())")
+        editor.display()
+        let rep = try XCTUnwrap(editor.bitmapImageRepForCachingDisplay(in: editor.bounds))
+        editor.cacheDisplay(in: editor.bounds, to: rep)
+        // 合成到白底再看：正文宿主自身是透明背景（卡片/底片画在文字层之下）。
+        let size = NSSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+        let canvas = NSImage(size: size)
+        canvas.lockFocus()
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: size).fill()
+        rep.draw(in: NSRect(origin: .zero, size: size))
+        canvas.unlockFocus()
+        let composite = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(canvas.tiffRepresentation)))
+        let png = try XCTUnwrap(composite.representation(using: .png, properties: [:]))
+        try png.write(to: URL(fileURLWithPath: "/tmp/wf-code-visual.png"))
+    }
+
+    @MainActor
     func testSettingEmptyParagraphFormatSupportsUndoAndRedo() throws {
         for text in ["", "正文\n"] {
             for kind in [DocumentBlockKind.heading(1), .bullet, .ordered, .checklist(false), .quote] {

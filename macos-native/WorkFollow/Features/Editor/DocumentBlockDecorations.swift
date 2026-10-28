@@ -10,21 +10,9 @@ import AppKit
 extension NativeTextView {
     /// 代码块背景：画在文字层**之下**（`draw(_:)` 里先画背景再走 super），
     /// 连续的代码行合成一块圆角浅灰卡片。装饰层在选区之上，不能承担这个填充。
+    /// 空代码块没有字符可看，卡片和"代码"占位提示也在这里一起补齐。
     func drawCodeBlockBackgrounds(in dirtyRect: NSRect) {
-        guard let storage = textStorage else { return }
-        let source = storage.string as NSString
-        guard source.length > 0 else { return }
-        // 按整篇归组、只画与脏矩形相交的卡片：按视口截断会让跨屏的代码块在
-        // 可视边界处露出圆角/描边，滚动时像被切断。
-        var offset = 0
-        let end = source.length
-        var group: (top: CGFloat, bottom: CGFloat, left: CGFloat, right: CGFloat)?
-        func flushGroup() {
-            guard let rect = group else { return }
-            group = nil
-            let frame = NSRect(x: rect.left, y: rect.top, width: max(1, rect.right - rect.left),
-                               height: max(1, rect.bottom - rect.top))
-            guard frame.intersects(dirtyRect) else { return }
+        for frame in codeBlockCardRects() where frame.intersects(dirtyRect) {
             let path = NSBezierPath(roundedRect: frame, xRadius: 6, yRadius: 6)
             Self.codeBlockBackgroundColor.setFill()
             path.fill()
@@ -32,6 +20,41 @@ extension NativeTextView {
             path.lineWidth = 1
             path.stroke()
         }
+        drawCodeBlockPlaceholders(in: dirtyRect)
+    }
+
+    /// 代码块卡片几何（视图坐标）。连续的代码段落合并成一块；文末空段没有
+    /// 字符，主循环看不见，按待定/模型级别补一块——不输入内容也要看得见。
+    func codeBlockCardRects() -> [NSRect] {
+        guard let storage = textStorage else { return [] }
+        let source = storage.string as NSString
+        let right = bounds.maxX - (textContainer?.lineFragmentPadding ?? 5) - 2
+        let inset = DocumentEditorGeometry.codeBlockTextInset
+        var cards: [NSRect] = []
+        var group: (top: CGFloat, bottom: CGFloat, left: CGFloat, right: CGFloat)?
+
+        func flushGroup() {
+            guard let rect = group else { return }
+            group = nil
+            cards.append(NSRect(x: rect.left, y: rect.top,
+                                width: max(1, rect.right - rect.left),
+                                height: max(1, rect.bottom - rect.top)))
+        }
+        func extendGroup(with line: NSRect) {
+            if var current = group {
+                current.bottom = max(current.bottom, line.maxY)
+                current.right = max(current.right, right)
+                group = current
+            } else {
+                group = (line.minY - DocumentEditorGeometry.codeBlockVerticalPadding,
+                         line.maxY, line.minX - inset, right)
+            }
+        }
+
+        // 按整篇归组、只画与脏矩形相交的卡片：按视口截断会让跨屏的代码块在
+        // 可视边界处露出圆角/描边，滚动时像被切断。
+        var offset = 0
+        let end = source.length
         while offset < end {
             let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
             offset = NSMaxRange(paragraph)
@@ -42,22 +65,112 @@ extension NativeTextView {
             if isCode, let first = viewRect(forCharacterAt: paragraph.location) {
                 let lastIndex = max(paragraph.location, NSMaxRange(paragraph) - 1)
                 let last = viewRect(forCharacterAt: lastIndex) ?? first
-                let inset = DocumentEditorGeometry.codeBlockTextInset
-                let right = bounds.maxX - (textContainer?.lineFragmentPadding ?? 5) - 2
-                if var current = group {
-                    current.bottom = last.maxY
-                    current.right = max(current.right, right)
-                    group = current
-                } else {
-                    group = (first.minY - DocumentEditorGeometry.codeBlockVerticalPadding,
-                             last.maxY,
-                             first.minX - inset, right)
-                }
+                extendGroup(with: NSRect(x: first.minX, y: first.minY,
+                                         width: max(1, last.maxX - first.minX),
+                                         height: max(1, last.maxY - first.minY)))
             } else {
                 flushGroup()
             }
         }
+        // 文末空段（整篇为空时也走这里）：光标行上的待定级别优先，其次模型级别。
+        let trailingKind = pendingTrailingBlock ?? displayedTrailingBlock
+        if trailingKind == .code, let line = viewRect(forCharacterAt: source.length) {
+            extendGroup(with: line)
+        }
         flushGroup()
+        return cards
+    }
+
+    /// 空代码块里画一行浅灰"代码"，与卡片一起说明这里是一个可输入的代码块。
+    private func drawCodeBlockPlaceholders(in dirtyRect: NSRect) {
+        guard let storage = textStorage else { return }
+        let source = storage.string as NSString
+        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: NSColor.tertiaryLabelColor
+        ]
+        let text = "代码" as NSString
+        let size = text.size(withAttributes: attributes)
+
+        func drawPlaceholder(at line: NSRect) {
+            let frame = NSRect(x: line.minX,
+                               y: line.midY - size.height / 2,
+                               width: size.width, height: size.height)
+            guard frame.intersects(dirtyRect) else { return }
+            text.draw(at: frame.origin, withAttributes: attributes)
+        }
+
+        var offset = 0
+        while offset < source.length {
+            let paragraph = source.paragraphRange(for: NSRange(location: offset, length: 0))
+            offset = NSMaxRange(paragraph)
+            guard paragraph.length > 0 else { continue }
+            let token = storage.attribute(DocumentTextCodec.blockKey, at: paragraph.location,
+                                          effectiveRange: nil) as? String
+            guard DocumentTextCodec.kind(token ?? "paragraph") == .code else { continue }
+            let lastCharacter = source.character(at: NSMaxRange(paragraph) - 1)
+            let contentLength = paragraph.length - (lastCharacter == 0x0A ? 1 : 0)
+            guard contentLength == 0,
+                  let line = viewRect(forCharacterAt: paragraph.location) else { continue }
+            drawPlaceholder(at: line)
+        }
+        let trailingKind = pendingTrailingBlock ?? displayedTrailingBlock
+        if trailingKind == .code, let line = viewRect(forCharacterAt: source.length) {
+            drawPlaceholder(at: line)
+        }
+    }
+
+    /// 行内代码底片：文字层之下的圆角浅灰小底块（与高亮色可叠）。
+    func drawInlineCodeChips(in dirtyRect: NSRect) {
+        let visible = characterRangeForViewport()
+        for rect in inlineCodeChipRects(in: visible) where rect.intersects(dirtyRect) {
+            let path = NSBezierPath(roundedRect: rect,
+                                    xRadius: DocumentEditorGeometry.inlineCodeChipRadius,
+                                    yRadius: DocumentEditorGeometry.inlineCodeChipRadius)
+            Self.inlineCodeBackgroundColor.setFill()
+            path.fill()
+        }
+    }
+
+    /// 行内代码底片几何：TextKit 2 按行段枚举，折行的 run 会得到多块底片。
+    /// 代码块整段已有卡片，不再叠行内底片。
+    func inlineCodeChipRects(in range: NSRange? = nil) -> [NSRect] {
+        guard let storage = textStorage, storage.length > 0 else { return [] }
+        let full = NSRange(location: 0, length: storage.length)
+        let search = range.map { NSIntersectionRange($0, full) } ?? full
+        guard search.length > 0 else { return [] }
+        var runs: [NSRange] = []
+        storage.enumerateAttribute(DocumentTextCodec.inlineCodeKey, in: search, options: []) { value, run, _ in
+            guard value as? Bool == true, run.length > 0 else { return }
+            let token = storage.attribute(DocumentTextCodec.blockKey, at: run.location,
+                                          effectiveRange: nil) as? String
+            guard DocumentTextCodec.kind(token ?? "paragraph") != .code else { return }
+            runs.append(run)
+        }
+        guard !runs.isEmpty, let manager = textLayoutManager,
+              let content = manager.textContentManager as? NSTextContentStorage else { return [] }
+        let origin = textContainerOrigin
+        var rects: [NSRect] = []
+        for run in runs {
+            guard let start = content.location(content.documentRange.location, offsetBy: run.location),
+                  let end = content.location(start, offsetBy: run.length),
+                  let textRange = NSTextRange(location: start, end: end) else { continue }
+            manager.enumerateTextSegments(in: textRange, type: .highlight, options: []) { _, rect, _, _ in
+                var chip = rect.offsetBy(dx: origin.x, dy: origin.y)
+                chip = chip.insetBy(dx: -DocumentEditorGeometry.inlineCodeChipPaddingX,
+                                    dy: DocumentEditorGeometry.inlineCodeChipPaddingY)
+                if chip.width > 0, chip.height > 0 { rects.append(chip) }
+                return true
+            }
+        }
+        return rects
+    }
+
+    /// 行内代码底片：浅色下黑 7%，深色下白 11%。
+    static let inlineCodeBackgroundColor = NSColor(name: nil) { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return dark ? NSColor.white.withAlphaComponent(0.11)
+            : NSColor.black.withAlphaComponent(0.07)
     }
 
     /// 浅灰卡片：浅色下黑 5.5%，深色下白 8%（直接用动态 NSColor，切换外观自动重解析）。
