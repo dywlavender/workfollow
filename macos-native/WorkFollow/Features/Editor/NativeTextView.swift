@@ -1053,6 +1053,8 @@ final class NativeTextView: NSTextView {
 
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event)
+        // 只读预览保留复制/选择，不提供任何格式命令。
+        guard isEditable else { return menu }
         let formatting = NSMenuItem(title: "格式", action: nil, keyEquivalent: "")
         formatting.submenu = formatMenu()
         menu?.addItem(formatting)
@@ -1088,7 +1090,9 @@ final class NativeTextView: NSTextView {
             lastSelectionToolbarRange = range
             selectionToolbarSuppressed = false
         }
-        let eligible = window != nil && !hasMarkedText() && range.length > 0 && profile.supportsSelectionToolbar
+        // 只读预览里选字只用于复制，不弹可修改格式的浮条。
+        let eligible = isEditable && window != nil && !hasMarkedText() && range.length > 0
+            && profile.supportsSelectionToolbar
             && !profile.selectionActions.isEmpty && NSMaxRange(range) <= (string as NSString).length
         guard eligible, !selectionToolbarSuppressed else {
             closeSelectionPanel()

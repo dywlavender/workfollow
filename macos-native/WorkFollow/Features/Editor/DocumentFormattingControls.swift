@@ -9,6 +9,8 @@ enum DocumentEditorPresentationMetrics {
     static let toggleSize: CGFloat = 28
     static let toolbarGap: CGFloat = 4
     static let toolbarHorizontalInset: CGFloat = 16
+    /// NSTextContainer 默认的左右 fragment padding：正文墨迹比宿主内缩 5pt。
+    static let textContainerFragmentPadding: CGFloat = 5
 }
 
 struct DocumentFormattingToolbarBoundsKey: PreferenceKey {

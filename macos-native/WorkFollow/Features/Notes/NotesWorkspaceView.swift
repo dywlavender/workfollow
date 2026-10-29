@@ -20,6 +20,8 @@ struct NotesWorkspaceView: View {
     // 笔记页脚的浮动格式工具条（Round B2 迁移：Flutter DocumentEditorFooter + DocumentEditorToolbar）。
     @State private var showFormatToolbar = false
     @StateObject private var editorHandle = DocumentEditorHandle()
+    /// 浮窗打开时原编辑栏改成只读预览；独立身份避免与浮窗争同一份编辑状态。
+    @State private var previewDocumentID = UUID()
     @ObservedObject private var floatingNotes = FloatingNoteWindowController.shared
     private var trash: Bool { navigation.destination == .notesTrash }
     private var rows: [Note] { notes.rows(trash: trash, query: query, folder: folder, favorites: favorites) }
@@ -257,12 +259,22 @@ struct NotesWorkspaceView: View {
                         Text(note.title.isEmpty ? "未命名笔记" : note.title)
                             .font(WFType.detailTitle)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        let body = note.document.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Text(body.isEmpty ? "还没有正文。" : body)
-                            .font(WFType.body)
-                            .foregroundStyle(body.isEmpty ? WFColors.tertiaryText : WFColors.text)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // 编辑权在浮窗，这里只保留同一套富文本排版供阅读/复制；
+                        // 标题、列表、引用、代码块不再退化成 plainText。
+                        DocumentEditor(documentID: previewDocumentID, document: note.document,
+                                       onDocumentChange: { _ in },
+                                       onEscape: { .keepInspector },
+                                       onEditingChanged: { _ in },
+                                       profile: NoteDocumentProfile.make(host: NoteEditorHostActions.make(
+                                           noteID: note.id, tasks: tasks, notes: notes)),
+                                       contentSized: true,
+                                       readOnly: true)
+                            .overlay(alignment: .topLeading) {
+                                if DocumentEditorPlaceholder.isVisible(for: note.document) {
+                                    DocumentEditorPlaceholder(title: "还没有正文。")
+                                }
+                            }
+                            .padding(.leading, -DocumentEditorPresentationMetrics.textContainerFragmentPadding)
                     } else {
                         TextField("笔记标题", text: Binding(get: { notes.notes.first { $0.id == note.id }?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }), axis: .vertical)
                             .textFieldStyle(.plain).font(WFType.detailTitle)

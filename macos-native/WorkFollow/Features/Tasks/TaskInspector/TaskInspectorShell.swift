@@ -49,6 +49,8 @@ struct TaskInspectorShell: View {
     @State private var pendingChecklistTaskID: UUID?
     @State private var aiTaskRequest: AITaskRequest?
     @StateObject private var editorHandle = DocumentEditorHandle()
+    /// 浮窗打开时详情只读预览用的独立身份，避免和浮窗争同一份编辑状态。
+    @State private var previewDocumentID = UUID()
     @ObservedObject private var floatingTasks = StickyNoteWindowController.shared
 
     private var selectedTaskHasFloatingEditor: Bool {
@@ -519,7 +521,8 @@ struct TaskInspectorShell: View {
                                  isEditing: $titleEditing,
                                  placeholder: task.parentID == nil ? "任务标题" : "准备做什么？",
                                  // 标题 Return → 正文（TI2-22，滴答 `focusOnContentIfNeeded`）。
-                                 onSubmit: { editorHandle.focusEditor() })
+                                 onSubmit: { editorHandle.focusEditor() },
+                                 readOnly: selectedTaskHasFloatingEditor)
                 .id(task.id)
                 .inspectorRenderAnchor(.title)
                 .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
@@ -971,8 +974,20 @@ struct TaskInspectorShell: View {
                         Button("定位便签") { floatingTasks.bringToFront(taskID: task.id) }
                             .buttonStyle(.plain).foregroundStyle(WFColors.accent)
                     }
-                    Text(task.document.plainText).font(WFType.body)
-                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                    // 编辑权在浮窗，这里仍按原生版式展示同一份富文本，禁止修改。
+                    DocumentEditor(documentID: previewDocumentID, document: task.document,
+                                   onDocumentChange: { _ in },
+                                   onEscape: { .keepInspector },
+                                   onEditingChanged: { _ in },
+                                   profile: documentProfile(task),
+                                   contentSized: true,
+                                   decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane - TaskInspectorMetrics.documentLeadingPadding),
+                                   readOnly: true)
+                        .overlay(alignment: .topLeading) {
+                            if DocumentEditorPlaceholder.isVisible(for: task.document) {
+                                DocumentEditorPlaceholder(title: "添加描述…")
+                            }
+                        }
                 }
             } else {
                 DocumentEditor(
@@ -987,42 +1002,7 @@ struct TaskInspectorShell: View {
                             presentation.editingTarget = .none
                         }
                     },
-                    profile: TaskDocumentProfile.make(task: task, host: TaskEditorHostActions(
-                        createChild: {
-                            workspace.requestChildTitleEditor(for: task.id)
-                        },
-                        openTags: { openActionPanel(.tags) },
-                        openRelation: {
-                            openActionPanel(.relation)
-                        }, openLink: openDocumentLink,
-                        availableTags: { workspace.tagNames },
-                        addTag: { tag in
-                            guard let current = workspace.task(for: task.id) else { return }
-                            guard !current.tags.contains(tag) else { return }
-                            workspace.setTags(task.id, current.tags + [tag])
-                        },
-                        availableLists: {
-                            // 当前清单排除在外：候选里列出"已经在的清单"没有意义。
-                            workspace.availableListNames.filter { $0 != task.list.name }
-                        },
-                        moveToList: { name in
-                            guard let current = workspace.task(for: task.id) else { return }
-                            guard current.list.name != name else { return }
-                            workspace.moveToList(task.id, TaskList(name: name))
-                        },
-                        pasteFiles: { urls in
-                            guard let imported = try? NativeAttachmentFiles.importFiles(urls),
-                                  !imported.isEmpty else { return }
-                            guard let current = workspace.task(for: task.id) else { return }
-                            workspace.setAttachments(task.id, current.attachments + imported)
-                        },
-                        checklistItem: { line in
-                            workspace.checklistItemMeta(task.id, line: line)
-                        },
-                        setChecklistReminder: { line, date in
-                            _ = workspace.setChecklistItemReminder(task.id, line: line, at: date)
-                        },
-                        checklistReminderNotice: { environment.reminders.checklistReminderNotice })),
+                    profile: documentProfile(task),
                     contentSized: true,
                     handle: editorHandle,
                     // 传给编辑器的是"宿主内可见的装饰槽宽度"（容器坐标），不是分栏线位置；
@@ -1038,6 +1018,45 @@ struct TaskInspectorShell: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.leading, TaskInspectorMetrics.documentLeadingPadding)
         .padding(.trailing, TaskInspectorMetrics.horizontalPadding)
+    }
+
+    private func documentProfile(_ task: Task) -> DocumentProfile {
+        TaskDocumentProfile.make(task: task, host: TaskEditorHostActions(
+            createChild: {
+                workspace.requestChildTitleEditor(for: task.id)
+            },
+            openTags: { openActionPanel(.tags) },
+            openRelation: {
+                openActionPanel(.relation)
+            }, openLink: openDocumentLink,
+            availableTags: { workspace.tagNames },
+            addTag: { tag in
+                guard let current = workspace.task(for: task.id) else { return }
+                guard !current.tags.contains(tag) else { return }
+                workspace.setTags(task.id, current.tags + [tag])
+            },
+            availableLists: {
+                // 当前清单排除在外：候选里列出"已经在的清单"没有意义。
+                workspace.availableListNames.filter { $0 != task.list.name }
+            },
+            moveToList: { name in
+                guard let current = workspace.task(for: task.id) else { return }
+                guard current.list.name != name else { return }
+                workspace.moveToList(task.id, TaskList(name: name))
+            },
+            pasteFiles: { urls in
+                guard let imported = try? NativeAttachmentFiles.importFiles(urls),
+                      !imported.isEmpty else { return }
+                guard let current = workspace.task(for: task.id) else { return }
+                workspace.setAttachments(task.id, current.attachments + imported)
+            },
+            checklistItem: { line in
+                workspace.checklistItemMeta(task.id, line: line)
+            },
+            setChecklistReminder: { line, date in
+                _ = workspace.setChecklistItemReminder(task.id, line: line, at: date)
+            },
+            checklistReminderNotice: { environment.reminders.checklistReminderNotice }))
     }
 
     /// 优先级菜单：滴答为四行「彩色旗 + 文案」、无当前值标记（实测 2026-10-16）。

@@ -16,13 +16,15 @@ struct AppKitTaskTitleField: NSViewRepresentable {
     /// Return 的落点：标题编辑结束后把焦点交给正文（滴答 `focusOnContentIfNeeded`）。
     /// nil 时保持旧行为（只结束编辑）。
     var onSubmit: (() -> Void)? = nil
+    /// 浮窗接管期间，原详情里的标题只展示、不可编辑。
+    var readOnly = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeNSView(context: Context) -> HeightTrackingTextField {
         let field = HeightTrackingTextField()
         field.delegate = context.coordinator
-        field.isEditable = true
+        field.isEditable = !readOnly
         field.isSelectable = true
         field.isBezeled = false
         field.drawsBackground = false
@@ -51,6 +53,7 @@ struct AppKitTaskTitleField: NSViewRepresentable {
 
     func updateNSView(_ field: HeightTrackingTextField, context: Context) {
         context.coordinator.parent = self
+        field.isEditable = !readOnly
         if field.stringValue != text { field.stringValue = text }
         if (field.placeholderString as String?) != placeholder {
             field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
@@ -70,6 +73,15 @@ struct AppKitTaskTitleField: NSViewRepresentable {
     /// 只在状态不符时操作，避免每次 SwiftUI 更新都重设 firstResponder（会打断输入法）。
     private func syncFirstResponder(_ field: HeightTrackingTextField) {
         guard field.window != nil else { return }
+        if readOnly {
+            if field.currentEditor() != nil {
+                DispatchQueue.main.async { [weak field] in
+                    guard let field, !field.isEditable, field.currentEditor() != nil else { return }
+                    field.window?.makeFirstResponder(nil)
+                }
+            }
+            return
+        }
         let editing = field.currentEditor() != nil
         if isEditing, !editing {
             DispatchQueue.main.async {

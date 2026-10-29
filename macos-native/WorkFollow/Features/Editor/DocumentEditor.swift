@@ -374,6 +374,8 @@ struct DocumentEditor: View {
     var contentSized = false
     var handle: DocumentEditorHandle?
     var decorationVisibleMinX: CGFloat = 0
+    /// 浮窗接管编辑权时，原宿主只保留富文本展示：可选可复制，但不能修改。
+    var readOnly = false
 
     var body: some View {
         if let ready = try? document.materialized() {
@@ -381,7 +383,8 @@ struct DocumentEditor: View {
                               onDocumentChange: onDocumentChange, onEscape: onEscape,
                               onEditingChanged: onEditingChanged, profile: profile,
                                   contentSized: contentSized, handle: handle,
-                                  decorationVisibleMinX: decorationVisibleMinX)
+                                  decorationVisibleMinX: decorationVisibleMinX,
+                                  readOnly: readOnly)
             .padding(.leading, -DocumentEditorGeometry.decorationLane)
         } else {
             Text("正文读取失败，暂时无法编辑").foregroundStyle(.secondary)
@@ -399,6 +402,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
     var contentSized = false
     var handle: DocumentEditorHandle?
     var decorationVisibleMinX: CGFloat = 0
+    var readOnly = false
 
     func makeCoordinator() -> DocumentEditorCoordinator {
         DocumentEditorCoordinator(documentID: documentID, document: document,
@@ -413,6 +417,9 @@ private struct DocumentEditorContent: NSViewRepresentable {
         let textView = NativeTextView(frame: .zero, textContainer: nil)
         textView.decorationVisibleMinX = decorationVisibleMinX
         textView.documentIdentity = documentID
+        // 只读预览仍可选中/复制，但不能输入、勾选或打开块菜单。
+        textView.isEditable = !readOnly
+        textView.isSelectable = true
         textView.delegate = context.coordinator
         textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
         textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
@@ -461,6 +468,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         handle?.beginViewUpdate()
         defer { handle?.endViewUpdate() }
         textView.decorationVisibleMinX = decorationVisibleMinX
+        textView.isEditable = !readOnly
         handle?.textView = textView
         handle?.coordinator = context.coordinator
         textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
