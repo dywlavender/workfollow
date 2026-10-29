@@ -284,15 +284,14 @@ enum MatrixProjection {
                             now: Date,
                             calendar: Calendar,
                             hasChildren: (UUID) -> Bool) -> MatrixTaskViewModel {
-        let dueAt = task.schedule.dueAt
-        let anchor = dueAt ?? (task.status == .completed ? task.completedAt : nil)
-        let today = calendar.startOfDay(for: now)
-        let day = anchor.map { calendar.startOfDay(for: $0) }
+        let anchor = ScheduleOverdue.reference(task.schedule)
+            ?? (task.status == .completed ? task.completedAt : nil)
         return MatrixTaskViewModel(
             task: task,
             listName: normalizedListName(task),
             dateLabel: dateLabel(for: anchor, now: now, calendar: calendar),
-            overdue: task.status != .completed && (day.map { $0 < today } ?? false),
+            overdue: task.status != .completed
+                && ScheduleOverdue.isOverdue(schedule: task.schedule, now: now, calendar: calendar),
             hasNote: !task.document.isEmpty,
             hasSubtasks: hasChildren(task.id),
             hasReminder: task.reminderAt != nil || !(task.reminderOffsets ?? []).isEmpty,

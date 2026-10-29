@@ -13,17 +13,13 @@ enum TaskInspectorSchedulePresentation {
 
     static func tone(schedule: TaskSchedule, now: Date, calendar: Calendar) -> Tone {
         guard schedule.dueAt != nil else { return .empty }
-        return tone(date: schedule.dueEndAt ?? schedule.dueAt, hasTime: schedule.hasTime,
-                    now: now, calendar: calendar)
+        return ScheduleOverdue.isOverdue(schedule: schedule, now: now, calendar: calendar)
+            ? .overdue : .scheduled
     }
 
     static func overdueDescription(schedule: TaskSchedule, isClosed: Bool = false,
                                    now: Date, calendar: Calendar) -> String? {
-        guard !isClosed, tone(schedule: schedule, now: now, calendar: calendar) == .overdue,
-              let date = schedule.dueEndAt ?? schedule.dueAt else { return nil }
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date),
-                                           to: calendar.startOfDay(for: now)).day ?? 0
-        return days > 0 ? "延迟\(days)天" : "延迟不足1天"
+        ScheduleOverdue.delayText(schedule: schedule, isClosed: isClosed, now: now, calendar: calendar)
     }
 
     static func label(date: Date?, hasTime: Bool, now: Date, calendar: Calendar) -> String {

@@ -4,7 +4,6 @@ struct AITaskComposerView: View {
     let request: AITaskRequest
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openSettings) private var openSettings
     @StateObject private var session: AITaskDraftSession
     @State private var attempt = 0
     @State private var list = TaskList.inbox.name
@@ -41,12 +40,8 @@ struct AITaskComposerView: View {
         .frame(width: 560, height: 500)
         .background(WFColors.content)
         .task(id: attempt) {
-            var client = SummaryPiOptimizer()
-            client.executable = environment.meetingStore.configuration.executable
-            client.model = environment.meetingStore.configuration.resolvedMinutesModel
-            await session.generate(request: request) { source in
-                client.textModel = try environment.aiModels.request()
-                return try await client.generateTasks(source)
+            await session.generate(request: request) { source, updates in
+                try await environment.textAIClient().generateTasks(source, updates: updates)
             }
         }
         .accessibilityIdentifier("ai-task-composer")
@@ -58,16 +53,9 @@ struct AITaskComposerView: View {
     @ViewBuilder private var content: some View {
         switch session.phase {
         case .loading:
-            VStack(spacing: 12) { ProgressView().controlSize(.small); Text(request.isBreakdown ? "正在整理执行步骤…" : "正在提取待办…") }
-                .font(WFType.body).foregroundStyle(WFColors.secondaryText)
+            AIStreamingTextView(text: session.preview, status: session.status)
         case let .failed(message):
-            VStack(spacing: 12) {
-                Text(message).multilineTextAlignment(.center)
-                HStack {
-                    Button("重新生成") { attempt += 1 }
-                    Button("AI 模型设置…") { environment.settingsSection = .ai; openSettings() }
-                }
-            }.padding(24)
+            AIWorkflowFailureView(message: message, retryAt: session.retryAt) { attempt += 1 }.padding(24)
         case .ready:
             if session.drafts.isEmpty {
                 VStack(spacing: 10) {

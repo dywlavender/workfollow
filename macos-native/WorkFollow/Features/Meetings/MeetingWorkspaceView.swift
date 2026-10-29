@@ -30,6 +30,7 @@ struct MeetingWorkspaceView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.openSettings) private var openSettings
     @State private var aiTaskRequest: AITaskRequest?
+    @State private var transcriptQuery = ""
 
     /// 窄窗口下只显示一栏时的「当前在哪一栏」。宽窗口下恒为 false（两栏都在）。
     @State private var detailOnly = false
@@ -93,6 +94,11 @@ struct MeetingWorkspaceView: View {
         .coordinateSpace(name: "meeting-minutes-workspace")
         .background(WFColors.content)
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
+        .onChange(of: store.selectedID) { _, _ in
+            transcriptQuery = ""
+            if store.transcriptRevealRequest?.meetingID == store.selectedID { detailOnly = true }
+        }
+        .onAppear { if store.transcriptRevealRequest?.meetingID == store.selectedID { detailOnly = true } }
     }
 
     /// 列表列与详情栏之间那条线。与任务页/笔记页同一条可拖分隔条（原来是系统
@@ -438,7 +444,15 @@ struct MeetingWorkspaceView: View {
 
     private func transcriptColumn(_ meeting: MeetingRecord) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            columnHeader("对话记录", trailing: transcriptSummary(meeting))
+            HStack(spacing: 8) {
+                Text("对话记录").font(WFType.sectionSemibold)
+                if let summary = transcriptSummary(meeting) {
+                    Text(summary).font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                TextField("查找对话", text: $transcriptQuery).textFieldStyle(.roundedBorder)
+                    .frame(width: 130).accessibilityIdentifier("meeting.find-transcript")
+            }.padding(.horizontal, WFSpace.md).frame(height: MeetingMetrics.columnHeaderHeight)
             Divider()
             // 自己一条滚动条。原来整页共用一条外层 `ScrollView`，
             // 分栏之后两栏必须各滚各的，否则一边滚另一边跟着动。
@@ -464,22 +478,33 @@ struct MeetingWorkspaceView: View {
                     syncPinned()
                 }
                 .onAppear {
-                    proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
+                    revealOrFollow(meeting, proxy: proxy)
                 }
                 .onChange(of: meeting.id) { _, _ in
-                    // 换会议：无条件回底部并恢复跟随；等新内容布完局再跳。
-                    transcriptPinned = true
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
-                    }
+                    revealOrFollow(meeting, proxy: proxy)
+                }
+                .onChange(of: store.transcriptRevealRequest) { _, request in
+                    guard request?.meetingID == meeting.id else { return }
+                    revealOrFollow(meeting, proxy: proxy)
                 }
                 .onChange(of: transcriptTail(meeting)) { _, _ in
-                    guard transcriptPinned else { return }
+                    guard transcriptPinned, transcriptQuery.isEmpty else { return }
                     withAnimation(.easeOut(duration: 0.18)) {
                         proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
                     }
                 }
             }
+        }
+    }
+
+    private func revealOrFollow(_ meeting: MeetingRecord, proxy: ScrollViewProxy) {
+        let request = store.transcriptRevealRequest
+        let lineID = request?.meetingID == meeting.id ? request?.lineID : nil
+        transcriptQuery = ""
+        transcriptPinned = lineID == nil
+        DispatchQueue.main.async {
+            if let lineID { proxy.scrollTo(lineID, anchor: .center) }
+            else { proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom) }
         }
     }
 
@@ -528,9 +553,12 @@ struct MeetingWorkspaceView: View {
     private func transcript(_ meeting: MeetingRecord) -> some View {
         let done = Set(meeting.summarizedLineIDs)
         // 手动接管后没有「未进纪要」这回事，分界线一并撤掉。
-        let boundary = meeting.minutesIsManual
+        let boundary = meeting.minutesIsManual || !transcriptQuery.isEmpty
             ? nil
             : meeting.transcript.firstIndex { !done.contains($0.id) }
+        let visible = Array(meeting.transcript.enumerated()).filter { _, line in
+            MeetingTranscriptSearch.matches(line, query: transcriptQuery)
+        }
         return VStack(alignment: .leading, spacing: 0) {
             if meeting.transcript.isEmpty && (store.streamDrafts[meeting.id]?.isEmpty ?? true) {
                 Text("尚无对话文字。录音不会被当作已转写。")
@@ -538,15 +566,23 @@ struct MeetingWorkspaceView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, WFSpace.md)
             }
-            ForEach(Array(meeting.transcript.enumerated()), id: \.element.id) { index, line in
+            if !transcriptQuery.isEmpty && visible.isEmpty {
+                Text("没有匹配的定稿发言").foregroundStyle(WFColors.secondaryText).padding(WFSpace.md)
+            }
+            ForEach(visible, id: \.element.id) { index, line in
                 // Pi 是按顺序总结的，所以「已进纪要 / 未进纪要」的分界就在第一条
                 // 未被总结的行之前。`summarizedLineIDs` 是现成的，不用新加字段。
                 if index == boundary, let boundary, boundary > 0 {
                     pendingBoundary(meeting.transcript.count - meeting.summarizedLineCount)
                 }
                 transcriptRow(line, inMinutes: done.contains(line.id))
+                    .background(store.transcriptRevealRequest?.meetingID == meeting.id && store.transcriptRevealRequest?.lineID == line.id
+                        ? WFColors.selection : .clear)
+                    .id(line.id)
+                    .accessibilityIdentifier("meeting.line.\(line.id)")
+                    .workflowActionAnchor("meeting.line.\(line.id)")
             }
-            ForEach((store.streamDrafts[meeting.id]?.values.map { $0 } ?? []).sorted { $0.offset < $1.offset }) { line in
+            ForEach((store.streamDrafts[meeting.id]?.values.filter { MeetingTranscriptSearch.matches($0, query: transcriptQuery) } ?? []).sorted { $0.offset < $1.offset }) { line in
                 VStack(alignment: .leading, spacing: WFSpace.xs) {
                     Text("正在转写 · 草稿").font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                     transcriptRow(line)
@@ -619,6 +655,9 @@ struct MeetingWorkspaceView: View {
             HStack(spacing: WFSpace.sm) {
                 Text("滚动纪要").font(WFType.sectionSemibold)
                 Spacer(minLength: WFSpace.sm)
+                if store.updatingMinutes && store.minutesPreviewID == meeting.id {
+                    Button("停止") { store.cancelMinutes() }.controlSize(.small)
+                }
                 Button(store.updatingMinutes ? "AI 编写中…" : "AI 编写纪要") {
                     store.updateMinutesNow()
                 }
@@ -634,7 +673,9 @@ struct MeetingWorkspaceView: View {
             .padding(.horizontal, WFSpace.md)
             .frame(height: MeetingMetrics.columnHeaderHeight)
             Divider()
-            minutesEditor(meeting)
+            if store.updatingMinutes && store.minutesPreviewID == meeting.id {
+                AIStreamingTextView(text: store.minutesPreview, status: store.minutesStatus)
+            } else { minutesEditor(meeting) }
             Divider()
             minutesFooter(meeting)
         }

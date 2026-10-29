@@ -10,9 +10,11 @@ extension AppEnvironment {
     }
 
     func aiTaskRequest(for meeting: MeetingRecord) -> AITaskRequest {
-        let content = meeting.minutes.trimmingCharacters(in: .whitespacesAndNewlines)
+        // A generated summary is not a replacement for the original evidence.
+        let transcript = meeting.transcript.map { $0.speaker + "：" + $0.text }.joined(separator: "\n")
+        let content = transcript.isEmpty ? meeting.minutes.trimmingCharacters(in: .whitespacesAndNewlines) : transcript
         return AITaskRequest(source: .meeting(meeting.id), title: meeting.title,
-            content: content.isEmpty ? meeting.transcript.map { $0.speakerDisplayName + "：" + $0.text }.joined(separator: "\n") : content,
+            content: content,
             referenceDate: meeting.createdAt, existingTitles: taskWorkspace.allTasks.filter {
                 $0.deletedAt == nil && $0.sourceMeetingID == meeting.id
             }.map(\.title))

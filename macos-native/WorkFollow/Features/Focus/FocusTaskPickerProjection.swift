@@ -71,7 +71,7 @@ enum FocusTaskPickerProjection {
         switch scope {
         case .today:
             let overdue = matches.filter {
-                $0.schedule.dueAt.map { calendar.startOfDay(for: $0) < today } ?? false
+                ScheduleOverdue.isOverdue(schedule: $0.schedule, now: now, calendar: calendar)
             }
             let overdueIDs = Set(overdue.map(\.id))
             let dueToday = matches.filter { !overdueIDs.contains($0.id) }
@@ -89,13 +89,15 @@ enum FocusTaskPickerProjection {
 
         case .nextSevenDays:
             let overdue = matches.filter {
-                $0.schedule.dueAt.map { calendar.startOfDay(for: $0) < today } ?? false
+                ScheduleOverdue.isOverdue(schedule: $0.schedule, now: now, calendar: calendar)
             }
+            let overdueIDs = Set(overdue.map(\.id))
+            // 进行中的时间段（开始日已过、结束日未到）归到今天，不算逾期。
             let upcoming = matches.filter {
-                $0.schedule.dueAt.map { calendar.startOfDay(for: $0) >= today } ?? false
+                !overdueIDs.contains($0.id) && $0.schedule.dueAt != nil
             }
             let byDay = Dictionary(grouping: upcoming) {
-                calendar.startOfDay(for: $0.schedule.dueAt!)
+                max(calendar.startOfDay(for: $0.schedule.dueAt!), today)
             }
             var result = [group("overdue", title: "已过期", tasks: overdue)]
             result += byDay.keys.sorted().map { day in

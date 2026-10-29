@@ -24,6 +24,12 @@ final class AIBackendBridgeTests: XCTestCase {
             elif method == 'event':
                 print(json.dumps({'channel':request['params']['channel'],'event':{'kind':'final','text':'最后一句'}}),flush=True)
                 print(json.dumps({'id':request['id'],'result':{}}),flush=True)
+            elif method == 'limited':
+                print(json.dumps({'id':request['id'],'error':{'code':'rate_limited','message':'模型服务触发速率限制','retryAfterSeconds':12.5}}),flush=True)
+            elif method == 'note.rewrite':
+                (root / 'request.json').write_text(json.dumps(request))
+                print(json.dumps({'channel':request['params']['progressChannel'],'event':{'kind':'text','text':'正在输出的正文'}}),flush=True)
+                print(json.dumps({'id':request['id'],'result':{'text':'完整草稿'}}),flush=True)
             else:
                 (root / 'request.json').write_text(json.dumps(request))
                 print(json.dumps({'id':request['id'],'result':{'text':'草稿','protocol':1}}),flush=True)
@@ -96,5 +102,26 @@ final class AIBackendBridgeTests: XCTestCase {
             let _: EmptyAIResponse = try await bridge.call("health")
             XCTFail("Expected missing runtime")
         } catch { XCTAssertTrue(error.localizedDescription.contains("完整应用")) }
+    }
+
+    func testAgentTextUsesChannelWithoutChunkJobsAndServiceFailureKeepsRetryDelay() async throws {
+        let (bridge, root) = try fixture()
+        var client = SummaryPiOptimizer(); client.backend = bridge
+        let request = NoteRewriteRequest(noteID: UUID(), title: "虚构笔记", content: "保留细节。", action: .polish)
+        let progress = expectation(description: "agent text")
+        let text = try await client.rewriteNote(request) { event in
+            XCTAssertEqual(event.text, "正在输出的正文")
+            progress.fulfill()
+        }
+        await fulfillment(of: [progress], timeout: 2)
+        XCTAssertEqual(text, "完整草稿")
+        let payload = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("request.json"))) as? [String: Any])
+        XCTAssertNil((payload["params"] as? [String: Any])?["jobID"])
+        do {
+            let _: EmptyAIResponse = try await bridge.call("limited")
+            XCTFail("Expected rate limit")
+        } catch let AIBackendError.service(code, message, delay) {
+            XCTAssertEqual(code, "rate_limited"); XCTAssertTrue(message.contains("速率限制")); XCTAssertEqual(delay, 12.5)
+        }
     }
 }

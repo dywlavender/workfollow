@@ -54,29 +54,52 @@ struct SummaryPiOptimizer {
     var backend: AIBackendBridge = .shared
     var textModel: AITextModelRequest?
 
-    func optimize(text: String, options: SummaryAIOptions) async throws -> String {
+    func optimize(text: String, options: SummaryAIOptions, updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
         let encoded = try JSONEncoder().encode(options)
         let value = try JSONSerialization.jsonObject(with: encoded)
-        return try await request("text.summary", params: ["content": text, "options": value])
+        return try await request("text.summary", params: ["content": text, "options": value], updates: updates)
     }
 
-    func generateTasks(_ request: AITaskRequest) async throws -> String {
-        try await self.request("text.tasks", params: request.backendParameters)
+    func generateTasks(_ request: AITaskRequest, updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
+        try await self.request("text.tasks", params: request.backendParameters, updates: updates)
     }
 
     func generate(prompt: String) async throws -> String {
         try await request("text.generate", params: ["prompt": prompt])
     }
 
-    private func request(_ method: String, params: [String: Any]) async throws -> String {
+    func answer(question: String, sources: [KnowledgePassage], updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> KnowledgeAnswer {
+        try await streamed("knowledge.ask", params: ["question": question, "sources": sources.map(\.parameters)], updates: updates)
+    }
+
+    func rewriteNote(_ request: NoteRewriteRequest,
+                     updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
+        return try await self.request("note.rewrite", params: ["action": request.action.rawValue,
+            "title": request.title, "content": request.content], updates: updates)
+    }
+
+    private func request(_ method: String, params: [String: Any], updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
         struct Response: Decodable { let text: String }
-        var params = params
+        let response: Response = try await streamed(method, params: params, updates: updates)
+        guard !response.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SummaryPiError.emptyResult }
+        return response.text
+    }
+
+    private func streamed<Result: Decodable>(_ method: String, params: [String: Any], updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> Result {
+        let channel = UUID().uuidString
+        backend.subscribe(channel) { data in
+            if let event = try? JSONDecoder().decode(AITextUpdate.self, from: data) { updates(event) }
+        }
+        defer { backend.unsubscribe(channel) }
+        return try await backend.call(method, params: parameters(params.merging(["progressChannel": channel]) { _, new in new }), timeout: 605)
+    }
+
+    private func parameters(_ values: [String: Any]) -> [String: Any] {
+        var params = values
         params["model"] = model; params["piExecutable"] = executable
         params["timeoutSeconds"] = timeout
         if let textModel { params.merge(textModel.parameters) { _, new in new } }
-        let response: Response = try await backend.call(method, params: params, timeout: timeout + 5)
-        guard !response.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SummaryPiError.emptyResult }
-        return response.text
+        return params
     }
 
 }

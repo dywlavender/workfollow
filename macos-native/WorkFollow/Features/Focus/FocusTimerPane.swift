@@ -439,8 +439,8 @@ struct FocusTimerPane: View {
     }
 
     private func isDueOverdue(_ task: Task) -> Bool {
-        guard let workspace, let dueAt = task.schedule.dueAt else { return false }
-        return workspace.calendar.startOfDay(for: dueAt)
-            < workspace.calendar.startOfDay(for: workspace.clock())
+        guard let workspace else { return false }
+        return ScheduleOverdue.isOverdue(schedule: task.schedule, now: workspace.clock(),
+                                         calendar: workspace.calendar)
     }
 }

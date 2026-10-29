@@ -63,7 +63,7 @@ final class SummaryMetadataPresentationTests: XCTestCase {
         let cases: [(Task, DocumentInk?, String?)] = [
             (datedTask("未来任务", due: 29), .accent, nil),
             (datedTask("跨天逾期", due: 24), .danger, "延迟3天"),
-            (datedTask("今天已过时刻", due: 27, timed: true), .danger, "延迟不足1天"),
+            (datedTask("今天已过时刻", due: 27, timed: true), .danger, "延迟2小时"),
             (datedTask("区间尚未结束", due: 24, end: 29), .accent, nil),
             (datedTask("区间结束", due: 20, end: 25), .danger, "延迟2天"),
             (datedTask("已完成", due: 24, closed: true), nil, nil),

@@ -135,6 +135,34 @@ final class TaskViewPreferencesTests: XCTestCase {
                        [recent.id, older.id], "按创建日倒序：今天在前，三天前在后")
     }
 
+    /// 时间段以结束判逾期：进行中的区间留在「今天」，结束后才进「已过期」。
+    func testRangeTasksGroupByTheirEndDate() throws {
+        let (store, _) = makeFixture()
+        let today = calendar.startOfDay(for: now)
+        func day(_ offset: Int) -> Date {
+            calendar.date(byAdding: .day, value: offset, to: today)!
+        }
+        var ongoing = makeTask("进行中", createdAt: now, dueAt: day(-10))
+        ongoing.schedule.dueEndAt = day(2)
+        var ended = makeTask("已结束", createdAt: now, dueAt: day(-10))
+        ended.schedule.dueEndAt = day(-1)
+        let single = makeTask("单日逾期", createdAt: now, dueAt: day(-2))
+        store.commit([ongoing, ended, single], undoPolicy: .skip, lists: [TaskList.inbox.name])
+
+        let todayGroups = TaskListProjection.groups(in: .today, store: store, now: now,
+                                                    calendar: calendar)
+        XCTAssertEqual(todayGroups.map(\.kind), [.overdue, .today])
+        XCTAssertEqual(todayGroups[0].tasks.map(\.id), [ended.id, single.id])
+        XCTAssertEqual(todayGroups[1].tasks.map(\.id), [ongoing.id])
+
+        let weekGroups = TaskListProjection.groups(in: .nextSevenDays, store: store, now: now,
+                                                   calendar: calendar)
+        XCTAssertEqual(weekGroups.first?.kind, .overdue)
+        XCTAssertEqual(weekGroups.first?.tasks.map(\.id), [ended.id, single.id])
+        XCTAssertEqual(weekGroups.first { $0.kind == .today }?.tasks.map(\.id), [ongoing.id],
+                       "开始日已过但区间未结束 → 归今天，不掉行")
+    }
+
     func testResetSortClearsModeAndDirectionButKeepsGrouping() {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("TaskViewPreferencesTests-\(UUID().uuidString)", isDirectory: true)

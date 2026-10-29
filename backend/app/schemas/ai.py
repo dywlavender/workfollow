@@ -32,7 +32,7 @@ class AIOptions(ApiModel):
 class AIGenerateRequest(ApiModel):
     action: Literal["extract_tasks", "breakdown_task", "improve_summary"]
     title: str = Field(default="", max_length=500)
-    content: str = Field(min_length=1, max_length=256000)
+    content: str = Field(min_length=1)
     existing_titles: list[str] = Field(default_factory=list, max_length=500)
     reference_date: date | None = None
     time_zone: str = "Asia/Shanghai"

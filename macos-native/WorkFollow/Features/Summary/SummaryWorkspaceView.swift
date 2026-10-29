@@ -27,6 +27,8 @@ struct SummaryWorkspaceView: View {
     @State private var showsSources = false
     @State private var selectedCarry: Set<UUID> = []
     @State private var aiRunning = false
+    @State private var aiPreview = ""
+    @State private var aiStatus = "正在生成…"
     @State private var aiError: String?
     @State private var aiJob: _Concurrency.Task<Void, Never>?
     @State private var aiGeneration = UUID()
@@ -257,8 +259,7 @@ struct SummaryWorkspaceView: View {
         VStack(alignment: .leading, spacing: 10) {
             if aiRunning {
                 HStack {
-                    ProgressView().controlSize(.small)
-                    Text("AI 正在整理草稿…").font(WFType.supporting)
+                    Text(aiStatus).font(WFType.supporting)
                     Spacer()
                     Button("取消生成", action: cancelAI).buttonStyle(.borderless)
                 }
@@ -270,6 +271,9 @@ struct SummaryWorkspaceView: View {
                 }
             }
             VStack(spacing: 0) {
+                if aiRunning {
+                    AIStreamingTextView(text: aiPreview, status: aiStatus)
+                } else {
                 DocumentFormatToolbarView(handle: editorHandle, maxWidth: .infinity, embedded: true)
                     .padding(.horizontal, 10)
                 Divider().overlay(WFColors.border)
@@ -278,6 +282,7 @@ struct SummaryWorkspaceView: View {
                     onEditingChanged: { _ in }, profile: linkProfile, handle: editorHandle)
                     .padding(.horizontal, 12).padding(.vertical, 14)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
             }
             .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
             .overlay { RoundedRectangle(cornerRadius: 8).stroke(WFColors.border, lineWidth: 1) }
@@ -601,6 +606,7 @@ struct SummaryWorkspaceView: View {
     private func cancelAI() {
         aiGeneration = UUID()
         aiJob?.cancel(); aiJob = nil; aiRunning = false
+        aiPreview = ""
     }
     private func startAI() {
         cancelAI()
@@ -615,14 +621,20 @@ struct SummaryWorkspaceView: View {
         var request = aiOptions
         request.weeklyStructure = false
         request.isWeeklyPeriod = range.kind == .week
-        aiRunning = true; aiError = nil
+        aiRunning = true; aiError = nil; aiPreview = ""; aiStatus = "正在生成…"
         defer { if aiGeneration == generation { aiRunning = false; aiJob = nil } }
         do {
             var optimizer = SummaryPiOptimizer()
             optimizer.executable = environment.meetingStore.configuration.executable
             optimizer.model = environment.meetingStore.configuration.resolvedMinutesModel
             optimizer.textModel = try environment.aiModels.request()
-            let text = try await optimizer.optimize(text: original.plainText, options: request)
+            let text = try await optimizer.optimize(text: original.plainText, options: request) { event in
+                _Concurrency.Task { @MainActor in
+                    guard aiGeneration == generation, aiRunning else { return }
+                    if event.kind == "text" { aiPreview = event.text ?? "" }
+                    if event.kind == "status" { aiStatus = event.message ?? "正在生成…" }
+                }
+            }
             try _Concurrency.Task.checkCancellation()
             guard aiGeneration == generation, target == selection, !journalMode,
                   environment.navigation.destination == .summary else { return }

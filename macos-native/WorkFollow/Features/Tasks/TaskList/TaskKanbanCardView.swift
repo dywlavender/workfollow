@@ -239,7 +239,9 @@ private struct TaskKanbanTaskRow: View {
                     contextDateAnchor = nil
                     showDatePopover = true
                 } label: {
-                    Text(TaskDateLabel.text(due, hasTime: task.schedule.hasTime,
+                    // 时间段以结束为准：倒数日不能拿开始日算「逾期」。
+                    Text(TaskDateLabel.text(dateDisplay == .countdown ? (task.schedule.dueEndAt ?? due) : due,
+                                            hasTime: task.schedule.hasTime,
                                             now: workspace.clock(), calendar: workspace.calendar,
                                             display: dateDisplay))
                         .lineLimit(1)
@@ -266,7 +268,8 @@ private struct TaskKanbanTaskRow: View {
     private var scheduleColor: Color {
         guard !task.isClosed else { return muted }
         return TaskListViewDefaults.rowDateColor(for: TaskListViewDefaults.dateBadgeStyle(
-            dueAt: task.schedule.dueAt, isClosed: task.isClosed,
+            dueAt: task.schedule.dueAt, dueEndAt: task.schedule.dueEndAt,
+            hasTime: task.schedule.hasTime, isClosed: task.isClosed,
             now: workspace.clock(), calendar: workspace.calendar))
     }
 

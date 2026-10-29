@@ -26,7 +26,7 @@ struct CommandPaletteView: View {
             HStack(spacing: WFSpace.md) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(WFColors.secondaryText)
-                TextField("搜索任务、笔记或命令…", text: $session.query)
+                TextField("搜索内容，或输入问题问 AI…", text: $session.query)
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .onKeyPress(keys: [.return], phases: .down) { key in
@@ -34,18 +34,28 @@ struct CommandPaletteView: View {
                         createFromQuery()
                         return .handled
                     }
-                    .onSubmit(runSelected)
+                    .onSubmit { if session.askingAI { askQuestion() } else { runSelected() } }
                     .onKeyPress(.downArrow) { moveSelection(1) }
                     .onKeyPress(.upArrow) { moveSelection(-1) }
                     .onKeyPress(.escape) {
                         environment.commandPalettePresented = false
                         return .handled
                     }
-                Button("取消") { environment.commandPalettePresented = false }
+                Button { askQuestion() } label: { Label("问 AI", systemImage: "sparkles") }
+                    .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || query.count > 500)
+                    .accessibilityIdentifier("knowledge.ask")
+                    .workflowActionAnchor("knowledge.ask")
+                Button("关闭") { environment.commandPalettePresented = false }
                     .keyboardShortcut(.cancelAction)
             }
             .padding(WFSpace.lg)
 
+            if session.askingAI {
+                Divider()
+                KnowledgeAnswerView(session: session.knowledge,
+                    retry: { askQuestion(session.knowledge.question) })
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
             if session.showAll { filters }
             Divider()
 
@@ -105,20 +115,23 @@ struct CommandPaletteView: View {
                 }
             }
 
+            }
+
             Divider()
 
             HStack {
-                Button(session.showAll ? "返回快捷搜索" : "查看全部结果") {
-                    session.showAll.toggle(); selectedIndex = 0
+                Button(session.askingAI ? "返回搜索" : session.showAll ? "返回快捷搜索" : "查看全部结果") {
+                    if session.askingAI { session.knowledge.cancel(); session.askingAI = false }
+                    else { session.showAll.toggle(); selectedIndex = 0 }
                 }.buttonStyle(.borderless)
                 Spacer()
-                if session.showAll {
+                if session.showAll && !session.askingAI {
                     Text("\(entries.count) 条结果").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 }
             }.padding(.horizontal, WFSpace.lg).padding(.vertical, WFSpace.sm)
             // 底部快捷键提示条（Flutter 命令面板对齐）。
             HStack(spacing: WFSpace.sm) {
-                Text("↑↓ 选择 · ↵ 打开 · ⌘↵ 新建 · esc 关闭")
+                Text(session.askingAI ? "点击引用查看来源 · ↵ 提问 · esc 关闭" : "↑↓ 选择 · ↵ 打开 · ⌘↵ 新建 · esc 关闭")
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
                 Spacer(minLength: 0)
@@ -132,12 +145,13 @@ struct CommandPaletteView: View {
             .background(WFColors.canvas)
         }
         .background(WFColors.content)
-        .frame(width: session.showAll ? 700 : 540, height: session.showAll ? 580 : 420)
+        .frame(width: session.showAll || session.askingAI ? 700 : 620, height: session.askingAI ? 620 : session.showAll ? 580 : 420)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in selectedIndex = 0 }
         .onChange(of: session.content) { _, _ in selectedIndex = 0 }
         .onChange(of: session.status) { _, _ in selectedIndex = 0 }
         .onChange(of: session.list) { _, _ in selectedIndex = 0 }
+        .onDisappear { session.knowledge.cancel() }
     }
 
     private var filters: some View {
@@ -165,6 +179,7 @@ struct CommandPaletteView: View {
     }
 
     private func moveSelection(_ offset: Int) -> KeyPress.Result {
+        guard !session.askingAI else { return .ignored }
         guard !entries.isEmpty else { return .ignored }
         selectedIndex = (selectedIndex + offset + entries.count) % entries.count
         return .handled
@@ -198,5 +213,13 @@ struct CommandPaletteView: View {
 
     private func run(_ entry: CommandPaletteEntry) {
         session.open(entry, environment: environment, navigation: navigation)
+    }
+
+    private func askQuestion(_ submitted: String? = nil) {
+        let question = submitted ?? query
+        session.askingAI = true
+        session.knowledge.ask(question: question, corpus: environment.knowledgeCorpus()) { question, sources, updates in
+            try await environment.textAIClient().answer(question: question, sources: sources, updates: updates)
+        }
     }
 }

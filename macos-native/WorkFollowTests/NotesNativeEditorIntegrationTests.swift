@@ -137,6 +137,76 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         XCTAssertEqual(environment.taskWorkspace.tasksInActiveLists.map(\.id), [id])
     }
 
+    /// 列表首行：页头 44 + 间距 8 + 搜索栏 34 + 间距 8 + 行高约 52，取行中心。
+    /// SwiftUI 列表行不暴露 AX 元素，这里按固定的列布局定位。
+    private func rightClickFirstNoteRow(in window: NSWindow) throws {
+        let height = try XCTUnwrap(window.contentView).bounds.height
+        let point = NSPoint(x: 96, y: height - 120)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: point,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            eventNumber: 1, clickCount: 1, pressure: 1))
+        XCTAssertTrue(PopupInteractionRegistry.shared.showContextMenu(for: event))
+        InspectorPanelTestSupport.settle(window)
+    }
+
+    func testNoteRowRightClickSelectsRowAndTogglesFavorite() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        // 新笔记插在列表最前：先建「另一篇」，再建要右键的那篇。
+        let other = notes.create()
+        notes.edit(other) { $0.title = "另一篇"; $0.document = NativeDocument(plainText: "另一篇正文") }
+        let first = notes.create()
+        notes.edit(first) { $0.title = "右键笔记"; $0.document = NativeDocument(plainText: "正文") }
+        notes.selectedID = other
+        var menuRows: [BusinessMenuRowFrame] = []
+        let host = host(environment, onPopupRows: { menuRows = $0 })
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+
+        // 行上挂 .draggable 后，普通点击仍要能选中并打开详情。
+        try InspectorPanelTestSupport.click(CGRect(x: 96, y: 112, width: 12, height: 12),
+                                            in: host, window: window)
+        XCTAssertEqual(notes.selectedID, first)
+        notes.selectedID = other
+
+        try rightClickFirstNoteRow(in: window)
+        let menu = try InspectorPanelTestSupport.panel(title: "操作菜单", below: window)
+        XCTAssertEqual(notes.selectedID, first, "右键先选中目标行")
+        // 打开笔记 / 收藏 / 移动到 / 复制笔记正文 / 转换为任务 / 移到垃圾桶
+        XCTAssertEqual(menuRows.count, 6)
+        try InspectorPanelTestSupport.click(menuRows[1].rect,
+                                            in: try XCTUnwrap(menu.contentView), window: menu)
+        XCTAssertEqual(notes.notes.first { $0.id == first }?.favorite, true)
+        XCTAssertFalse(menu.isVisible)
+    }
+
+    func testNoteRowContextMenuMovesNoteIntoFolderThroughSubmenu() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        XCTAssertTrue(notes.addFolder("会议"))
+        let id = notes.create()
+        notes.edit(id) { $0.title = "待归档笔记"; $0.document = NativeDocument(plainText: "正文") }
+        var menuRows: [BusinessMenuRowFrame] = []
+        let host = host(environment, onPopupRows: { menuRows = $0 })
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+
+        try rightClickFirstNoteRow(in: window)
+        let menu = try InspectorPanelTestSupport.panel(title: "操作菜单", below: window)
+        try InspectorPanelTestSupport.click(menuRows[2].rect,
+                                            in: try XCTUnwrap(menu.contentView), window: menu)
+        let child = try InspectorPanelTestSupport.panel(title: "移动到", below: window)
+        // 子菜单行不暴露 AX；按共用菜单几何点第二行（未归档 / 会议 / 移到新文件夹…）。
+        let rowTop = PopupMetrics.menuInset + PopupMetrics.menuRowHeight + 2
+        try InspectorPanelTestSupport.click(
+            CGRect(x: 20, y: rowTop, width: 60, height: PopupMetrics.menuRowHeight),
+            in: try XCTUnwrap(child.contentView), window: child)
+
+        XCTAssertEqual(notes.notes.first { $0.id == id }?.folder, "会议")
+        XCTAssertEqual(notes.notes.first { $0.id == id }?.folderID, notes.folderID(named: "会议"))
+    }
+
     func testLongNoteUsesOuterCompactScrollView() throws {
         let environment = fixture()
         let notes = environment.notesWorkspace

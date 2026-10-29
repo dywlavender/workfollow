@@ -57,7 +57,7 @@ enum NativeResourceLinkRouter {
             navigation.taskSelectionToPreserveOnNextNavigation = nil
             navigation.destination = .notes
             tasks.select(nil)
-            notes.selectedID = id
+            notes.reveal(id)
         case let .meeting(id):
             guard let meetings, meetings.meetings.contains(where: { $0.id == id }) else { return false }
             meetings.selectedID = id

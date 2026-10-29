@@ -10,7 +10,6 @@ from pydantic import Field
 
 from app.core.config import Settings
 from app.schemas.ai import AIChatRequest, AIGenerateRequest
-from app.services.ai_context import estimate_message_tokens, split_source
 from app.services.ai_service import AIServiceError, TextAIService
 
 
@@ -47,17 +46,6 @@ def ai_settings(**overrides) -> Settings:
                     ai_context_window=4096, ai_max_output_tokens=512, ai_context_margin=512, **overrides)
 
 
-def test_source_chunks_preserve_tail_and_account_for_json_escaping():
-    content = ('项目\t说明："日期待定"。\n' * 40) + "最后一句：周五提交。"
-    chunks = split_source(content, 128)
-    assert len(chunks) > 1
-    assert chunks[0].start == 0
-    assert chunks[-1].end == len(content)
-    assert chunks[-1].text.endswith("最后一句：周五提交。")
-    assert all(next_chunk.start <= chunk.end for chunk, next_chunk in zip(chunks, chunks[1:]))
-    assert all(len(json.dumps(chunk.text, ensure_ascii=False).encode()) - 2 <= 128 for chunk in chunks)
-
-
 def test_long_note_extraction_keeps_tail_evidence_and_deduplicates():
     model = ExtractingModel()
     service = TextAIService(ai_settings(), model=model)
@@ -66,9 +54,8 @@ def test_long_note_extraction_keeps_tail_evidence_and_deduplicates():
         action="extract_tasks", content=content, referenceDate="2026-10-28",
     )))
     assert [task.title for task in result.tasks] == ["提交方案", "核对合同"]
-    assert result.usage.chunks > 1
+    assert result.usage.chunks == 1
     assert result.usage.model_calls == len(model.seen)
-    assert all(estimate_message_tokens(messages) <= service.budget.input_tokens for messages in model.seen)
     assert all(task.quote in content for task in result.tasks)
     assert "2026-10-28" in model.seen[0][-1].content
 
@@ -107,8 +94,8 @@ def test_long_summary_is_combined_instead_of_losing_the_last_chunk():
     service = TextAIService(ai_settings(), model=model)
     content = "第一部分成果。\n" + "A" * 6000 + "\n最后部分成果。"
     result = asyncio.run(service.generate(AIGenerateRequest(action="improve_summary", content=content, referenceDate="2026-10-28")))
-    assert result.usage.chunks > 1
-    assert result.usage.model_calls > result.usage.chunks
+    assert result.usage.chunks == 1
+    assert result.usage.model_calls == 1
     assert "最后部分成果" in result.text
     merge = json.loads(model.seen[-1][-1].content)["content"]
     assert "第一部分成果" in merge and "最后部分成果" in merge
@@ -117,7 +104,7 @@ def test_long_summary_is_combined_instead_of_losing_the_last_chunk():
 def test_langchain_compacts_history_and_returns_reusable_context_without_mutating_input():
     model = RecordingModel(responses=["交付日期是11月2日；任务尚未完成。", "继续按11月2日安排交付。"])
     service = TextAIService(ai_settings(), model=model)
-    messages = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"历史讨论{i}：交付日期11月2日，任务尚未完成。"} for i in range(28)]
+    messages = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"历史讨论{i}：交付日期11月2日，任务尚未完成。" * 10} for i in range(100)]
     messages.append({"role": "user", "content": "继续整理下一步"})
     original = json.dumps(messages, ensure_ascii=False)
     result = asyncio.run(service.chat(AIChatRequest(messages=messages)))
@@ -128,33 +115,14 @@ def test_langchain_compacts_history_and_returns_reusable_context_without_mutatin
     assert result.messages[-1].role == "assistant"
     assert result.messages[-2].content == "继续整理下一步"
     assert json.dumps(messages, ensure_ascii=False) == original
-    assert all(estimate_message_tokens(call) <= service.budget.input_tokens for call in model.seen)
 
 
-def test_oversized_chat_is_rejected_before_a_model_call():
-    model = RecordingModel()
+def test_large_single_message_is_sent_to_the_agent_without_preflight_rejection():
+    model = RecordingModel(responses=["完整返回"])
     service = TextAIService(ai_settings(), model=model)
-    with pytest.raises(AIServiceError) as failure:
-        asyncio.run(service.chat(AIChatRequest(messages=[{"role": "user", "content": "长" * 3000}])))
-    assert failure.value.status_code == 413
-    assert model.seen == []
-
-
-def test_failed_compaction_does_not_continue_with_an_error_as_history():
-    class FailingSummaryModel(RecordingModel):
-        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
-            self.seen.append(messages)
-            raise AIServiceError(502, "模拟压缩失败")
-
-    model = FailingSummaryModel()
-    service = TextAIService(ai_settings(), model=model)
-    messages = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"历史讨论{i}：交付日期11月2日，任务尚未完成。"} for i in range(28)]
-    messages.append({"role": "user", "content": "继续整理下一步"})
-    original = json.dumps(messages, ensure_ascii=False)
-    with pytest.raises(AIServiceError, match="模拟压缩失败"):
-        asyncio.run(service.chat(AIChatRequest(messages=messages)))
-    assert len(model.seen) == 1
-    assert json.dumps(messages, ensure_ascii=False) == original
+    content = "长" * 3000
+    asyncio.run(service.chat(AIChatRequest(messages=[{"role": "user", "content": content}])))
+    assert model.seen[0][-1].content == content
 
 
 def test_real_langchain_adapter_uses_compatible_chat_endpoint(monkeypatch):

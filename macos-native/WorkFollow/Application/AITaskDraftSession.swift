@@ -6,17 +6,36 @@ final class AITaskDraftSession: ObservableObject {
     enum Phase { case loading, ready, failed(String) }
     @Published var drafts: [AITaskDraft] = []
     @Published private(set) var phase: Phase = .loading
+    @Published private(set) var retryAt: Date?
+    @Published private(set) var preview = ""
+    @Published private(set) var status = "正在生成…"
+    private var generation = UUID()
+    private var running = false
     var selectedCount: Int { drafts.filter { $0.selected && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count }
 
-    func generate(request: AITaskRequest, using generate: (AITaskRequest) async throws -> String) async {
-        phase = .loading
+    func generate(request: AITaskRequest, using generate: (AITaskRequest, @escaping @Sendable (AITextUpdate) -> Void) async throws -> String) async {
+        guard !running, retryAt.map({ $0 <= Date() }) ?? true else { return }
+        running = true
+        let token = UUID(); generation = token
+        defer { running = false; generation = UUID() }
+        phase = .loading; retryAt = nil; preview = ""; status = "正在生成…"
         do {
-            let text = try await generate(request)
+            let text = try await generate(request) { [weak self] value in
+                _Concurrency.Task { @MainActor in
+                    guard let self, self.generation == token else { return }
+                    if value.kind == "text" { self.preview = value.text ?? "" }
+                    if value.kind == "status" { self.status = value.message ?? "正在生成…" }
+                }
+            }
             try _Concurrency.Task.checkCancellation()
             drafts = try AITaskDraft.decode(text, request: request)
             phase = .ready
         } catch is CancellationError { }
         catch is DecodingError { phase = .failed("未能整理出有效结果，请重新生成。") }
+        catch let error as AIBackendError {
+            if let seconds = error.retryAfterSeconds { retryAt = Date().addingTimeInterval(seconds) }
+            phase = .failed(error.localizedDescription)
+        }
         catch {
             let message = error.localizedDescription
             if message.contains("503") || message.contains("无可用渠道") {

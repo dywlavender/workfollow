@@ -24,8 +24,6 @@ class AISettings(BaseModel):
 
     @model_validator(mode="after")
     def validate_ai_budget(self) -> "AISettings":
-        if self.ai_context_window - self.ai_max_output_tokens - self.ai_context_margin < 1024:
-            raise ValueError("AI 上下文窗口必须为输入、输出和预留空间提供足够预算")
         if self.ai_summary_keep_ratio >= self.ai_summary_trigger_ratio:
             raise ValueError("AI 历史保留比例必须小于压缩触发比例")
         return self

@@ -29,11 +29,12 @@ final class FilterEvaluatorTests: XCTestCase {
 
     private func makeTask(title: String = "任务", list: String = "收集箱", tags: [String] = [],
                           priority: TaskPriority = .none,
-                          dueAt: Date? = nil, deadlineAt: Date? = nil,
+                          dueAt: Date? = nil, dueEndAt: Date? = nil, deadlineAt: Date? = nil,
                           document: NativeDocument = .empty,
                           completed: Bool = false, parent: Task? = nil) -> Task {
         Task(id: UUID(), title: title, document: document, tags: tags, list: TaskList(name: list),
-             priority: priority, schedule: TaskSchedule(dueAt: dueAt, deadlineAt: deadlineAt),
+             priority: priority, schedule: TaskSchedule(dueAt: dueAt, dueEndAt: dueEndAt,
+                                                        deadlineAt: deadlineAt),
              status: completed ? .completed : .active, parentID: parent?.id,
              childOrder: 0, createdAt: now, updatedAt: now)
     }
@@ -160,6 +161,10 @@ final class FilterEvaluatorTests: XCTestCase {
         XCTAssertFalse(matches(makeTask(deadlineAt: day(-1)), filter),
                        "已逾期分桶只看到期日，截止时间不算（对齐所有任务分桶口径）")
         XCTAssertFalse(matches(makeTask(), filter))
+        XCTAssertFalse(matches(makeTask(dueAt: day(-10), dueEndAt: day(2)), filter),
+                       "时间段以结束为准：进行中的区间不算逾期")
+        XCTAssertTrue(matches(makeTask(dueAt: day(-10), dueEndAt: day(-1)), filter),
+                      "区间结束后才进已逾期")
     }
 
     func testNoDateRangeMatchesUndatedTasksOnly() {

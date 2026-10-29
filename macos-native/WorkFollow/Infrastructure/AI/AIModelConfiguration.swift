@@ -87,5 +87,5 @@ struct AITextModelRequest: Sendable {
          "ai_model": profile.model, "ai_base_url": profile.baseURL, "ai_api_key": key,
          "ai_context_window": profile.contextWindow, "ai_max_output_tokens": profile.maxOutputTokens]
     }
-    var parameters: [String: Any] { ["engine": "langchain", "configuration": configuration] }
+    var parameters: [String: Any] { ["engine": "langchain", "profileID": profile.id.uuidString, "configuration": configuration] }
 }

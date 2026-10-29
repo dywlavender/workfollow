@@ -26,6 +26,20 @@ final class MatrixConfigurationTests: XCTestCase {
         XCTAssertTrue(wide.showsSecondaryIcons)
         XCTAssertLessThanOrEqual(wide.listNameWidth, 96)
     }
+    /// 矩阵的安排日同样以区间结束为准：进行中的时间段不能被当成过期。
+    func testRuleAnchorUsesRangeEnd() {
+        let rule = MatrixDatePredicate()
+        let range = task(start: date(10), end: date(20))
+        XCTAssertEqual(rule.anchor(of: range), date(20))
+        XCTAssertEqual(rule.anchor(of: task(start: date(10))), date(10))
+        var includeOverdue = MatrixDatePredicate()
+        includeOverdue.kind = .nextDays
+        includeOverdue.days = 7
+        includeOverdue.includeOverdue = true
+        XCTAssertTrue(includeOverdue.matches(range, now: now, calendar: calendar),
+                      "结束日在今天之后 → 归入「未来 N 天」，不靠开始日")
+    }
+
     func testLegacyClassificationSurvivesDefaultConfiguration() {
         for priority in TaskPriority.menuOrder {
             for start in [nil, date(10), date(13), date(16), date(17)] {

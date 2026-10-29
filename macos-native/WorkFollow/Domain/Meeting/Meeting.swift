@@ -1,5 +1,11 @@
 import Foundation
 
+struct MeetingTranscriptReveal: Equatable {
+    let id = UUID()
+    let meetingID: UUID
+    let lineID: UUID?
+}
+
 struct MeetingTranscriptLine: Codable, Equatable, Identifiable {
     var id = UUID()
     var speaker: String

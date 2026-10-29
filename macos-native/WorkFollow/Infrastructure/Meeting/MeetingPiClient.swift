@@ -4,12 +4,18 @@ protocol MeetingAIClient {
     func prepareTranscription(configuration: MeetingPiConfiguration) async throws
     func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
                        lines: [MeetingTranscriptLine]) async throws -> String
+    func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
+                       lines: [MeetingTranscriptLine], updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> String
     func transcribe(configuration: MeetingPiConfiguration, packet: MeetingAudioPacket,
                     speakers: [String]) async throws -> [MeetingTranscriptLine]
 }
 
 extension MeetingAIClient {
     func prepareTranscription(configuration: MeetingPiConfiguration) async throws {}
+    func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
+                       lines: [MeetingTranscriptLine], updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> String {
+        try await updateMinutes(configuration: configuration, minutes: minutes, lines: lines)
+    }
 }
 
 /// Native owns audio capture and storage; the backend owns all AI work.
@@ -22,6 +28,10 @@ struct MeetingPiClient: MeetingAIClient {
     }
     func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
                        lines: [MeetingTranscriptLine]) async throws -> String {
+        try await updateMinutes(configuration: configuration, minutes: minutes, lines: lines, updates: { _ in })
+    }
+    func updateMinutes(configuration: MeetingPiConfiguration, minutes: String,
+                       lines: [MeetingTranscriptLine], updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> String {
         guard !lines.isEmpty else { return minutes }
         let selected = try await textModel?()
         guard selected != nil || !configuration.minutesUsesASR else {
@@ -31,7 +41,13 @@ struct MeetingPiClient: MeetingAIClient {
         if let selected { params.merge(selected.parameters) { _, new in new } }
         params["minutes"] = minutes
         params["lines"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(lines))
-        let result: AITextResponse = try await backend.call("meeting.minutes", params: params)
+        let channel = UUID().uuidString
+        params["progressChannel"] = channel
+        backend.subscribe(channel) { data in
+            if let event = try? JSONDecoder().decode(AITextUpdate.self, from: data) { updates(event) }
+        }
+        defer { backend.unsubscribe(channel) }
+        let result: AITextResponse = try await backend.call("meeting.minutes", params: params, timeout: 605)
         return result.text
     }
     func transcribe(configuration: MeetingPiConfiguration, packet: MeetingAudioPacket,

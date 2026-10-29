@@ -55,6 +55,7 @@ output/
 # Generated release packages
 release/
 .runtime-cache/
+/build-backup-*/
 
 # Local tools and IDE
 .workbuddy/

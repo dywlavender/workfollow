@@ -7,8 +7,10 @@ import Foundation
 ///   deadline no later than today), so 已过期 tasks still show under 今天 views.
 /// - `nextSevenDays` matches the `.nextSevenDays` scope predicate
 ///   (due day < today + 7, includes today and 已过期, excludes the boundary day).
-/// - `overdue` / `noDate` match the 所有任务 date buckets (due day < today,
-///   respectively dueAt == nil; deadlines alone do not create buckets).
+/// - `overdue` / `noDate` match the 所有任务 date buckets. Overdue follows
+///   `ScheduleOverdue`: a time range is judged by its end (`dueEndAt`), so an
+///   ongoing range is not overdue; `noDate` is dueAt == nil. Deadlines alone do
+///   not create buckets.
 enum SavedFilterDateRange: String, Codable, CaseIterable {
     case any
     case today
@@ -347,8 +349,8 @@ enum FilterEvaluator {
         case .noDate:
             return task.schedule.dueAt == nil
         case .overdue:
-            guard let dueAt = task.schedule.dueAt else { return false }
-            return calendar.startOfDay(for: dueAt) < today
+            // 时间段以结束为准：进行中的区间不算逾期。
+            return ScheduleOverdue.isOverdue(schedule: task.schedule, now: now, calendar: calendar)
         }
     }
 }

@@ -12,6 +12,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 
 BUNDLE_ID = "com.workfollow.native.preview"
@@ -20,6 +21,8 @@ DESTINATION = Path("/Applications/WorkFollow.app")
 UPDATES = Path.home() / "Library/Application Support/WorkFollowNativeUpdates"
 LOG = Path.home() / "Library/Logs/WorkFollowNativeUpdates/build.log"
 AI_BUNDLE_SCRIPT = Path(__file__).with_name("bundle-ai-backend.py")
+TMP_ROOT = Path("/private/tmp")
+TMP_OUTPUT = TMP_ROOT / "workfollow-local-build"
 
 
 class AppError(Exception):
@@ -178,6 +181,24 @@ def next_build(destination):
     return "2"
 
 
+def clean_stale_builds(keep=None, max_age_seconds=6 * 3600):
+    """Remove build folders that interrupted runs left behind in the temp directory."""
+    cutoff = time.time() - max_age_seconds
+    protected = {TMP_OUTPUT, keep.expanduser().absolute() if keep else None}
+    for path in TMP_ROOT.iterdir():
+        if not path.is_dir() or not path.name.endswith("-build"):
+            continue
+        if not path.name.startswith(("wf-", "workfollow-")):
+            continue
+        if any(item and item.is_relative_to(path) for item in protected):
+            continue
+        try:
+            if path.stat().st_mtime <= cutoff:
+                shutil.rmtree(path, ignore_errors=True)
+        except OSError:
+            continue
+
+
 def build(output, build_number, identity):
     if not re.fullmatch(r"[1-9][0-9]*", build_number):
         raise AppError("构建号必须是正整数。")
@@ -245,6 +266,7 @@ def build(output, build_number, identity):
         if output.exists():
             shutil.rmtree(output)
         shutil.copytree(package, output, symlinks=True)
+    clean_stale_builds(output.parent)
     return output
 
 

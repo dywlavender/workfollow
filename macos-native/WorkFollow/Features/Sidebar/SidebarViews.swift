@@ -402,12 +402,15 @@ private struct NotesNavigationSection: View {
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     var onNavigate: () -> Void
+    /// 正在被笔记拖拽悬停的文件夹行（只影响描边高亮）。
+    @State private var noteDropTarget: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             row("全部笔记", symbol: "text.alignleft", folder: nil)
             row("收藏", symbol: "star", folder: nil, favorites: true)
             row("未归档", symbol: "folder", folder: "未归档")
+                .modifier(NoteFolderDropTarget(folder: "未归档", notes: notes, targeted: $noteDropTarget))
             HStack {
                 Text("文件夹").font(WFType.supporting)
                 Spacer()
@@ -423,6 +426,7 @@ private struct NotesNavigationSection: View {
                 VStack(spacing: 0) {
                     ForEach(notes.folders, id: \.self) { folder in
                         row(folder, symbol: "folder", folder: folder)
+                            .modifier(NoteFolderDropTarget(folder: folder, notes: notes, targeted: $noteDropTarget))
                             .businessContextMenu {
                                 Button("重命名文件夹…") {
                                     if let name = TaskNamePrompt.ask("重命名文件夹", value: folder), name != folder,

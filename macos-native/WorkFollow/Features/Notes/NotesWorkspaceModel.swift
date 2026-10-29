@@ -6,6 +6,12 @@ import Foundation
 /// read and write goes through the same task store and history as the task page.
 @MainActor
 final class NotesWorkspaceModel: ObservableObject {
+    @Published private(set) var revealRequest: UUID?
+
+    func reveal(_ id: UUID) {
+        folderFilter = nil; favoritesOnly = false; selectedID = id
+        revealRequest = UUID()
+    }
     private let taskWorkspace: TaskWorkspaceModel
     private let clock: () -> Date
     private var savedFolders: [String]
@@ -320,6 +326,21 @@ final class NotesWorkspaceModel: ObservableObject {
         selectedID = copyID
         revision += 1
         return copyID
+    }
+
+    func createAIRewrite(_ text: String, request: NoteRewriteRequest) throws -> UUID {
+        guard let source = notes.first(where: { $0.id == request.noteID && $0.deletedAt == nil }) else {
+            throw AITaskError.sourceMissing
+        }
+        let body = DocumentExternalClipboardCodec.fragment(fromMarkdown: text)?.document ?? NativeDocument(plainText: text)
+        let link = DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "来源："),
+            DocumentRun(text: request.title, marks: [.link(NativeResourceLink.note(source.id).url.absoluteString)])])
+        guard let id = taskWorkspace.createNote(title: request.title + "（\(request.action.suffix)）",
+            document: NativeDocument(blocks: [link] + body.blocks), folder: source.folder, folderID: source.folderID) else {
+            throw AITaskError.sourceMissing
+        }
+        selectedID = id; revision += 1
+        return id
     }
 }
 

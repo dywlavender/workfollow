@@ -14,8 +14,12 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var requestingPermission = false
     @Published private(set) var transcribing = false
     @Published private(set) var updatingMinutes = false
+    @Published private(set) var minutesPreview = ""
+    @Published private(set) var minutesPreviewID: UUID?
+    @Published private(set) var minutesStatus = "正在生成…"
     @Published private(set) var savingRecordingIDs: Set<UUID> = []
     @Published private(set) var streamDrafts: [UUID: [String: MeetingTranscriptLine]] = [:]
+    @Published private(set) var transcriptRevealRequest: MeetingTranscriptReveal?
     @Published var error: String?
     @Published var configuration = MeetingPiConfiguration() { didSet { save() } }
     private let persistence: JSONFileStore<Snapshot>
@@ -75,6 +79,11 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
 
     var selected: MeetingRecord? { meetings.first { $0.id == selectedID } }
+    func revealTranscript(meetingID: UUID, lineID: UUID?) {
+        guard meetings.contains(where: { $0.id == meetingID }) else { return }
+        selectedID = meetingID
+        transcriptRevealRequest = MeetingTranscriptReveal(meetingID: meetingID, lineID: lineID)
+    }
     func recordingFiles(for meeting: MeetingRecord) -> [URL] {
         meeting.audio.flatMap { chunk in [chunk.filename, chunk.transcriptionFilename].compactMap { $0 } }
             .map { storageDirectory.appendingPathComponent($0).standardizedFileURL }
@@ -312,6 +321,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         guard let id = selectedID else { return }
         generateMinutes(for: id, automatically: false)
     }
+    func cancelMinutes() { minutesTask?.cancel() }
 
     func canGenerateMinutes(for meeting: MeetingRecord) -> Bool {
         !updatingMinutes && !meeting.transcript.isEmpty
@@ -489,14 +499,23 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         heartbeat?.cancel(); heartbeat = nil
         error = nil
         updatingMinutes = true
+        minutesPreview = ""; minutesPreviewID = id; minutesStatus = "正在生成…"
         minutesTask = _Concurrency.Task { [weak self] in
             guard let self else { return }
             defer {
                 self.minutesTask = nil; self.updatingMinutes = false
+                self.minutesPreview = ""; self.minutesPreviewID = nil
                 self.scheduleAutomaticMinutes()
             }
             do {
-                let minutes = try await self.ai.updateMinutes(configuration: configuration, minutes: "", lines: lines)
+                let minutes = try await self.ai.updateMinutes(configuration: configuration, minutes: "", lines: lines) { [weak self] event in
+                    _Concurrency.Task { @MainActor in
+                        guard let self, self.updatingMinutes, self.minutesPreviewID == id,
+                              self.minutesEditRevisions[id, default: 0] == revision else { return }
+                        if event.kind == "text" { self.minutesPreview = event.text ?? "" }
+                        if event.kind == "status" { self.minutesStatus = event.message ?? "正在生成…" }
+                    }
+                }
                 guard !minutes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw MeetingPiError.invalidResult }
                 // Keep edits made while the model request was running.
                 guard self.minutesEditRevisions[id, default: 0] == revision else { return }
@@ -506,7 +525,8 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
                     $0.minutesUpdatedAt = Date()
                     $0.minutesEditedByUser = nil
                 }
-            } catch {
+            } catch is CancellationError { }
+            catch {
                 self.error = error.localizedDescription
             }
         }

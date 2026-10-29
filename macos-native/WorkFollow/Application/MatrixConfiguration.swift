@@ -55,7 +55,10 @@ struct MatrixDatePredicate: Equatable, Codable {
     var rangeStart: Date?
     var rangeEnd: Date?
 
-    func anchor(of task: Task) -> Date? { basis == .schedule ? task.schedule.dueAt : task.schedule.deadlineAt }
+    /// 时间段以结束为准：矩阵里的「安排日」和逾期判断都看区间终点。
+    func anchor(of task: Task) -> Date? {
+        basis == .schedule ? (task.schedule.dueEndAt ?? task.schedule.dueAt) : task.schedule.deadlineAt
+    }
     func matches(_ task: Task, now: Date, calendar: Calendar) -> Bool {
         let anchor = anchor(of: task).map { calendar.startOfDay(for: $0) }
         let today = calendar.startOfDay(for: now)

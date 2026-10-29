@@ -248,11 +248,9 @@ struct TaskQuickComposer: View {
 
     private static let draftTaskID = UUID(uuidString: "00000000-0000-0000-0000-00000000ADD1")!
 
-    /// 过期判定与列表日期徽标同口径：开始日早于今天才变红（“今天”仍是蓝）。
+    /// 过期判定与列表日期徽标同口径：时间段以结束为准，进行中不算逾期。
     private var scheduleOverdue: Bool {
-        guard let due = schedule.dueAt else { return false }
-        return workspace.calendar.startOfDay(for: due)
-            < workspace.calendar.startOfDay(for: workspace.clock())
+        ScheduleOverdue.isOverdue(schedule: schedule, now: workspace.clock(), calendar: workspace.calendar)
     }
 
     private var scheduleLabel: String {

@@ -108,7 +108,7 @@ final class AITaskDraftTests: XCTestCase {
 
     func testGenerationDoesNotMutateTasksAndCancellationDoesNotPublishResult() async throws {
         let session = AITaskDraftSession(), input = request(.task(UUID()))
-        await session.generate(request: input) { prompt in
+        await session.generate(request: input) { prompt, _ in
             XCTAssertEqual(prompt.backendParameters["action"] as? String, "breakdown_task")
             return "{\"tasks\":[{\"title\":\"整理报价项目\"}]}"
         }
@@ -116,7 +116,7 @@ final class AITaskDraftTests: XCTestCase {
         session.drafts[0].selected = false
         XCTAssertEqual(session.selectedCount, 0)
         let cancelled = AITaskDraftSession()
-        let job = _Concurrency.Task { await cancelled.generate(request: input) { _ in
+        let job = _Concurrency.Task { await cancelled.generate(request: input) { _, _ in
             try await _Concurrency.Task.sleep(nanoseconds: 100_000_000)
             return "{\"tasks\":[{\"title\":\"不应出现\"}]}"
         } }
@@ -159,11 +159,26 @@ final class AITaskDraftTests: XCTestCase {
     func testProviderFailureShowsActionableMessageWithoutChangingDrafts() async {
         let session = AITaskDraftSession()
         session.drafts = [AITaskDraft(title: "已编辑的标题")]
-        await session.generate(request: request()) { _ in
+        await session.generate(request: request()) { _, _ in
             throw NSError(domain: "fixture", code: 503, userInfo: [NSLocalizedDescriptionKey: "503: 无可用渠道"])
         }
         guard case let .failed(message) = session.phase else { return XCTFail("缺少失败提示") }
         XCTAssertTrue(message.contains("AI 模型"))
+        XCTAssertEqual(session.drafts.first?.title, "已编辑的标题")
+    }
+
+    func testRateLimitKeepsServiceExplanationAndPreventsImmediateRegeneration() async {
+        let session = AITaskDraftSession()
+        session.drafts = [AITaskDraft(title: "已编辑的标题")]
+        await session.generate(request: request()) { _, _ in
+            throw AIBackendError.service(code: "rate_limited", message: "模型服务触发速率限制，请在 30 秒后重试。", retryAfter: 30)
+        }
+        guard case let .failed(message) = session.phase else { return XCTFail("缺少限流提示") }
+        XCTAssertTrue(message.contains("速率限制"))
+        XCTAssertNotNil(session.retryAt)
+        var called = false
+        await session.generate(request: request()) { _, _ in called = true; return "{\"tasks\":[]}" }
+        XCTAssertFalse(called)
         XCTAssertEqual(session.drafts.first?.title, "已编辑的标题")
     }
 }

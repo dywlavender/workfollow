@@ -552,7 +552,8 @@ struct TaskListView: View {
     /// （过期红、今天强调色、未来/无日期灰）。
     private func quickAddBadgeColor(_ timing: QuickAddScheduleDraft) -> Color {
         guard let dueAt = timing.dueAt else { return WFColors.secondaryText }
-        switch TaskListViewDefaults.dateBadgeStyle(dueAt: dueAt, isClosed: false,
+        switch TaskListViewDefaults.dateBadgeStyle(dueAt: dueAt, dueEndAt: timing.dueEndAt,
+                                                   hasTime: timing.hasTime, isClosed: false,
                                                    now: workspace.clock(),
                                                    calendar: workspace.calendar) {
         case .overdue: return .red
@@ -1940,7 +1941,10 @@ private struct TaskRowMetadataTrail: View {
     }
 
     private var dateStyle: TaskListViewDefaults.DateBadgeStyle {
-        TaskListViewDefaults.dateBadgeStyle(dueAt: task.schedule.dueAt, isClosed: task.isClosed,
+        TaskListViewDefaults.dateBadgeStyle(dueAt: task.schedule.dueAt,
+                                            dueEndAt: task.schedule.dueEndAt,
+                                            hasTime: task.schedule.hasTime,
+                                            isClosed: task.isClosed,
                                             now: workspace.clock(), calendar: workspace.calendar)
     }
 
@@ -2008,6 +2012,7 @@ private struct TaskRowMetadataTrail: View {
         Button { onOpenDate() } label: {
             Text(TaskListViewDefaults.scheduleLabel(
                 dueAt: task.schedule.dueAt ?? Date(),
+                dueEndAt: task.schedule.dueEndAt,
                 hasTime: task.schedule.hasTime,
                 now: workspace.clock(),
                 calendar: workspace.calendar,
@@ -2058,10 +2063,12 @@ enum TaskListViewDefaults {
         return destination.symbol
     }
 
-    static func scheduleLabel(dueAt: Date, hasTime: Bool, now: Date, calendar: Calendar,
+    static func scheduleLabel(dueAt: Date, dueEndAt: Date? = nil, hasTime: Bool, now: Date,
+                              calendar: Calendar,
                               dateDisplay: TaskDateDisplayMode = .taskTime) -> String {
         if dateDisplay == .countdown {
-            return TaskDateLabel.text(dueAt, hasTime: hasTime, now: now,
+            // 时间段以结束为准：区间还在进行时不该出现「逾期」。
+            return TaskDateLabel.text(dueEndAt ?? dueAt, hasTime: hasTime, now: now,
                                       calendar: calendar, display: .countdown)
         }
         guard hasTime else {
@@ -2093,12 +2100,14 @@ enum TaskListViewDefaults {
         }
     }
 
-    static func dateBadgeStyle(dueAt: Date?, isClosed: Bool, now: Date, calendar: Calendar) -> DateBadgeStyle {
+    /// 时间段以结束日判定：进行中的区间仍是蓝/强调色，结束后才变红。
+    static func dateBadgeStyle(dueAt: Date?, dueEndAt: Date? = nil, hasTime: Bool = false,
+                               isClosed: Bool, now: Date, calendar: Calendar) -> DateBadgeStyle {
         guard let dueAt, !isClosed else { return .none }
-        let today = calendar.startOfDay(for: now)
-        let day = calendar.startOfDay(for: dueAt)
-        if day < today { return .overdue }
-        if day == today { return .today }
+        let end = dueEndAt ?? dueAt
+        if ScheduleOverdue.isOverdue(date: end, hasTime: hasTime,
+                                     now: now, calendar: calendar) { return .overdue }
+        if calendar.startOfDay(for: end) == calendar.startOfDay(for: now) { return .today }
         return .scheduled
     }
 

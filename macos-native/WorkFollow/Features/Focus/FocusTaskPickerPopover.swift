@@ -243,7 +243,7 @@ struct FocusTaskPickerPopover: View {
                 if let date = FocusTaskPickerProjection.date(for: task) {
                     Text(dateText(date, task: task))
                         .font(.system(size: FocusTaskPickerMetrics.dateFontSize))
-                        .foregroundStyle(dateIsOverdue(date) ? theme.warn : theme.text3)
+                        .foregroundStyle(dateIsOverdue(date, task: task) ? theme.warn : theme.text3)
                         .lineLimit(1)
                         .fixedSize()
                         .focusTaskPickerAnchor("date-\(task.id.uuidString)")
@@ -269,7 +269,11 @@ struct FocusTaskPickerPopover: View {
         return task.schedule.dueAt == nil ? label + "截止" : label
     }
 
-    private func dateIsOverdue(_ date: Date) -> Bool {
-        workspace.calendar.startOfDay(for: date) < workspace.calendar.startOfDay(for: workspace.clock())
+    private func dateIsOverdue(_ date: Date, task: Task) -> Bool {
+        if task.schedule.dueAt != nil {
+            return ScheduleOverdue.isOverdue(schedule: task.schedule, now: workspace.clock(),
+                                             calendar: workspace.calendar)
+        }
+        return workspace.calendar.startOfDay(for: date) < workspace.calendar.startOfDay(for: workspace.clock())
     }
 }

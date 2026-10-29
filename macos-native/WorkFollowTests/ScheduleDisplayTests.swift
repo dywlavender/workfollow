@@ -122,7 +122,7 @@ final class ScheduleDisplayTests: XCTestCase {
         XCTAssertEqual(TaskInspectorSchedulePresentation.label(
             schedule: TaskSchedule(dueAt: date(2026, 10, 24, 23, 55), hasTime: true),
             now: date(2026, 10, 25, 0, 5), calendar: calendar),
-            "10月24日, 23:55, 延迟1天", "跨自然日即计入一天，不按满24小时取整")
+            "10月24日, 23:55, 延迟10分钟", "带时刻按实际经过时长，不满 24 小时不进位到「天」")
     }
 
     func testInspectorDelayOnlyAppearsForOpenOverdueSchedules() {
@@ -139,7 +139,7 @@ final class ScheduleDisplayTests: XCTestCase {
             "明天, 10月26日")
         XCTAssertEqual(TaskInspectorSchedulePresentation.label(
             schedule: TaskSchedule(dueAt: date(2026, 10, 25, 9), hasTime: true), now: now, calendar: calendar),
-            "10月25日, 09:00, 延迟不足1天")
+            "10月25日, 09:00, 延迟3小时")
     }
 
     func testInspectorPeriodsUseTheirEndForOverdueStatusAndDayCount() {

@@ -26,6 +26,7 @@ struct NotesWorkspaceView: View {
     @State private var confirmClear = false
     @State private var purgeID: UUID?
     @State private var aiTaskRequest: AITaskRequest?
+    @State private var aiRewriteRequest: NoteRewriteRequest?
     @StateObject private var editorHandle = DocumentEditorHandle()
     /// 浮窗打开时原编辑栏改成只读预览；独立身份避免与浮窗争同一份编辑状态。
     @State private var previewDocumentID = UUID()
@@ -84,7 +85,10 @@ struct NotesWorkspaceView: View {
         .onChange(of: navigation.destination) { _, _ in detailOnly = false; query = "" }
         .onChange(of: notes.folderFilter) { _, _ in detailOnly = false; query = "" }
         .onChange(of: notes.favoritesOnly) { _, _ in detailOnly = false; query = "" }
+        .onChange(of: notes.revealRequest) { _, _ in query = ""; detailOnly = true }
+        .onAppear { if notes.revealRequest != nil { query = ""; detailOnly = true } }
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
+        .sheet(item: $aiRewriteRequest) { NoteRewriteComposerView(request: $0) }
         .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
             Button("取消", role: .cancel) {}
             Button("全部删除", role: .destructive) { notes.emptyTrash() }
@@ -198,6 +202,12 @@ struct NotesWorkspaceView: View {
                             }
                         }
                         .rowHoverBackground(selected: visibleNote?.id == note.id, cornerRadius: 8)
+                        // 右键先选中目标行（Finder / 滴答口径），再弹常用操作；
+                        // 垃圾桶行不可拖，只有恢复/永久删除。
+                        .modifier(NoteDragSource(note: note, enabled: !trash))
+                        .businessContextMenu(onOpen: { notes.selectedID = note.id }) {
+                            noteRowMenu(note)
+                        }
                     }
                 }
             }
@@ -223,6 +233,7 @@ struct NotesWorkspaceView: View {
                         Button { notes.restore(note.id); detailOnly = false } label: { Image(systemName: "arrow.uturn.backward") }.hoverTip("恢复笔记")
                         Button(role: .destructive) { purgeID = note.id } label: { Image(systemName: "trash.slash") }.hoverTip("永久删除笔记")
                     } else {
+                        noteAIMenu(note)
                         FloatingEditorButton { openFloatingNote(note) }
                     }
                 }.buttonStyle(.borderless).padding(.horizontal, 20).frame(height: 44)
@@ -345,19 +356,52 @@ struct NotesWorkspaceView: View {
         floatingNotes.open(noteID: note.id)
     }
 
+    // MARK: - 笔记列表右键菜单
+
+    @ViewBuilder private func noteRowMenu(_ note: Note) -> some View {
+        if trash {
+            Button("恢复笔记") { notes.restore(note.id) }
+            Divider()
+            Button("永久删除…", role: .destructive) { purgeID = note.id }
+        } else {
+            Button("打开笔记") { notes.selectedID = note.id; detailOnly = true }
+            Divider()
+            Button(note.favorite ? "取消收藏" : "收藏") {
+                notes.edit(note.id) { $0.favorite.toggle() }
+            }
+            BusinessMenu("移动到") { noteFolderMenu(note) }
+            Divider()
+            Button("复制笔记正文") { copyPlainText(note) }
+            if note.hasPreservedRichContent {
+                Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
+            }
+            Button("转换为任务") { _ = notes.convertToTask(note.id) }
+            Divider()
+            Button("移到垃圾桶", role: .destructive) { notes.delete(note.id) }
+        }
+    }
+
+    /// 页脚文件夹菜单与右键「移动到」共用同一份归属列表。
+    @ViewBuilder private func noteFolderMenu(_ note: Note) -> some View {
+        ForEach(["未归档"] + notes.folders, id: \.self) { value in
+            Button(value) { notes.moveNoteToFolder(note.id, named: value) }
+        }
+        Divider()
+        Button("移到新文件夹…") { moveToNewFolder(note) }
+    }
+
+    private func moveToNewFolder(_ note: Note) {
+        guard let value = TaskNamePrompt.ask("文件夹名称"), !value.isEmpty else { return }
+        guard notes.addFolder(value) else { TaskNamePrompt.invalidName(); return }
+        notes.moveNoteToFolder(note.id, named: value)
+    }
+
     private func noteActionsMenu(_ note: Note) -> some View {
         BusinessMenu(title: "笔记操作", prefersAbove: true) {
             Button(note.favorite ? "取消收藏" : "收藏") {
                 notes.edit(note.id) { $0.favorite.toggle() }
             }
             Button("复制笔记正文") { copyPlainText(note) }
-            Button("提取待办…") {
-                editorHandle.prepareForDocumentChange()
-                do {
-                    let current = notes.notes.first { $0.id == note.id } ?? note
-                    aiTaskRequest = try environment.aiTaskRequest(for: current)
-                } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
-            }.disabled(note.document.isEmpty && note.title.isEmpty)
             if note.hasPreservedRichContent {
                 Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
             }
@@ -372,6 +416,36 @@ struct NotesWorkspaceView: View {
                 .accessibilityLabel("更多笔记操作")
         }.fixedSize()
         .hoverTip("更多操作")
+    }
+
+    private func noteAIMenu(_ note: Note) -> some View {
+        BusinessMenu(title: "笔记 AI") {
+            Button("整理要点…") { rewrite(note, action: .organize) }.disabled(note.document.isEmpty)
+                .workflowActionAnchor("note.ai.organize")
+            Button("润色笔记…") { rewrite(note, action: .polish) }.disabled(note.document.isEmpty)
+                .workflowActionAnchor("note.ai.polish")
+            Button("提取待办…") {
+                editorHandle.prepareForDocumentChange()
+                do {
+                    let current = notes.notes.first { $0.id == note.id } ?? note
+                    aiTaskRequest = try environment.aiTaskRequest(for: current)
+                } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
+            }.disabled(note.document.isEmpty && note.title.isEmpty)
+                .workflowActionAnchor("note.ai.tasks")
+        } label: { Label("AI", systemImage: "sparkles").accessibilityLabel("笔记 AI") }
+        .accessibilityIdentifier("note.ai")
+        .workflowActionAnchor("note.ai")
+    }
+
+    private func rewrite(_ note: Note, action: NoteRewriteRequest.Action) {
+        editorHandle.prepareForDocumentChange()
+        do {
+            let current = notes.notes.first { $0.id == note.id } ?? note
+            let body = try current.document.materialized().plainText
+            guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            aiRewriteRequest = NoteRewriteRequest(noteID: current.id,
+                title: current.title.isEmpty ? "未命名笔记" : current.title, content: body, action: action)
+        } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
     }
 
     private func copyPlainText(_ note: Note) {
@@ -454,16 +528,7 @@ struct NotesWorkspaceView: View {
     private func footer(_ note: Note) -> some View {
         HStack(spacing: 10) {
             BusinessMenu(prefersAbove: true) {
-                ForEach(["未归档"] + notes.folders, id: \.self) { value in
-                    Button(value) { notes.moveNoteToFolder(note.id, named: value) }
-                }
-                Divider()
-                Button("移到新文件夹…") {
-                    if let value = TaskNamePrompt.ask("文件夹名称"), !value.isEmpty {
-                        guard notes.addFolder(value) else { TaskNamePrompt.invalidName(); return }
-                        notes.moveNoteToFolder(note.id, named: value)
-                    }
-                }
+                noteFolderMenu(note)
             } label: { Label(note.folder, systemImage: "folder") }
             .lineLimit(1).fixedSize()
             Spacer()

@@ -25,6 +25,7 @@ def task_prompt(data: dict) -> str:
         "一般提供 3 到 6 个步骤；结合现有正文，不重复已有子任务，不输出空泛的准备/执行/总结套话。可提出步骤建议，quote 可为空。" if breakdown else
         "只提取有原文依据的事项；quote 必须是输入中的连续原文。排除已完成、已否决和待定提议，没有明确待办返回空数组。",
         "不重复 existingTasks。不要输出 Markdown 或解释。",
+        "任务标题简短具体；quote 只摘取能说明该行动及日期的最短连续原文，不重复整篇笔记。",
         "输入 JSON：" + json.dumps(payload, ensure_ascii=False),
     ])
 

@@ -21,7 +21,7 @@ PYTHON_RELEASE = "20261026"
 ARCHES = ("arm64",)
 SOURCE_FILES = ("ai_entry.py", "app/__init__.py", "app/ai_runtime", "app/schemas/__init__.py",
                 "app/schemas/base.py", "app/schemas/ai.py", "app/services/__init__.py",
-                "app/services/ai_context.py", "app/services/ai_service.py")
+                "app/services/ai_service.py")
 
 
 def run(command, **kwargs):
@@ -129,6 +129,8 @@ def embed(app, cache=CACHE, if_ready=False):
     manifest["node"] = "external"
     manifest["pi"] = "external"
     manifest["minimumNodeVersion"] = "22.19.0"
+    manifest.pop("boundedText", None)
+    manifest["textTransport"] = "pi-agent"
     (root / "runtime.json").write_text(json.dumps(manifest, indent=2))
     for name in SOURCE_FILES:
         source, destination = REPO / "backend" / name, root / "backend" / name
@@ -139,7 +141,7 @@ def embed(app, cache=CACHE, if_ready=False):
             shutil.copy2(source, destination)
     resources = root / "resources"
     resources.mkdir()
-    for path in (REPO / "macos-native/WorkFollow/Resources").glob("wf-meeting-*.mjs"):
+    for path in (REPO / "macos-native/WorkFollow/Resources").glob("wf-*.mjs"):
         shutil.copy2(path, resources / path.name)
     skill = REPO / ".pi/skills/meeting-minutes/SKILL.md"
     if skill.is_file():
@@ -161,6 +163,8 @@ def validate_layout(app):
     manifest = json.loads((root / "runtime.json").read_text()) if (root / "runtime.json").exists() else {}
     required = [root / "runtime.json", root / "backend/ai_entry.py",
                 root / "resources/wf-meeting-stream.mjs", root / "resources/wf-meeting-audio.mjs"]
+    if manifest.get("boundedText"):
+        required.append(root / "resources/wf-text.mjs")
     if manifest.get("pi") != "external":
         required.append(root / "pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js")
     # Older installed packages remain eligible for backup and rollback.

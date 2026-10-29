@@ -2,6 +2,7 @@ import Foundation
 
 enum AIBackendError: LocalizedError {
     case unavailable, disconnected, timedOut, invalidResponse, failed(String)
+    case service(code: String, message: String, retryAfter: TimeInterval?)
     var errorDescription: String? {
         switch self {
         case .unavailable: "内置 AI 组件缺失，请重新安装完整应用。"
@@ -9,7 +10,12 @@ enum AIBackendError: LocalizedError {
         case .timedOut: "AI 请求超时，请稍后重试。"
         case .invalidResponse: "AI 服务返回的结果无效。"
         case .failed(let message): message
+        case .service(_, let message, _): message
         }
+    }
+    var retryAfterSeconds: TimeInterval? {
+        if case .service(_, _, let seconds) = self { return seconds }
+        return nil
     }
 }
 
@@ -129,9 +135,11 @@ final class AIBackendBridge: @unchecked Sendable {
                 lock.withLock { events[channel] }?(payload)
             } else if let id = message["id"] as? String {
                 let call = lock.withLock { pending.removeValue(forKey: id) }
-                if let error = message["error"] as? [String: String] {
-                    let result: Error = error["code"] == "cancelled" ? CancellationError() :
-                        AIBackendError.failed(error["message"] ?? "AI 调用失败。")
+                if let error = message["error"] as? [String: Any] {
+                    let result: Error = (error["code"] as? String) == "cancelled" ? CancellationError() :
+                        AIBackendError.service(code: error["code"] as? String ?? "engine_failed",
+                            message: error["message"] as? String ?? "AI 调用失败。",
+                            retryAfter: error["retryAfterSeconds"] as? TimeInterval)
                     call?.finish(.failure(result))
                 } else if let result = message["result"], let data = try? JSONSerialization.data(withJSONObject: result) {
                     call?.finish(.success(data))

@@ -3,14 +3,17 @@ import SwiftUI
 
 extension View {
     /// 宽度缺省 = 按内容量（打开前离屏量一次），并夹在紧凑/上限之间。
+    /// `onOpen` 在右键弹出前回调，用于把右键目标行设为选中（Finder/滴答口径）。
     func businessContextMenu<Content: View>(width: CGFloat? = nil,
+                                           onOpen: (() -> Void)? = nil,
                                            @ViewBuilder content: @escaping () -> Content) -> some View {
-        modifier(BusinessContextMenuModifier(width: width, menu: content))
+        modifier(BusinessContextMenuModifier(width: width, onOpen: onOpen, menu: content))
     }
 }
 
 private struct BusinessContextMenuModifier<Menu: View>: ViewModifier {
     let width: CGFloat?
+    let onOpen: (() -> Void)?
     @ViewBuilder let menu: () -> Menu
     @State private var presented = false
     @State private var point = CGPoint.zero
@@ -38,6 +41,7 @@ private struct BusinessContextMenuModifier<Menu: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(BusinessContextMenuTrigger { position in
+                onOpen?()
                 point = position
                 measuredWidth = measureWidth()
                 controller.reset()

@@ -47,6 +47,33 @@ final class TaskListViewDefaultsTests: XCTestCase {
             dueAt: date(9, 25), isClosed: true, now: now, calendar: calendar), .none)
     }
 
+    /// 时间段以结束为准：进行中的区间不标红，倒数日也不能拿开始日算「逾期」。
+    func testRangesUseTheirEndForBadgeAndCountdown() {
+        XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
+            dueAt: date(9, 24), dueEndAt: date(9, 30), isClosed: false,
+            now: now, calendar: calendar), .scheduled)
+        XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
+            dueAt: date(9, 24), dueEndAt: date(9, 26), isClosed: false,
+            now: now, calendar: calendar), .today)
+        XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
+            dueAt: date(9, 20), dueEndAt: date(9, 25), isClosed: false,
+            now: now, calendar: calendar), .overdue)
+        XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
+            dueAt: date(9, 20), dueEndAt: date(9, 26, hour: 9), hasTime: true,
+            isClosed: false, now: now, calendar: calendar), .overdue,
+            "带时刻的结束已过点 → 过期")
+        XCTAssertEqual(TaskListViewDefaults.dateBadgeStyle(
+            dueAt: date(9, 20), dueEndAt: date(9, 26, hour: 23), hasTime: true,
+            isClosed: false, now: now, calendar: calendar), .today)
+
+        XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
+            dueAt: date(9, 24), dueEndAt: date(9, 30), hasTime: false,
+            now: now, calendar: calendar, dateDisplay: .countdown), "4天后")
+        XCTAssertEqual(TaskListViewDefaults.scheduleLabel(
+            dueAt: date(9, 24), dueEndAt: date(9, 25), hasTime: false,
+            now: now, calendar: calendar, dateDisplay: .countdown), "逾期1天")
+    }
+
     func testRowDateColorsAreBlueUntilOverdueAndNeutralWhenClosed() {
         XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .today), WFColors.accent)
         XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .scheduled), WFColors.accent)

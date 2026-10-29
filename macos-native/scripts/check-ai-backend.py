@@ -90,6 +90,7 @@ async def check(app, node=None, pi=None):
             assert json.loads(await asyncio.wait_for(process.stdout.readline(), 10)) == {"ready": 1}
             health = await request("health")
             assert health["protocol"] == 1
+            assert {"knowledge", "note_rewrite"}.issubset(health["capabilities"])
             assert isinstance((await request("models"))["models"], list)
             stream = await request("stream.open", {"channel": "first", "streamExtension": str(extension)})
             await request("stream.command", {"streamID": stream["streamID"], "op": "append", "audio": "AA==", "sequence": 0})
@@ -107,10 +108,21 @@ async def check(app, node=None, pi=None):
                 def do_POST(self):
                     payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
                     requests.append((self.path, payload))
+                    source = json.dumps(payload, ensure_ascii=False)
+                    if "知识问答合成验证" in source:
+                        text = json.dumps({"paragraphs": [{"text": "周五验收。", "citations": [
+                            {"source": "S1", "quote": "周五验收。"}]}], "insufficient": False}, ensure_ascii=False)
+                    elif "笔记改写合成验证" in source:
+                        text = "整理后的合成笔记正文。"
+                    elif "待办提取合成验证" in source:
+                        text = json.dumps({"tasks": [{"title": "核对成本", "date": None, "due": "2026-10-30",
+                            "priority": "none", "quote": "周五前核对成本。"}]}, ensure_ascii=False)
+                    else:
+                        text = "已验证摘要"
                     if payload.get("stream") and self.path.startswith("/openai/"):
                         self.send_response(200); self.send_header("Content-Type", "text/event-stream")
                         self.send_header("Connection", "close"); self.end_headers()
-                        for delta, finish in [({"role": "assistant", "content": "已验证摘要"}, None), ({}, "stop")]:
+                        for delta, finish in [({"role": "assistant", "content": text}, None), ({}, "stop")]:
                             value = {"id": "fixture", "object": "chat.completion.chunk", "created": 1, "model": "fixture-model",
                                      "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
                             self.wfile.write(("data: " + json.dumps(value) + "\n\n").encode())
@@ -120,13 +132,33 @@ async def check(app, node=None, pi=None):
                         value = {"id": "resp_synthetic", "object": "response", "created_at": 1, "model": "fixture-model",
                             "status": "completed", "error": None, "incomplete_details": None,
                             "output": [{"type": "message", "id": "msg_synthetic", "role": "assistant", "status": "completed",
-                                        "content": [{"type": "output_text", "text": "已验证摘要", "annotations": []}]}],
+                                        "content": [{"type": "output_text", "text": text, "annotations": []}]}],
                             "usage": {"input_tokens": 10, "output_tokens": 1, "total_tokens": 11,
                                       "input_tokens_details": {"cached_tokens": 0}, "output_tokens_details": {"reasoning_tokens": 0}}}
                     else:
                         value = {"id": "synthetic", "object": "chat.completion", "created": 1,
                             "model": "fixture-model", "choices": [{"index": 0, "finish_reason": "stop",
-                            "message": {"role": "assistant", "content": "已验证摘要"}}]}
+                            "message": {"role": "assistant", "content": text}}]}
+                    if payload.get("stream") and self.path.startswith("/responses/"):
+                        self.send_response(200); self.send_header("Content-Type", "text/event-stream")
+                        self.send_header("Connection", "close"); self.end_headers()
+                        sequence = 0
+                        def event(kind, **values):
+                            nonlocal sequence
+                            data = {"type": kind, "sequence_number": sequence, **values}; sequence += 1
+                            self.wfile.write(("event: " + kind + "\ndata: " + json.dumps(data) + "\n\n").encode())
+                        item = value["output"][0]
+                        event("response.created", response={**value, "status": "in_progress", "output": []})
+                        event("response.output_item.added", output_index=0, item={**item, "status": "in_progress", "content": []})
+                        event("response.content_part.added", output_index=0, item_id=item["id"], content_index=0,
+                            part={"type": "output_text", "text": "", "annotations": []})
+                        event("response.output_text.delta", output_index=0, item_id=item["id"], content_index=0, delta=text)
+                        event("response.output_text.done", output_index=0, item_id=item["id"], content_index=0, text=text)
+                        event("response.content_part.done", output_index=0, item_id=item["id"], content_index=0, part=item["content"][0])
+                        event("response.output_item.done", output_index=0, item=item)
+                        event("response.completed", response=value)
+                        self.wfile.flush(); self.close_connection = True
+                        return
                     body = json.dumps(value).encode()
                     self.send_response(200); self.send_header("Content-Type", "application/json")
                     self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
@@ -136,6 +168,27 @@ async def check(app, node=None, pi=None):
 
             http = HTTPServer(("127.0.0.1", 0), Handler)
             threading.Thread(target=lambda: http.serve_forever(poll_interval=0.05), daemon=True).start()
+
+            async def workflows(engine, options):
+                answer = await request("knowledge.ask", {**options, "engine": engine,
+                    "question": "知识问答合成验证：海鸥何时验收？",
+                    "sources": [{"id": "S1", "title": "海鸥项目", "content": "定稿发言：周五验收。"}]})
+                assert answer["sourceIDs"] == ["S1"]
+                assert answer["paragraphs"][0]["citations"][0] == {"source": "S1", "quote": "周五验收。"}
+                channel = str(uuid.uuid4())
+                note = await request("note.rewrite", {**options, "engine": engine, "action": "polish",
+                    "title": "笔记改写合成验证", "content": "这是一条用于验证的合成笔记。",
+                    "jobID": str(uuid.uuid4()), "progressChannel": channel})
+                assert note["text"] == "整理后的合成笔记正文。"
+                progress = [item["event"] for item in events if item["channel"] == channel]
+                assert progress[-1] == {"kind": "text", "text": "整理后的合成笔记正文。"}
+                tasks = await request("text.tasks", {**options, "engine": engine, "action": "extract_tasks",
+                    "title": "待办提取合成验证", "content": "周五前核对成本。测试报告已完成。追加采购仅为建议。",
+                    "referenceDate": "2026-10-29", "timeZone": "Asia/Shanghai"})
+                row = json.loads(tasks["text"])["tasks"][0]
+                assert row["title"] == "核对成本" and row["quote"] == "周五前核对成本。"
+                assert row["due"] == "2026-10-30" and row["date"] is None
+
             routes = {"openai_chat": "/openai/v1", "openai_responses": "/responses/v1", }
             for protocol, route in routes.items():
                 configuration = {"ai_enabled": True, "ai_protocol": protocol,
@@ -145,6 +198,7 @@ async def check(app, node=None, pi=None):
                 result = await request("text.summary", {"engine": "langchain", "content": "只使用这条合成事实。",
                     "options": {"length": "简短", "style": "正式"}, "configuration": configuration})
                 assert result["text"] == "已验证摘要"
+                await workflows("langchain", {"configuration": configuration})
             assert requests[0][0] == "/openai/v1/chat/completions"
             error = await request("models", {"piExecutable": str(temporary / "missing/pi")}, expected_error="pi_unavailable")
             assert "AI 配置说明" in error["message"]
@@ -161,6 +215,7 @@ async def check(app, node=None, pi=None):
             assert any(item["provider"] == "fixture" and item["id"] == "fixture-model" for item in catalog["models"])
             generated = await request("text.generate", {"model": "fixture/fixture-model", "prompt": "请回复测试文字。"})
             assert generated["text"] == "已验证摘要"
+            await workflows("pi", {"model": "fixture/fixture-model"})
             configured = await request("stream.open", {"channel": "configured", "model": "fixture/fixture-model", "streamExtension": str(extension)})
             diagnostic = events[-1]["event"]
             assert diagnostic["provider"] == "fixture"
@@ -193,7 +248,7 @@ async def check(app, node=None, pi=None):
             process.stdin.close()
             await asyncio.wait_for(process.wait(), 5)
             assert process.returncode == 0
-            print("通过：本机 Node/Pi、Pi 配置文件读取、文字生成、转写末句、两种 OpenAI 协议和退出清理；缺少 Node 时直接调用仍可用。")
+            print("通过：包内后端启动、本机 Node/Pi、配置读取、两类引擎的资料问答与引用校验、笔记改写、两种 OpenAI 协议、转写末句和退出清理；缺少 Node 时直接调用仍可用。")
         finally:
             if process.returncode is None:
                 process.terminate()

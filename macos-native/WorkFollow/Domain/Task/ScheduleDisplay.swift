@@ -153,13 +153,16 @@ enum ScheduleDisplay {
 
     /// 「倒数日」口径：`3天后`、`今天 14:30`、`逾期2天`。
     /// 有具体时刻时保留时间——只看天数会丢掉当天的时间约束。
+    /// 逾期时长与详情共用 `ScheduleOverdue`（天/小时/分钟三档）。
     static func countdownText(_ date: Date, hasTime: Bool, now: Date,
                               calendar: Calendar) -> String {
         let distance = dayDistance(from: now, to: date, calendar: calendar)
         let day: String
         if distance > 0 { day = "\(distance)天后" }
-        else if distance < 0 { day = "逾期\(-distance)天" }
-        else { day = "今天" }
+        else if ScheduleOverdue.isOverdue(date: date, hasTime: hasTime, now: now, calendar: calendar) {
+            day = "逾期" + ScheduleOverdue.durationText(date: date, hasTime: hasTime,
+                                                        now: now, calendar: calendar)
+        } else { day = "今天" }
         guard hasTime else { return day }
         return day + " " + clockText(date, calendar: calendar)
     }

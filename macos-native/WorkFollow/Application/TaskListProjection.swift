@@ -331,7 +331,9 @@ enum TaskListProjection {
             }
         } else if scope == .today {
             let today = calendar.startOfDay(for: now)
-            let overdue = ordinary.filter { $0.schedule.dueAt.map { calendar.startOfDay(for: $0) < today } ?? false }
+            let overdue = ordinary.filter {
+                ScheduleOverdue.isOverdue(schedule: $0.schedule, now: now, calendar: calendar)
+            }
             let overdueIDs = Set(overdue.map(\.id))
             let remaining = ordinary.filter { !overdueIDs.contains($0.id) }
             if !overdue.isEmpty { groups.append(TaskListGroup(kind: .overdue, day: nil, tasks: overdue)) }
@@ -349,12 +351,18 @@ enum TaskListProjection {
             }
         } else if scope == .nextSevenDays {
             let today = calendar.startOfDay(for: now)
-            let overdue = ordinary.filter { $0.schedule.dueAt.map { calendar.startOfDay(for: $0) < today } ?? false }
+            let overdue = ordinary.filter {
+                ScheduleOverdue.isOverdue(schedule: $0.schedule, now: now, calendar: calendar)
+            }
             if !overdue.isEmpty { groups.append(TaskListGroup(kind: .overdue, day: nil, tasks: overdue)) }
 
-            let upcoming = ordinary.filter { $0.schedule.dueAt.map { calendar.startOfDay(for: $0) >= today } ?? false }
+            // 进行中的时间段：开始日在过去、结束日未到，按「今天」落桶（不算逾期）。
+            let overdueIDs = Set(overdue.map(\.id))
+            let upcoming = ordinary.filter {
+                !overdueIDs.contains($0.id) && $0.schedule.dueAt != nil
+            }
             let byDay = Dictionary(grouping: upcoming) {
-                calendar.startOfDay(for: $0.schedule.dueAt!)
+                max(calendar.startOfDay(for: $0.schedule.dueAt!), today)
             }
             for day in byDay.keys.sorted() {
                 groups.append(TaskListGroup(kind: day == today ? .today : .day,
@@ -378,18 +386,23 @@ enum TaskListProjection {
         let today = calendar.startOfDay(for: now)
         let recentEnd = calendar.date(byAdding: .day, value: 7, to: today)!
         let overdue = tasks.filter {
-            $0.schedule.dueAt.map { calendar.startOfDay(for: $0) < today } ?? false
+            ScheduleOverdue.isOverdue(schedule: $0.schedule, now: now, calendar: calendar)
         }
-        let onToday = tasks.filter {
-            $0.schedule.dueAt.map { calendar.startOfDay(for: $0) == today } ?? false
+        let overdueIDs = Set(overdue.map(\.id))
+        // 落桶仍按开始日；开始日已过但区间未结束的任务归到今天（进行中，不丢行）。
+        func bucketDay(_ task: Task) -> Date? {
+            guard let dueAt = task.schedule.dueAt else { return nil }
+            return max(calendar.startOfDay(for: dueAt), today)
         }
-        let upcoming = tasks.filter {
-            guard let dueAt = $0.schedule.dueAt else { return false }
-            let day = calendar.startOfDay(for: dueAt)
+        let dated = tasks.filter { !overdueIDs.contains($0.id) && $0.schedule.dueAt != nil }
+        let onToday = dated.filter { bucketDay($0) == today }
+        let upcoming = dated.filter {
+            guard let day = bucketDay($0) else { return false }
             return day > today && day < recentEnd
         }
-        let later = tasks.filter {
-            $0.schedule.dueAt.map { calendar.startOfDay(for: $0) >= recentEnd } ?? false
+        let later = dated.filter {
+            guard let day = bucketDay($0) else { return false }
+            return day >= recentEnd
         }
         let undated = tasks.filter { $0.schedule.dueAt == nil }
 

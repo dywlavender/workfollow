@@ -11,12 +11,16 @@ import json
 from pathlib import Path
 import signal
 import sys
+import time
 
 from pydantic import ValidationError
 
-from app.ai_runtime.pi_engine import EngineError, PiEngine
+from app.ai_runtime.pi_engine import PiEngine
+from app.ai_runtime.failures import EngineError, model_failure
 from app.ai_runtime.prompts import minutes_prompt, summary_prompt, task_prompt
 from app.ai_runtime.settings import AISettings
+from app.ai_runtime.text_stream import TextStream
+from app.ai_runtime.workflows import KnowledgeRequest, NoteRewriteRequest, knowledge_prompt, knowledge_result, note_prompt
 from app.schemas.ai import AIChatRequest, AIGenerateRequest
 
 PROTOCOL_VERSION = 1
@@ -36,15 +40,66 @@ class Runtime:
         self.emit = emit
         self.pi = PiEngine(root)
         self.pending: dict[str, asyncio.Task] = {}
+        self.text_gate = asyncio.Lock()
+        self.cooldowns = {}
 
     async def dispatch(self, method: str, data: dict):
+        text_methods = {"knowledge.ask", "note.rewrite", "text.tasks", "text.summary", "text.generate", "chat", "meeting.minutes", "model.test"}
+        if method not in text_methods or (method == "knowledge.ask" and not data.get("sources")):
+            return await self._dispatch(method, data)
+        key = self.model_key(data)
+        remaining = self.cooldowns.get(key, 0) - time.monotonic()
+        if remaining > 0:
+            raise model_failure(status=429, retry_after=remaining)
+        try:
+            # A cancelled child can take a moment to exit. Briefly wait for
+            # cleanup, then report busy without starting another model call.
+            await asyncio.wait_for(self.text_gate.acquire(), 2)
+        except TimeoutError:
+            raise EngineError("另一个文字 AI 任务正在处理，请等待完成或先取消。", "busy") from None
+        try:
+            remaining = self.cooldowns.get(key, 0) - time.monotonic()
+            if remaining > 0:
+                raise model_failure(status=429, retry_after=remaining)
+            async with asyncio.timeout(600):
+                return await self._dispatch(method, data)
+        except EngineError as exc:
+            if exc.code == "rate_limited":
+                self.cooldowns[key] = time.monotonic() + (exc.retry_after or 30)
+            raise
+        finally:
+            self.text_gate.release()
+
+    @staticmethod
+    def model_key(data):
+        config = data.get("configuration", {})
+        return (data.get("engine", "pi"), data.get("model", ""), data.get("piExecutable", ""),
+                data.get("profileID", ""), *(config.get(key) for key in
+                ("ai_protocol", "ai_base_url", "ai_model", "ai_context_window", "ai_max_output_tokens", "ai_context_margin")))
+
+    def text_stream(self, method, data):
+        return TextStream(method, data.get("progressChannel"), self.emit)
+
+    async def _dispatch(self, method: str, data: dict):
         if method == "health":
             return {"protocol": PROTOCOL_VERSION, "engines": ["pi", "langchain"],
-                    "capabilities": ["tasks", "summary", "minutes", "transcription", "stream", "chat"]}
+                    "capabilities": ["tasks", "summary", "minutes", "transcription", "stream", "chat", "knowledge", "note_rewrite", "streaming_text"]}
         if method == "models":
             return {"models": await self.pi.models(data)}
         if method == "model.test":
             return await self.langchain(method, data)
+        if method in ("knowledge.ask", "note.rewrite"):
+            if data.get("engine", "pi") not in ("pi", "langchain"):
+                raise EngineError("不支持的 AI 引擎。", "invalid_request")
+            request = KnowledgeRequest.model_validate(data) if method == "knowledge.ask" else NoteRewriteRequest.model_validate(data)
+            if isinstance(request, KnowledgeRequest) and not request.sources:
+                return {"paragraphs": [], "insufficient": True, "sourceIDs": []}
+            if data.get("engine") == "langchain":
+                return await self.langchain(method, data)
+            if isinstance(request, NoteRewriteRequest):
+                return {"text": await self.pi.generate(data, note_prompt(request), on_event=self.text_stream(method, data))}
+            text = await self.pi.generate(data, knowledge_prompt(request), on_event=self.text_stream(method, data))
+            return knowledge_result(text, request)
         if method in ("text.tasks", "text.summary", "text.generate", "chat"):
             if method == "text.tasks" and not data.get("content", "").strip():
                 data = {**data, "content": data.get("title", "")}
@@ -64,7 +119,7 @@ class Runtime:
                 prompt = data["prompt"]
                 if not isinstance(prompt, str) or not prompt.strip():
                     raise EngineError("输入不能为空。", "invalid_request")
-            return {"text": await self.pi.generate(data, prompt)}
+            return {"text": await self.pi.generate(data, prompt, on_event=self.text_stream(method, data))}
         if method == "meeting.minutes":
             if not data.get("lines"):
                 return {"text": data.get("minutes", "")}
@@ -78,7 +133,7 @@ class Runtime:
             if "-omni-" in model_id and model_id.endswith("-realtime"):
                 extension = self.audio_extension(data)
                 prompt = "/wf-meeting-minutes " + json.dumps({"version": 1, "prompt": prompt}, ensure_ascii=False)
-            return {"text": await self.pi.generate(data, prompt, extension)}
+            return {"text": await self.pi.generate(data, prompt, extension, on_event=self.text_stream(method, data))}
         if method == "meeting.prepare":
             if data.get("model", "").split("/")[-1] == "qwen-audio-3.1-asr-flash" and not data.get("audioExtension"):
                 await self.pi.generate(data, "/wf-meeting-check", self.audio_extension(data))
@@ -106,11 +161,16 @@ class Runtime:
         from app.services.ai_service import AIServiceError, TextAIService
         settings = AISettings.model_validate(data.get("configuration", {}))
         service = TextAIService(settings)
+        service.on_text = self.text_stream(method, data).text if data.get("progressChannel") else None
         try:
-            async with asyncio.timeout(settings.ai_timeout_seconds):
+            async with asyncio.timeout(600):
                 if method == "model.test":
                     await service.test_connection()
                     return {"success": True}
+                elif method == "knowledge.ask":
+                    return await service.answer_knowledge(KnowledgeRequest.model_validate(data))
+                elif method == "note.rewrite":
+                    result = await service.rewrite_note(NoteRewriteRequest.model_validate(data))
                 elif method == "meeting.minutes":
                     result = await service.write_minutes(data["lines"])
                 elif method == "chat":
@@ -122,7 +182,7 @@ class Runtime:
                     request = AIGenerateRequest.model_validate({**params, "options": normalized_options(params)})
                     result = await service.generate(request)
         except AIServiceError as exc:
-            raise EngineError(str(exc)) from exc
+            raise EngineError(str(exc), exc.code, exc.retry_after) from exc
         finally:
             await service.close()
         value = result.model_dump(mode="json", by_alias=True)
@@ -140,7 +200,10 @@ class Runtime:
         except TimeoutError:
             self.emit({"id": request_id, "error": {"code": "timeout", "message": "AI 请求超时，已有内容保留。"}})
         except EngineError as exc:
-            self.emit({"id": request_id, "error": {"code": exc.code, "message": str(exc)}})
+            error = {"code": exc.code, "message": str(exc)}
+            if exc.retry_after is not None:
+                error["retryAfterSeconds"] = exc.retry_after
+            self.emit({"id": request_id, "error": error})
         except (ValidationError, KeyError, TypeError, ValueError):
             self.emit({"id": request_id, "error": {"code": "invalid_request", "message": "AI 请求参数不正确。"}})
         except Exception:
@@ -165,6 +228,7 @@ class Runtime:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         await self.pi.close()
+        self.cooldowns.clear()
 
 
 async def serve(root: Path):

@@ -118,7 +118,7 @@ final class TaskInspectorShellContractTests: XCTestCase {
         typealias Presentation = TaskInspectorSchedulePresentation
         XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: start, hasTime: true,
             dueEndAt: date(19, 11, 43)), now: date(19, 12), calendar: calendar),
-            "10月19日, 09:17 - 11:43, 延迟不足1天")
+            "10月19日, 09:17 - 11:43, 延迟17分钟")
         XCTAssertEqual(Presentation.label(schedule: TaskSchedule(dueAt: date(19),
             dueEndAt: date(20)), now: date(19, 12), calendar: calendar),
             "今天, 10月19日 - 明天, 10月20日")

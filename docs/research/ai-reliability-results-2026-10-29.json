@@ -1,0 +1,346 @@
+{
+  "date": "2026-10-29",
+  "data": "fictional only",
+  "userConfigurationChanged": false,
+  "runs": [
+    {
+      "stage": "first_output_budget",
+      "record": {
+        "data": "fictional only",
+        "model": "AgentRouter-Pi2/gpt-6.1-sol",
+        "results": [
+          {
+            "case": "retrieved_knowledge",
+            "error": "模型输出达到长度上限，未采用不完整结果；请缩小内容范围或提高输出预算。",
+            "question": "海鸥项目最终何时验收，验收任务是否已经完成？预算是否获批？",
+            "seconds": 58.64864003658295,
+            "sources": [
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n以下为会议纪要（整理参考）：\n旧纪要：11月2日验收，预算已经批准。",
+                "id": "S1",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n定稿发言 · 00:50 · 未区分\n2026-10-29：11月2日周一验收的安排取消，改为10月30日周五15点验收。18000元只是备选报价，预算尚未批准。",
+                "id": "S2",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "任务：海鸥验收\n清单：海鸥项目\n状态：未完成\n重要性：高优先级\n安排日期：未设置\n截止日期：未设置\n完成时间：未设置\n验收负责人未指定。",
+                "id": "S3",
+                "title": "海鸥验收"
+              },
+              {
+                "content": "笔记：燕子预算\n文件夹：工作\n编辑时间：2026-10-29 12:00\n燕子预算已经批准。",
+                "id": "S4",
+                "title": "燕子预算"
+              },
+              {
+                "content": "笔记：海鸥旧计划\n文件夹：工作\n编辑时间：2026-10-23 12:00\n2026-10-23：海鸥项目原计划在11月2日周一验收。",
+                "id": "S5",
+                "title": "海鸥旧计划"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "stage": "low_reasoning_request",
+      "record": {
+        "data": "fictional only",
+        "model": "AgentRouter-Pi2/gpt-6.1-sol",
+        "results": [
+          {
+            "case": "retrieved_knowledge",
+            "error": "AI 请求超时，已有内容保留。",
+            "question": "海鸥项目最终何时验收，验收任务是否已经完成？预算是否获批？",
+            "seconds": 61.24173104763031,
+            "sources": [
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n以下为会议纪要（整理参考）：\n旧纪要：11月2日验收，预算已经批准。",
+                "id": "S1",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n定稿发言 · 00:50 · 未区分\n2026-10-29：11月2日周一验收的安排取消，改为10月30日周五15点验收。18000元只是备选报价，预算尚未批准。",
+                "id": "S2",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "任务：海鸥验收\n清单：海鸥项目\n状态：未完成\n重要性：高优先级\n安排日期：未设置\n截止日期：未设置\n完成时间：未设置\n验收负责人未指定。",
+                "id": "S3",
+                "title": "海鸥验收"
+              },
+              {
+                "content": "笔记：海鸥旧计划\n文件夹：工作\n编辑时间：2026-10-23 12:00\n2026-10-23：海鸥项目原计划在11月2日周一验收。",
+                "id": "S4",
+                "title": "海鸥旧计划"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "stage": "short_notes_and_initial_long",
+      "record": {
+        "data": "fictional only",
+        "model": "AgentRouter-Pi2/gpt-6.1-sol",
+        "results": [
+          {
+            "case": "organize",
+            "sourceCharacters": 128,
+            "result": {
+              "text": "## 明确决定\n- 10月29日讨论：取消原定11月2日周一验收的方案，改为10月30日周五15点验收。\n\n## 行动项\n- 李敏负责整理接口清单，10月29日18点前交付。\n\n## 已完成事项\n- 测试报告已提交完成。\n\n## 建议与待确认\n- 赵青建议追加采购，尚未确认为行动。\n- 备选报价18000元，预算尚未批准。"
+            },
+            "seconds": 24.5
+          },
+          {
+            "case": "polish",
+            "sourceCharacters": 128,
+            "result": {
+              "text": "## 10月29日讨论\n\n- 原定于11月2日（周一）验收的方案已取消，改为10月30日（周五）15点验收。\n- 李敏明确负责整理接口清单，需在10月29日18点前交付。\n- 测试报告已完成提交。\n- 追加采购仅为赵青的建议，并非已确认的行动；备选报价为18000元，预算尚未批准。\n- 负责人身份不作其他推断。"
+            },
+            "seconds": 30.53
+          },
+          {
+            "case": "long_polish",
+            "sourceCharacters": 2926,
+            "error": "模型输出达到长度上限，未采用不完整结果；请缩小内容范围或提高输出预算。",
+            "code": "output_limit",
+            "seconds": 84.6
+          }
+        ]
+      }
+    },
+    {
+      "stage": "temporary_reasoning_metadata",
+      "record": {
+        "data": "fictional only",
+        "model": "AgentRouter-Pi2/gpt-6.1-sol",
+        "configurationChanged": false,
+        "results": [
+          {
+            "case": "knowledge_with_reasoning",
+            "temporaryReasoningMetadata": true,
+            "result": {
+              "paragraphs": [
+                {
+                  "text": "所提供资料中的最终验收安排为2026年10月30日（周五）15:00，原11月2日的安排已取消。旧纪要仍记载11月2日验收，与定稿发言冲突，应以定稿发言为准。",
+                  "citations": [
+                    {
+                      "source": "S2",
+                      "quote": "定稿发言 · 00:50 · 未区分\n2026-10-29：11月2日周一验收的安排取消，改为10月30日周五15点验收。"
+                    },
+                    {
+                      "source": "S1",
+                      "quote": "旧纪要：11月2日验收，预算已经批准。"
+                    }
+                  ]
+                },
+                {
+                  "text": "验收任务尚未完成，依据是任务元数据中的“未完成”状态，不能将会议中的验收安排视为已完成。",
+                  "citations": [
+                    {
+                      "source": "S3",
+                      "quote": "任务：海鸥验收\n清单：海鸥项目\n状态：未完成"
+                    }
+                  ]
+                },
+                {
+                  "text": "预算尚未批准，18000元只是备选报价。旧纪要称预算已经批准，与定稿发言冲突，应以定稿发言为准。",
+                  "citations": [
+                    {
+                      "source": "S2",
+                      "quote": "18000元只是备选报价，预算尚未批准。"
+                    },
+                    {
+                      "source": "S1",
+                      "quote": "旧纪要：11月2日验收，预算已经批准。"
+                    }
+                  ]
+                }
+              ],
+              "insufficient": false,
+              "sourceIDs": [
+                "S1",
+                "S2",
+                "S3",
+                "S4"
+              ]
+            },
+            "seconds": 57.58
+          },
+          {
+            "case": "long_with_reasoning",
+            "temporaryReasoningMetadata": true,
+            "error": "模型输出达到长度上限，未采用不完整结果；请缩小内容范围或提高输出预算。",
+            "code": "output_limit",
+            "seconds": 41.48
+          }
+        ]
+      }
+    },
+    {
+      "stage": "final_native_pipeline",
+      "record": {
+        "data": "fictional only",
+        "model": "AgentRouter-Pi2/gpt-6.1-sol",
+        "results": [
+          {
+            "case": "retrieved_knowledge",
+            "question": "海鸥项目最终何时验收，验收任务是否已经完成？预算是否获批？",
+            "result": {
+              "insufficient": false,
+              "paragraphs": [
+                {
+                  "citations": [
+                    {
+                      "quote": "定稿发言 · 00:50 · 未区分\n2026-10-29：11月2日周一验收的安排取消，改为10月30日周五15点验收。18000元只是备选报价，预算尚未批准。",
+                      "source": "S2"
+                    },
+                    {
+                      "quote": "旧纪要：11月2日验收，预算已经批准。",
+                      "source": "S1"
+                    }
+                  ],
+                  "text": "按2026年10月29日的定稿发言，验收安排改为2026年10月30日15:00，原11月2日安排取消。预算尚未批准，18000元只是备选报价。旧纪要称“11月2日验收，预算已经批准”，与定稿发言冲突，应以定稿发言为准。"
+                },
+                {
+                  "citations": [
+                    {
+                      "quote": "任务：海鸥验收\n清单：海鸥项目\n状态：未完成\n重要性：高优先级\n安排日期：未设置\n截止日期：未设置\n完成时间：未设置",
+                      "source": "S3"
+                    }
+                  ],
+                  "text": "验收任务尚未完成，完成时间未设置。因此，上述日期是验收安排，不能视为已经实际完成验收。"
+                }
+              ]
+            },
+            "seconds": 42.122212052345276,
+            "sources": [
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n以下为会议纪要（整理参考）：\n旧纪要：11月2日验收，预算已经批准。",
+                "id": "S1",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n定稿发言 · 00:50 · 未区分\n2026-10-29：11月2日周一验收的安排取消，改为10月30日周五15点验收。18000元只是备选报价，预算尚未批准。",
+                "id": "S2",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "任务：海鸥验收\n清单：海鸥项目\n状态：未完成\n重要性：高优先级\n安排日期：未设置\n截止日期：未设置\n完成时间：未设置\n验收负责人未指定。",
+                "id": "S3",
+                "title": "海鸥验收"
+              },
+              {
+                "content": "笔记：海鸥旧计划\n文件夹：工作\n编辑时间：2026-10-23 12:00\n2026-10-23：海鸥项目原计划在11月2日周一验收。",
+                "id": "S4",
+                "title": "海鸥旧计划"
+              }
+            ]
+          },
+          {
+            "case": "missing_fact",
+            "error": "模型服务触发速率限制，请在 30 秒后重试或更换模型。",
+            "question": "海鸥验收项目的合同编号是多少？",
+            "seconds": 31.775766015052795,
+            "sources": [
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n以下为会议纪要（整理参考）：\n旧纪要：11月2日验收，预算已经批准。",
+                "id": "S1",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "会议：海鸥验收会议\n会议时间：2026-10-29 12:00\n定稿发言 · 00:50 · 未区分\n2026-10-29：11月2日周一验收的安排取消，改为10月30日周五15点验收。18000元只是备选报价，预算尚未批准。",
+                "id": "S2",
+                "title": "海鸥验收会议"
+              },
+              {
+                "content": "任务：海鸥验收\n清单：海鸥项目\n状态：未完成\n重要性：高优先级\n安排日期：未设置\n截止日期：未设置\n完成时间：未设置\n验收负责人未指定。",
+                "id": "S3",
+                "title": "海鸥验收"
+              },
+              {
+                "content": "笔记：海鸥旧计划\n文件夹：工作\n编辑时间：2026-10-23 12:00\n2026-10-23：海鸥项目原计划在11月2日周一验收。",
+                "id": "S4",
+                "title": "海鸥旧计划"
+              }
+            ]
+          },
+          {
+            "case": "organize",
+            "error": "模型服务触发速率限制，请在 29 秒后重试或更换模型。",
+            "seconds": 0.015267014503479004
+          },
+          {
+            "case": "polish",
+            "error": "模型服务触发速率限制，请在 29 秒后重试或更换模型。",
+            "seconds": 0.001989006996154785
+          },
+          {
+            "case": "long_polish",
+            "error": "模型服务触发速率限制，请在 29 秒后重试或更换模型。",
+            "seconds": 0.000970005989074707
+          }
+        ]
+      }
+    },
+    {
+      "stage": "final_long_after_cooldown",
+      "record": {
+        "data": "fictional only",
+        "model": "AgentRouter-Pi2/gpt-6.1-sol",
+        "configurationChanged": false,
+        "sourceCharacters": 2926,
+        "results": [
+          {
+            "case": "long_polish",
+            "attempt": 1,
+            "trigger": "initial",
+            "error": "模型服务触发速率限制，请在 30 秒后重试或更换模型。",
+            "code": "rate_limited",
+            "retryAfter": 30.0,
+            "seconds": 48.52
+          },
+          {
+            "case": "long_polish",
+            "attempt": 2,
+            "trigger": "simulated_manual_retry",
+            "error": "模型服务触发速率限制，请在 30 秒后重试或更换模型。",
+            "code": "rate_limited",
+            "retryAfter": 30.0,
+            "seconds": 1.88
+          }
+        ]
+      }
+    },
+    {
+      "stage": "existing_deepseek_comparison",
+      "record": {
+        "data": "fictional only",
+        "configurationChanged": false,
+        "results": [
+          {
+            "case": "long_polish",
+            "model": "AgentRouter-Pi/deepseek-v4-flash",
+            "sourceCharacters": 2926,
+            "error": "模型服务调用失败，原有内容保留，请稍后重试或检查模型设置。",
+            "code": "engine_failed",
+            "seconds": 3.28
+          }
+        ]
+      }
+    }
+  ],
+  "verification": {
+    "backendPassed": 68,
+    "nativePassed": 89,
+    "nativeSkipped": 6,
+    "packageSmokePassed": true,
+    "build": "0.2.0 (64)",
+    "installed": false
+  }
+}

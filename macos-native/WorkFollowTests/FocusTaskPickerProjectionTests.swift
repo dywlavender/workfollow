@@ -19,13 +19,14 @@ final class FocusTaskPickerProjectionTests: XCTestCase {
                                            hour: hour, minute: minute))!
     }
 
-    private func makeTask(_ title: String, dueAt: Date? = nil, deadlineAt: Date? = nil,
+    private func makeTask(_ title: String, dueAt: Date? = nil, dueEndAt: Date? = nil,
+                          deadlineAt: Date? = nil,
                           list: String = TaskList.inbox.name, status: TaskStatus = .active,
                           parentID: UUID? = nil, document: String = "") -> Task {
         let stamp = Date(timeIntervalSince1970: 0)
         return Task(id: UUID(), title: title, document: NativeDocument(plainText: document),
                     list: TaskList(name: list), priority: .none,
-                    schedule: TaskSchedule(dueAt: dueAt, deadlineAt: deadlineAt),
+                    schedule: TaskSchedule(dueAt: dueAt, dueEndAt: dueEndAt, deadlineAt: deadlineAt),
                     status: status, parentID: parentID, childOrder: 0,
                     createdAt: stamp, updatedAt: stamp)
     }
@@ -36,14 +37,17 @@ final class FocusTaskPickerProjectionTests: XCTestCase {
         let deadlineOnlyOverdue = makeTask("只有截止日期", deadlineAt: date(2026, 9, 25))
         let futureDeadlineOnly = makeTask("未来截止日期", deadlineAt: date(2026, 9, 27))
         let futureDue = makeTask("明天安排", dueAt: date(2026, 9, 27))
-        let tasks = [overdue, today, deadlineOnlyOverdue, futureDeadlineOnly, futureDue]
+        let ongoing = makeTask("进行中", dueAt: date(2026, 9, 20), dueEndAt: date(2026, 9, 30))
+        let tasks = [overdue, today, deadlineOnlyOverdue, futureDeadlineOnly, futureDue, ongoing]
 
         let groups = FocusTaskPickerProjection.groups(tasks: tasks, scope: .today,
                                                       query: "", now: now, calendar: calendar)
 
         XCTAssertEqual(groups.map(\.title), ["已过期", "今天"])
         XCTAssertEqual(groups[0].tasks.map(\.id), [overdue.id])
-        XCTAssertEqual(Set(groups[1].tasks.map(\.id)), Set([today.id, deadlineOnlyOverdue.id]))
+        XCTAssertEqual(Set(groups[1].tasks.map(\.id)),
+                       Set([today.id, deadlineOnlyOverdue.id, ongoing.id]),
+                       "时间段结束日未到 → 归今天，不算已过期")
         XCTAssertFalse(groups.flatMap(\.tasks).contains { $0.id == futureDeadlineOnly.id })
         XCTAssertFalse(groups.flatMap(\.tasks).contains { $0.id == futureDue.id })
     }
@@ -92,15 +96,18 @@ final class FocusTaskPickerProjectionTests: XCTestCase {
         let today = makeTask("今天", dueAt: date(2026, 9, 26))
         let withinRange = makeTask("范围内", dueAt: date(2026, 10, 2))
         let outsideRange = makeTask("第七天", dueAt: date(2026, 10, 3))
+        let ongoing = makeTask("进行中", dueAt: date(2026, 9, 20), dueEndAt: date(2026, 10, 1))
 
         let groups = FocusTaskPickerProjection.groups(
-            tasks: [overdue, today, withinRange, outsideRange], scope: .nextSevenDays,
+            tasks: [overdue, today, withinRange, outsideRange, ongoing], scope: .nextSevenDays,
             query: "", now: now, calendar: calendar
         )
 
         XCTAssertEqual(groups.first?.title, "已过期")
         XCTAssertEqual(groups.first?.tasks.map(\.id), [overdue.id])
-        XCTAssertEqual(groups.dropFirst().flatMap(\.tasks).map(\.id), [today.id, withinRange.id])
+        XCTAssertEqual(groups.dropFirst().flatMap(\.tasks).map(\.id), [today.id, ongoing.id, withinRange.id],
+                       "开始日已过但区间未结束 → 归今天")
+        XCTAssertFalse(groups.first?.tasks.contains { $0.id == ongoing.id } == true)
         XCTAssertFalse(groups.flatMap(\.tasks).contains { $0.id == outsideRange.id })
     }
 

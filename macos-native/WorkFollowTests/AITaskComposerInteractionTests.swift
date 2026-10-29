@@ -22,13 +22,21 @@ final class AITaskComposerInteractionTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: root) }
         try NativePreviewRepository(directory: root).save(NativeWorkspaceSnapshot(tasks: [], notes: []))
         let script = root.appendingPathComponent("fixture-pi")
-        try """
-        #!/bin/sh
-        cat <<'RESULT'
-        {"tasks":[{"title":"核对成本","quote":"核对成本。","due":"2026-10-30"},{"title":"发送报价","quote":"发送报价。"}]}
-        RESULT
-
-        """.write(to: script, atomically: true, encoding: .utf8)
+        try #"""
+        #!/usr/bin/python3
+        import json, sys, pathlib, time
+        root = pathlib.Path(__file__).parent
+        for line in sys.stdin:
+            request = json.loads(line)
+            if request.get('type') != 'prompt': continue
+            if (root / 'hold').exists():
+                print(json.dumps({'type':'message_start','message':{'role':'assistant'}}),flush=True)
+                print(json.dumps({'type':'message_update','assistantMessageEvent':{'type':'text_delta','delta':'{"tasks":[{"title":"核对成本"'}}),flush=True)
+                while not (root / 'release').exists(): time.sleep(0.02)
+            text = '{"tasks":[{"title":"核对成本","quote":"核对成本。","due":"2026-10-30"},{"title":"发送报价","quote":"发送报价。"}]}'
+            print(json.dumps({'type':'message_end','message':{'role':'assistant','stopReason':'stop','content':[{'type':'text','text':text}]}}),flush=True)
+            print('{"type":"agent_settled"}',flush=True)
+        """#.write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         let environment = AppEnvironment(directory: root)
         environment.meetingStore.configuration.executable = script.path
@@ -121,5 +129,34 @@ final class AITaskComposerInteractionTests: XCTestCase {
         XCTAssertFalse(menu.isVisible, "入口菜单关闭后显示一个预览面板")
         try InspectorPanelTestSupport.sendEscape(to: sheet)
         XCTAssertEqual(environment.taskWorkspace.selectedTaskID, parentID)
+    }
+
+    func testStreamIsVisibleBeforeCompletionAndEscapeDoesNotCreateTasks() async throws {
+        let environment = try environment()
+        let root = URL(fileURLWithPath: environment.meetingStore.configuration.executable).deletingLastPathComponent()
+        try "hold".write(to: root.appendingPathComponent("hold"), atomically: true, encoding: .utf8)
+        let id = environment.notesWorkspace.create()
+        environment.notesWorkspace.edit(id) { $0.title = "虚构笔记"; $0.document = NativeDocument(plainText: "核对成本。") }
+        let note = try XCTUnwrap(environment.notesWorkspace.selected)
+        let session = AITaskDraftSession()
+        let host = NSHostingView(rootView: SheetHost(request: try environment.aiTaskRequest(for: note), session: session).environmentObject(environment))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+        for _ in 0..<250 {
+            if session.preview == "核对成本", window.attachedSheet != nil { break }
+            try await _Concurrency.Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(session.preview, "核对成本")
+        XCTAssertTrue(session.drafts.isEmpty)
+        XCTAssertTrue(environment.taskWorkspace.allTasks.filter { !$0.isNoteTask }.isEmpty)
+        let sheet = try XCTUnwrap(window.attachedSheet)
+        try screenshot(sheet, name: "streaming")
+        try InspectorPanelTestSupport.sendEscape(to: sheet)
+        for _ in 0..<100 {
+            if window.attachedSheet == nil { break }
+            try await _Concurrency.Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNil(window.attachedSheet)
+        XCTAssertTrue(environment.taskWorkspace.allTasks.filter { !$0.isNoteTask }.isEmpty)
     }
 }

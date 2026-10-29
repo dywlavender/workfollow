@@ -12,6 +12,8 @@ final class WorkspaceSearchSession: ObservableObject {
     @Published var status = Status.all
     @Published var list: String?
     @Published var selectedIndex = 0
+    @Published var askingAI = false
+    let knowledge = KnowledgeAnswerSession()
     @Published private var recent: [Recent] = []
     private let defaults: UserDefaults
     private static let key = "recentWorkspaceResources.v1"
