@@ -32,6 +32,7 @@ struct SettingsShellView: View {
         .frame(width: 560, height: 520)
         .background(WFColors.content)
         .navigationTitle("设置")
+        .hidesSystemFocusEffect()
     }
 }
 

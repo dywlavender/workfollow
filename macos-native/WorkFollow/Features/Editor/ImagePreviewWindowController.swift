@@ -43,8 +43,10 @@ final class ImagePreviewWindowController: NSWindowController, NSWindowDelegate {
 
         let saveButton = NSButton(title: "存储副本…", target: self, action: #selector(saveCopy))
         saveButton.bezelStyle = .rounded
+        saveButton.focusRingType = .none
         let closeButton = NSButton(title: "关闭", target: self, action: #selector(closeWindow))
         closeButton.bezelStyle = .rounded
+        closeButton.focusRingType = .none
         closeButton.keyEquivalent = "\u{1b}"
 
         let info = NSStackView(views: [nameLabel, sizeLabel])

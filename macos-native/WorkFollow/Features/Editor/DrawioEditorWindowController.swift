@@ -61,6 +61,9 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
         saveButton.target = self; saveButton.action = #selector(saveDrawing)
         cancelButton.target = self; cancelButton.action = #selector(cancelDrawing)
         saveButton.bezelStyle = .rounded; cancelButton.bezelStyle = .rounded
+        for button in [importButton, exportButton, saveButton, cancelButton] {
+            button.focusRingType = .none
+        }
         saveButton.keyEquivalent = "s"
         saveButton.keyEquivalentModifierMask = .command
         cancelButton.keyEquivalent = "\u{1b}"

@@ -78,6 +78,7 @@ private struct FocusWindowRoot: View {
     var body: some View {
         FocusCompactPresentation(store: store, immersive: immersive)
             .preferredColorScheme(appearance.selection.colorScheme)
+            .hidesSystemFocusEffect()
     }
 }
 

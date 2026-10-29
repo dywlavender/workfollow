@@ -216,6 +216,7 @@ private struct ChecklistItemReminderCard: View {
             DispatchQueue.main.async { onResize() }
         }
         .onExitCommand(perform: onClose)
+        .hidesSystemFocusEffect()
     }
 
     // MARK: 预设页

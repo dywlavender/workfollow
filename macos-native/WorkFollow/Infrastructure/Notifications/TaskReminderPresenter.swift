@@ -71,5 +71,6 @@ private struct TaskReminderPanel: View {
                 Button("停止", action: onStop).keyboardShortcut(.cancelAction)
             }
         }.padding(20).frame(width: 350, height: 160, alignment: .topLeading)
+            .hidesSystemFocusEffect()
     }
 }

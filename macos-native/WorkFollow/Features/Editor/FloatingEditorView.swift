@@ -100,6 +100,7 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
         }
         .ignoresSafeArea(.container, edges: .top)
         .background(WFColors.content)
+        .hidesSystemFocusEffect()
         .task {
             for _ in 0..<10 {
                 if editorHandle.textView?.window != nil {

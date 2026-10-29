@@ -217,7 +217,7 @@ struct NativeTaskOutline: NSViewRepresentable {
 #endif
             itemID = item.id
             // A reused cell resets SwiftUI state only when it hosts another row.
-            host.rootView = AnyView(item.row.makeContent().id(item.id))
+            host.rootView = AnyView(item.row.makeContent().hidesSystemFocusEffect().id(item.id))
         }
     }
 

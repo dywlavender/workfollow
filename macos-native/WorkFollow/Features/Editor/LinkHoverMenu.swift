@@ -115,6 +115,7 @@ private struct LinkHoverMenuView: View {
         .background(WFColors.overlay)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder))
+        .hidesSystemFocusEffect()
     }
 
     private func button(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {

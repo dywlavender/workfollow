@@ -215,6 +215,7 @@ struct SlashCommandList: View {
                     .stroke(WFColors.border, lineWidth: 1)
             }
         }
+        .hidesSystemFocusEffect()
     }
 
     /// 分组细线：全宽 1pt `menuDivider`，上下各 4（原版 `_divider`）。

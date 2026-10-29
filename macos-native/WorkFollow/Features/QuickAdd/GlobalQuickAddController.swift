@@ -404,6 +404,7 @@ private struct GlobalQuickAddPanelView: View {
         .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
             tagsOverride = QuickAddPropertiesOverrides.renamedTags(tagsOverride, notification: notification)
         }
+        .hidesSystemFocusEffect()
         // 面板一弹出就把焦点交给输入框。以前这行是无效写（`@FocusState` 死信号），
         // 面板弹出来焦点还停在宿主视图上，打字没反应。
         .onAppear { DispatchQueue.main.async { inputFocused = true } }

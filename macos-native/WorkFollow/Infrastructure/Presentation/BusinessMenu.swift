@@ -87,6 +87,7 @@ struct BusinessMenu<Label: View, Content: View>: View {
                     if showing.wrappedValue { prepareOpening() }
                 } label: { label.contentShape(Rectangle()) }
                     .buttonStyle(.plain)
+                    .hidesSystemFocusEffect()
             }
         }
         .background(PopupPresentingWindowReader(owner: presenter))

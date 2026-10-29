@@ -101,6 +101,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
                 .background(PopupEscapeRouter(depth: escapeDepth) { [weak self] in self?.dismiss() })
                 .environment(\.popupPresentingWindow, presentingWindow)
+                .hidesSystemFocusEffect()
             if host == nil {
                 let contentHost = ContentHost(rootView: AnyView(card))
                 contentHost.sizeInvalidated = { [weak self] in self?.queueContentResize() }

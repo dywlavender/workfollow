@@ -54,7 +54,7 @@ final class TaskKanbanColumnDropView: NSView {
     private let hostingView: NSHostingView<AnyView>
     var rootView: AnyView {
         get { hostingView.rootView }
-        set { hostingView.rootView = newValue }
+        set { hostingView.rootView = AnyView(newValue.hidesSystemFocusEffect()) }
     }
     override var isFlipped: Bool { true }
     var workspace: TaskWorkspaceModel?
@@ -69,7 +69,7 @@ final class TaskKanbanColumnDropView: NSView {
     private var insertionMarker: TaskKanbanInsertionMarker?
 
     init(rootView: AnyView) {
-        hostingView = NSHostingView(rootView: rootView)
+        hostingView = NSHostingView(rootView: AnyView(rootView.hidesSystemFocusEffect()))
         super.init(frame: .zero)
         hostingView.sizingOptions = []
         hostingView.safeAreaRegions = []

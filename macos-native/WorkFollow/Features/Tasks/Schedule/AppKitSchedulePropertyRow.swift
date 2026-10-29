@@ -169,10 +169,11 @@ final class PropertyRowCanvas: NSView {
             editorHost = nil
             return
         }
+        let content = AnyView(editor.hidesSystemFocusEffect())
         if let host = editorHost {
-            host.rootView = editor
+            host.rootView = content
         } else {
-            let host = NSHostingView(rootView: editor)
+            let host = NSHostingView(rootView: content)
             host.frame = valueRect
             addSubview(host)
             editorHost = host

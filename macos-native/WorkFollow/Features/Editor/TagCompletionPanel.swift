@@ -222,5 +222,6 @@ private struct TagCandidateList: View {
         .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .transaction { $0.animation = nil }
+        .hidesSystemFocusEffect()
     }
 }

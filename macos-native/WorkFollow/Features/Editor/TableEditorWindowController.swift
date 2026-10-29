@@ -37,6 +37,7 @@ final class TableEditorWindowController: NSWindowController, NSWindowDelegate {
         let removeColumn = NSButton(title: "删除列", target: self, action: #selector(removeColumn))
         for button in [addRow, removeRow, addColumn, removeColumn] {
             button.bezelStyle = .rounded
+            button.focusRingType = .none
         }
         let toolSpacer = NSView()
         toolSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -57,10 +58,12 @@ final class TableEditorWindowController: NSWindowController, NSWindowDelegate {
         saveButton.target = self
         saveButton.action = #selector(saveTable)
         saveButton.bezelStyle = .rounded
+        saveButton.focusRingType = .none
         saveButton.keyEquivalent = "\r"
         cancelButton.target = self
         cancelButton.action = #selector(cancel)
         cancelButton.bezelStyle = .rounded
+        cancelButton.focusRingType = .none
         cancelButton.keyEquivalent = "\u{1b}"
         let buttonSpacer = NSView()
         buttonSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)

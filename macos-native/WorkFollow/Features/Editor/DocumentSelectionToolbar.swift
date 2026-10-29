@@ -93,6 +93,7 @@ struct DocumentSelectionToolbarView: View {
         .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .coordinateSpace(name: Self.coordinateSpace)
+        .hidesSystemFocusEffect()
     }
 
     /// 浮条本身是**非激活子窗口**：提示必须 `activeAlways`，否则悬停事件不送达。

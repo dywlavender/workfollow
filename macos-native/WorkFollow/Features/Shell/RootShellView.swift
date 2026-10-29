@@ -48,6 +48,7 @@ struct RootShellView: View {
             .environment(\.mainWindowRailInset, railInset)
             .environment(\.colorScheme, colorScheme)
             .disabled(environment.storageNeedsReload)
+            .hidesSystemFocusEffect()
         #if DEBUG
         return AnyView(content.environment(\.popupContentObservation, popupObservation).environment(\.workflowActionObservation, workflowObservation).tint(WFColors.accent))
         #else
@@ -125,6 +126,7 @@ struct RootShellView: View {
                 }
             }
         }
+        .hidesSystemFocusEffect()
     }
 }
 

@@ -41,10 +41,12 @@ final class FormulaEditorWindowController: NSWindowController, NSWindowDelegate 
         saveButton.target = self
         saveButton.action = #selector(saveFormula)
         saveButton.bezelStyle = .rounded
+        saveButton.focusRingType = .none
         saveButton.title = formula == nil ? "插入公式" : "保存公式"
         cancelButton.target = self
         cancelButton.action = #selector(cancel)
         cancelButton.bezelStyle = .rounded
+        cancelButton.focusRingType = .none
         cancelButton.keyEquivalent = "\u{1b}"
         saveButton.keyEquivalent = "\r"
 
