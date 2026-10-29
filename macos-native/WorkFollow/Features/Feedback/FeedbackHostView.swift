@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 结果 HUD 的唯一绘制处，由 RootShellView 在底部居中挂载一次。
+/// 结果 HUD 的唯一绘制处，由 RootShellView 作为底部悬浮层挂载一次。
 /// 当前条目、停留时长与竞争仲裁都在 FeedbackCenter；这里只负责外观与过渡。
 struct FeedbackHostView: View {
     @ObservedObject var center: FeedbackCenter
@@ -10,15 +10,40 @@ struct FeedbackHostView: View {
             if let presentation = center.presentation {
                 FeedbackToastView(event: presentation.event, onAction: { center.undo() }, onDestination: { center.openDestination() })
                     .id(presentation.id)
+                    .feedbackHUDRenderProbe()
                     // 打勾的安静动效：短淡入 + 自底部轻移，无弹簧。
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                     .padding(.bottom, WFSpace.lg)
             }
         }
-        .frame(maxWidth: .infinity)
+        // 只占胶囊大小：透明的横向空间不能拦截底栏按钮的点击。
         .animation(.easeOut(duration: 0.16), value: center.presentation?.id)
     }
 }
+
+#if DEBUG
+/// 渲染回归用：HUD 胶囊在宿主坐标空间里的 frame；发布构建不包含。
+struct FeedbackHUDRenderFrames: PreferenceKey {
+    static let coordinateSpace = "feedback-hud-layout"
+    static var defaultValue: [CGRect] = []
+    static func reduce(value: inout [CGRect], nextValue: () -> [CGRect]) { value += nextValue() }
+}
+
+private extension View {
+    func feedbackHUDRenderProbe() -> some View {
+        background {
+            GeometryReader { geometry in
+                Color.clear.preference(key: FeedbackHUDRenderFrames.self,
+                                       value: [geometry.frame(in: .named(FeedbackHUDRenderFrames.coordinateSpace))])
+            }
+        }
+    }
+}
+#else
+private extension View {
+    func feedbackHUDRenderProbe() -> some View { self }
+}
+#endif
 
 /// 深色胶囊卡片：`任务已完成    ↶`。
 /// 不持有计时器也不持有状态——何时出现、何时离开由宿主决定。

@@ -105,11 +105,13 @@ struct RootShellView: View {
                 },
                 onSkip: { environment.welcomeGuideWelcomePresented = false })
         }
+        // HUD 浮在最外层：作为 overlay 不参与布局，出现/消失时中栏与检查器
+        // 的高度不回流；底部状态条仍用 safeAreaInset 占位，避免提示盖住重试入口。
+        .overlay(alignment: .bottom) {
+            FeedbackHostView(center: environment.feedback)
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
-                // HUD 放在安全区内：有提示时把页面顶上去，不浮在底栏按钮上抢点击
-                // （任务完成后的撤销提示等）。交互本身由 FeedbackCenter 的优先级保证。
-                FeedbackHostView(center: environment.feedback)
                 if let error = environment.storageError {
                     // 保存失败不是"看一眼就好"：重试成功后提示自己消失。
                     HStack(spacing: 8) {
