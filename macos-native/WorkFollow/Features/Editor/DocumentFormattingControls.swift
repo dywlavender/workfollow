@@ -51,11 +51,22 @@ struct DocumentFormattingToolbarRow: View {
 struct DocumentEditorPlaceholder: View {
     let title: String
 
-    static func isVisible(for document: NativeDocument) -> Bool {
+    /// 模型为空、且编辑区里也确实没有字。只盯模型不够：输入法的组合串
+    /// 还没提交，模型仍是空的，占位文案不能压在拼音下面等上屏。
+    static func isVisible(for document: NativeDocument, handle: DocumentEditorHandle? = nil) -> Bool {
         document.isEmpty && document.blocks.count == 1 && document.blocks[0].kind == .paragraph
+            && (handle?.liveTextIsEmpty ?? true)
     }
 
     var body: some View {
+        #if DEBUG
+        label.preference(key: DocumentEditorPlaceholderTitles.self, value: [title])
+        #else
+        label
+        #endif
+    }
+
+    private var label: some View {
         Text(title)
             .font(.system(size: DocumentEditorPresentationMetrics.bodyFontSize))
             .foregroundStyle(WFColors.tertiaryText)
@@ -64,6 +75,14 @@ struct DocumentEditorPlaceholder: View {
             .allowsHitTesting(false)
     }
 }
+
+#if DEBUG
+/// 渲染回归用：当前画出来的占位文案；发布构建不包含。
+struct DocumentEditorPlaceholderTitles: PreferenceKey {
+    static var defaultValue: [String] = []
+    static func reduce(value: inout [String], nextValue: () -> [String]) { value += nextValue() }
+}
+#endif
 
 /// 只登记箭头光标矩形、不参与命中的透明层。
 private struct ArrowCursorArea: NSViewRepresentable {

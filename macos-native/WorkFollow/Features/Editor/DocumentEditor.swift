@@ -45,8 +45,13 @@ final class DocumentEditorHandle: ObservableObject {
     @Published private(set) var canRedo = false
     /// 格式刷取格式后为 true，等待下一次选区落定。
     @Published private(set) var formatPainterActive = false
+    /// 编辑区当前是否为空（输入法的组合串也算已输入）。占位文案据此在
+    /// 组合阶段就让位——模型要等上屏才会提交，只看文档会一直盖在拼音下面。
+    @Published private(set) var liveTextIsEmpty = true
     private var viewUpdateDepth = 0
     private var styleRefreshScheduled = false
+    private var liveTextSyncScheduled = false
+    private var pendingLiveTextIsEmpty: Bool?
     private var painterStyle: DocumentSelectionStyle?
     private var painterSourceSelection: NSRange?
     private var painterWorkItem: DispatchWorkItem?
@@ -57,6 +62,22 @@ final class DocumentEditorHandle: ObservableObject {
     // Publish the final toolbar style after that update, not its transient styles.
     func beginViewUpdate() { viewUpdateDepth += 1 }
     func endViewUpdate() { viewUpdateDepth -= 1 }
+
+    /// 同步"编辑区里有没有字"。文本回调可能发生在 SwiftUI 更新途中，
+    /// 一律排到本轮结束再发布，避免"Publishing changes from within view updates"。
+    func syncLiveTextIsEmpty(_ isEmpty: Bool) {
+        guard liveTextIsEmpty != isEmpty || pendingLiveTextIsEmpty != nil else { return }
+        pendingLiveTextIsEmpty = isEmpty
+        guard !liveTextSyncScheduled else { return }
+        liveTextSyncScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.liveTextSyncScheduled = false
+            guard let next = self.pendingLiveTextIsEmpty else { return }
+            self.pendingLiveTextIsEmpty = nil
+            if self.liveTextIsEmpty != next { self.liveTextIsEmpty = next }
+        }
+    }
 
     func prepareForDocumentChange() {
         cancelFormatPainter()
@@ -405,10 +426,12 @@ private struct DocumentEditorContent: NSViewRepresentable {
     var readOnly = false
 
     func makeCoordinator() -> DocumentEditorCoordinator {
-        DocumentEditorCoordinator(documentID: documentID, document: document,
-                                  onDocumentChange: onDocumentChange,
-                                  onEscape: onEscape,
-                                  onEditingChanged: onEditingChanged)
+        let coordinator = DocumentEditorCoordinator(documentID: documentID, document: document,
+                                                    onDocumentChange: onDocumentChange,
+                                                    onEscape: onEscape,
+                                                    onEditingChanged: onEditingChanged)
+        coordinator.handle = handle
+        return coordinator
     }
 
     func makeNSView(context: Context) -> NSView {
@@ -435,6 +458,10 @@ private struct DocumentEditorContent: NSViewRepresentable {
         }
         textView.onEditingChanged = onEditingChanged
         textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
+        textView.onLiveTextChange = { [weak textView, weak coordinator = context.coordinator] in
+            guard let textView, let coordinator else { return }
+            coordinator.handle?.syncLiveTextIsEmpty(textView.string.isEmpty)
+        }
         textView.profile = profile
         textView.autoresizingMask = [.width]
         handle?.textView = textView
@@ -471,7 +498,12 @@ private struct DocumentEditorContent: NSViewRepresentable {
         textView.isEditable = !readOnly
         handle?.textView = textView
         handle?.coordinator = context.coordinator
+        context.coordinator.handle = handle
         textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
+        textView.onLiveTextChange = { [weak textView, weak coordinator = context.coordinator] in
+            guard let textView, let coordinator else { return }
+            coordinator.handle?.syncLiveTextIsEmpty(textView.string.isEmpty)
+        }
         textView.onCancelTransient = { [weak handle] in
             guard handle?.formatPainterActive == true else { return false }
             handle?.cancelFormatPainter()

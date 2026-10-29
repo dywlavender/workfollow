@@ -1001,7 +1001,7 @@ struct TaskInspectorShell: View {
                     decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane - TaskInspectorMetrics.documentLeadingPadding)
                 )
 
-                if DocumentEditorPlaceholder.isVisible(for: task.document) {
+                if DocumentEditorPlaceholder.isVisible(for: task.document, handle: editorHandle) {
                     DocumentEditorPlaceholder(title: "添加描述…")
                 }
             }

@@ -73,7 +73,7 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
                         onEditingChanged: { _ in }, profile: profile,
                         contentSized: true, handle: editorHandle)
                         .overlay(alignment: .topLeading) {
-                            if DocumentEditorPlaceholder.isVisible(for: document) {
+                            if DocumentEditorPlaceholder.isVisible(for: document, handle: editorHandle) {
                                 DocumentEditorPlaceholder(title: "随手记下…")
                             }
                         }

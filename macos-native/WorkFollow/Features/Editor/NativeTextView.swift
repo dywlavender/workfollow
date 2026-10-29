@@ -21,6 +21,9 @@ final class NativeTextView: NSTextView {
     var onEditingChanged: ((Bool) -> Void)?
     /// 选区或输入属性变了：工具条靠它刷新激活态（对齐原版 `_active` 的那条路）。
     var onSelectionChanged: (() -> Void)?
+    /// 编辑区即时内容变了——输入法的组合串也算。`setMarkedText` 不走
+    /// `NSTextViewDelegate.textDidChange`，占位文案只能靠这条通知即时让位。
+    var onLiveTextChange: (() -> Void)?
     var profile = DocumentProfile()
     var slashSession: SlashSession?
     var slashPanel: NSPanel?
@@ -136,6 +139,16 @@ final class NativeTextView: NSTextView {
         return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
     }
 
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        onLiveTextChange?()
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        onLiveTextChange?()
+    }
+
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
         let wasComposing = hasMarkedText()
         if !wasComposing,
@@ -199,6 +212,7 @@ final class NativeTextView: NSTextView {
         // （标题行回车后新行延续级别靠这一步）。
         syncPendingTrailingBlock()
         super.didChangeText()
+        onLiveTextChange?()
         refreshSlash()
         refreshTagCompletion()
         hideLinkHoverMenu()

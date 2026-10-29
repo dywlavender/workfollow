@@ -302,7 +302,7 @@ struct NotesWorkspaceView: View {
                                            noteID: note.id, tasks: tasks, notes: notes)),
                                        contentSized: true, handle: editorHandle)
                             .overlay(alignment: .topLeading) {
-                                if DocumentEditorPlaceholder.isVisible(for: note.document) {
+                                if DocumentEditorPlaceholder.isVisible(for: note.document, handle: editorHandle) {
                                     DocumentEditorPlaceholder(title: "写下你的想法、会议记录或下一步行动…")
                                 }
                             }

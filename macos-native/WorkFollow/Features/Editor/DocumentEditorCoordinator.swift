@@ -15,6 +15,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private var committedTrailingListStart: Int?
     private var committedTrailingAlign: DocumentAlignment?
     private(set) var decodeCount = 0
+    /// 宿主工具条/占位文案观察的句柄；编辑器每次文本变化都回写实时空状态。
+    weak var handle: DocumentEditorHandle?
 
     init(documentID: UUID, document: NativeDocument,
          onDocumentChange: @escaping (NativeDocument) -> Void,
@@ -149,6 +151,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     }
 
     func didLoadDocument(in textView: NativeTextView, reparseInline: Bool = false) {
+        handle?.syncLiveTextIsEmpty(textView.string.isEmpty)
         committedStorageRevision = textView.storageRevision
         committedTrailingBlock = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
         committedTrailingIndentLevel = textView.trailingIndentLevel
@@ -172,6 +175,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         textView.onCancelTransient = nil
         textView.onEditingChanged = nil
         textView.onSelectionChanged = nil
+        textView.onLiveTextChange = nil
         textView.profile = DocumentProfile()
     }
 
