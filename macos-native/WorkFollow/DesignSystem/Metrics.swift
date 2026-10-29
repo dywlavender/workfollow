@@ -87,12 +87,9 @@ enum WFMetrics {
     /// 列表列宽度：任务列表与笔记列表**共用同一个值**（笔记页原来自己硬编码 330/300，
     /// 见 `NotesWorkspaceView`）。两处各写各的，用户在中栏来回切就会看到忽宽忽窄。
     ///
-    /// `listPreferred` = 360 来自 2026-10-17 同窗口 AX 实测：滴答 `AXOutline @273,136 360×2684`
-    /// （任务行宽 360，列表列 273..633），本地同窗口为 340（276..616）→ 据此把默认值从 340 调到 360。
-    /// 早前记录的 340 来自另一状态/旧布局的 `AXOutline @273,136 340x753`，已在本次复核中更正。
-    /// 导航列两侧原用 `Divider()` 在 `HStack` 里各占 1pt，列表列因此从 276 起；改为
-    /// `ShellColumnSeparator` 覆盖绘制后列表列起于 274，与滴答 `AXScrollArea @274,137` 对齐
-    /// （滴答列表 outline 的 1pt 边框压在导航列最后一像素上）。
+    /// 2026-10-30 按用户反馈，两栏一起从 360 降到 320：笔记行只有标题 + 单行预览，
+    /// 360 用不满；任务列表保持同宽，切换时中栏不跳。360 原来自 2026-10-17 同窗口
+    /// AX 实测滴答 `AXOutline @273,136 360×2684`，这次是为可读性主动偏离，不再是实测值。
     ///
     /// `listMinimum` 必须跟着下调：默认值会被 `min(max(值, listMinimum), …)` 夹住，
     /// 若最小值还留在 380，340 会被顶回 380，改默认值等于白改。
@@ -100,7 +97,7 @@ enum WFMetrics {
     /// 连带效应：`splitMinimum` 由 `listMinimum` 派生（现为 621），`navigationBreakpoint`
     /// 随之变小，即导航栏在更窄的窗口就会显示（默认窗口 1280，两者都远在门槛之上）。
     static let listMinimum: CGFloat = 300
-    static let listPreferred: CGFloat = 360
+    static let listPreferred: CGFloat = 320
     static let listMaximum: CGFloat = 470
     static let inspectorMinimum: CGFloat = 320
     static let divider: CGFloat = 1
