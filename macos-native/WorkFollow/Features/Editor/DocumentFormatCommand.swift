@@ -148,13 +148,13 @@ extension NativeTextView {
         let text = string as NSString
         let needsLeadingBreak = range.location > 0 && text.substring(with: NSRange(location: range.location - 1, length: 1)) != "\n"
         let insertion = NSMutableAttributedString(string: needsLeadingBreak ? "\n" : "",
-            attributes: DocumentTextCodec.attributes(kind: .paragraph, marks: []))
-        insertion.append(DocumentTextCodec.render(NativeDocument(blocks: [
+            attributes: paragraphAttributes(kind: .paragraph, marks: []))
+        insertion.append(renderDocument(NativeDocument(blocks: [
             DocumentBlock(kind: .divider, runs: [DocumentRun(text: "\u{FFFC}")]),
             DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "")])
         ])))
         insertText(insertion, replacementRange: range)
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        typingAttributes = paragraphAttributes(kind: .paragraph, marks: [])
         resizeDocumentDividers()
     }
 
@@ -243,7 +243,7 @@ extension NativeTextView {
             // 当场让协调器收到变更——否则在文末空行上选完标题、不输入就切走会丢掉
             // 这一级（原版把行属性存在 Delta 里，没有这个边界）。
             replaceEmptyBlock(range: range, content: NSAttributedString(string: ""),
-                              typing: DocumentTextCodec.attributes(kind: resolved, marks: marks,
+                              typing: paragraphAttributes(kind: resolved, marks: marks,
                                   indentLevel: currentBlock?.indentLevel ?? 0,
                                   listStart: currentBlock?.listStart,
                                   align: currentBlock?.align,
@@ -296,7 +296,7 @@ extension NativeTextView {
             // NSTextView may merge attributes omitted by the replacement string
             // from typingAttributes. Rendered runs carry their own marks, so clear
             // stale typing marks while replacing the selected attributed text.
-            var cleanTypingAttributes = DocumentTextCodec.attributes(
+            var cleanTypingAttributes = paragraphAttributes(
                 kind: document.blocks.first?.kind ?? .paragraph, marks: [],
                 indentLevel: document.blocks.first?.indentLevel ?? 0,
                 listStart: document.blocks.first?.listStart,
@@ -305,7 +305,7 @@ extension NativeTextView {
             cleanTypingAttributes.removeValue(forKey: DocumentTextCodec.completedChecklistPresentationKey)
             typingAttributes = cleanTypingAttributes
         }
-        let replacement = NSMutableAttributedString(attributedString: DocumentTextCodec.render(document))
+        let replacement = NSMutableAttributedString(attributedString: renderDocument(document))
         if case .strikethrough? = command.mark, !remove, replacement.length > 0 {
             // This deletion line now represents an explicit user mark, not just
             // the checked checklist's derived presentation.
@@ -334,7 +334,7 @@ extension NativeTextView {
             let caret = min(NSMaxRange(range), (string as NSString).length)
             setSelectedRange(NSRange(location: caret, length: 0))
             syncParagraphStyleAfterEdit(at: caret)
-            typingAttributes = DocumentTextCodec.attributes(
+            typingAttributes = paragraphAttributes(
                 kind: document.blocks.first?.kind ?? .paragraph,
                 marks: document.blocks.first?.runs.first?.marks ?? [],
                 indentLevel: document.blocks.first?.indentLevel ?? 0,
@@ -377,7 +377,7 @@ extension NativeTextView {
 
         let selected = storage.attributedSubstring(from: paragraph)
         let decoded = DocumentTextCodec.decode(selected, preserving: NativeDocument(plainText: selected.string))
-        let attributes = DocumentTextCodec.attributes(kind: decoded.blocks.first?.kind ?? .paragraph,
+        let attributes = paragraphAttributes(kind: decoded.blocks.first?.kind ?? .paragraph,
                                                       marks: decoded.blocks.first?.runs.first?.marks ?? [],
                                                       indentLevel: decoded.blocks.first?.indentLevel ?? 0,
                                                       listStart: decoded.blocks.first?.listStart,

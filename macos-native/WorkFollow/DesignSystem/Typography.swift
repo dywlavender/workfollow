@@ -1,14 +1,13 @@
 import SwiftUI
 
+/// 字号/字重按滴答 macOS 8.0.80 运行时实测（2026-10-29）对齐：
+/// 页面标题 20 Medium、任务标题 14 Regular、正文预览 12 Regular、
+/// 行元信息 10、列表分组 14 Demi、侧栏分组 12 Medium、侧栏计数 10。
 enum WFType {
-    static let pageTitle = Font.system(size: 19, weight: .semibold)
-    /// 任务列表页头：滴答 `TTTaskListViewController.nib` 实测 24pt Medium。
-    /// 其它模块（笔记/日历/会议）仍用 19pt 的 `pageTitle`。
-    static let taskListPageTitle = Font.system(size: 24, weight: .medium)
+    static let pageTitle = Font.system(size: 20, weight: .medium)
+    static let taskListPageTitle = Font.system(size: 20, weight: .medium)
     static let detailTitle = Font.system(size: 18, weight: .semibold)
-    /// 任务标题输入框（任务详情）：滴答实测 19pt Medium。从滴答任务详情面板的
-    /// 富文本导出直读（`\fs38` = 19pt、HelveticaNeue-Medium，2026-10-16）。
-    /// 它与 `detailTitle` 只差 1pt 但字重不同，所以单列一个角色，不改共享令牌。
+    /// 任务详情标题输入框（滴答富文本导出 `\fs38` = 19pt Medium，2026-10-16）。
     static let taskTitle = Font.system(size: 19, weight: .medium)
     static let navigation = Font.system(size: 14)
     static let listTitle = Font.system(size: 14)
@@ -16,28 +15,35 @@ enum WFType {
     static let supporting = Font.system(size: 12)
     static let section = Font.system(size: 13, weight: .medium)
 
-    // 对齐 Flutter `WorkFollowMacTypography` 的角色。这几个值不是新刻度，而是
-    // 日历与四象限已经写在源码里的字号（12.5 的列表正文、12 的元信息、11 的
-    // 说明、13 的控件字、13 半粗的分组标题），集中在这里以免同一页出现三种
-    // 近似值。
-    /// 列表正文：12.5，不是 13——它紧挨 14 的标题，取整会掉一整级。
+    /// 看板卡标题、时间轴、日历日号等次级列表正文。
     static let listBody = Font.system(size: 12.5, weight: .medium)
-    static let completedListBody = Font.system(size: 12.5, weight: .regular)
-    /// 行元信息与日历小条标题。
+    /// 任务行正文预览：滴答 12pt Regular。
+    static let taskPreview = Font.system(size: 12)
+    static let completedTaskPreview = Font.system(size: 12)
+    /// 日历小条标题等次级列表文字。
     static let listMeta = Font.system(size: 12)
+    /// 任务行右侧元信息（清单名、日期、图标）：滴答 10pt Regular。
+    static let taskMeta = Font.system(size: 10)
     /// 说明性文字、日历条上的时刻、象限空态。
     static let caption = Font.system(size: 11)
     /// 工具条文字控件（月/周、今天）。
     static let control = Font.system(size: 13, weight: .medium)
-    /// 分组标题：与 `section` 同字号，但半粗。
-    static let sectionSemibold = Font.system(size: 13, weight: .semibold)
-    /// 子任务行标题与「添加子任务」整行：原版两处都是 `listTitle`（14）配 `medium`，
-    /// 比任务列表里的行标题（14 regular）重一档——层级靠字重，不靠颜色。
+    /// 任务列表分组标题：滴答 14pt Demi。
+    static let sectionSemibold = Font.system(size: 14, weight: .semibold)
     static let listTitleMedium = Font.system(size: 14, weight: .medium)
-    /// 命令/更多菜单的行文字（原版 `WorkFollowMacTypography.menu` = 14）。
-    /// 不设字重时 SwiftUI 会用系统默认（约 13），菜单行会比原版小一档。
     static let menu = Font.system(size: 14)
-    /// 12pt 但要用 medium 的元信息：快速输入行的日期摘要、批量操作条的计数
-    /// （原版在 `supporting` / `listMeta` 上另配 `medium`）。
     static let metaMedium = Font.system(size: 12, weight: .medium)
+
+    /// 侧栏“清单/过滤器/标签”分组：滴答 12pt Medium + 弱灰。
+    static let sidebarSection = Font.system(size: 12, weight: .medium)
+    /// 侧栏计数：滴答 10pt Regular。
+    static let sidebarBadge = Font.system(size: 10)
+    /// 列表分组计数：滴答 12pt Regular。
+    static let groupCount = Font.system(size: 12)
+    /// 空状态文案：滴答 13pt Regular。
+    static let emptyState = Font.system(size: 13)
+
+    // 专注统计（滴答实测：标签 12 Medium、数字 SF Rounded 24）。
+    static let focusStatLabel = Font.system(size: 12, weight: .medium)
+    static let focusStatValue = Font.system(size: 24, weight: .regular, design: .rounded)
 }

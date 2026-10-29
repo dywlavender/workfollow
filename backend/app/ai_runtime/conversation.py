@@ -13,7 +13,7 @@ SCENES = {
 }
 
 
-async def converse(pi, data, on_event, *, prompt=None, scene=None):
+def conversation_file(data, scene=None):
     scene = scene or data.get("scene", "chat")
     if scene not in SCENES:
         raise EngineError("不支持的对话场景。", "invalid_request")
@@ -21,9 +21,13 @@ async def converse(pi, data, on_event, *, prompt=None, scene=None):
     directory = Path(data["sessionDirectory"]).expanduser()
     if not directory.is_absolute():
         raise EngineError("对话保存目录无效。", "invalid_request")
-    folder = directory / scene
-    folder.mkdir(parents=True, exist_ok=True)
-    session_file = folder / (conversation_id + ".jsonl")
+    return directory / scene / (conversation_id + ".jsonl")
+
+
+async def converse(pi, data, on_event, *, prompt=None, scene=None):
+    scene = scene or data.get("scene", "chat")
+    session_file = conversation_file(data, scene)
+    session_file.parent.mkdir(parents=True, exist_ok=True)
     if prompt is None:
         prompt = data.get("message", "")
         if not isinstance(prompt, str) or not prompt.strip():

@@ -147,7 +147,7 @@ extension NativeTextView {
         guard !files.isEmpty else { return }
         let runs = files.flatMap { [DocumentRun(text: "\u{FFFC}", attachment: $0), DocumentRun(text: " ")] }
         let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: runs)])
-        insertText(DocumentTextCodec.render(content), replacementRange: range ?? selectedRange())
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        insertText(renderDocument(content), replacementRange: range ?? selectedRange())
+        typingAttributes = paragraphAttributes(kind: .paragraph, marks: [])
     }
 }

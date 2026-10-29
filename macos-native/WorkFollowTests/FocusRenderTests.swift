@@ -71,7 +71,7 @@ final class FocusRenderTests: XCTestCase {
             XCTAssertEqual(card.height, FocusLayoutMetrics.overviewCardHeight, accuracy: 0.5)
             XCTAssertEqual(card.minY, 61, accuracy: 0.5,
                            "Overview card top edge moved from the rendered reference")
-            XCTAssertEqual(recordsHeader.minY, 277.75, accuracy: 0.5,
+            XCTAssertEqual(recordsHeader.minY, 276.75, accuracy: 0.5,
                            "Records header moved from the rendered reference")
             if renderCase.timerState == .idleWithoutRecords {
                 let illustration = try XCTUnwrap(frames[.emptyRecordsIllustration],

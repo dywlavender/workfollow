@@ -42,9 +42,9 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             // Replacing storage emits selection callbacks synchronously; do
             // not let that transient end-of-document range replace the reset.
             let incomingSelection = editorState.selectedRange
-            textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+            textView.typingAttributes = textView.paragraphAttributes()
             self.document = document
-            textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+            textView.textStorage?.setAttributedString(textView.renderDocument(document))
             textView.setSelectedRange(incomingSelection)
             // 文末空段落的级别只能从模型带回输入属性（它的样式在文档里没有字符可承载），
             // 否则切回来接着在文末输入会退回正文。
@@ -61,7 +61,7 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
             } else if !textView.hasMarkedText() {
                 let selection = textView.selectedRange()
                 self.document = document
-                textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+                textView.textStorage?.setAttributedString(textView.renderDocument(document))
                 let location = min(selection.location, (document.plainText as NSString).length)
                 let length = min(selection.length, (document.plainText as NSString).length - location)
                 textView.setSelectedRange(NSRange(location: location, length: length))

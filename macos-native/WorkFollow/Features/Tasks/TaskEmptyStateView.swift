@@ -33,7 +33,7 @@ struct TaskEmptyStateView: View {
                 .accessibilityHidden(true)
             if let message {
                 Text(message)
-                    .font(WFType.body)
+                    .font(WFType.emptyState)
                     .foregroundStyle(WFColors.secondaryText)
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isStaticText)

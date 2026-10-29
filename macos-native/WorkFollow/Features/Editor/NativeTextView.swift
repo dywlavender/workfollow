@@ -55,6 +55,25 @@ final class NativeTextView: NSTextView {
     var displayedTrailingIndentLevel = 0
     var displayedTrailingListStart: Int?
     var displayedTrailingAlign: DocumentAlignment?
+    /// 正文段后间距；nil 用 `DocumentTextCodec` 的笔记默认值（10pt）。
+    /// 任务详情设 0，对齐滴答"Enter 即 22pt 行盒、没有额外段距"。
+    var paragraphSpacingOverride: CGFloat?
+
+    /// 编辑器内部一律经这两个入口取样式：override 只在这里注入，
+    /// 避免格式化/粘贴等旁路渲染又落回笔记段距。
+    func renderDocument(_ document: NativeDocument) -> NSAttributedString {
+        DocumentTextCodec.render(document, paragraphSpacing: paragraphSpacingOverride)
+    }
+
+    func paragraphAttributes(kind: DocumentBlockKind = .paragraph,
+                             marks: Set<DocumentMark> = [],
+                             indentLevel: Int = 0, listStart: Int? = nil,
+                             align: DocumentAlignment? = nil,
+                             bodySize: DocumentBodySize? = nil) -> [NSAttributedString.Key: Any] {
+        DocumentTextCodec.attributes(kind: kind, marks: marks, indentLevel: indentLevel,
+                                     listStart: listStart, align: align, bodySize: bodySize,
+                                     paragraphSpacing: paragraphSpacingOverride)
+    }
     var trailingIndentLevel: Int {
         pendingTrailingBlock != nil
             ? (typingAttributes[DocumentTextCodec.indentKey] as? Int ?? 0) : displayedTrailingIndentLevel
@@ -82,7 +101,7 @@ final class NativeTextView: NSTextView {
         displayedTrailingListStart = listStart
         displayedTrailingAlign = align
         guard let kind else { return }
-        typingAttributes = DocumentTextCodec.attributes(kind: kind, marks: [],
+        typingAttributes = paragraphAttributes(kind: kind,
             indentLevel: indentLevel, listStart: listStart, align: align)
     }
     var selectionPanel: NSPanel?
@@ -156,9 +175,9 @@ final class NativeTextView: NSTextView {
            typingAttributes[DocumentTextCodec.blockKey] as? String != "checked" {
             let sample = NSAttributedString(string: " ", attributes: typingAttributes)
             let block = DocumentTextCodec.decode(sample, preserving: .empty).blocks.first
-            typingAttributes = DocumentTextCodec.attributes(kind: block?.kind ?? .paragraph,
-                                                            marks: block?.runs.first?.marks ?? [],
-                                                            bodySize: block?.bodySize)
+            typingAttributes = paragraphAttributes(kind: block?.kind ?? .paragraph,
+                                                  marks: block?.runs.first?.marks ?? [],
+                                                  bodySize: block?.bodySize)
         }
         // 覆盖一段选中文本输入触发字符是普通编辑，不该开命令面板。
         let target = replacementRange.location == NSNotFound ? selectedRange() : replacementRange
@@ -358,7 +377,7 @@ final class NativeTextView: NSTextView {
         let caret = min(max(selectedRange().location, 0), source.length)
         let trailingEmpty = source.length == 0
             || (caret == source.length && source.character(at: source.length - 1) == 0x0A)
-        let plain = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        let plain = paragraphAttributes()
         // 可退出的块：标题、三类列表（有序/无序/检查项）、引用与代码块。
         func isExitable(_ kind: DocumentBlockKind) -> Bool {
             switch kind {
@@ -909,8 +928,8 @@ final class NativeTextView: NSTextView {
     /// 文末空段的检查项翻转：无字符可改，直接改输入属性与待定级别并注册撤销；
     /// 光标同时落到文末（级别只有这样才会随下一次 commit 进模型）。
     func setTrailingChecklist(checked: Bool) {
-        applyTrailingState(typing: DocumentTextCodec.attributes(kind: .checklist(checked), marks: [],
-                                                              indentLevel: trailingIndentLevel),
+        applyTrailingState(typing: paragraphAttributes(kind: .checklist(checked),
+                                                       indentLevel: trailingIndentLevel),
                            trailing: .checklist(checked))
     }
 
@@ -974,7 +993,7 @@ final class NativeTextView: NSTextView {
             var updated = attributes
             updated[DocumentTextCodec.blockKey] = DocumentTextCodec.blockToken(kind)
             updated[.foregroundColor] = checked
-                ? NSColor(WFColors.taskCompletedTitle) : NSColor.labelColor
+                ? NSColor(WFColors.taskCompletedTitle) : NSColor(WFColors.documentText)
             // 勾选态的删除线是展示层（切回文本时才加），这里统一清掉，
             // 避免取消勾选后残留。
             updated.removeValue(forKey: .strikethroughStyle)
@@ -1565,12 +1584,12 @@ final class NativeTextView: NSTextView {
         isEditable = true
         drawsBackground = false
         backgroundColor = .clear
-        textColor = .labelColor
-        insertionPointColor = .labelColor
+        textColor = NSColor(WFColors.documentText)
+        insertionPointColor = NSColor(WFColors.documentText)
         font = .systemFont(ofSize: DocumentEditorPresentationMetrics.bodyFontSize)
         // Empty documents must begin at the same origin as rendered paragraphs
         // and headings; NSTextView's default typing style has zero indent.
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        typingAttributes = paragraphAttributes()
         // 行首沟槽（角标 / 空行"+" / 列表标记）由各段落的 headIndent 留出，
         // 而不是 textContainerInset：NSTextView 会把绘制裁剪到文本容器区域，
         // 画在容器左侧留白里的装饰（x < inset.width）一律不可见（实测）。

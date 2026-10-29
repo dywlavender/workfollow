@@ -66,7 +66,7 @@ extension NativeTextView {
         let (range, trailingEmpty) = toolbarParagraphRange()
         if trailingEmpty || range.length == 0 {
             replaceEmptyBlock(range: range, content: NSAttributedString(string: ""),
-                              typing: DocumentTextCodec.attributes(kind: .paragraph, marks: []),
+                              typing: paragraphAttributes(kind: .paragraph, marks: []),
                               trailing: nil)
             return
         }
@@ -178,7 +178,7 @@ extension NativeTextView {
         let align = block?.align
         let bodySize = block?.bodySize
         let result = transform(kind, marks, indent, start, align, bodySize)
-        let typing = DocumentTextCodec.attributes(kind: result.0, marks: result.1,
+        let typing = paragraphAttributes(kind: result.0, marks: result.1,
             indentLevel: result.2, listStart: result.3, align: result.4, bodySize: result.5)
         let (range, _) = toolbarParagraphRange()
         replaceEmptyBlock(range: range, content: NSAttributedString(string: ""),
@@ -195,7 +195,7 @@ extension NativeTextView {
             var marks = block?.runs.first?.marks ?? []
             marks = marks.filter { !matches($0) }
             if let applying { marks.insert(applying) }
-            let typing = DocumentTextCodec.attributes(kind: block?.kind ?? .paragraph, marks: marks,
+            let typing = paragraphAttributes(kind: block?.kind ?? .paragraph, marks: marks,
                 indentLevel: block?.indentLevel ?? 0, listStart: block?.listStart, align: block?.align,
                 bodySize: block?.bodySize)
             typingAttributes = typing
@@ -218,8 +218,8 @@ extension NativeTextView {
     /// 用渲染后的富文本替换选区，并保持撤销、选区、输入属性与最终存储一致。
     private func replaceFormattedSelection(range: NSRange, document: NativeDocument, selection: NSRange) {
         guard let storage = textStorage else { return }
-        let replacement = DocumentTextCodec.render(document)
-        var cleanTyping = DocumentTextCodec.attributes(
+        let replacement = renderDocument(document)
+        var cleanTyping = paragraphAttributes(
             kind: document.blocks.first?.kind ?? .paragraph, marks: [],
             indentLevel: document.blocks.first?.indentLevel ?? 0,
             listStart: document.blocks.first?.listStart,

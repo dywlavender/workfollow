@@ -231,11 +231,15 @@ struct NotesWorkspaceView: View {
                                             .foregroundStyle(WFColors.accent)
                                             .hoverTip("正在浮窗中编辑")
                                     }
-                                    Text(note.title.isEmpty ? "未命名笔记" : note.title).lineLimit(1).strikethrough(trash)
+                                    Text(note.title.isEmpty ? "未命名笔记" : note.title)
+                                        .font(WFType.listTitle)
+                                        .lineLimit(1).strikethrough(trash)
                                     Spacer()
                                 }
                                 Text(note.document.isEmpty ? "还没有内容" : note.document.previewText.replacingOccurrences(of: "\n", with: " "))
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    .font(WFType.taskPreview)
+                                    .foregroundStyle(WFColors.taskPreviewText)
+                                    .lineLimit(1)
                                     // 标题用正文字号、预览用 caption，小字号的字形左侧留白更少，
                                     // 视觉上会比标题靠左。补一点内缩，和任务列表的「标题 / 正文」对齐。
                                     .padding(.leading, 4)
@@ -248,7 +252,7 @@ struct NotesWorkspaceView: View {
                             VStack(alignment: .trailing, spacing: 4) {
                                 Text(note.folder)
                                 Text((note.deletedAt ?? note.updatedAt).formatted(.dateTime.month().day().locale(.appDate)) + (trash ? "删除" : ""))
-                            }.font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            }.font(WFType.taskMeta).foregroundStyle(WFColors.taskMetaText).lineLimit(1)
                                 // 右列按内容固定宽度，避免被左侧的 layoutPriority 压没。
                                 .fixedSize(horizontal: true, vertical: false)
                                 .frame(minWidth: 56, maxWidth: 96, alignment: .trailing)

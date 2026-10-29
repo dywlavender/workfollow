@@ -102,6 +102,54 @@ final class AIConversationTests: XCTestCase {
         XCTAssertEqual(restored.current.latestResult, "第一答")
     }
 
+    func testDeletingHistoryKeepsCurrentOrSelectsRemainingAndSurvivesRelaunch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-delete-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory)
+        var ids: [UUID] = []
+        for question in ["第一段", "第二段", "第三段"] {
+            ids.append(store.current.record.id)
+            store.current.input = question; store.current.send { _, _, _, _, _ in "虚构回答" }
+            try await wait { !store.current.isRunning }
+            if question != "第三段" { store.newConversation() }
+        }
+        var removed: [UUID] = []
+        await store.delete(ids[0]) { removed.append($0) }
+        XCTAssertEqual(store.current.record.id, ids[2])
+        await store.delete(ids[2]) { removed.append($0) }
+        XCTAssertEqual(store.current.record.id, ids[1])
+        XCTAssertEqual(store.current.latestResult, "虚构回答")
+        await withCheckedContinuation { resume in store.flush { error in XCTAssertNil(error); resume.resume() } }
+        let restored = AIChatStore(directory: directory)
+        XCTAssertEqual(restored.records.map(\.id), [ids[1]])
+        XCTAssertEqual(restored.current.record.id, ids[1])
+        await restored.delete(ids[1]) { removed.append($0) }
+        XCTAssertEqual(removed, [ids[0], ids[2], ids[1]])
+        XCTAssertTrue(restored.records.isEmpty)
+        XCTAssertTrue(restored.current.record.messages.isEmpty)
+        XCTAssertFalse(ids.contains(restored.current.record.id))
+        await withCheckedContinuation { resume in restored.flush { error in XCTAssertNil(error); resume.resume() } }
+        XCTAssertTrue(AIChatStore(directory: directory).records.isEmpty)
+    }
+
+    func testDeletingRunningConversationStopsAndIgnoresLateReply() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-delete-running-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory), model = store.current
+        var resume: CheckedContinuation<String, Never>?
+        model.input = "虚构问题"
+        model.send { _, _, _, _, _ in await withCheckedContinuation { resume = $0 } }
+        try await wait { resume != nil }
+        await store.delete(model.record.id) { _ in }
+        XCTAssertFalse(model.isRunning)
+        XCTAssertNotEqual(store.current.record.id, model.record.id)
+        resume?.resume(returning: "迟到的回复")
+        try await _Concurrency.Task.sleep(for: .milliseconds(20))
+        XCTAssertTrue(store.records.isEmpty)
+        await withCheckedContinuation { resume in store.flush { error in XCTAssertNil(error); resume.resume() } }
+        XCTAssertTrue(AIChatStore(directory: directory).records.isEmpty)
+    }
+
     func testSelectionReplacementAndInsertionKeepSurroundingTextAndUndo() async throws {
         let id = UUID(), handle = DocumentEditorHandle()
         var document = NativeDocument(plainText: "开头。原来的文字。结尾。")

@@ -8,6 +8,13 @@ struct AIConversationClient {
     var directory: URL
     var appURL: URL = Bundle.main.bundleURL
 
+    func delete(id: UUID) async throws {
+        struct Response: Decodable { let deleted: Bool }
+        let _: Response = try await backend.call("conversation.delete", params: [
+            "conversationID": id.uuidString, "sessionDirectory": directory.path
+        ], timeout: 30)
+    }
+
     func send(id: UUID, scene: AIConversationModel.Scene, context: String, message: String,
               updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> String {
         struct Response: Decodable { let text: String }

@@ -767,7 +767,7 @@ struct TaskInspectorShell: View {
         } label: {
             HStack(spacing: WFSpace.dense) {
                 Image(systemName: "plus").font(.system(size: WFMetrics.icon))
-                Text("添加子任务").font(WFType.listTitleMedium)
+                Text("添加子任务").font(WFType.listTitle)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(WFColors.accent)

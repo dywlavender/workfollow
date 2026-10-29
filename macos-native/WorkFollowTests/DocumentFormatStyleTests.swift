@@ -28,6 +28,17 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual(plain.paragraphSpacing, 10, "正文换段留 10pt 段距（ima 实测 5+5）")
     }
 
+    func testTaskRhythmRemovesParagraphSpacingWithoutTouchingChecklists() throws {
+        func spacing(_ kind: DocumentBlockKind, _ override: CGFloat?) throws -> CGFloat {
+            let attributes = DocumentTextCodec.attributes(kind: kind, marks: [], paragraphSpacing: override)
+            return try XCTUnwrap(attributes[.paragraphStyle] as? NSParagraphStyle).paragraphSpacing
+        }
+        XCTAssertEqual(try spacing(.paragraph, 0), 0, "滴答任务正文 Enter 即 22pt 行盒，没有额外段距")
+        XCTAssertEqual(try spacing(.paragraph, nil), 10, "笔记仍用 ima 的 10pt 段距")
+        XCTAssertEqual(try spacing(.checklist(false), 0), 19, "任务段距不改变清单 37pt 节距")
+        XCTAssertEqual(try spacing(.quote, 0), 2)
+    }
+
     @MainActor
     func testListFormattingOnlyChangesSelectedParagraphs() throws {
         for kind in [DocumentBlockKind.bullet, .ordered, .checklist(false)] {

@@ -74,6 +74,47 @@ def test_cancelled_conversation_releases_text_gate_and_can_continue(tmp_path):
     asyncio.run(run())
 
 
+def test_delete_chat_removes_only_its_session_without_requiring_pi(tmp_path):
+    async def run():
+        runtime = Runtime(tmp_path, lambda _: None)
+        conversation = str(uuid4())
+        directory = tmp_path / "sessions"
+        paths = [directory / "chat" / (conversation + ".jsonl"),
+                 directory / "selection" / (conversation + ".jsonl"),
+                 directory / "chat" / (str(uuid4()) + ".jsonl")]
+        for path in paths:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("虚构会话")
+        result = await runtime.dispatch("conversation.delete", {
+            "conversationID": conversation, "sessionDirectory": str(directory)})
+        assert result == {"deleted": True}
+        assert not paths[0].exists()
+        assert all(path.read_text() == "虚构会话" for path in paths[1:])
+        await runtime.close()
+    asyncio.run(run())
+
+
+def test_delete_running_chat_waits_for_pi_exit_before_removing_session(tmp_path):
+    async def run():
+        runtime = Runtime(tmp_path, lambda _: None)
+        options = {"piExecutable": str(fixture_pi(tmp_path)), "conversationID": str(uuid4()),
+                   "sessionDirectory": str(tmp_path / "sessions")}
+        file = tmp_path / "sessions" / "chat" / (options["conversationID"] + ".jsonl")
+        task = asyncio.create_task(runtime.dispatch("conversation.send", {**options, "message": "WAIT"}))
+        for _ in range(200):
+            if file.exists(): break
+            await asyncio.sleep(0.01)
+        assert file.exists()
+        # The native stop request can arrive immediately before deletion.
+        task.cancel()
+        await runtime.dispatch("conversation.delete", options)
+        assert task.done() and task.cancelled()
+        assert not file.exists() and not runtime.conversation_tasks
+        assert not runtime.text_gate.locked()
+        await runtime.close()
+    asyncio.run(run())
+
+
 def test_app_skill_and_cli_are_enabled_only_for_standalone_chat(tmp_path, monkeypatch):
     async def run():
         runtime = Runtime(tmp_path, lambda _: None)

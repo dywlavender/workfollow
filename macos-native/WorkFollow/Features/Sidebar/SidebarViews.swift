@@ -208,11 +208,11 @@ struct SidebarSectionHeader<Trailing: View>: View {
                 HStack(spacing: 2) {
                     Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(WFColors.tertiaryText)
+                        .foregroundStyle(WFColors.faintText)
                         .frame(width: 9)
                     Text(title)
-                        .font(WFType.supporting)
-                        .foregroundStyle(WFColors.secondaryText)
+                        .font(WFType.sidebarSection)
+                        .foregroundStyle(WFColors.faintText)
                     Spacer(minLength: 0)
                 }
                 .frame(height: NavigationMetrics.rowHeight)
@@ -286,7 +286,7 @@ struct NavigationColumnView: View {
                 NotesNavigationSection(notes: environment.notesWorkspace, navigation: navigation, onNavigate: onNavigate)
             } else {
                 Text(navigation.destination.isNotes ? "笔记" : "工作空间")
-                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .font(WFType.sidebarSection).foregroundStyle(WFColors.faintText)
                     .padding(.horizontal, WFSpace.sm).padding(.bottom, WFSpace.sm)
                 ForEach(destinations) { destinationRow($0) }
                 Spacer(minLength: 0)
@@ -378,8 +378,8 @@ struct NavigationColumnView: View {
                 Spacer(minLength: WFSpace.xs)
                 let count = workspace.count(for: destination)
                 if count > 0 {
-                    Text("\(count)").font(WFType.supporting)
-                        .foregroundStyle(WFColors.secondaryText)
+                    Text("\(count)").font(WFType.sidebarBadge)
+                        .foregroundStyle(WFColors.taskMetaText)
                 }
             }
             .font(WFType.navigation)
@@ -414,7 +414,7 @@ private struct NotesNavigationSection: View {
             row("未归档", symbol: "folder", folder: "未归档")
                 .modifier(NoteFolderDropTarget(folder: "未归档", notes: notes, targeted: $noteDropTarget))
             HStack {
-                Text("文件夹").font(WFType.supporting)
+                Text("文件夹").font(WFType.sidebarSection).foregroundStyle(WFColors.faintText)
                 Spacer()
                 Button {
                     if let name = TaskNamePrompt.ask("新建文件夹") {
@@ -463,7 +463,7 @@ private struct NotesNavigationSection: View {
                 Image(systemName: symbol).frame(width: 18)
                 Text(title).lineLimit(1)
                 Spacer(minLength: 4)
-                if count > 0 { Text("\(count)").font(WFType.supporting).foregroundStyle(WFColors.secondaryText) }
+                if count > 0 { Text("\(count)").font(WFType.sidebarBadge).foregroundStyle(WFColors.taskMetaText) }
             }
             .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: NavigationMetrics.rowHeight)
             .foregroundStyle(WFColors.text)

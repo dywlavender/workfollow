@@ -16,7 +16,7 @@ import time
 from pydantic import ValidationError
 
 from app.ai_runtime.pi_engine import PiEngine
-from app.ai_runtime.conversation import converse
+from app.ai_runtime.conversation import converse, conversation_file
 from app.ai_runtime.failures import EngineError, model_failure
 from app.ai_runtime.prompts import minutes_prompt, summary_prompt, task_prompt
 from app.ai_runtime.settings import AISettings
@@ -41,6 +41,7 @@ class Runtime:
         self.emit = emit
         self.pi = PiEngine(root)
         self.pending: dict[str, asyncio.Task] = {}
+        self.conversation_tasks: dict[Path, asyncio.Task] = {}
         self.text_gate = asyncio.Lock()
         self.cooldowns = {}
 
@@ -88,7 +89,24 @@ class Runtime:
         if method == "models":
             return {"models": await self.pi.models(data)}
         if method == "conversation.send":
-            return await converse(self.pi, data, self.text_stream(method, data))
+            file = conversation_file(data)
+            self.conversation_tasks[file] = asyncio.current_task()
+            try:
+                return await converse(self.pi, data, self.text_stream(method, data))
+            finally:
+                self.conversation_tasks.pop(file, None)
+        if method == "conversation.delete":
+            file = conversation_file(data, scene="chat")
+            task = self.conversation_tasks.get(file)
+            if task:
+                if not task.cancelling():
+                    task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+            try:
+                file.unlink(missing_ok=True)
+            except OSError as exc:
+                raise EngineError("无法删除本地会话，请检查数据目录权限。", "storage_failed") from exc
+            return {"deleted": True}
         if method == "model.test":
             return await self.langchain(method, data)
         if method in ("knowledge.ask", "note.rewrite"):

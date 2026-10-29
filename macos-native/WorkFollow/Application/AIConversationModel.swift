@@ -100,6 +100,7 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var current: AIConversationModel
     @Published private(set) var records: [AIConversationRecord]
     @Published private(set) var storageError: String?
+    @Published private(set) var deletingIDs: Set<UUID> = []
     let sessionDirectory: URL
     private let persistence: JSONFileStore<Snapshot>
 
@@ -117,12 +118,27 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
         current = AIConversationModel(); connect(); save()
     }
     func select(_ id: UUID) {
-        guard id != current.record.id, let record = records.first(where: { $0.id == id }) else { return }
+        guard id != current.record.id, !deletingIDs.contains(id),
+              let record = records.first(where: { $0.id == id }) else { return }
         current.stop(); current = AIConversationModel(record: record); connect(); save()
+    }
+    func delete(_ id: UUID, using removeSession: (UUID) async throws -> Void) async {
+        guard records.contains(where: { $0.id == id }), deletingIDs.insert(id).inserted else { return }
+        defer { deletingIDs.remove(id) }
+        if current.record.id == id { current.stop() }
+        do { try await removeSession(id) }
+        catch { storageError = error.localizedDescription; return }
+        records.removeAll { $0.id == id }
+        if current.record.id == id {
+            current.onChange = nil
+            current = AIConversationModel(record: records.max(by: { $0.updatedAt < $1.updatedAt }) ?? .init())
+            connect()
+        }
+        storageError = nil; save()
     }
     private func connect() {
         current.onChange = { [weak self] value in
-            guard let self else { return }
+            guard let self, self.current.record.id == value.id else { return }
             if let i = self.records.firstIndex(where: { $0.id == value.id }) { self.records[i] = value }
             else { self.records.append(value) }
             self.save()

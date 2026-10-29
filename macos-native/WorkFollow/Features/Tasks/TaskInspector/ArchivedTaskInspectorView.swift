@@ -40,8 +40,10 @@ private struct ArchivedTaskDocument: NSViewRepresentable {
     func updateNSView(_ view: NSScrollView, context: Context) {
         guard let text = view.documentView as? NativeTextView else { return }
         let rendered = NSMutableAttributedString(string: task.title + "\n\n", attributes: [
-            .font: NSFont.systemFont(ofSize: 22, weight: .medium), .foregroundColor: NSColor.labelColor])
-        if let document = try? task.document.materialized() { rendered.append(DocumentTextCodec.render(document)) }
+            .font: NSFont.systemFont(ofSize: 22, weight: .medium), .foregroundColor: NSColor(WFColors.documentText)])
+        if let document = try? task.document.materialized() {
+            rendered.append(DocumentTextCodec.render(document, paragraphSpacing: 0))
+        }
         if !text.attributedString().isEqual(to: rendered) { text.textStorage?.setAttributedString(rendered); text.sizeToFit() }
     }
 }

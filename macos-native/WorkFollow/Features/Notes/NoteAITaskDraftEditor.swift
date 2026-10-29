@@ -34,6 +34,7 @@ private struct NoteAITaskDraftEditor: View {
     @State private var showSchedulePopover = false
     @State private var editingDeadline = false
     @State private var showRepeatPopover = false
+    @State private var showPriorityMenu = false
 
     private var now: Date { tasks.clock() }
 
@@ -145,8 +146,16 @@ private struct NoteAITaskDraftEditor: View {
 
     private var header: some View {
         HStack(spacing: 8) {
+            // 与任务详情同款：关闭入口放左侧返回位，右上角只留优先级。
+            AppKitIconButton(symbol: "chevron.left", pointSize: 14,
+                             tint: .inspectorPrimary, accessibilityLabel: "关闭任务编辑",
+                             action: onClose)
+                .frame(width: 24, height: WFMetrics.controlHeight)
+                .workflowActionAnchor("note.ai.draftEditor.close")
+
             AppKitScheduleChip(symbol: "calendar", title: scheduleLabel, tint: scheduleTint,
                                accessibilityLabel: scheduleLabel) {
+                showPriorityMenu = false
                 editingDeadline = false
                 showRepeatPopover = false
                 showSchedulePopover = true
@@ -158,6 +167,7 @@ private struct NoteAITaskDraftEditor: View {
 
             if let deadlineLabel {
                 Button {
+                    showPriorityMenu = false
                     editingDeadline = true
                     showRepeatPopover = false
                     showSchedulePopover = true
@@ -184,6 +194,7 @@ private struct NoteAITaskDraftEditor: View {
             if showsRepeat {
                 AppKitIconButton(symbol: "repeat", pointSize: 14,
                                  tint: NSColor(WFColors.accent), accessibilityLabel: "重复") {
+                    showPriorityMenu = false
                     showSchedulePopover = false
                     showRepeatPopover = true
                 }
@@ -194,33 +205,61 @@ private struct NoteAITaskDraftEditor: View {
 
             Spacer(minLength: 4)
 
-            BusinessMenu {
-                ForEach(TaskPriority.menuOrder, id: \.rawValue) { priority in
-                    BusinessMenuOption(priority.title, selected: draft.priority == priority,
-                                       symbol: "flag", color: priority.menuColor) {
-                        draft.priority = priority
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: draft.priority == .none ? "flag" : "flag.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(draft.priority.menuColor)
-                    Text(draft.priority == .none ? "优先级" : draft.priority.title)
-                        .font(.system(size: 12))
-                        .foregroundStyle(WFColors.secondaryText)
-                }
-            }
-            .fixedSize()
-
-            AppKitIconButton(symbol: "xmark", pointSize: 12, tint: .inspectorSecondary,
-                             accessibilityLabel: "关闭任务编辑", action: onClose)
-                .frame(width: 24, height: WFMetrics.controlHeight)
-                .hoverTip("关闭任务编辑")
-                .workflowActionAnchor("note.ai.draftEditor.close")
+            priorityMenu
         }
         .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
         .frame(height: TaskInspectorMetrics.headerHeight)
+    }
+
+    private var priorityMenu: some View {
+        AppKitIconButton(symbol: draft.priority == .none ? "flag" : "flag.fill",
+                         pointSize: 14,
+                         tint: NSColor(draft.priority.menuColor),
+                         accessibilityLabel: "优先级：\(draft.priority.shortTitle)",
+                         action: { togglePriorityMenu() })
+            .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
+            .background {
+                AnchoredPropertyPanel(isPresented: $showPriorityMenu,
+                                      width: PopupMetrics.priorityMenuWidth,
+                                      placement: .dropdown,
+                                      focusPolicy: .preservePresenter, title: "优先级") {
+                    priorityPopover
+                }
+            }
+            .workflowActionAnchor("note.ai.draftEditor.priority")
+    }
+
+    private func togglePriorityMenu() {
+        let opening = !showPriorityMenu
+        showSchedulePopover = false
+        showRepeatPopover = false
+        showPriorityMenu = opening
+    }
+
+    /// 与任务详情同款：四行「彩色旗 + 文案」，无当前值标记。
+    private var priorityPopover: some View {
+        VStack(spacing: 2) {
+            ForEach(TaskPriority.menuOrder, id: \.rawValue) { priority in
+                PopupMenuRow(action: {
+                    showPriorityMenu = false
+                    draft.priority = priority
+                }) {
+                    HStack(spacing: WFSpace.dense) {
+                        Image(systemName: priority == .none ? "flag" : "flag.fill")
+                            .foregroundStyle(priority.menuColor)
+                        Text(priority.title)
+                        Spacer(minLength: 0)
+                    }
+                    .font(WFType.menu)
+                }
+                .foregroundStyle(WFColors.text)
+            }
+        }
+        .padding(8)
+        .frame(width: PopupMetrics.priorityMenuWidth)
+        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
+        .background(PopupEscapeRouter(depth: 2) { showPriorityMenu = false })
     }
 
     private var documentEditor: some View {
@@ -248,11 +287,13 @@ private struct NoteAITaskDraftEditor: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
-            Text("保存到「\(destination)」")
-                .font(.system(size: 10))
-                .foregroundStyle(WFColors.tertiaryText)
+        HStack(spacing: WFSpace.xs) {
+            Label(destination, systemImage: "tray")
+                .font(WFType.control)
+                .foregroundStyle(WFColors.secondaryText)
                 .lineLimit(1)
+                .help("保存到「\(destination)」")
+                .accessibilityLabel("保存到「\(destination)」")
             Spacer()
             Button("完成", action: onClose)
                 .buttonStyle(.borderedProminent)

@@ -92,7 +92,7 @@ final class DocumentEditorHandle: ObservableObject {
                          inverseCommit: @escaping (NativeDocument) -> Void) -> Bool {
         prepareForDocumentChange()
         guard let textView, let storage = textView.textStorage else { return false }
-        let accepted = textView.replaceDocumentContent(DocumentTextCodec.render(document),
+        let accepted = textView.replaceDocumentContent(textView.renderDocument(document),
             range: NSRange(location: 0, length: storage.length), selection: NSRange(location: 0, length: 0),
             commit: commit, inverseCommit: inverseCommit)
         return accepted
@@ -314,8 +314,8 @@ final class DocumentEditorHandle: ObservableObject {
         let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
             DocumentRun(text: reference.title, marks: [.link(reference.target)])
         ])])
-        textView.insertText(DocumentTextCodec.render(content), replacementRange: textView.selectedRange())
-        textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        textView.insertText(textView.renderDocument(content), replacementRange: textView.selectedRange())
+        textView.typingAttributes = textView.paragraphAttributes()
     }
 
     /// Reference command with host fields sharing the document's undo/redo.
@@ -329,11 +329,11 @@ final class DocumentEditorHandle: ObservableObject {
         let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
             DocumentRun(text: reference.title, marks: [.link(reference.target)])
         ])])
-        let value = DocumentTextCodec.render(content)
+        let value = textView.renderDocument(content)
         guard textView.replaceDocumentContent(value, range: range,
             selection: NSRange(location: range.location + value.length, length: 0),
             commit: commit, inverseCommit: undoCommit) else { return false }
-        textView.typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        textView.typingAttributes = textView.paragraphAttributes()
         refreshStyle()
         return true
     }
@@ -438,13 +438,14 @@ private struct DocumentEditorContent: NSViewRepresentable {
         handle?.beginViewUpdate()
         defer { handle?.endViewUpdate() }
         let textView = NativeTextView(frame: .zero, textContainer: nil)
+        textView.paragraphSpacingOverride = profile.paragraphSpacing
         textView.decorationVisibleMinX = decorationVisibleMinX
         textView.documentIdentity = documentID
         // 只读预览仍可选中/复制，但不能输入、勾选或打开块菜单。
         textView.isEditable = !readOnly
         textView.isSelectable = true
         textView.delegate = context.coordinator
-        textView.textStorage?.setAttributedString(DocumentTextCodec.render(document))
+        textView.textStorage?.setAttributedString(textView.renderDocument(document))
         textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
             block.runs.allSatisfy { $0.text.isEmpty } ? block.kind : nil
         }, indentLevel: document.blocks.last?.indentLevel ?? 0,
@@ -509,6 +510,8 @@ private struct DocumentEditorContent: NSViewRepresentable {
             handle?.cancelFormatPainter()
             return true
         }
+        // 段距随 profile 变；先落到 textView，再让协调器按新节奏重建。
+        textView.paragraphSpacingOverride = profile.paragraphSpacing
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,

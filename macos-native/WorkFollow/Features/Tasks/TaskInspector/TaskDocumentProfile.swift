@@ -43,6 +43,9 @@ enum TaskDocumentProfile {
         profile.setChecklistReminder = host.setChecklistReminder
         profile.checklistReminderNotice = host.checklistReminderNotice
         profile.checklistRemindersEnabled = task.kind == .checklist
+        // 滴答任务正文的 Enter 就是一个 22pt 行盒（2026-10-30 AX 实测），
+        // 没有笔记那种 10pt 段距。
+        profile.paragraphSpacing = 0
         return profile
     }
 

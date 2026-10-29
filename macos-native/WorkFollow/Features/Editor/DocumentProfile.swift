@@ -57,6 +57,8 @@ struct DocumentProfile {
     var taskSlash = false
     var noteSlash = false
     var compactSlash: Bool { taskSlash || noteSlash }
+    /// 正文段后间距；nil 走笔记默认 10pt（ima 段距 5+5），任务详情设 0（滴答行盒节奏）。
+    var paragraphSpacing: CGFloat?
     var onOpenLink: ((String) -> Bool)?
     /// `#` 标签补全（TI2-08）：宿主提供候选与"已插入"回调；默认空 = 不启用。
     var tagCandidates: () -> [String] = { [] }

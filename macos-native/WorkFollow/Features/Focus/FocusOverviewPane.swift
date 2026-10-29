@@ -18,7 +18,7 @@ struct FocusOverviewPane: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(store.contentRoute == .records ? "专注记录" : "概览")
-                    .font(.system(size: FocusLayoutMetrics.overviewTitleFontSize, weight: .semibold))
+                    .font(.system(size: FocusLayoutMetrics.overviewTitleFontSize, weight: .medium))
                     .foregroundStyle(theme.text)
                 Spacer()
                 if store.contentRoute == .records {
@@ -43,7 +43,7 @@ struct FocusOverviewPane: View {
 
             HStack(alignment: .firstTextBaseline) {
                 Text("专注记录")
-                    .font(.system(size: FocusLayoutMetrics.recordHeaderFontSize, weight: .semibold))
+                    .font(.system(size: FocusLayoutMetrics.recordHeaderFontSize, weight: .medium))
                     .foregroundStyle(theme.text)
                     .focusRenderAnchor(.recordsHeader)
                 Spacer()
@@ -83,11 +83,11 @@ struct FocusOverviewPane: View {
     private func statCard(_ label: String, value: Int, unit: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: FocusLayoutMetrics.overviewCardTextGap) {
             Text(label)
-                .font(.system(size: FocusLayoutMetrics.overviewLabelFontSize))
+                .font(WFType.focusStatLabel)
                 .foregroundStyle(theme.text2)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("\(value)")
-                    .font(.system(size: FocusLayoutMetrics.overviewValueFontSize, weight: .regular))
+                    .font(WFType.focusStatValue)
                     .monospacedDigit()
                     .foregroundStyle(theme.text)
                 if let unit {
@@ -177,7 +177,7 @@ struct FocusOverviewPane: View {
                 .foregroundStyle(theme.text3)
                 .frame(width: 76, alignment: .leading)
             Text(recordTitle(for: record))
-                .font(.system(size: FocusLayoutMetrics.recordTitleFontSize))
+                .font(.system(size: FocusLayoutMetrics.recordTitleFontSize, weight: .medium))
                 .foregroundStyle(theme.text)
                 .lineLimit(1)
                 .frame(minWidth: 0, alignment: .leading)

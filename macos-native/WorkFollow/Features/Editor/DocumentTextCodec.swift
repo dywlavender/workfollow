@@ -103,20 +103,21 @@ enum DocumentTextCodec {
     static func attributes(kind: DocumentBlockKind, marks: Set<DocumentMark>,
                            indentLevel: Int = 0, listStart: Int? = nil,
                            align: DocumentAlignment? = nil,
-                           bodySize: DocumentBodySize? = nil) -> [NSAttributedString.Key: Any] {
+                           bodySize: DocumentBodySize? = nil,
+                           paragraphSpacing: CGFloat? = nil) -> [NSAttributedString.Key: Any] {
         let style = NSMutableParagraphStyle()
         let structured = kind == .quote || isListKind(kind)
         let isHeading: Bool = { if case .heading = kind { return true }; return false }()
         let isCode = kind == .code
         // 清单行的文字与滴答一样留出更松的上下间距；行距由 paragraphSpacing
         // 承担，不拉高单行字体行盒，避免光标与文字基线偏移。
-        // 正文段后 10pt：Enter 换段与自动折行刻意拉开（ima 实测段距 5+5）；
-        // 自动折行和软换行仍在同一段里，只走 21pt 行盒。标题保留 8pt 才能
-        // 维持 35 / 32 / 30 的标题节距；列表/引用 2pt、清单 19pt 不变。
+        // 正文段后默认 10pt：笔记按 ima 实测段距 5+5；任务详情传 0，
+        // 因为滴答任务正文的 Enter 就是一个 22pt 行盒（AX 实测），没有额外段距。
+        // 标题保留 8pt 才能维持 35 / 32 / 30 的标题节距；列表/引用 2pt、清单 19pt 不变。
         // 代码块连续行之间不留段距，整块由背景绘制成一体。
         style.paragraphSpacing = kind.isChecklist ? DocumentEditorGeometry.checklistRowSpacing
             : (structured ? DocumentEditorGeometry.structuredParagraphSpacing
-                : (isHeading ? 8 : (isCode ? 0 : 10)))
+                : (isHeading ? 8 : (isCode ? 0 : (paragraphSpacing ?? 10))))
         // 字阶按滴答实测（2026-10-16，截图 1px = 1pt）：标题三级 18 / 16 / 14，正文 14。
         // 滴答的标题 3 到 6 是**同一个字号**（实测三级到六级墨水质量完全相同），
         // 只靠字重与段间距和正文区分，所以这里不再按级别继续收窄。
@@ -182,13 +183,13 @@ enum DocumentTextCodec {
         if marks.contains(.caption) {
             style.firstLineHeadIndent = gutter + DocumentEditorGeometry.listTextIndent + levelIndent
             style.headIndent = style.firstLineHeadIndent
-            style.paragraphSpacing = 10
+            style.paragraphSpacing = paragraphSpacing ?? 10
             style.lineSpacing = 3
         }
         if let align { style.alignment = align.nsAlignment }
         let baseForeground: NSColor = kind == .quote ? NSColor.secondaryLabelColor
             : checklistCompleted ? NSColor(WFColors.taskCompletedTitle)
-            : NSColor.labelColor
+            : NSColor(WFColors.documentText)
         var attrs: [NSAttributedString.Key: Any] = [
             blockKey: blockToken(kind), explicitBoldKey: marks.contains(.bold), .font: font, .paragraphStyle: style,
             // 引用与已勾选检查项转灰：勾选后只变灰（与已完成任务同一档灰），
@@ -228,13 +229,14 @@ enum DocumentTextCodec {
         }
         return attrs
     }
-    static func render(_ document: NativeDocument) -> NSAttributedString {
+    static func render(_ document: NativeDocument, paragraphSpacing: CGFloat? = nil) -> NSAttributedString {
         let result = NSMutableAttributedString(string: "")
         for (index, block) in document.blocks.enumerated() {
             for run in block.runs {
                 var attrs = attributes(kind: block.kind, marks: run.marks,
                                        indentLevel: block.indentLevel, listStart: block.listStart,
-                                       align: block.align, bodySize: block.bodySize)
+                                       align: block.align, bodySize: block.bodySize,
+                                       paragraphSpacing: paragraphSpacing)
                 if let name = attrs[symbolKey] as? String, let symbol = DocumentInlineSymbol(rawValue: name),
                    run.text == symbol.textFallback {
                     let attachment = NSTextAttachment()
@@ -293,7 +295,8 @@ enum DocumentTextCodec {
                 result.append(NSAttributedString(string: "\n", attributes: attributes(
                     kind: separatorKind, marks: caption ? [.caption] : [], indentLevel: block.indentLevel,
                     listStart: block.listStart, align: block.align,
-                    bodySize: separatorKind == .paragraph ? block.bodySize : nil)))
+                    bodySize: separatorKind == .paragraph ? block.bodySize : nil,
+                    paragraphSpacing: paragraphSpacing)))
             }
         }
         applyCodeHighlighting(to: result, document: document)

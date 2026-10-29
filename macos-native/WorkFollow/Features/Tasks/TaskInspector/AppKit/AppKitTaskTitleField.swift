@@ -40,7 +40,7 @@ struct AppKitTaskTitleField: NSViewRepresentable {
         field.cell?.isScrollable = singleLine
         field.maximumNumberOfLines = singleLine ? 1 : 0
         field.font = font
-        field.textColor = .labelColor
+        field.textColor = NSColor(WFColors.documentText)
         // 占位符灰与待办框唯一真源同源（默认灰偏深）。
         field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
             .foregroundColor: QuickAddBarStyle.placeholderNSColor,

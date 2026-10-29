@@ -92,7 +92,7 @@ extension NativeTextView {
     private func listTypingAttributes(for block: DocumentBlock) -> [NSAttributedString.Key: Any] {
         let marks = DocumentTextCodec.decode(NSAttributedString(string: " ", attributes: typingAttributes),
                                             preserving: .empty).blocks.first?.runs.first?.marks ?? []
-        return DocumentTextCodec.attributes(kind: block.kind, marks: marks,
+        return paragraphAttributes(kind: block.kind, marks: marks,
             indentLevel: block.indentLevel, listStart: block.listStart, align: block.align)
     }
 
@@ -108,7 +108,7 @@ extension NativeTextView {
         undoManager?.registerUndo(withTarget: self) { view in
             view.applyListDocument(previous, selection: previousSelection, typing: previousTyping)
         }
-        storage.setAttributedString(DocumentTextCodec.render(document))
+        storage.setAttributedString(renderDocument(document))
         let last = document.blocks.last
         displayedTrailingBlock = last?.plainText.isEmpty == true ? last?.kind : nil
         displayedTrailingIndentLevel = last?.indentLevel ?? 0

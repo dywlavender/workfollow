@@ -77,7 +77,7 @@ final class DocumentTableCell: NSTextAttachmentCell {
                                   height: max(1, rowHeight - 12))
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: NSFont.systemFont(ofSize: 13, weight: row == 0 ? .semibold : .regular),
-                    .foregroundColor: text.isEmpty ? NSColor.tertiaryLabelColor : NSColor.labelColor,
+                    .foregroundColor: text.isEmpty ? NSColor.tertiaryLabelColor : NSColor(WFColors.documentText),
                     .paragraphStyle: style
                 ]
                 (text.isEmpty ? " " as NSString : text as NSString).draw(in: rect, withAttributes: attributes)
@@ -179,14 +179,14 @@ extension NativeTextView {
         }
         blocks.append(DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "\u{FFFC}", table: table)]))
         if !updating { blocks.append(DocumentBlock(kind: .paragraph)) }
-        let content = DocumentTextCodec.render(NativeDocument(blocks: blocks))
+        let content = renderDocument(NativeDocument(blocks: blocks))
         breakUndoCoalescing()
         guard shouldChangeText(in: range, replacementString: content.string) else { return false }
         storage.replaceCharacters(in: range, with: content)
         setSelectedRange(NSRange(location: range.location + content.length, length: 0))
         didChangeText()
         breakUndoCoalescing()
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        typingAttributes = paragraphAttributes(kind: .paragraph, marks: [])
         undoManager?.setActionName(updating ? "编辑表格" : "插入表格")
         return true
     }

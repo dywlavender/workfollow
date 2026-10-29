@@ -181,11 +181,11 @@ extension NativeTextView {
     private func convertTypedMarkdownDivider(lineRange: NSRange, hasFollowingLine: Bool) {
         let insertion: NSAttributedString
         if hasFollowingLine {
-            insertion = DocumentTextCodec.render(NativeDocument(blocks: [
+            insertion = renderDocument(NativeDocument(blocks: [
                 DocumentBlock(kind: .divider, runs: [DocumentRun(text: "\u{FFFC}")])
             ]))
         } else {
-            insertion = DocumentTextCodec.render(NativeDocument(blocks: [
+            insertion = renderDocument(NativeDocument(blocks: [
                 DocumentBlock(kind: .divider, runs: [DocumentRun(text: "\u{FFFC}")]),
                 DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "")])
             ]))
@@ -195,7 +195,7 @@ extension NativeTextView {
         undoManager?.beginUndoGrouping()
         insertText(insertion, replacementRange: lineRange)
         setSelectedRange(NSRange(location: min(caret, (string as NSString).length), length: 0))
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        typingAttributes = paragraphAttributes(kind: .paragraph, marks: [])
         undoManager?.endUndoGrouping()
         breakUndoCoalescing()
         resizeDocumentDividers()

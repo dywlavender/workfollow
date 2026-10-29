@@ -424,7 +424,7 @@ final class SubtaskRowView: NSTableCellView {
         titleField.drawsBackground = false
         titleField.focusRingType = .none
         titleField.lineBreakMode = .byTruncatingTail
-        titleField.font = .systemFont(ofSize: 14, weight: .medium)
+        titleField.font = .systemFont(ofSize: 14)
         titleField.delegate = nil
         titleField.target = self
         titleField.action = #selector(titleCommitted)

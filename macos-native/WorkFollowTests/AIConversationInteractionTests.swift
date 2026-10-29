@@ -87,6 +87,30 @@ final class AIConversationInteractionTests: XCTestCase {
         try await wait("select previous conversation") { environment.aiChat.current.record.id == model.record.id }
         XCTAssertEqual(environment.aiChat.current.record.messages.count, 4)
         XCTAssertEqual(environment.aiChat.current.latestResult, "第2轮回复：清楚的虚构文字")
+        let deleteID = "ai.chat.delete.\(model.record.id)"
+        let delete = try XCTUnwrap(anchors[deleteID])
+        try InspectorPanelTestSupport.click(delete.bounds, in: delete, window: window)
+        try await wait("delete confirmation") { window.attachedSheet != nil }
+        let cancelSheet = try XCTUnwrap(window.attachedSheet)
+        let cancel = try XCTUnwrap(cancelSheet.contentView.flatMap {
+            descendants($0).compactMap { $0 as? NSButton }.first { $0.title == "取消" }
+        })
+        cancel.performClick(nil)
+        try await wait("cancel deletion") { window.attachedSheet == nil }
+        XCTAssertEqual(environment.aiChat.records.count, 2)
+        try InspectorPanelTestSupport.click(delete.bounds, in: delete, window: window)
+        try await wait("delete confirmation again") { window.attachedSheet != nil }
+        let confirmSheet = try XCTUnwrap(window.attachedSheet)
+        let confirm = try XCTUnwrap(confirmSheet.contentView.flatMap {
+            descendants($0).compactMap { $0 as? NSButton }.first { $0.title == "删除" }
+        })
+        confirm.performClick(nil)
+        try await wait("deleted conversation") { environment.aiChat.records.count == 1 }
+        XCTAssertEqual(environment.aiChat.current.record.id, secondID)
+        XCTAssertEqual(environment.aiChat.current.latestResult, "第1轮回复：清楚的虚构文字")
+        let sessionFile = environment.aiChat.sessionDirectory.appendingPathComponent("chat")
+            .appendingPathComponent(model.record.id.uuidString + ".jsonl")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sessionFile.path))
     }
 
     func testSelectedTextOpensFloatingConversationAndReplacementIsUndoable() async throws {

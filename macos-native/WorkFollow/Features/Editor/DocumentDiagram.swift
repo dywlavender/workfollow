@@ -86,8 +86,8 @@ extension NativeTextView {
                 return run
             })
         })
-        insertText(DocumentTextCodec.render(copy), replacementRange: selectedRange())
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        insertText(renderDocument(copy), replacementRange: selectedRange())
+        typingAttributes = paragraphAttributes(kind: .paragraph, marks: [])
         return true
     }
 
@@ -150,7 +150,7 @@ extension NativeTextView {
         }
         blocks.append(DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "\u{FFFC}", diagram: diagram)]))
         if !updating { blocks.append(DocumentBlock(kind: .paragraph)) }
-        var content = DocumentTextCodec.render(NativeDocument(blocks: blocks))
+        var content = renderDocument(NativeDocument(blocks: blocks))
         if matches.count > 1 {
             // Earlier saves could insert the same ID more than once. On the
             // next explicit save, retain the chosen editor's current version.
@@ -181,7 +181,7 @@ extension NativeTextView {
         setSelectedRange(NSRange(location: range.location + content.length, length: 0))
         didChangeText()
         breakUndoCoalescing()
-        typingAttributes = DocumentTextCodec.attributes(kind: .paragraph, marks: [])
+        typingAttributes = paragraphAttributes(kind: .paragraph, marks: [])
         undoManager?.setActionName(updating ? "编辑流程图" : "插入流程图")
         return true
     }

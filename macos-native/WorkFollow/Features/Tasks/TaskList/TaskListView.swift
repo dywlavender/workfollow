@@ -362,7 +362,7 @@ struct TaskListView: View {
                 }
                 .frame(width: WFMetrics.navigationWidth, height: 440)
             })
-            // 滴答页头没有目的地图标，标题 24pt medium 紧贴汉堡。
+            // 滴答页头没有目的地图标，标题 20pt Medium 紧贴汉堡。
             Text(headerTitle)
                 .font(WFType.taskListPageTitle)
                 .lineLimit(1)
@@ -1117,17 +1117,16 @@ struct TaskListView: View {
                 HStack(spacing: 0) {
                     Image(systemName: groupExpansion.isCollapsed(group) ? "chevron.right" : "chevron.down")
                         .font(.system(size: TaskListMetrics.groupChevronSize, weight: .semibold))
-                        .foregroundStyle(WFColors.secondaryText)
+                        .foregroundStyle(WFColors.taskMetaText)
                         .frame(width: TaskListMetrics.groupChevronSize, height: headerHeight)
-                    // 滴答日期分组与自定义小节的标题同为 13pt semibold
-                    // （`TTTaskListSectionCell.nib` 11pt 是设计稿的 2x 口径）。
+                    // 滴答日期分组标题 14pt Demi、计数 12pt Regular（运行时实测）。
                     Text(groupTitle(group))
                         .font(WFType.sectionSemibold)
                         .padding(.leading, 4)
                     Text("\(group.tasks.count)")
-                        .font(.system(size: 11))
+                        .font(WFType.groupCount)
                         .padding(.leading, 5)
-                        .foregroundStyle(group.kind == .completed ? WFColors.taskCompletedCount : WFColors.secondaryText)
+                        .foregroundStyle(group.kind == .completed ? WFColors.taskCompletedCount : WFColors.taskMetaText)
                 }
                 .frame(height: headerHeight)
                 .contentShape(Rectangle())
@@ -1673,9 +1672,9 @@ struct TaskRowView: View {
                 }
                 if let preview = rowPreview {
                     Text(preview)
-                        .font(task.status == .completed ? WFType.completedListBody : WFType.listBody)
+                        .font(task.status == .completed ? WFType.completedTaskPreview : WFType.taskPreview)
                         .lineLimit(1)
-                        .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.secondaryText)
+                        .foregroundStyle(task.status == .completed ? WFColors.taskCompletedPreview : WFColors.taskPreviewText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 3)
                         .taskTreeRenderAnchor(task.id, .preview)
@@ -1949,7 +1948,7 @@ private struct TaskRowMetadataTrail: View {
     }
 
     private var muted: Color {
-        task.status == .completed ? WFColors.taskCompletedMetadata : task.isClosed ? WFColors.tertiaryText : WFColors.secondaryText
+        task.status == .completed ? WFColors.taskCompletedMetadata : task.isClosed ? WFColors.tertiaryText : WFColors.taskMetaText
     }
 
     var body: some View {
@@ -2001,8 +2000,8 @@ private struct TaskRowMetadataTrail: View {
                 dateBadge.fixedSize().layoutPriority(2)
             }
         }
-        // 行内元信息 11pt；日期仅显示文字，保留原有点击高度。
-        .font(.system(size: 11))
+        // 滴答行内元信息 10pt；日期仅显示文字，保留原有点击高度。
+        .font(WFType.taskMeta)
         .lineLimit(1)
         .frame(maxWidth: 140, alignment: .trailing)
         .fixedSize(horizontal: true, vertical: false)
@@ -2114,7 +2113,8 @@ enum TaskListViewDefaults {
     static func rowDateColor(for style: DateBadgeStyle) -> Color {
         switch style {
         case .overdue: .red
-        case .today, .scheduled: WFColors.accent
+        case .today: WFColors.accent
+        case .scheduled: WFColors.taskMetaText
         case .none: WFColors.taskCompletedMetadata
         }
     }

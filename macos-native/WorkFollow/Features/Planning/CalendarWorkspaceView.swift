@@ -634,7 +634,7 @@ struct CalendarMonthGridView: View {
             ForEach((0..<7).map { CalendarWeekHeaderLabels.all[(calendar.firstWeekday - 1 + $0) % 7] }, id: \.self) { label in
                 Text(label)
                     .font(WFType.listMeta)
-                    .foregroundStyle(WFColors.tertiaryText)
+                    .foregroundStyle(WFColors.taskMetaText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, WFCalendarMetrics.weekHeaderPadding)
             }

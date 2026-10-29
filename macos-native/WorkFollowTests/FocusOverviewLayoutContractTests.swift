@@ -41,12 +41,12 @@ final class FocusOverviewLayoutContractTests: XCTestCase {
         XCTAssertEqual(FocusLayoutMetrics.overviewUnitFontSize, 12)
         XCTAssertEqual(FocusLayoutMetrics.overviewGoalFontSize, 12)
         XCTAssertEqual(FocusLayoutMetrics.overviewGoalProgressHeight, 3)
-        XCTAssertEqual(FocusLayoutMetrics.recordHeaderFontSize, 17)
+        XCTAssertEqual(FocusLayoutMetrics.recordHeaderFontSize, 18)
         XCTAssertEqual(FocusLayoutMetrics.recordHeaderIconSize, 16)
         XCTAssertEqual(FocusLayoutMetrics.recordHeaderButtonSize, 28)
-        XCTAssertEqual(FocusLayoutMetrics.recordTimeFontSize, 13)
+        XCTAssertEqual(FocusLayoutMetrics.recordTimeFontSize, 12)
         XCTAssertEqual(FocusLayoutMetrics.recordTitleFontSize, 14)
-        XCTAssertEqual(FocusLayoutMetrics.recordMinutesFontSize, 13)
+        XCTAssertEqual(FocusLayoutMetrics.recordMinutesFontSize, 12)
         XCTAssertEqual(FocusLayoutMetrics.recordStatusDotSize, 5)
     }
 }

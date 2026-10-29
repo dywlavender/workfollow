@@ -176,6 +176,22 @@ enum WFColors {
     static let taskCompletedMetadata = themed(rgb(0xE0E0E0), rgb(0x707070))
     static let taskCompletedCount = themed(rgb(0xA6A6A6), rgb(0xA0A0A0))
 
+    // MARK: 滴答灰阶（2026-10-29 从滴答浅色截图取样）
+    //
+    // 滴答不是“主色 + 一个次级灰”，而是三层灰：正文预览 #757575、
+    // 元信息/计数 #A3A3A3、侧栏分组 #BABABA。此前预览和元信息都用
+    // `secondaryText`，两层挤在一起，列表看起来比滴答“重”。
+    /// 任务行正文预览。
+    static let taskPreviewText = themed(rgb(0x757575), rgb(0xA8A8A8))
+    /// 任务行元信息、日期（非今天）、分组计数、侧栏计数。
+    static let taskMetaText = themed(rgb(0xA3A3A3), rgb(0x7C7C7C))
+    /// 侧栏最弱一档：分组标题、空分组提示。
+    static let faintText = themed(rgb(0xBABABA), rgb(0x6E6E6E))
+    /// 编辑区正文墨色。滴答 2026-10-30 AX 实测任务详情：标题 PingFang Medium 19、
+    /// 正文 PingFang Regular 14，墨色都是 #191919；系统 `labelColor` 在白底上
+    /// 解析成 #262626（85% 黑），比滴答浅一档，编辑器里一行行看会很虚。
+    static let documentText = themed(rgb(0x191919), rgb(0xEDEDED))
+
     // MARK: 锚定浮层（日历/四象限的编辑器与新建卡）
 
     /// 浮层底色（Flutter `WorkFollowTheme.overlay`）。它比 `content` 深一档：
