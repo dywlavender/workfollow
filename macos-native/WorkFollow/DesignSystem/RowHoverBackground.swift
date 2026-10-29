@@ -14,6 +14,8 @@ struct RowHoverBackground: NSViewRepresentable {
     var idleFill: Color = .clear
     var selectedFill: Color = WFColors.listSelection
     var hoverFill: Color = WFColors.hover
+    /// 菜单子窗口通常不成为 key window，需用 app 级追踪才能收到 hover。
+    var activeInActiveApp = false
     /// 需要悬停时显示行内操作的行接这个回调；只画背景的行留空即可。
     var onHoverChanged: ((Bool) -> Void)?
 
@@ -34,6 +36,7 @@ struct RowHoverBackground: NSViewRepresentable {
         view.idleFill = idleFill
         view.selectedFill = selectedFill
         view.hoverFill = hoverFill
+        view.activeInActiveApp = activeInActiveApp
         view.setSelected(selected)
     }
 }
@@ -65,6 +68,12 @@ final class RowHoverView: NSView {
     var hoverFill: Color = WFColors.hover {
         didSet { if hoverFill != oldValue { paint() } }
     }
+    var activeInActiveApp = false {
+        didSet {
+            guard activeInActiveApp != oldValue else { return }
+            updateTrackingAreas()
+        }
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -92,8 +101,9 @@ final class RowHoverView: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let pointerArea { removeTrackingArea(pointerArea) }
+        let activity: NSTrackingArea.Options = activeInActiveApp ? .activeInActiveApp : .activeInKeyWindow
         let area = NSTrackingArea(rect: .zero,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)
+            options: [.mouseEnteredAndExited, activity, .inVisibleRect], owner: self, userInfo: nil)
         addTrackingArea(area)
         pointerArea = area
     }
@@ -145,6 +155,7 @@ private struct RowHoverBackgroundModifier: ViewModifier {
     let idleFill: Color
     let selectedFill: Color
     let hoverFill: Color
+    let activeInActiveApp: Bool
     let onHoverChanged: ((Bool) -> Void)?
 
     func body(content: Content) -> some View {
@@ -155,6 +166,7 @@ private struct RowHoverBackgroundModifier: ViewModifier {
                                idleFill: idleFill,
                                selectedFill: selectedFill,
                                hoverFill: hoverFill,
+                               activeInActiveApp: activeInActiveApp,
                                onHoverChanged: onHoverChanged)
         }
     }
@@ -170,6 +182,7 @@ extension View {
         idleFill: Color = .clear,
         selectedFill: Color = WFColors.listSelection,
         hoverFill: Color = WFColors.hover,
+        activeInActiveApp: Bool = false,
         onHoverChanged: ((Bool) -> Void)? = nil
     ) -> some View {
         modifier(RowHoverBackgroundModifier(selected: selected,
@@ -178,6 +191,7 @@ extension View {
                                             idleFill: idleFill,
                                             selectedFill: selectedFill,
                                             hoverFill: hoverFill,
+                                            activeInActiveApp: activeInActiveApp,
                                             onHoverChanged: onHoverChanged))
     }
 }

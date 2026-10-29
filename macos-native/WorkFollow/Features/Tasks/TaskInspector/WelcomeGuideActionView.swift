@@ -11,6 +11,8 @@ struct WelcomeGuideActionView: View {
     var body: some View {
         if action == .agentAccess {
             AgentAccessGuideView()
+        } else if action == .aiConfiguration {
+            AIConfigurationGuideView(prepareSettings: perform)
         } else {
             navigationAction
         }

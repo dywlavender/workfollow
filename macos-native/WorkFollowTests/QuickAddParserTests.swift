@@ -267,4 +267,268 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(unknownList, "")
         XCTAssertFalse(unknownList.contains("@冰箱"))
     }
+
+    // MARK: - 滴答「🕑 智能识别」表格对齐
+
+    /// 时段词单独出现时按默认钟点落到最近的有效时刻。
+    /// 参考：滴答帮助「智能识别」日期和时间表（早上 7 点 … 晚上 8 点）。
+    func testBarePeriodWordsResolveToDefaultClocks() {
+        func due(_ input: String) -> Date? {
+            QuickAddParser.parse(input, now: now, calendar: calendar,
+                                 knownLists: ["收集箱"]).dueAt
+        }
+        // now = 2026-09-14(周一) 08:00，晚于 07:00 的时段顺延到次日。
+        XCTAssertEqual(due("早上"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 15, hour: 7)))
+        XCTAssertEqual(due("上午"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 9)))
+        XCTAssertEqual(due("中午"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 12)))
+        XCTAssertEqual(due("下午"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 13)))
+        XCTAssertEqual(due("傍晚"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 17)))
+        XCTAssertEqual(due("晚上"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 20)))
+        // 时段词不再留在标题里。
+        XCTAssertEqual(QuickAddParser.parse("下午", now: now, calendar: calendar,
+                                           knownLists: []).title, "")
+    }
+
+    func testIntervalRecurrenceKeepsCadenceAndClearsTitle() {
+        func parse(_ input: String) -> QuickAddParseResult {
+            QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: ["收集箱"])
+        }
+        XCTAssertEqual(parse("每2天").recurrenceRule?.interval, 2)
+        XCTAssertEqual(parse("每2天").recurrence, .daily)
+        XCTAssertEqual(parse("每2周").recurrenceRule?.interval, 2)
+        XCTAssertEqual(parse("每2周").recurrence, .weekly)
+        XCTAssertEqual(parse("每2月").recurrenceRule?.interval, 2)
+        XCTAssertEqual(parse("每2月").recurrence, .monthly)
+        XCTAssertEqual(parse("每2天").title, "")
+        // 裸「每周」不再被当成标题文字。
+        XCTAssertEqual(parse("每周").recurrence, .weekly)
+        XCTAssertEqual(parse("每周").title, "")
+    }
+
+    func testYearlyWorkdayAndWeekendRecurrenceVocabulary() {
+        func parse(_ input: String) -> QuickAddParseResult {
+            QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: ["收集箱"])
+        }
+        let march = parse("每年3月")
+        XCTAssertEqual(march.recurrence, .yearly)
+        XCTAssertEqual(march.recurrenceRule?.month, 3)
+        XCTAssertEqual(march.recurrenceRule?.monthDay, 1)
+
+        let march6 = parse("每年3月6日")
+        XCTAssertEqual(march6.recurrence, .yearly)
+        XCTAssertEqual(march6.recurrenceRule?.month, 3)
+        XCTAssertEqual(march6.recurrenceRule?.monthDay, 6)
+
+        XCTAssertEqual(parse("每个工作日").recurrence, .workdays)
+        XCTAssertEqual(parse("每周末").recurrence, .weekends)
+        XCTAssertEqual(parse("每月1日").recurrenceRule?.monthDay, 1)
+        XCTAssertEqual(parse("每月最后1天").recurrenceRule?.monthlyOrdinal, -1)
+    }
+
+    /// 滴答把「提前 N」解析成准时 + 提前 N 的双提醒。
+    func testAdvanceReminderProducesTimelyPlusEarlyOffsets() {
+        func offsets(_ input: String) -> [Int] {
+            QuickAddParser.parse(input, now: now, calendar: calendar,
+                                 knownLists: ["收集箱"]).reminderOffsets
+        }
+        XCTAssertEqual(offsets("今天下午3点，提前3分钟"), [-3, 0])
+        XCTAssertEqual(offsets("今天下午3点 提前1小时"), [-60, 0])
+        XCTAssertEqual(offsets("今天下午3点 提前1天"), [-1440, 0])
+        // 「提前提醒我」按表格默认 5 分钟。
+        XCTAssertEqual(offsets("今天下午3点 提前提醒我"), [-5, 0])
+        // 提醒片段不再污染标题。
+        XCTAssertEqual(QuickAddParser.parse("今天下午3点，提前3分钟", now: now,
+                                           calendar: calendar, knownLists: []).title, "")
+        // 没有提前提醒时不产出 offsets，旧路径不受影响。
+        XCTAssertTrue(offsets("今天下午3点").isEmpty)
+    }
+
+    func testRelativeIntervalsCoverCompositeWeeksMonthsAndYears() {
+        func due(_ input: String) -> Date? {
+            QuickAddParser.parse(input, now: now, calendar: calendar,
+                                 knownLists: ["收集箱"]).dueAt
+        }
+        // 组合时长曾错误地只吃下「1小时」，把「30分钟后」留在标题里。
+        XCTAssertEqual(due("1小时30分钟后"), now.addingTimeInterval(90 * 60))
+        XCTAssertEqual(due("2周后"), calendar.date(from: DateComponents(year: 2026, month: 9, day: 28)))
+        XCTAssertEqual(due("1个月后"), calendar.date(from: DateComponents(year: 2026, month: 10, day: 14)))
+        XCTAssertEqual(due("1年后"), calendar.date(from: DateComponents(year: 2027, month: 9, day: 14)))
+        XCTAssertEqual(QuickAddParser.parse("1小时30分钟后", now: now, calendar: calendar,
+                                           knownLists: []).title, "")
+    }
+
+    func testReminderOffsetsLabelReadsAsTimelyPlusEarly() {
+        XCTAssertEqual(QuickAddParser.reminderOffsetsLabel([-3, 0]), "提前3分钟 + 准时")
+        XCTAssertEqual(QuickAddParser.reminderOffsetsLabel([-60, 0]), "提前1小时 + 准时")
+    }
+
+    /// 时段词只是普通名词的一部分时不能被吃进日程（「下午茶」「早上好」）。
+    func testPeriodWordInsideLargerWordStaysInTitle() {
+        for word in ["下午茶时间", "早上好", "晚上市"] {
+            let parsed = QuickAddParser.parse(word, now: now, calendar: calendar,
+                                              knownLists: ["收集箱"])
+            XCTAssertNil(parsed.dueAt, "\(word) 不应被识别成时间")
+            XCTAssertEqual(parsed.title, word)
+        }
+        // 紧跟动词时仍按默认钟点生效。
+        let meeting = QuickAddParser.parse("下午开会", now: now, calendar: calendar,
+                                           knownLists: ["收集箱"])
+        XCTAssertEqual(meeting.title, "开会")
+        XCTAssertEqual(meeting.dueAt, calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 13)))
+    }
+
+    /// 时段词 + 数字时钟时，下午/傍晚/晚上都要推进到 24 小时制。
+    func testAfternoonPeriodWordsShiftClockIntoTwentyFourHourRange() {
+        func hour(_ input: String) -> Int? {
+            QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: ["收集箱"])
+                .dueAt.map { calendar.component(.hour, from: $0) }
+        }
+        XCTAssertEqual(hour("下午3点"), 15)
+        XCTAssertEqual(hour("傍晚5点"), 17)
+        XCTAssertEqual(hour("晚上8点"), 20)
+        XCTAssertEqual(hour("上午9点"), 9)
+        XCTAssertEqual(hour("中午12点"), 12)
+    }
+
+    func testChineseNumeralsCoverElevenThroughTwentyThree() {
+        func hour(_ input: String) -> Int? {
+            QuickAddParser.parse(input, now: now, calendar: calendar, knownLists: ["收集箱"])
+                .dueAt.map { calendar.component(.hour, from: $0) }
+        }
+        XCTAssertEqual(hour("十一点"), 11)
+        XCTAssertEqual(hour("十点"), 10)
+        XCTAssertEqual(hour("二十三点"), 23)
+    }
+
+    /// 识别 chip 的可编辑性：只有日程类能点开面板改值，标签/清单/优先级不行。
+    func testOnlyScheduleTokensAreEditableThroughChip() {
+        XCTAssertTrue(QuickAddToken.Kind.date.isEditableScheduleToken)
+        XCTAssertTrue(QuickAddToken.Kind.time.isEditableScheduleToken)
+        XCTAssertTrue(QuickAddToken.Kind.reminder.isEditableScheduleToken)
+        XCTAssertTrue(QuickAddToken.Kind.recurrence.isEditableScheduleToken)
+        XCTAssertFalse(QuickAddToken.Kind.tag.isEditableScheduleToken)
+        XCTAssertFalse(QuickAddToken.Kind.list.isEditableScheduleToken)
+        XCTAssertFalse(QuickAddToken.Kind.priority.isEditableScheduleToken)
+    }
+
+    /// 提前提醒 chip 点开的是提醒页，保证「点 chip 改值」落到正确的面板页。
+    func testChipEditTargetsMatchingSchedulePage() {
+        func page(_ kind: QuickAddToken.Kind) -> TaskDatePopoverV2.Page? {
+            QuickAddParser
+                .parse("今天下午3点 提前3分钟", now: now, calendar: calendar, knownLists: [])
+                .tokens.first(where: { $0.kind == kind })
+                .flatMap { TaskDatePopoverV2.Page(editing: $0) }
+        }
+        XCTAssertEqual(page(.reminder), .reminder)
+        XCTAssertEqual(page(.date), .main)
+
+        let tag = QuickAddParser.parse("#工作 买牛奶", now: now, calendar: calendar, knownLists: [])
+            .tokens.first(where: { $0.kind == .tag })!
+        XCTAssertNil(TaskDatePopoverV2.Page(editing: tag))
+    }
+
+    // MARK: - 面板改值回写文字
+
+    private func draft(_ due: Date?, end: Date? = nil, hasTime: Bool = true,
+                       offsets: [Int] = [], repeat repeatFrequency: TaskRepeat = .never,
+                       rule: RecurrenceRule? = nil) -> QuickAddScheduleDraft {
+        QuickAddScheduleDraft(dueAt: due, dueEndAt: end, hasTime: hasTime,
+                              reminderOffsets: offsets, repeatFrequency: repeatFrequency,
+                              recurrenceRule: rule)
+    }
+
+    private func rewritten(_ text: String, _ value: QuickAddScheduleDraft) -> String? {
+        QuickAddScheduleTextSync.rewrite(text, to: value, now: now, calendar: calendar,
+                                         knownLists: ["收集箱", "个人"])
+    }
+
+    /// 核心诉求：面板把「提前3分钟」改成 30 分钟后，文字和 chip 要立刻跟上。
+    func testSchedulePanelEditRewritesReminderText() throws {
+        let text = "开会 今天下午3点，提前3分钟"
+        let updated = draft(calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 15)),
+                            offsets: [-30, 0])
+        let result = try XCTUnwrap(rewritten(text, updated))
+        XCTAssertTrue(result.contains("提前30分钟"), result)
+        XCTAssertFalse(result.contains("提前3分钟"), result)
+
+        let reparsed = QuickAddParser.parse(result, now: now, calendar: calendar, knownLists: [])
+        XCTAssertEqual(reparsed.reminderOffsets, [-30, 0])
+        XCTAssertEqual(reparsed.title, "开会")
+    }
+
+    func testSchedulePanelEditRewritesDateAndKeepsOtherTokens() throws {
+        let text = "评审 明天9点 提前1小时 #工作 @个人"
+        let updated = draft(calendar.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 9)),
+                            offsets: [-60, 0])
+        let result = try XCTUnwrap(rewritten(text, updated))
+        let reparsed = QuickAddParser.parse(result, now: now, calendar: calendar,
+                                            knownLists: ["个人"])
+        XCTAssertEqual(reparsed.dueAt, calendar.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 9)))
+        XCTAssertEqual(reparsed.reminderOffsets, [-60, 0])
+        // 标签与清单必须原样存活，标题不被污染。
+        XCTAssertEqual(reparsed.tags, ["工作"])
+        XCTAssertEqual(reparsed.listName, "个人")
+        XCTAssertEqual(reparsed.title, "评审")
+    }
+
+    /// 新增重复：文字里原本没有重复片段时也要落笔，否则 chip 会漏掉这一项。
+    func testSchedulePanelEditCanIntroduceNewRecurrence() throws {
+        let text = "开会 今天下午3点，提前3分钟"
+        let updated = draft(calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 15)),
+                            offsets: [-3, 0], repeat: .daily)
+        let result = try XCTUnwrap(rewritten(text, updated))
+        let reparsed = QuickAddParser.parse(result, now: now, calendar: calendar, knownLists: [])
+        XCTAssertEqual(reparsed.recurrence, .daily)
+        XCTAssertEqual(reparsed.reminderOffsets, [-3, 0])
+    }
+
+    func testSchedulePanelEditCarriesTimeRange() throws {
+        let text = "开会 今天下午3点，提前3分钟"
+        let updated = draft(calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 15)),
+                            end: calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 17)),
+                            offsets: [-3, 0])
+        let result = try XCTUnwrap(rewritten(text, updated))
+        let reparsed = QuickAddParser.parse(result, now: now, calendar: calendar, knownLists: [])
+        XCTAssertEqual(reparsed.dueEndAt,
+                       calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 17)))
+    }
+
+    /// 清空提醒后文字里不该残留悬空标点。
+    func testClearingReminderLeavesNoDanglingPunctuation() throws {
+        let text = "开会 今天下午3点，提前3分钟"
+        let updated = draft(calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 15)))
+        let result = try XCTUnwrap(rewritten(text, updated))
+        XCTAssertFalse(result.hasSuffix("，"), result)
+        XCTAssertFalse(result.hasSuffix(","), result)
+        XCTAssertEqual(QuickAddParser.parse(result, now: now, calendar: calendar,
+                                            knownLists: []).reminderOffsets, [])
+    }
+
+    /// 没有日程片段的纯标题：不回写，交给 override（避免把标题改坏）。
+    func testTextWithoutScheduleTokensIsNotRewritten() {
+        XCTAssertNil(rewritten("开会", draft(calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 15)))))
+    }
+
+    func testTextRangeParsingProducesEndTime() {
+        let parsed = QuickAddParser.parse("9点至11点 开会", now: now, calendar: calendar,
+                                          knownLists: [])
+        XCTAssertEqual(parsed.title, "开会")
+        XCTAssertEqual(parsed.dueAt,
+                       calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 9)))
+        XCTAssertEqual(parsed.dueEndAt,
+                       calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 11)))
+        // 跨天区间：结束落到次日。
+        let overnight = QuickAddParser.parse("23点至1点", now: now, calendar: calendar,
+                                             knownLists: [])
+        XCTAssertEqual(overnight.dueEndAt,
+                       calendar.date(from: DateComponents(year: 2026, month: 9, day: 15, hour: 1)))
+    }
+
+    func testAbsoluteYearDateParsesForWriteBack() {
+        let parsed = QuickAddParser.parse("2026年9月15日 09:00 开会", now: now,
+                                          calendar: calendar, knownLists: [])
+        XCTAssertEqual(parsed.title, "开会")
+        XCTAssertEqual(parsed.dueAt,
+                       calendar.date(from: DateComponents(year: 2026, month: 9, day: 15, hour: 9, minute: 0)))
+    }
 }

@@ -215,7 +215,7 @@ final class TaskContextPanelTests: XCTestCase {
         workspace.setTags(id, ["REA 标签验收"])
         let environment = AppEnvironment()
         let titles = ["添加子任务", "关联主任务", "置顶", "放弃", "移动到", "标签", "开始专注",
-                      "创建副本", "复制链接", "打开便签", "转换为笔记", "删除"]
+                      "创建副本", "复制链接", "打开浮窗", "转换为笔记", "删除"]
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let probe = MenuProbe()
             let (owner, session) = try openMenu(workspace: workspace, taskID: id,

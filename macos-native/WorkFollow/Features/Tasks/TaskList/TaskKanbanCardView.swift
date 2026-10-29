@@ -7,6 +7,7 @@ struct TaskKanbanCardView: View {
     var hidesCompleted = false
     var hidesDetails = false
     var hiddenFields: [TaskRowDetailField] = []
+    var showsChecklist = true
     let onSelect: (UUID) -> Void
 
     var body: some View {
@@ -15,6 +16,7 @@ struct TaskKanbanCardView: View {
                 TaskKanbanTaskRow(node: node, workspace: workspace,
                                   showsListBadge: showsListBadge,
                                   hidesDetails: hidesDetails, hiddenFields: hiddenFields,
+                                  showsChecklist: showsChecklist,
                                   onSelect: { onSelect(node.task.id) })
                     .padding(.leading, node.depth == 0 ? 0 : 32)
             }
@@ -38,6 +40,7 @@ private struct TaskKanbanTaskRow: View {
     let showsListBadge: Bool
     let hidesDetails: Bool
     let hiddenFields: [TaskRowDetailField]
+    let showsChecklist: Bool
     let onSelect: () -> Void
     @EnvironmentObject private var environment: AppEnvironment
     @State private var hovering = false
@@ -73,6 +76,7 @@ private struct TaskKanbanTaskRow: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverTip(node.expanded ? "收起子任务" : "展开子任务")
                 .accessibilityLabel((node.expanded ? "收起子任务：" : "展开子任务：") + task.title)
                 .taskTreeRenderAnchor(task.id, .disclosure)
             }
@@ -80,6 +84,7 @@ private struct TaskKanbanTaskRow: View {
                 TaskRowCompletionBox(task: task).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(workspace.isListArchived(task.list.name))
             .accessibilityLabel(task.isClosed ? "恢复：\(task.title)" : "完成：\(task.title)")
             .taskTreeRenderAnchor(task.id, .checkbox)
 
@@ -92,13 +97,16 @@ private struct TaskKanbanTaskRow: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .taskTreeRenderAnchor(task.id, .title)
-                if let preview = details.preview {
+                if task.kind != .checklist, let preview = details.preview {
                     Text(preview)
                         .font(WFType.supporting)
                         .foregroundStyle(muted)
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .taskTreeRenderAnchor(task.id, .preview)
+                }
+                if showsChecklist, task.kind == .checklist {
+                    checklistItems
                 }
                 metadataDetails
             }
@@ -121,6 +129,7 @@ private struct TaskKanbanTaskRow: View {
         .kanbanDropFrame(.row(task.id))
         .overlay {
             SecondaryClickCapture { rowView, point in
+                guard !workspace.isListArchived(task.list.name) else { return }
                 guard let current = workspace.task(for: task.id) else { return }
                 TaskContextMenuPresenter.show(in: rowView, at: point,
                                               environment: environment,
@@ -140,6 +149,34 @@ private struct TaskKanbanTaskRow: View {
         // Existing sidebar/calendar destinations accept the transferable's
         // copy operation but perform a domain move; board columns propose move.
         .modifier(TaskReorderDragPolicy(allowsCopyWithinApp: true))
+    }
+
+    private var checklistItems: some View {
+        let items = TaskKanbanChecklistItem.items(in: task)
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(items.prefix(5))) { item in
+                Button {
+                    guard let current = workspace.task(for: task.id),
+                          var document = try? current.document.materialized(),
+                          let index = document.blocks.firstIndex(where: { $0.id == item.id }),
+                          case .checklist(let checked) = document.blocks[index].kind else { return }
+                    document.blocks[index].kind = .checklist(!checked)
+                    _ = workspace.setDocument(task.id, document)
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: item.checked ? "checkmark.square.fill" : "square")
+                        Text(item.text).lineLimit(1).strikethrough(item.checked)
+                    }.font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                }
+                .buttonStyle(.plain).disabled(workspace.isListArchived(task.list.name))
+                .accessibilityLabel((item.checked ? "取消完成检查事项：" : "完成检查事项：") + item.text)
+                .taskTreeRenderAnchor(task.id, .checklist(item.id))
+            }
+            if items.count > 5 {
+                Button("还有 \(items.count - 5) 项", action: onSelect).buttonStyle(.plain)
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+            }
+        }
     }
 
     @ViewBuilder
@@ -208,6 +245,7 @@ private struct TaskKanbanTaskRow: View {
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
+                .disabled(workspace.isListArchived(task.list.name))
                 .foregroundStyle(scheduleColor)
                 .help("修改安排日期")
                 .accessibilityLabel("安排日期：\(task.title.isEmpty ? "无标题" : task.title)")
@@ -237,19 +275,21 @@ private struct TaskKanbanTaskRow: View {
             if details.showsPinned {
                 Image(systemName: "pin.fill")
                     .foregroundStyle(task.isClosed ? muted : WFColors.accent)
+                    .hoverTip("已置顶")
                     .accessibilityLabel("已置顶")
             }
             if details.showsAbandoned { Text("已放弃") }
             if details.showsPriority {
                 Image(systemName: "flag.fill")
                     .foregroundStyle(task.isClosed ? muted : TaskRowPriority.color(task.priority))
+                    .hoverTip(TaskRowPriority.title(task.priority))
                     .accessibilityLabel(TaskRowPriority.title(task.priority))
             }
             ForEach(details.indicators) { item in
                 if let value = item.value {
-                    Text(value).accessibilityLabel(item.accessibilityLabel)
+                    Text(value).hoverTip(item.accessibilityLabel).accessibilityLabel(item.accessibilityLabel)
                 } else if let symbol = item.symbol {
-                    Image(systemName: symbol).accessibilityLabel(item.accessibilityLabel)
+                    Image(systemName: symbol).hoverTip(item.accessibilityLabel).accessibilityLabel(item.accessibilityLabel)
                 }
             }
         }

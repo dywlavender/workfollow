@@ -13,7 +13,7 @@ struct SettingsShellView: View {
                 .tabItem { Label("通用", systemImage: "gearshape") }
                 .tag(SettingsSection.general)
 
-            SettingsAIModelsView(store: environment.meetingStore, catalog: aiCatalog)
+            SettingsAIModelsView(store: environment.meetingStore, models: environment.aiModels, catalog: aiCatalog)
                 .tabItem { Label("AI 模型", systemImage: "sparkles") }
                 .tag(SettingsSection.ai)
 

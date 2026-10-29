@@ -153,7 +153,7 @@ struct MeetingWorkspaceView: View {
             HStack(spacing: WFSpace.sm) {
                 if compact, store.selected != nil {
                     Button { detailOnly = false } label: { Image(systemName: "chevron.left") }
-                        .buttonStyle(.plain).help("返回会议列表")
+                        .buttonStyle(.plain).hoverTip("返回会议列表")
                 }
                 Text("会议纪要").font(WFType.pageTitle)
                 Spacer(minLength: WFSpace.sm)
@@ -163,7 +163,7 @@ struct MeetingWorkspaceView: View {
                 }
                 .buttonStyle(.plain).foregroundStyle(.white)
                 .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6))
-                .help("新建会议").accessibilityLabel("新建会议")
+                .hoverTip("新建会议").accessibilityLabel("新建会议")
             }
             .frame(height: 44)
 
@@ -251,7 +251,7 @@ struct MeetingWorkspaceView: View {
           .allowsHitTesting(hoveredMeetingID == meeting.id)
           .accessibilityHidden(hoveredMeetingID != meeting.id)
           .accessibilityLabel("删除会议记录：\(meeting.title.isEmpty ? "未命名会议" : meeting.title)")
-          .help(store.canDelete(meeting.id) ? "删除会议记录" : "请结束录音及转写后再删除")
+          .hoverTip(store.canDelete(meeting.id) ? "删除会议记录" : "请结束录音及转写后再删除")
           .padding(.trailing, WFSpace.md)
         }
         .contentShape(Rectangle())
@@ -695,7 +695,7 @@ struct MeetingWorkspaceView: View {
             } label: { Image(systemName: "doc.on.doc") }
             .controlSize(.small)
             .disabled(meeting.minutes.isEmpty)
-            .help("复制纪要").accessibilityLabel("复制纪要")
+            .hoverTip("复制纪要").accessibilityLabel("复制纪要")
             Spacer(minLength: WFSpace.sm)
             if meeting.minutesIsManual {
                 Text("自动编写已暂停").font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)

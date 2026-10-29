@@ -135,15 +135,48 @@ final class TaskKanbanHierarchyTests: XCTestCase {
         @ObservedObject var workspace: TaskWorkspaceModel
         let id: UUID
         let onSelect: (UUID) -> Void
+        var showsChecklist = true
         var body: some View {
             VStack(alignment: .leading, spacing: 0) {
                 if let task = workspace.task(for: id) {
-                    TaskKanbanCardView(task: task, workspace: workspace, onSelect: onSelect)
+                    TaskKanbanCardView(task: task, workspace: workspace, showsChecklist: showsChecklist, onSelect: onSelect)
                         .frame(width: 256)
                 }
                 Spacer(minLength: 0)
             }
         }
+    }
+
+    func testChecklistCardControlsUpdateTheDocumentAndRespectDisplaySetting() throws {
+        var source = task("出差准备"); source.kind = .checklist
+        source.document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "核对车票")]),
+            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "整理材料")])
+        ])
+        let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: calendar,
+            seedDemoData: false, initialTasks: [source], initialLists: ["工作"])
+        let itemID = source.document.blocks[0].id
+        var frames: [TaskTreeRenderAnchor: CGRect] = [:], selections: [UUID] = []
+        func content(_ shown: Bool) -> AnyView {
+            AnyView(LiveCard(workspace: workspace, id: source.id, onSelect: { selections.append($0) }, showsChecklist: shown)
+                .frame(width: 600, height: 500, alignment: .topLeading)
+                .coordinateSpace(name: "task-tree-render").environment(\.recordsTaskTreeFrames, true)
+                .onPreferenceChange(TaskTreeFramesKey.self) { frames = $0 }.environmentObject(AppEnvironment()))
+        }
+        let host = NSHostingView(rootView: content(true))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 600, height: 500)
+        defer { window.close() }
+        let frame = try XCTUnwrap(frames[.init(taskID: source.id, part: .checklist(itemID))])
+        try InspectorPanelTestSupport.click(frame, in: host, window: window)
+        XCTAssertEqual(workspace.task(for: source.id)?.document.blocks.first?.kind, .checklist(true))
+        XCTAssertEqual(workspace.checklistProgress(for: try XCTUnwrap(workspace.task(for: source.id))), "2/2")
+        XCTAssertTrue(try XCTUnwrap(workspace.task(for: source.id)).isClosed, "所有检查事项完成后沿用编辑器的整项完成规则")
+        XCTAssertTrue(selections.isEmpty, "点击检查事项不触发整张卡片的选择")
+        workspace.undo()
+        XCTAssertEqual(workspace.task(for: source.id)?.document.blocks.first?.kind, .checklist(false))
+        XCTAssertFalse(try XCTUnwrap(workspace.task(for: source.id)).isClosed)
+        host.rootView = content(false); InspectorPanelTestSupport.settle(window)
+        XCTAssertNil(frames[.init(taskID: source.id, part: .checklist(itemID))])
     }
 
     func testRenderedChildControlsSelectCompleteAndOpenOwnDateWithoutSelectingParent() throws {

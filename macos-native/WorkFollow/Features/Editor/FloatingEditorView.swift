@@ -1,58 +1,71 @@
 import AppKit
 import SwiftUI
 
+enum FloatingEditorMetrics {
+    /// 顶栏与标题行都压在标题栏区域内，避免两行之间出现大段空白。
+    static let topBarHeight: CGFloat = 44
+    static let titleRowHeight: CGFloat = 36
+    /// 与任务详情同一内容原点：顶栏、标题、正文左缘统一 20pt。
+    static let contentHorizontalPadding: CGFloat = TaskInspectorMetrics.horizontalPadding
+    /// TextKit 容器自带 5pt fragment padding，宿主少留 5pt 才能让正文与标题对齐。
+    static var documentLeadingPadding: CGFloat {
+        contentHorizontalPadding - DocumentEditorPresentationMetrics.textContainerFragmentPadding
+    }
+}
+
 /// The same top-level entry is used by task and note inspectors.
 struct FloatingEditorButton: View {
     let action: () -> Void
 
     var body: some View {
         AppKitIconButton(symbol: "rectangle.on.rectangle", pointSize: 13,
-                         tint: .inspectorSecondary, accessibilityLabel: "打开便签", action: action)
+                         tint: .inspectorSecondary, accessibilityLabel: "打开浮窗", action: action)
             .frame(width: 24, height: WFMetrics.controlHeight)
-            .help("打开便签")
             .inspectorRenderAnchor(.detach)
     }
 }
 
 /// Shared title, native rich-text editor, scrolling and formatting controls.
 /// Host adapters only supply their document and business actions.
-struct FloatingEditorView<Actions: View>: View {
+struct FloatingEditorView<Actions: View, TopBar: View>: View {
     let documentID: UUID
     @Binding var title: String
     let titlePlaceholder: String
+    var titleAccessibilityLabel: String = "标题"
     let document: NativeDocument
     let onDocumentChange: (NativeDocument) -> Void
     let profile: DocumentProfile
     @ObservedObject var editorHandle: DocumentEditorHandle
     var focusAtEnd = false
     let onClose: () -> Void
-    let onOpenInMain: () -> Void
     let actions: Actions
-    @State private var showFormatToolbar = false
+    /// 放在隐藏标题栏的上下文栏：任务属性或笔记日期，替代原来的顶部空白。
+    @ViewBuilder let topBar: () -> TopBar
+    @State private var titleEditing = false
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                FloatingEditorDragHandle()
-                    .frame(width: 16, height: 22)
-                    .overlay {
-                        Image(systemName: "line.3.horizontal")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(WFColors.tertiaryText)
-                            .allowsHitTesting(false)
-                    }
-                TextField(titlePlaceholder, text: $title)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15, weight: .semibold))
-                    .onSubmit { editorHandle.focusEditor() }
-                Spacer(minLength: 8)
-                headerButton("arrow.up.right.square", help: "在主页打开", action: onOpenInMain)
-                headerButton("xmark", help: "关闭便签", action: onClose)
+            HStack(spacing: 0) {
+                topBar()
+                    .frame(maxWidth: .infinity)
+                FloatingEditorCloseButton(action: onClose)
+                    .padding(.trailing, FloatingEditorMetrics.contentHorizontalPadding)
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 14)
-            .frame(height: 44)
+            .frame(height: FloatingEditorMetrics.topBarHeight)
             Divider()
+            DocumentFormattingToolbarRow(handle: editorHandle,
+                                         leadingPadding: FloatingEditorMetrics.documentLeadingPadding,
+                                         trailingPadding: FloatingEditorMetrics.contentHorizontalPadding)
+            Divider()
+            AppKitTaskTitleField(text: $title, isEditing: $titleEditing,
+                                 placeholder: titlePlaceholder,
+                                 font: .systemFont(ofSize: 15, weight: .semibold),
+                                 accessibilityLabel: titleAccessibilityLabel,
+                                 singleLine: true,
+                                 onSubmit: { editorHandle.focusEditor() })
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, FloatingEditorMetrics.contentHorizontalPadding)
+                .frame(height: FloatingEditorMetrics.titleRowHeight)
             GeometryReader { viewport in
                 ScrollView {
                     DocumentEditor(documentID: documentID, document: document,
@@ -64,7 +77,8 @@ struct FloatingEditorView<Actions: View>: View {
                                 DocumentEditorPlaceholder(title: "随手记下…")
                             }
                         }
-                        .padding(.horizontal, 28)
+                        .padding(.leading, FloatingEditorMetrics.documentLeadingPadding)
+                        .padding(.trailing, FloatingEditorMetrics.contentHorizontalPadding)
                         .padding(.top, 14)
                         .padding(.bottom, 28)
                         .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .topLeading)
@@ -80,13 +94,12 @@ struct FloatingEditorView<Actions: View>: View {
                     .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 Spacer()
                 actions
-                DocumentFormattingToggle(isPresented: $showFormatToolbar, handle: editorHandle)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, FloatingEditorMetrics.contentHorizontalPadding)
             .frame(height: DocumentEditorPresentationMetrics.footerHeight)
         }
+        .ignoresSafeArea(.container, edges: .top)
         .background(WFColors.content)
-        .documentFormattingToolbar(isPresented: showFormatToolbar, handle: editorHandle)
         .task {
             for _ in 0..<10 {
                 if editorHandle.textView?.window != nil {
@@ -99,22 +112,19 @@ struct FloatingEditorView<Actions: View>: View {
             }
         }
     }
-
-    private func headerButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .medium))
-                .foregroundStyle(WFColors.secondaryText)
-                .frame(width: 24, height: 24).contentShape(Rectangle())
-        }.help(help)
-    }
 }
 
-private struct FloatingEditorDragHandle: NSViewRepresentable {
-    func makeNSView(context: Context) -> DragView { DragView() }
-    func updateNSView(_ nsView: DragView, context: Context) {}
-    final class DragView: NSView {
-        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
-        override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+private struct FloatingEditorCloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark").font(.system(size: 12, weight: .medium))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 24, height: 24).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverTip("关闭浮窗")
+        .accessibilityLabel("关闭浮窗")
     }
 }

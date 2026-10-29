@@ -45,7 +45,7 @@
 		A00000000000000000000006 = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000012;
-			buildPhases = (A00000000000000000000008, A00000000000000000000009, A00000000000000000000010, D00000000000000000000011, F00000000000000000000011, F00000000000000000000014, F00000000000000000000017);
+			buildPhases = (A00000000000000000000008, A00000000000000000000009, A00000000000000000000010, D00000000000000000000011, F00000000000000000000011, F00000000000000000000014, F00000000000000000000017, A10000000000000000000001);
 			buildRules = ();
 			dependencies = (D00000000000000000000009, F00000000000000000000009);
 			fileSystemSynchronizedGroups = (A00000000000000000000003, E00000000000000000000002, F00000000000000000000013);
@@ -58,6 +58,18 @@
 		A00000000000000000000008 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A00000000000000000000009 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A00000000000000000000010 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (C00000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000001 = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			name = "Embed App AI backend";
+			outputPaths = ();
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 \"${SRCROOT}/scripts/bundle-ai-backend.py\" embed --if-ready --app \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\n";
+		};
 		C00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = text; name = "Meeting Minutes Skill"; path = "../.pi/skills/meeting-minutes/SKILL.md"; sourceTree = "<group>"; };
 		C00000000000000000000002 = { isa = PBXBuildFile; fileRef = C00000000000000000000001; };
 		A00000000000000000000011 = {
@@ -76,6 +88,7 @@
 			isa = XCBuildConfiguration;
 			name = Debug;
 			buildSettings = {
+				ARCHS = arm64;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
@@ -92,6 +105,7 @@
 			isa = XCBuildConfiguration;
 			name = Release;
 			buildSettings = {
+				ARCHS = arm64;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;

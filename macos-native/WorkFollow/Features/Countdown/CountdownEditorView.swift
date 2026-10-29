@@ -367,7 +367,7 @@ struct CountdownEditorView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("图标")
+            .hoverTip("图标")
             .accessibilityLabel("图标")
             .background(AnchoredPropertyPanel(isPresented: $symbolPickerOpen, width: PopupMetrics.symbolPickerWidth) {
                 symbolPicker
@@ -483,7 +483,7 @@ struct CountdownEditorView: View {
                 .contentShape(Rectangle())
         }
         .fixedSize()
-        .help("从节日目录选择")
+        .hoverTip("从节日目录选择")
         .accessibilityLabel("选择节日")
     }
 
@@ -929,7 +929,9 @@ struct CountdownEditorView: View {
     }
 
     private func optionRow(_ title: String, checked: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        PopupMenuRow(action: action,
+                     minHeight: Self.popupRowHeight,
+                     horizontalPadding: WFSpace.sm) {
             HStack(spacing: WFSpace.sm) {
                 Text(title).font(WFType.supporting).lineLimit(1)
                 Spacer(minLength: WFSpace.xs)
@@ -940,12 +942,7 @@ struct CountdownEditorView: View {
                 }
             }
             .foregroundStyle(WFColors.text)
-            .padding(.horizontal, WFSpace.sm)
-            .frame(height: Self.popupRowHeight)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel(title)
     }
 
@@ -1210,6 +1207,7 @@ struct CountdownStyleView: View {
                             .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
+                        .hoverTip("颜色 \(index + 1)")
                         .accessibilityLabel("颜色 \(index + 1)")
                     }
                     Spacer(minLength: 0)

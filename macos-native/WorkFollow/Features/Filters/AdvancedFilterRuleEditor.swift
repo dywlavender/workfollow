@@ -31,7 +31,7 @@ struct AdvancedFilterRuleEditor: View {
                         Image(systemName: "xmark").font(.system(size: 10)).frame(width: 20, height: 20)
                     }
                     .buttonStyle(.plain).foregroundStyle(WFColors.tertiaryText)
-                    .help("移除此条件").accessibilityLabel("移除" + rule.kind.title + "条件")
+                    .hoverTip("移除此条件").accessibilityLabel("移除" + rule.kind.title + "条件")
                 }
                 valueEditor
             }
@@ -113,6 +113,10 @@ struct AdvancedFilterRuleEditor: View {
                             }
                         }
                         .toggleStyle(.checkbox)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .popupMenuRowBackground(cornerRadius: 6)
                     }
                 }
                 .padding(WFSpace.md).frame(maxWidth: .infinity, alignment: .leading)

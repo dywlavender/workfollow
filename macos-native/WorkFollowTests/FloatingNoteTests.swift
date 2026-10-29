@@ -38,6 +38,19 @@ final class FloatingNoteTests: XCTestCase {
         XCTAssertFalse(model.discardEmptyNote(UUID()))
     }
 
+    func testTickStyleDateUsesRelativePrefixes() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 12)))
+        func date(_ day: Int) throws -> Date {
+            try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: 9)))
+        }
+        XCTAssertEqual(NoteDateLabel.tickStyle(try date(28), calendar: calendar, now: now), "今天，10月28日")
+        XCTAssertEqual(NoteDateLabel.tickStyle(try date(27), calendar: calendar, now: now), "昨天，10月27日")
+        XCTAssertEqual(NoteDateLabel.tickStyle(try date(26), calendar: calendar, now: now), "前天，10月26日")
+        XCTAssertEqual(NoteDateLabel.tickStyle(try date(1), calendar: calendar, now: now), "10月1日")
+    }
+
     func testEditorPopupLevelFollowsFloatingOwnerOnly() {
         let owner = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
                              styleMask: [.titled], backing: .buffered, defer: false)

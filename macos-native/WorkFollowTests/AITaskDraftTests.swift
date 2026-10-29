@@ -109,7 +109,7 @@ final class AITaskDraftTests: XCTestCase {
     func testGenerationDoesNotMutateTasksAndCancellationDoesNotPublishResult() async throws {
         let session = AITaskDraftSession(), input = request(.task(UUID()))
         await session.generate(request: input) { prompt in
-            XCTAssertTrue(prompt.contains("不调用工具"))
+            XCTAssertEqual(prompt.backendParameters["action"] as? String, "breakdown_task")
             return "{\"tasks\":[{\"title\":\"整理报价项目\"}]}"
         }
         XCTAssertEqual(session.selectedCount, 1)
@@ -148,7 +148,7 @@ final class AITaskDraftTests: XCTestCase {
         var client = SummaryPiOptimizer()
         client.model = ProcessInfo.processInfo.environment["AITASK_AI_MODEL"] ?? ""
         let input = request()
-        let text = try await client.generate(prompt: input.prompt)
+        let text = try await client.generateTasks(input)
         let drafts = try AITaskDraft.decode(text, request: input)
         XCTAssertGreaterThanOrEqual(drafts.count, 2)
         XCTAssertTrue(drafts.contains { $0.title.contains("成本") })

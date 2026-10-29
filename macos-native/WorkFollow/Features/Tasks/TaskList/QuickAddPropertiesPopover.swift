@@ -66,13 +66,12 @@ struct QuickAddPropertiesPopover: View {
                 priorityButton(.none, color: WFColors.secondaryText)
             }
             Divider()
-            Button {
+            PopupMenuRow(action: {
                 activeChild = .list
-            } label: {
+            }, minHeight: WFMetrics.controlHeight, horizontalPadding: 0) {
                 propertyRow(icon: selectedList == TaskList.inbox.name ? "tray" : "list.bullet",
                             title: selectedList)
             }
-            .buttonStyle(.plain)
             .quickAddRenderAnchor(.list)
             .background(AnchoredPropertyPanel(isPresented: presented(.list), width: PopupMetrics.quickAddChildWidth,
                                               placement: .submenu, focusPolicy: .panel) {
@@ -83,12 +82,11 @@ struct QuickAddPropertiesPopover: View {
                         activeChild = nil
                     })
             })
-            Button {
+            PopupMenuRow(action: {
                 activeChild = .tags
-            } label: {
+            }, minHeight: WFMetrics.controlHeight, horizontalPadding: 0) {
                 propertyRow(icon: "tag", title: selectedTags.isEmpty ? "标签" : selectedTags.map { "#\($0)" }.joined(separator: " "))
             }
-            .buttonStyle(.plain)
             .quickAddRenderAnchor(.tags)
             .background(AnchoredPropertyPanel(isPresented: presented(.tags), width: PopupMetrics.tagPickerWidth,
                                               placement: .submenu, focusPolicy: .panel) {
@@ -100,29 +98,28 @@ struct QuickAddPropertiesPopover: View {
                     })
             })
             // 滴答属性菜单第 5 项（实测 2026-10-16）：附件（文件选择器）。
-            Button {
+            PopupMenuRow(action: {
                 pickAttachments()
-            } label: {
+            }, minHeight: WFMetrics.controlHeight, horizontalPadding: 0) {
                 propertyRow(icon: "paperclip",
                             title: attachments.isEmpty ? "附件" : "附件 \(attachments.count)",
                             hasChild: false)
             }
-            .buttonStyle(.plain)
             .quickAddRenderAnchor(.attachment)
             // 滴答属性菜单第 6 项（实测 2026-10-17）：从模板添加（带右 chevron，打开模板选择器）。
-            Button(action: onTemplate) {
+            PopupMenuRow(action: onTemplate,
+                         minHeight: WFMetrics.controlHeight,
+                         horizontalPadding: 0) {
                 propertyRow(icon: "doc.text", title: "从模板添加", hasChild: true)
             }
-            .buttonStyle(.plain)
             .quickAddRenderAnchor(.template)
             // 滴答属性菜单第 7 项（实测 2026-10-17）：输入框设置（简洁 / 详细）。
             // 滴答这一行在菜单最底部，图标是齿轮，不是滑杆。
-            Button {
+            PopupMenuRow(action: {
                 activeChild = .displayMode
-            } label: {
+            }, minHeight: WFMetrics.controlHeight, horizontalPadding: 0) {
                 propertyRow(icon: "gearshape", title: "输入框设置：\(displayMode.title)")
             }
-            .buttonStyle(.plain)
             .quickAddRenderAnchor(.displayMode)
             .background(AnchoredPropertyPanel(isPresented: presented(.displayMode), width: 250,
                                               placement: .submenu, focusPolicy: .panel) {
@@ -160,7 +157,9 @@ struct QuickAddPropertiesPopover: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(priorityLabel(priority))
+        .popupMenuRowBackground(selected: selectedPriority == priority,
+                                cornerRadius: WFMetrics.corner)
+        .hoverTip(priorityLabel(priority))
         .accessibilityLabel(priorityLabel(priority))
         .quickAddRenderAnchor(.priority(priority))
     }
@@ -202,7 +201,8 @@ private struct QuickAddDisplayModePopover: View {
     var body: some View {
         VStack(spacing: WFSpace.xs) {
             ForEach(QuickAddDisplayMode.allCases, id: \.self) { mode in
-                Button { onSelect(mode) } label: {
+                PopupMenuRow(action: { onSelect(mode) }, minHeight: 48,
+                             horizontalPadding: WFSpace.sm) {
                     HStack(spacing: WFSpace.md) {
                         Image(systemName: mode == .compact ? "rectangle" : "rectangle.split.1x2")
                             .foregroundStyle(WFColors.secondaryText)
@@ -216,11 +216,7 @@ private struct QuickAddDisplayModePopover: View {
                             Image(systemName: "checkmark").foregroundStyle(WFColors.accent)
                         }
                     }
-                    .padding(.horizontal, WFSpace.sm)
-                    .frame(height: 48)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .foregroundStyle(WFColors.text)
             }
         }
@@ -255,7 +251,9 @@ private struct QuickAddListPickerPopover: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(matches, id: \.self) { name in
-                        Button { onSelect(name) } label: {
+                        PopupMenuRow(action: { onSelect(name) },
+                                     minHeight: WFMetrics.controlHeight,
+                                     horizontalPadding: WFSpace.md) {
                             HStack(spacing: WFSpace.md) {
                                 Image(systemName: name == TaskList.inbox.name ? "tray" : "list.bullet")
                                     .foregroundStyle(WFColors.secondaryText)
@@ -264,18 +262,14 @@ private struct QuickAddListPickerPopover: View {
                                     Image(systemName: "checkmark").foregroundStyle(WFColors.accent)
                                 }
                             }
-                            .padding(.horizontal, WFSpace.md)
-                            .frame(height: WFMetrics.controlHeight)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                .compactScrollbars()
                     }
                     if matches.isEmpty {
                         Text("没有匹配的清单").font(WFType.supporting)
                             .foregroundStyle(WFColors.secondaryText).padding(WFSpace.lg)
                     }
                 }
+                .compactScrollbars()
             }
         }
         .frame(width: 250, height: 300)

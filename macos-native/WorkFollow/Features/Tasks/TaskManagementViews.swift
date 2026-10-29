@@ -39,21 +39,32 @@ enum TaskNamePrompt {
 /// 行样式对齐 Flutter _TaskListItem：色板圆点 + hover"⋯"清单操作 +
 /// 拖放高亮；置顶清单排在分组前。
 struct TaskCollectionsView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var showListEditor = false
+    @State private var archivedCopy: String?
+    @State private var folderEditor: TaskFolderEditingRequest?
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
     var collapsed: Bool = false
     var onToggleSection: () -> Void = {}
-    /// 折叠的文件夹（视图内状态；本轮不持久化——登记在案）。
+    /// Local presentation state is restored from the shared view preferences.
     @State private var collapsedFolders: Set<String> = []
     @State private var archivedExpanded = true
+    @State private var targetedFolder: String?
     /// 文件夹下清单的缩进（与文件夹行的箭头列对齐）。
     private static let folderIndent: CGFloat = 16
 
     var body: some View {
         // 行间不再额外放宽：滴答导航行步长就是行高 38（连续行 y=45/83/121）。
         // 分组间隔由侧栏统一提供的 32pt 间隔行负责。
+        let counts = workspace.listOpenCounts
+        let pinned = workspace.orderedListNames.filter { workspace.listMeta(for: $0)?.isPinned == true }
         VStack(alignment: .leading, spacing: 0) {
+            ForEach(pinned, id: \.self) { name in
+                SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0]) { openList(name) }
+            }
+            if !pinned.isEmpty { Color.clear.frame(height: 12) }
             SidebarSectionHeader(title: "清单", collapsed: collapsed, toggle: onToggleSection) {
                 newListBox.fixedSize()
             }
@@ -61,9 +72,10 @@ struct TaskCollectionsView: View {
                 ForEach(workspace.listTree) { node in
                     switch node {
                     case .list(let name):
-                        // 顶层空档：落这里 = 排序 + **移出文件夹**（滴答的归属只有拖拽一条路）。
-                        insertionStrip(before: name, clearsFolder: true)
-                        SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+                        if workspace.listMeta(for: name)?.isPinned != true {
+                            insertionStrip(before: name, clearsFolder: true)
+                            SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0]) { openList(name) }
+                        }
                     case .folder(let folder, let lists):
                         // 文件夹前的空档落在"文件夹第一个成员"位置 → 仍属文件夹内，别误删归属。
                         insertionStrip(before: lists.first, clearsFolder: false)
@@ -71,7 +83,7 @@ struct TaskCollectionsView: View {
                         if !collapsedFolders.contains(folder) {
                             ForEach(lists, id: \.self) { name in
                                 insertionStrip(before: name, clearsFolder: false)
-                                SidebarListRowView(workspace: workspace, name: name) { openList(name) }
+                                SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0]) { openList(name) }
                                     .padding(.leading, Self.folderIndent)
                             }
                         }
@@ -83,6 +95,30 @@ struct TaskCollectionsView: View {
                 }
             }
         }.buttonStyle(.plain).font(WFType.navigation)
+        .sheet(isPresented: $showListEditor) {
+            TaskListEditorView(workspace: workspace, preferences: environment.viewPreferences, onSaved: openList)
+        }
+        .sheet(isPresented: Binding(get: { archivedCopy != nil }, set: { if !$0 { archivedCopy = nil } })) {
+            if let name = archivedCopy {
+                TaskListCopyView(workspace: workspace, source: name) { copied in
+                    environment.viewPreferences.copyScope(
+                        from: TaskViewScopeKey.key(destination: .allTasks, activeList: name, activeTag: nil),
+                        to: TaskViewScopeKey.key(destination: .allTasks, activeList: copied, activeTag: nil))
+                    openList(copied)
+                }
+            }
+        }
+        .sheet(item: $folderEditor) { request in
+            TaskFolderEditorView(workspace: workspace, name: request.name) { name in
+                if let old = request.name, collapsedFolders.remove(old) != nil { collapsedFolders.insert(name) }
+            }
+        }
+        .onAppear {
+            collapsedFolders = environment.viewPreferences.collapsedCollectionFolders
+            archivedExpanded = !environment.viewPreferences.archivedListsCollapsed
+        }
+        .onChange(of: collapsedFolders) { _, value in environment.viewPreferences.setCollapsedCollectionFolders(value) }
+        .onChange(of: archivedExpanded) { _, value in environment.viewPreferences.setArchivedListsCollapsed(!value) }
     }
 
     private var archivedLists: some View {
@@ -123,7 +159,8 @@ struct TaskCollectionsView: View {
                     .padding(.leading, Self.folderIndent)
                     .accessibilityLabel("已归档清单：" + name)
                     .businessContextMenu {
-                        Button("恢复清单") { _ = workspace.setListArchived(name, false) }
+                        TaskListCommands(workspace: workspace, name: name,
+                            onEdit: {}, onCopy: { archivedCopy = name })
                     }
                 }
             }
@@ -131,7 +168,7 @@ struct TaskCollectionsView: View {
     }
 
     /// 行间拖放带：清单拖到这里 = **排序**（拖到行上才是"建文件夹"，滴答同一手势两种结果）。
-    /// 本轮只做改顺序：归属（拖出文件夹）仍走 ⋯ → 移动到文件夹，已登记。
+    /// 顶层间隙同时支持移出文件夹，文件夹内间隙保留归属。
     private func insertionStrip(before target: String?, clearsFolder: Bool) -> some View {
         Color.clear
             .frame(height: 6)
@@ -154,9 +191,13 @@ struct TaskCollectionsView: View {
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(WFColors.tertiaryText)
                     .frame(width: 12)
+                if let icon = workspace.listFolders.first(where: { $0.name == folder })?.icon {
+                    Text(icon).font(.system(size: 13))
+                } else {
                 Image(systemName: "folder")
                     .font(.system(size: 12))
                     .foregroundStyle(WFColors.secondaryText)
+                }
                 Text(folder).font(WFType.navigation).foregroundStyle(WFColors.secondaryText)
                 Spacer(minLength: 0)
                 Text("\(count)").font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
@@ -164,15 +205,15 @@ struct TaskCollectionsView: View {
             .padding(.horizontal, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
             .contentShape(Rectangle())
-            .rowHoverBackground()
+            .rowHoverBackground(selected: targetedFolder == folder)
         }
         .buttonStyle(.plain)
+        .dropDestination(for: String.self) { values, _ in
+            guard let raw = values.first, case .list(let name)? = SidebarDragPayload.decode(raw) else { return false }
+            return workspace.setListFolder(name, folder)
+        } isTargeted: { targeted in targetedFolder = targeted ? folder : nil }
         .businessContextMenu {
-            Button("重命名文件夹…") {
-                guard let value = TaskNamePrompt.ask("重命名文件夹", value: folder),
-                      value != folder else { return }
-                if !workspace.renameListFolder(from: folder, to: value) { TaskNamePrompt.invalidName() }
-            }
+            Button("编辑文件夹…") { folderEditor = TaskFolderEditingRequest(name: folder) }
             Button("解散文件夹…") {
                 guard TaskNamePrompt.confirm("解散文件夹“\(folder)”？",
                                              message: "清单会保留，并移到顶层。",
@@ -185,15 +226,8 @@ struct TaskCollectionsView: View {
     /// 滴答桌面端是「光标覆盖"清单"区 → 点 +」：一个入口，两种新建（清单 / 文件夹）。
     private var newListBox: some View {
         BusinessMenu {
-            Button("新建清单…") {
-                if let value = TaskNamePrompt.ask("新建清单") {
-                    if workspace.saveList(value) { openList(value) } else { TaskNamePrompt.invalidName() }
-                }
-            }
-            Button("新建文件夹…") {
-                guard let value = TaskNamePrompt.ask("新建文件夹") else { return }
-                if !workspace.saveListFolder(value) { TaskNamePrompt.invalidName() }
-            }
+            Button("新建清单…") { showListEditor = true }
+            Button("新建文件夹…") { folderEditor = TaskFolderEditingRequest() }
         } label: {
             Image(systemName: "plus").font(.system(size: 12))
                 .foregroundStyle(WFColors.secondaryText)
@@ -201,7 +235,7 @@ struct TaskCollectionsView: View {
                 .contentShape(Rectangle())
         }
         .fixedSize()
-        .help("新建清单 / 文件夹")
+        .hoverTip("新建清单 / 文件夹")
     }
 
     private func openList(_ name: String) {
@@ -214,14 +248,16 @@ struct TaskCollectionsView: View {
 /// 侧栏清单行（Round B1）：色板圆点、hover"⋯"菜单（置顶/重命名/颜色/删除）、
 /// 作为拖放目标接收任务行拖拽（drop → moveToList），拖拽悬停时高亮描边。
 private struct SidebarListRowView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var showEditor = false
+    @State private var showCopy = false
     @ObservedObject var workspace: TaskWorkspaceModel
     let name: String
+    let openCount: Int
     let onOpen: () -> Void
     @State private var hovering = false
     @State private var menuPresented = false
     @State private var dragTargeted = false
-    @State private var showColorPicker = false
-    @State private var showIconPicker = false
 
     private var meta: TaskListMeta? { workspace.listMeta(for: name) }
     private var pinned: Bool { meta?.isPinned ?? false }
@@ -241,12 +277,6 @@ private struct SidebarListRowView: View {
     private var dotColor: Color {
         WFListPalette.color(for: name, meta: meta)
     }
-    private var openCount: Int {
-        workspace.allTasks.filter {
-            !$0.isNoteTask && $0.list.name == name && !$0.isClosed && $0.deletedAt == nil && $0.skippedAt == nil
-        }.count
-    }
-
     var body: some View {
         HStack(spacing: WFSpace.xs) {
             Button(action: onOpen) {
@@ -286,7 +316,7 @@ private struct SidebarListRowView: View {
             .opacity(hovering || menuPresented ? 1 : 0)
             .allowsHitTesting(hovering || menuPresented)
             .disabled(!hovering && !menuPresented)
-            .help("清单操作")
+            .hoverTip("清单操作")
         }
         // 容器本身已有 8 的横向内边距；清单行的色点比智能清单图标再靠左 12pt，
         // 所以这里不再加 leading，落到行内 8（滴答 7，差 1pt 由色点框宽吸收）。
@@ -311,181 +341,22 @@ private struct SidebarListRowView: View {
                 return combine(moved, into: name)
             }
         } isTargeted: { dragTargeted = $0 }
-        .background(AnchoredPropertyPanel(isPresented: $showColorPicker,
-                                         width: ListColorPickerPopover.panelWidth, placement: .submenu) {
-            ListColorPickerPopover(workspace: workspace, name: name) { showColorPicker = false }
-        })
-        .background(AnchoredPropertyPanel(isPresented: $showIconPicker,
-                                         width: ListIconPickerPopover.panelWidth, placement: .submenu) {
-            ListIconPickerPopover(workspace: workspace, name: name) { showIconPicker = false }
-        })
+        .sheet(isPresented: $showEditor) {
+            TaskListEditorView(workspace: workspace, preferences: environment.viewPreferences, name: name)
+        }
+        .sheet(isPresented: $showCopy) {
+            TaskListCopyView(workspace: workspace, source: name) { copied in
+                workspace.openFilter(nil); workspace.activeList = copied; workspace.activeTag = nil
+                environment.navigation.destination = .allTasks
+                environment.viewPreferences.copyScope(
+                    from: TaskViewScopeKey.key(destination: .allTasks, activeList: name, activeTag: nil),
+                    to: TaskViewScopeKey.key(destination: .allTasks, activeList: copied, activeTag: nil))
+            }
+        }
     }
 
-    @ViewBuilder
     private var menuItems: some View {
-        Button(pinned ? "取消置顶" : "置顶") {
-            _ = workspace.setListPinned(name, !pinned)
-        }
-        Button("重命名") {
-            if let value = TaskNamePrompt.ask("重命名清单", value: name),
-               !workspace.saveList(value, replacing: name) {
-                TaskNamePrompt.invalidName()
-            }
-        }
-        // 菜单关闭后再弹色板，避免 macOS 菜单吞掉 popover 的呈现时机。
-        Button("选择颜色") {
-            DispatchQueue.main.async { showColorPicker = true }
-        }
-        Button("设置图标") {
-            DispatchQueue.main.async { showIconPicker = true }
-        }
-        // 移动到文件夹（滴答层级：文件夹 → 清单）：现有文件夹 + 新建 + 移出；收集箱不参与。
-        if !isInbox {
-            BusinessMenu("移动到文件夹") {
-                ForEach(workspace.listFolderNames.filter { $0 != folder }, id: \.self) { target in
-                    Button(target) { _ = workspace.setListFolder(name, target) }
-                }
-                if !workspace.listFolderNames.filter({ $0 != folder }).isEmpty { Divider() }
-                Button("新建文件夹…") {
-                    guard let value = TaskNamePrompt.ask("新建文件夹") else { return }
-                    if !workspace.setListFolder(name, value) { TaskNamePrompt.invalidName() }
-                }
-                if folder != nil {
-                    Divider()
-                    Button("移出文件夹") { _ = workspace.setListFolder(name, nil) }
-                }
-            }
-        }
-        Divider()
-        if !isInbox {
-            Button("归档清单…") {
-                guard TaskNamePrompt.confirm("归档清单“\(name)”？",
-                    message: "归档后，该清单将放入“已归档的清单”中。清单中的任务不在智能清单中显示，到期也不提醒。可以随时恢复。",
-                    action: "归档") else { return }
-                _ = workspace.setListArchived(name, true)
-            }
-        }
-        Button("删除清单…", role: .destructive) {
-            if TaskNamePrompt.confirm("删除清单“\(name)”？",
-                                      message: "任务（含子任务）将移到收集箱，不删除任务。可撤销。",
-                                      action: "删除") {
-                workspace.removeList(name)
-            }
-        }
-    }
-}
-
-/// 14 色网格弹层（对齐 Flutter ListColorSwatch）：当前生效色打勾，点选即保存。
-private struct ListColorPickerPopover: View {
-    // Seven 22pt swatches, six 10pt gaps, and the existing content padding.
-    static let panelWidth: CGFloat = 7 * 22 + 6 * 10 + 2 * WFSpace.lg
-    @ObservedObject var workspace: TaskWorkspaceModel
-    let name: String
-    let onDismiss: () -> Void
-    private let columns = Array(repeating: GridItem(.fixed(22), spacing: 10), count: 7)
-
-    private var effectiveIndex: Int {
-        let meta = workspace.listMeta(for: name)
-        guard meta?.colorARGB == nil else { return -1 }
-        return WFListPalette.colorIndex(for: name, explicit: meta?.colorIndex)
-    }
-
-    var body: some View {
-        VStack(spacing: WFSpace.sm) {
-            Text("选择清单颜色").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(WFListPalette.argb.indices, id: \.self) { index in
-                    Button {
-                        // 点完**不关面板**：颜色是「可反复改的属性」，想换个色得
-                        // 重新打开一遍面板是净损失（同右键菜单的日期/优先级）。
-                        // 不关的前提是打勾能**就地**跟上——`effectiveIndex` 读的是
-                        // `workspace.listMeta(for:)` 活值，`setListColor` 会 bump
-                        // `revision`，所以这里不需要额外做什么。
-                        // 关闭走三条既有通道：Esc（`PopupEscapeRegistry` 按键名次、
-                        // 子面板压过宿主）、点面板外（`PopupInteractionRegistry`）、
-                        // 或点「⋯」菜单里的其他项。
-                        _ = workspace.setListColor(name, colorIndex: index)
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(WFListPalette.swatch(WFListPalette.argb[index]))
-                                .frame(width: 22, height: 22)
-                            if index == effectiveIndex {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(WFListPalette.checkmarkOn(WFListPalette.argb[index]))
-                            }
-                        }
-                        .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .padding(WFSpace.lg)
-        .onExitCommand(perform: onDismiss)
-    }
-}
-
-/// 清单图标（Emoji）网格弹层：内置常用集合（不引第三方图标库），选完即保存。
-/// 「无图标」清除后侧栏回落色点（用色板仍是独立一步，和滴答一样是两件事）。
-private struct ListIconPickerPopover: View {
-    static let panelWidth: CGFloat = 6 * 26 + 5 * 10 + 2 * WFSpace.lg
-    /// 常用清单图标：够覆盖"工作 / 生活 / 学习 / 兴趣"这类清单，不追求全量 Emoji。
-    static let choices = ["📋", "🚀", "💼", "📌", "🎯", "📚",
-                          "💡", "🧾", "🏠", "🛒", "🏃", "🍀",
-                          "❤️", "⭐️", "🎵", "✈️", "🧪", "🎨"]
-    @ObservedObject var workspace: TaskWorkspaceModel
-    let name: String
-    let onDismiss: () -> Void
-    private let columns = Array(repeating: GridItem(.fixed(26), spacing: 10), count: 6)
-
-    private var current: String? { workspace.listMeta(for: name)?.icon }
-
-    var body: some View {
-        VStack(spacing: WFSpace.sm) {
-            Text("选择清单图标").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(Self.choices, id: \.self) { emoji in
-                    Button {
-                        // 同色板：点完留着，可以连着换几个看看。选中描边读的是
-                        // `current` 活值（`listMeta` → `revision`），会自己跟上。
-                        _ = workspace.setListIcon(name, emoji)
-                    } label: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(WFColors.secondarySurface)
-                                .frame(width: 26, height: 26)
-                            Text(emoji).font(.system(size: 15))
-                            if emoji == current {
-                                RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(WFColors.accent, lineWidth: 1.5)
-                                    .frame(width: 26, height: 26)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            Divider()
-            Button {
-                // 「无图标」同样留着：清除之后它自己会变成「无图标（当前）」并置灰
-                // （`current == nil` 是活值），用户能看见这一步确实生效了。
-                // 这也是「不关面板」的额外好处——关掉的话这层反馈根本看不到。
-                _ = workspace.setListIcon(name, nil)
-            } label: {
-                Text(current == nil ? "无图标（当前）" : "无图标")
-                    .font(WFType.supporting)
-                    .foregroundStyle(current == nil ? WFColors.tertiaryText : WFColors.text)
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(current == nil)
-        }
-        .padding(WFSpace.lg)
-        .onExitCommand(perform: onDismiss)
+        TaskListCommands(workspace: workspace, name: name, onEdit: { showEditor = true }, onCopy: { showCopy = true })
     }
 }
 
@@ -499,9 +370,7 @@ extension WFListPalette {
     }
 
     static func color(for name: String, meta: TaskListMeta?) -> Color {
-        if let importedColor = meta?.colorARGB { return swatch(importedColor) }
-        let index = colorIndex(for: name, explicit: meta?.colorIndex)
-        return swatch(argb[index])
+        swatch(argb(for: name, meta: meta))
     }
 
     /// 色块上的勾选颜色：按亮度取黑/白（对齐 Flutter WorkFollowThemeContrast.foregroundOn）。
@@ -573,7 +442,7 @@ struct TaskComposer: View {
                                    hasTime: initial?.hasTime ?? (parsed.dueAt != nil ? parsed.hasTime : false),
                                    dueEndAt: initial?.dueEndAt),
             reminder: initial?.reminderAt ?? parsed.reminderAt,
-            reminderOffsets: initial?.reminderOffsets ?? [],
+            reminderOffsets: initial?.reminderOffsets ?? parsed.reminderOffsets,
             frequency: initial?.repeatFrequency ?? parsed.recurrence,
             recurrenceRule: initial?.recurrenceRule ?? parsed.recurrenceRule)
     }

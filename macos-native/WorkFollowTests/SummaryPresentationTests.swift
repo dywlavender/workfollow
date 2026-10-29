@@ -42,22 +42,22 @@ final class SummaryPresentationTests: XCTestCase {
         XCTAssertEqual(unfinished.pending.map(\.id), [pending.id])
     }
 
-    func testDisplayOptionsControlMetadataWhileKeepingLinksToOriginalTasks() {
+    func testDisplayOptionsControlMetadataAndTaskNamesStayPlain() {
         let source = task("准备会议", completed: true, tags: ["紧急"])
         let report = builder.report(tasks: [source], weekOf: day(21))
         var options = SummaryDocumentOptions.standard
         options.content = Set(SummaryContentField.allCases)
         let full = builder.document(for: report, options: options)
         XCTAssertTrue(full.plainText.contains("10月20日"))
-        XCTAssertTrue(full.plainText.contains("（工作）"))
-        XCTAssertTrue(full.plainText.contains("#紧急"))
+        XCTAssertTrue(full.plainText.contains("工作"))
+        XCTAssertTrue(full.plainText.contains("紧急"))
         options.content = [.taskName]
         let minimal = builder.document(for: report, options: options)
         XCTAssertFalse(minimal.plainText.contains("10月20日"))
-        XCTAssertFalse(minimal.plainText.contains("（工作）"))
-        XCTAssertFalse(minimal.plainText.contains("#紧急"))
-        XCTAssertTrue(minimal.blocks.flatMap(\.runs).flatMap(\.marks)
-            .contains(.link(NativeResourceLink.task(source.id).url.absoluteString)))
+        XCTAssertFalse(minimal.plainText.contains("工作"))
+        XCTAssertFalse(minimal.plainText.contains("紧急"))
+        let title = minimal.blocks.flatMap(\.runs).first { $0.text == source.title }
+        XCTAssertEqual(title?.marks, [])
     }
 
     func testGroupingChangesSectionsWithoutInflatingCompletedCount() {
@@ -77,48 +77,39 @@ final class SummaryPresentationTests: XCTestCase {
         XCTAssertEqual(report.completed.count, 2)
     }
 
-    func testNextCycleToggleAndRegenerationRetainTheWrittenReflection() throws {
+    func testNextCycleToggleRebuildsTheLiveProjectionInsteadOfMergingEdits() {
         let current = task("本周交付", completed: true)
         let future = task("下周访谈", due: 28)
         let report = builder.report(tasks: [current, future], weekOf: day(21))
-        var document = builder.document(for: report)
-        document.blocks.append(DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "本周复盘")]))
-        document.blocks.append(DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "下次提前沟通评审时间。", marks: [.bold])]))
-        let reflection = document.blocks.count - 1
-        XCTAssertFalse(document.plainText.contains(future.title))
+        let withoutNext = builder.document(for: report)
+        XCTAssertFalse(withoutNext.plainText.contains(future.title))
         var options = SummaryDocumentOptions.standard; options.includesNextWeek = true
-        let draft = builder.document(for: report, options: options, preserving: document)
-        XCTAssertTrue(draft.plainText.contains(future.title))
-        XCTAssertEqual(WeeklyReportBuilder.reflection(in: draft).first?.runs, document.blocks[reflection].runs)
-        XCTAssertFalse(document.plainText.contains(future.title))
+        let withNext = builder.document(for: report, options: options)
+        XCTAssertTrue(withNext.plainText.contains(future.title))
+        XCTAssertTrue(withNext.plainText.contains("下周重点"))
+        XCTAssertFalse(withoutNext.plainText.contains("下周重点"))
     }
 
-    func testEmptyScopeStaysConciseAndDoesNotAccumulateGeneratedPlaceholders() {
+    func testEmptyScopeStaysConciseAndAlwaysReflectsCurrentFacts() {
         let report = builder.report(tasks: [], weekOf: day(21))
         let empty = builder.document(for: report)
         XCTAssertEqual(empty.blocks.count, 2)
         XCTAssertEqual(empty.blocks.last?.plainText, "当前范围内没有符合条件的任务")
-        let refreshed = builder.document(for: report, preserving: empty)
+        let refreshed = builder.document(for: report)
         XCTAssertEqual(refreshed.plainText, empty.plainText)
         XCTAssertFalse(refreshed.plainText.contains("原有记录"))
-        let written = NativeDocument(plainText: "这一周的手写记录。")
-        XCTAssertTrue(builder.document(for: report, preserving: written).plainText.contains(written.plainText))
     }
 
-    func testAppliedOptionsPersistEvenWhenTheDocumentTextHasNotChanged() async {
+    func testAppliedOptionsPersistWithoutAnyDocumentSnapshot() async {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("summary-options-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SummaryStore(directory: directory)
-        let document = NativeDocument(plainText: "保留手写总结")
-        store.saveWeekly(document: document, weekKey: "2026-10-19", options: .standard)
         var options = SummaryDocumentOptions.standard
         options.grouping = .list; options.filter.status = .completed; options.includesNextWeek = true
-        store.saveWeekly(document: document, weekKey: "2026-10-19", options: options)
+        store.updateOptions(options)
         await withCheckedContinuation { continuation in store.flush { error in XCTAssertNil(error); continuation.resume() } }
         let restored = SummaryStore(directory: directory)
-        XCTAssertEqual(restored.weeklyEntry(weekKey: "2026-10-19")?.document, document)
-        XCTAssertEqual(restored.weeklyEntry(weekKey: "2026-10-19")?.options, options)
-        restored.saveWeekly(document: .init(plainText: "继续编辑"), weekKey: "2026-10-19")
-        XCTAssertEqual(restored.weeklyEntry(weekKey: "2026-10-19")?.options, options)
+        XCTAssertEqual(restored.options, options)
+        XCTAssertTrue(restored.entries.isEmpty)
     }
 }

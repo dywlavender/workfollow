@@ -26,7 +26,7 @@ struct TaskTagStrip: View {
             }
             .buttonStyle(.plain)
             .background(WFColors.hover, in: Capsule())
-            .help("添加标签")
+            .hoverTip("添加标签")
             .accessibilityLabel("添加标签")
         }
     }
@@ -56,7 +56,7 @@ struct TaskTagStrip: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("移除标签「\(name)」")
+                .hoverTip("移除标签「\(name)」")
                 .accessibilityLabel("移除标签：\(name)")
             }
             .padding(.leading, 8)

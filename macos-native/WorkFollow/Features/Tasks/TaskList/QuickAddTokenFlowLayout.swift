@@ -7,6 +7,7 @@ enum QuickAddTokenColor {
         case .date: WFColors.accent
         case .time: WFColors.accentHover
         case .recurrence: WFColors.secondaryText
+        case .reminder: WFColors.accentHover
         case .tag: WFColors.success
         case .list: WFColors.warning
         case .priority: WFColors.danger
@@ -15,6 +16,56 @@ enum QuickAddTokenColor {
 
     static func appKitColor(for kind: QuickAddToken.Kind) -> NSColor {
         NSColor(swiftUIColor(for: kind))
+    }
+}
+
+/// 识别 chip 的**唯一**渲染实现。
+///
+/// 列表快速添加条与全局快速添加面板原先各写一份，删改行为容易漂移；
+/// 这里统一成一处，并把「哪些 chip 能点开日程面板」收敛成
+/// `QuickAddToken.Kind.isEditableScheduleToken`，避免两处各判一套。
+struct QuickAddTokenChip: View {
+    let token: QuickAddToken
+    /// 点击 chip 主体：当前统一为「打开日程面板并定位到该属性页」。
+    /// 为 nil 时 chip 不可点（只剩右侧 ×）。
+    var onEdit: (() -> Void)?
+    let onRemove: () -> Void
+    var font: Font = WFType.supporting
+    var horizontalPadding: CGFloat = WFSpace.sm
+    var verticalPadding: CGFloat = WFSpace.xs / 2
+    var backgroundOpacity: Double = 0.12
+
+    private var color: Color { QuickAddTokenColor.swiftUIColor(for: token.kind) }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let onEdit {
+                Button(action: onEdit) {
+                    Text(token.label)
+                        .font(font)
+                        .foregroundStyle(color)
+                }
+                .buttonStyle(.plain)
+                .help(editHelp)
+                .accessibilityHint(editHelp)
+            } else {
+                Text(token.label).font(font).foregroundStyle(color)
+            }
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill").font(.system(size: 9))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(color)
+            .hoverTip("移除识别项：\(token.label)")
+            .accessibilityLabel("移除识别项：\(token.label)")
+        }
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, verticalPadding)
+        .background(color.opacity(backgroundOpacity), in: Capsule())
+    }
+
+    private var editHelp: String {
+        token.kind == .recurrence ? "修改重复：\(token.label)" : "修改\(token.label)"
     }
 }
 
@@ -390,6 +441,20 @@ struct QuickAddTokenFlowLayout: Layout {
             subview.place(at: CGPoint(x: x, y: y), proposal: .unspecified)
             x += size.width + horizontalSpacing
             rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+extension TaskDatePopoverV2.Page {
+    /// 识别 chip → 日程面板的初始页。日期/时间都落在主面板（时间行在主页），
+    /// 提前提醒直接进提醒页，重复进重复页。
+    init?(editing token: QuickAddToken) {
+        guard token.kind.isEditableScheduleToken else { return nil }
+        switch token.kind {
+        case .reminder: self = .reminder
+        case .recurrence: self = .recurrence
+        case .date, .time: self = .main
+        case .tag, .list, .priority: return nil
         }
     }
 }

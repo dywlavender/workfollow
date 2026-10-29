@@ -25,8 +25,15 @@ enum TaskListMetrics {
 
     // MARK: 任务行
 
-    /// 勾选框外边距：行背景从行左 16 开始，勾选框在 31，标题在 52。
+    /// 分组头、拖拽预览等内容区使用的通用横向内边距。
     static let rowHorizontalPadding: CGFloat = 16
+    /// Outline 左侧沟槽。行背景从这里开始，勾选框在其内 16pt。
+    static let outlineLeadingInset: CGFloat = 18
+    /// 行背景右侧与列表右边界保持约 15pt，略比快速添加条更宽。
+    static let outlineTrailingInset: CGFloat = 1
+    /// 行内只留 1pt，避免与 Outline 的左侧内边距重复叠加。
+    static let rowContentLeading: CGFloat = 1
+    static let rowTrailingPadding: CGFloat = 15
     /// 勾选框左侧的展开/拖拽槽。自定义小节的 15pt 与分组箭头 15pt 对齐。
     static let leadingGutter: CGFloat = 15
     static let checkboxSize: CGFloat = 19
@@ -39,7 +46,7 @@ enum TaskListMetrics {
     static let tagRowIncrement: CGFloat = 21
     static let hierarchyIndent: CGFloat = 21
 
-    static var checkboxLeading: CGFloat { rowHorizontalPadding + leadingGutter }
+    static var checkboxLeading: CGFloat { rowContentLeading + leadingGutter }
     static var titleLeading: CGFloat {
         checkboxLeading + checkboxSize + checkboxTitleGap
     }

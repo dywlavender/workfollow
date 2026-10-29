@@ -41,6 +41,46 @@ final class TaskFocusSubmenuTests: XCTestCase {
         XCTAssertNotNil(workspace.task(for: id)?.deletedAt, "末行无需滚动即可执行")
     }
 
+    func testMoreMenuRowsShowHoverBackgroundIncludingFocusAction() throws {
+        let environment = AppEnvironment()
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "更多菜单悬浮验收", in: .inbox).taskID)
+        workspace.select(id)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+        InspectorPanelTestSupport.settle(window)
+
+        try InspectorPanelTestSupport.clickButton(containing: "更多任务操作", in: window)
+        let more = try InspectorPanelTestSupport.actionPanel(in: window)
+        let content = try XCTUnwrap(more.contentView)
+        let hoverRows = descendants(of: content).compactMap { $0 as? RowHoverView }
+        XCTAssertGreaterThan(hoverRows.count, 10, "更多菜单的可用行都应带悬浮背景")
+        XCTAssertTrue(hoverRows.allSatisfy { $0.onHover != nil },
+                      "开始专注行也要把 hover 传给子菜单意图")
+
+        let row = try XCTUnwrap(hoverRows.first)
+        XCTAssertTrue(row.trackingAreas.contains { $0.options.contains(.activeInActiveApp) },
+                      "菜单子窗口不是 key window，仍须接收 app 级 hover")
+        let event = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseEntered, location: .zero,
+            modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: more.windowNumber, context: nil, eventNumber: 1,
+            trackingNumber: 0, userData: nil))
+        XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0)
+        row.mouseEntered(with: event)
+        InspectorPanelTestSupport.settle(more)
+        XCTAssertTrue(row.hovered)
+        XCTAssertGreaterThan(row.layer?.backgroundColor?.alpha ?? 0, 0)
+
+        row.mouseExited(with: try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseExited,
+            location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: more.windowNumber, context: nil, eventNumber: 2,
+            trackingNumber: 0, userData: nil)))
+        InspectorPanelTestSupport.settle(more)
+        XCTAssertFalse(row.hovered)
+        XCTAssertEqual(row.layer?.backgroundColor?.alpha, 0)
+    }
+
     private func descendants(of view: NSView?) -> [NSView] {
         guard let view else { return [] }
         return [view] + view.subviews.flatMap(descendants)

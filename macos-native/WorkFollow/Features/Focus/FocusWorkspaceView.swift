@@ -152,7 +152,7 @@ struct FocusWorkspaceView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .help("选择表情")
+                    .hoverTip("选择表情")
                     TextField("名称", text: $addTimerName)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16 * s))

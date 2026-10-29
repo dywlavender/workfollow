@@ -53,9 +53,6 @@ enum NativeDestination: String, CaseIterable, Identifiable {
 @MainActor
 final class AppNavigation: ObservableObject {
     @Published var destination: NativeDestination = .today
-    /// 跨窗口“在主页打开笔记”的请求。NotesWorkspaceView 消费后清空，
-    /// 同时清搜索与筛选，避免目标笔记被当前过滤条件挡在列表外。
-    @Published var noteRevealRequest: UUID?
     /// 从摘要或小组件“在日历中查看”时携带的一次性日期：日历消费后清空，
     /// 切到周视图并定位到该日期所在周。
     @Published var calendarRevealRequest: Date?

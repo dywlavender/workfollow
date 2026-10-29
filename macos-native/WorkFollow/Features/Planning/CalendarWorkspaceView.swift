@@ -174,7 +174,7 @@ struct CalendarWorkspaceView: View {
             Button {
                 anchorSink.rect = addAnchor.rect; presentComposer(on: selectedDay)
             } label: { Image(systemName: "plus").frame(width: 32, height: 32) }
-            .buttonStyle(.plain).background(PlanningAnchorProbe(ref: addAnchor)).help("新建任务")
+            .buttonStyle(.plain).background(PlanningAnchorProbe(ref: addAnchor)).hoverTip("新建任务")
             BusinessMenu {
                 ForEach(CalendarViewMode.allCases, id: \.self) { value in
                     BusinessMenuOption(value.label, selected: value == mode) { settings.updateCalendar { $0.mode = value } }
@@ -191,7 +191,7 @@ struct CalendarWorkspaceView: View {
             Button { settings.updateCalendar { $0.showArrangePane.toggle() } } label: {
                 Image(systemName: "sidebar.right").frame(width: 30, height: 30)
                     .foregroundStyle(settings.calendar.showArrangePane ? WFColors.accent : WFColors.secondaryText)
-            }.buttonStyle(.plain).help("安排任务")
+            }.buttonStyle(.plain).hoverTip("安排任务")
             BusinessMenu {
                 Toggle("显示已完成任务", isOn: preference(\.showCompleted))
                 Toggle("显示未来重复周期", isOn: preference(\.showFutureOccurrences))
@@ -199,7 +199,7 @@ struct CalendarWorkspaceView: View {
                 Divider()
                 Button("显示设置…") { showDisplayOptions = true }
             } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
-            .fixedSize().help("日历设置")
+            .fixedSize().hoverTip("日历设置")
         }
         .padding(.horizontal, WFSpace.pageHorizontal)
         .frame(height: WFCalendarMetrics.toolbarHeight)
@@ -208,7 +208,7 @@ struct CalendarWorkspaceView: View {
         Binding(get: { settings.calendar[keyPath: path] }, set: { value in settings.updateCalendar { $0[keyPath: path] = value } })
     }
     private func rangeButton(_ icon: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: icon).frame(width: 30, height: 30) }.buttonStyle(.plain).help(help)
+        Button(action: action) { Image(systemName: icon).frame(width: 30, height: 30) }.buttonStyle(.plain).hoverTip(help)
     }
     private func step(_ direction: Int) {
         viewport.mode = mode; viewport.step(direction, calendar: calendar)
@@ -1151,7 +1151,7 @@ struct CalendarTaskBarLine: View {
                 .padding(hitPadding)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onToggleCompletion)
-                .help(completed ? "恢复任务" : "完成任务")
+                .hoverTip(completed ? "恢复任务" : "完成任务")
                 .accessibilityLabel(completed ? "恢复：\(task.title)" : "完成：\(task.title)")
         } else {
             box
@@ -1359,7 +1359,7 @@ struct CalendarWeekPillButton: View {
                 .padding(hitPadding)
                 .contentShape(Rectangle())
                 .onTapGesture { onToggleTask(task.id) }
-                .help(completed ? "恢复任务" : "完成任务")
+                .hoverTip(completed ? "恢复任务" : "完成任务")
                 .accessibilityLabel(completed ? "恢复：\(task.title)" : "完成：\(task.title)")
             Spacer().frame(width: WFSpace.dense - hitPadding)
             Text(task.title)

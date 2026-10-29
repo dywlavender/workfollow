@@ -6,9 +6,6 @@ import SwiftUI
 enum DocumentEditorPresentationMetrics {
     static let bodyFontSize: CGFloat = 14
     static let footerHeight: CGFloat = 48
-    static let toggleSize: CGFloat = 28
-    static let toolbarGap: CGFloat = 4
-    static let toolbarHorizontalInset: CGFloat = 16
     /// NSTextContainer 默认的左右 fragment padding：正文墨迹比宿主内缩 5pt。
     static let textContainerFragmentPadding: CGFloat = 5
 }
@@ -21,19 +18,33 @@ struct DocumentFormattingToolbarBoundsKey: PreferenceKey {
     }
 }
 
-struct DocumentFormattingToggle: View {
-    @Binding var isPresented: Bool
-    let handle: DocumentEditorHandle
+/// 常驻正文上方的格式工具条。与标题/正文共用内容原点：
+/// 宿主传入的左右留白已扣掉 TextKit 的 fragment padding。
+struct DocumentFormattingToolbarRow: View {
+    @ObservedObject var handle: DocumentEditorHandle
+    var leadingPadding: CGFloat
+    var trailingPadding: CGFloat
+    /// 笔记页正文有 820pt 最大宽度；工具条与其同宽并居中。
+    var contentMaxWidth: CGFloat? = nil
 
     var body: some View {
-        AppKitTextButton(title: "A", pointSize: 15,
-                         tint: NSColor(isPresented ? WFColors.accent : WFColors.secondaryText),
-                         accessibilityLabel: "正文格式", action: {
-                             isPresented.toggle()
-                             if isPresented { handle.focusEditor() }
-                         })
-            .frame(width: DocumentEditorPresentationMetrics.toggleSize,
-                   height: DocumentEditorPresentationMetrics.toggleSize)
+        // 常驻行铺满宿主宽度，插入入口固定在右端，格式命令按需横向滚动。
+        DocumentFormatToolbarView(handle: handle, maxWidth: .infinity, embedded: true)
+            // 工具条浮在正文和空白命中层上方，必须自己登记箭头光标，
+            // 否则下层登记的光标矩形会让按钮显示文本 I-beam。
+            .overlay { ArrowCursorArea().allowsHitTesting(false) }
+            .background {
+                #if DEBUG
+                GeometryReader { geometry in
+                    Color.clear.preference(key: DocumentFormattingToolbarBoundsKey.self,
+                                           value: geometry.frame(in: .global))
+                }
+                #endif
+            }
+            .padding(.leading, leadingPadding)
+            .padding(.trailing, trailingPadding)
+            .frame(maxWidth: contentMaxWidth ?? .infinity)
+            .frame(maxWidth: .infinity)
     }
 }
 
@@ -54,23 +65,29 @@ struct DocumentEditorPlaceholder: View {
     }
 }
 
-extension View {
-    func documentFormattingToolbar(isPresented: Bool, handle: DocumentEditorHandle) -> some View {
-        overlay(alignment: .bottom) {
-            if isPresented {
-                DocumentFormatToolbarView(handle: handle)
-                    .background {
-                        #if DEBUG
-                        GeometryReader { geometry in
-                            Color.clear.preference(key: DocumentFormattingToolbarBoundsKey.self,
-                                                   value: geometry.frame(in: .global))
-                        }
-                        #endif
-                    }
-                    .padding(.horizontal, DocumentEditorPresentationMetrics.toolbarHorizontalInset)
-                    .padding(.bottom, DocumentEditorPresentationMetrics.footerHeight
-                             + DocumentEditorPresentationMetrics.toolbarGap)
-            }
+/// 只登记箭头光标矩形、不参与命中的透明层。
+private struct ArrowCursorArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> CursorView { CursorView() }
+    func updateNSView(_ view: CursorView, context: Context) {
+        view.window?.invalidateCursorRects(for: view)
+    }
+
+    final class CursorView: NSView {
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .arrow)
+        }
+
+        // 只负责光标；点击仍落到下面的工具条按钮。
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            window?.invalidateCursorRects(for: self)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.invalidateCursorRects(for: self)
         }
     }
 }

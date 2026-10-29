@@ -149,6 +149,7 @@ enum TaskRowDetailField: String, CaseIterable, Codable, Identifiable {
 
 /// 单个视图的偏好。所有键都可缺：旧档案缺键解码为 nil，读取时回落默认。
 struct TaskViewPreference: Equatable, Codable {
+    var kanban: TaskKanbanOptions?
     var sortMode: TaskListSortMode?
     var grouping: TaskListGrouping?
     /// 排序方向：false / 缺键 = 升序（旧档案的既有行为）。
@@ -169,7 +170,8 @@ struct TaskViewPreference: Equatable, Codable {
          sortDescending: Bool? = nil, hidesCompleted: Bool? = nil,
          hidesDetails: Bool? = nil, hiddenFields: [TaskRowDetailField]? = nil,
          viewMode: TaskListViewMode? = nil,
-         collapsedGroups: [String]? = nil) {
+         collapsedGroups: [String]? = nil, kanban: TaskKanbanOptions? = nil) {
+        self.kanban = kanban
         self.sortMode = sortMode
         self.grouping = grouping
         self.sortDescending = sortDescending
@@ -184,12 +186,12 @@ struct TaskViewPreference: Equatable, Codable {
     var isDefault: Bool {
         sortMode == nil && grouping == nil && sortDescending == nil
             && hidesCompleted != true && hidesDetails != true && (hiddenFields ?? []).isEmpty
-            && viewMode == nil && (collapsedGroups ?? []).isEmpty
+            && viewMode == nil && (collapsedGroups ?? []).isEmpty && kanban == nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case sortMode, grouping, sortDescending, hidesCompleted, hidesDetails, hiddenFields,
-             viewMode, collapsedGroups
+             viewMode, collapsedGroups, kanban
     }
 
     init(from decoder: Decoder) throws {
@@ -202,6 +204,7 @@ struct TaskViewPreference: Equatable, Codable {
         hiddenFields = try values.decodeIfPresent([TaskRowDetailField].self, forKey: .hiddenFields)
         viewMode = try values.decodeIfPresent(TaskListViewMode.self, forKey: .viewMode)
         collapsedGroups = try values.decodeIfPresent([String].self, forKey: .collapsedGroups)
+        kanban = try values.decodeIfPresent(TaskKanbanOptions.self, forKey: .kanban)
     }
 }
 
@@ -218,19 +221,25 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         var collapsedSidebarSections: [String] = []
         /// 侧栏分组的显示状态：键 = `SidebarSectionID.rawValue`。缺省 = 显示。
         var sidebarSectionVisibility: [String: SmartListVisibility] = [:]
+        var collapsedCollectionFolders: [String] = []
+        var archivedListsCollapsed = true
 
         init(preferences: [String: TaskViewPreference] = [:],
              smartListVisibility: [String: SmartListVisibility] = [:],
              collapsedSidebarSections: [String] = [],
-             sidebarSectionVisibility: [String: SmartListVisibility] = [:]) {
+             sidebarSectionVisibility: [String: SmartListVisibility] = [:],
+             collapsedCollectionFolders: [String] = [], archivedListsCollapsed: Bool = true) {
             self.preferences = preferences
             self.smartListVisibility = smartListVisibility
             self.collapsedSidebarSections = collapsedSidebarSections
             self.sidebarSectionVisibility = sidebarSectionVisibility
+            self.collapsedCollectionFolders = collapsedCollectionFolders
+            self.archivedListsCollapsed = archivedListsCollapsed
         }
 
         private enum CodingKeys: String, CodingKey {
             case preferences, smartListVisibility, collapsedSidebarSections, sidebarSectionVisibility
+            case collapsedCollectionFolders, archivedListsCollapsed
         }
 
         /// additive：旧 view-preferences.json 只有 `preferences` 键。
@@ -244,6 +253,8 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
                                                                   forKey: .collapsedSidebarSections) ?? []
             sidebarSectionVisibility = try values.decodeIfPresent([String: SmartListVisibility].self,
                                                                   forKey: .sidebarSectionVisibility) ?? [:]
+            collapsedCollectionFolders = try values.decodeIfPresent([String].self, forKey: .collapsedCollectionFolders) ?? []
+            archivedListsCollapsed = try values.decodeIfPresent(Bool.self, forKey: .archivedListsCollapsed) ?? true
         }
     }
 
@@ -251,6 +262,8 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var smartListVisibility: [String: SmartListVisibility]
     @Published private(set) var collapsedSidebarSections: Set<String>
     @Published private(set) var sidebarSectionVisibility: [String: SmartListVisibility]
+    @Published private(set) var collapsedCollectionFolders: Set<String>
+    @Published private(set) var archivedListsCollapsed: Bool
 
     private let persistence: JSONFileStore<Archive>
     private var organizationCancellable: AnyCancellable?
@@ -264,6 +277,8 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         smartListVisibility = archive?.smartListVisibility ?? [:]
         collapsedSidebarSections = Set(archive?.collapsedSidebarSections ?? [])
         sidebarSectionVisibility = archive?.sidebarSectionVisibility ?? [:]
+        collapsedCollectionFolders = Set(archive?.collapsedCollectionFolders ?? [])
+        archivedListsCollapsed = archive?.archivedListsCollapsed ?? true
         organizationCancellable = NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)
             .sink { [weak self] note in
                 guard let kind = note.userInfo?["kind"] as? String,
@@ -393,6 +408,16 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
     func setViewMode(_ mode: TaskListViewMode, for key: String) {
         update(key) { $0.viewMode = mode == .list ? nil : mode }
     }
+    func kanbanOptions(for key: String) -> TaskKanbanOptions { preferences[key]?.kanban ?? TaskKanbanOptions() }
+    func setKanbanOptions(_ options: TaskKanbanOptions, for key: String) {
+        update(key) { $0.kanban = options == TaskKanbanOptions() ? nil : options }
+    }
+    func copyScope(from source: String, to target: String) {
+        var entry = preferences[source]
+        entry?.collapsedGroups = nil
+        preferences[target] = entry
+        persist()
+    }
 
     /// 折叠状态（滴答 `taskCollapseStateChanged:` 落盘的口径）。
     /// 全展开时不写键，让 `isDefault` 能把这个视图的档案整个清掉。
@@ -460,10 +485,22 @@ final class TaskViewPreferenceStore: ObservableObject, ModuleStoreFlushable {
         persistence.flush(completion)
     }
 
+    func setCollapsedCollectionFolders(_ value: Set<String>) {
+        guard value != collapsedCollectionFolders else { return }
+        collapsedCollectionFolders = value; persist()
+    }
+
+    func setArchivedListsCollapsed(_ value: Bool) {
+        guard value != archivedListsCollapsed else { return }
+        archivedListsCollapsed = value; persist()
+    }
+
     private func persist() {
         persistence.schedule(Archive(preferences: preferences,
                                      smartListVisibility: smartListVisibility,
                                      collapsedSidebarSections: collapsedSidebarSections.sorted(),
-                                     sidebarSectionVisibility: sidebarSectionVisibility))
+                                     sidebarSectionVisibility: sidebarSectionVisibility,
+                                     collapsedCollectionFolders: collapsedCollectionFolders.sorted(),
+                                     archivedListsCollapsed: archivedListsCollapsed))
     }
 }

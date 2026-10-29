@@ -2,7 +2,8 @@ import AppKit
 import Foundation
 
 enum SummaryCopyFormat: String, CaseIterable, Hashable {
-    case plainText, richText, markdown
+    /// 与滴答一致：Markdown 在前，纯文本殿后。
+    case markdown, richText, plainText
 
     var menuTitle: String {
         switch self {

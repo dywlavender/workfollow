@@ -35,7 +35,7 @@ struct TaskBulkActionBar: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("取消选择")
+            .hoverTip("取消选择")
             .accessibilityLabel("取消选择")
         }
         .padding(.horizontal, WFSpace.sm)

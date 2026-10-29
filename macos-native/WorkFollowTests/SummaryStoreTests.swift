@@ -3,151 +3,71 @@ import XCTest
 
 @MainActor
 final class SummaryStoreTests: XCTestCase {
-    private let calendar: Calendar = {
-        var value = Calendar(identifier: .gregorian)
-        value.timeZone = TimeZone(secondsFromGMT: 0)!
-        return value
-    }()
-
-    // MARK: Helpers
-
-    private func makeStore(clock: @escaping () -> Date) -> SummaryStore {
-        SummaryStore(clock: clock, directory: FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString))
+    private var calendar: Calendar {
+        var value = Calendar(identifier: .gregorian); value.timeZone = TimeZone(secondsFromGMT: 28800)!; return value
     }
-
-    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        calendar.date(from: DateComponents(year: year, month: month, day: day))!
-    }
-
-    // MARK: Save
-
-    func testSaveCreatesEntryThenUpdateAdvancesUpdatedAt() {
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = makeStore { now }
-
-        store.save(content: "  第一篇摘要  ", dayKey: "2026-01-15")
-        XCTAssertEqual(store.entry(for: "2026-01-15")?.content, "第一篇摘要")
-        XCTAssertEqual(store.entry(for: "2026-01-15")?.updatedAt, now)
-
-        now = now.addingTimeInterval(120)
-        store.save(content: "更新后的摘要", dayKey: "2026-01-15")
-        XCTAssertEqual(store.entry(for: "2026-01-15")?.content, "更新后的摘要")
-        XCTAssertEqual(store.entry(for: "2026-01-15")?.updatedAt, now)
-        XCTAssertEqual(store.entries.map(\.dayKey), ["2026-01-15"])
-    }
-
-    func testEmptyContentDeletesEntry() {
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = makeStore { now }
-
-        store.save(content: "有内容的一天", dayKey: "2026-01-15")
-        XCTAssertNotNil(store.entry(for: "2026-01-15"))
-
-        store.save(content: "   \n\t ", dayKey: "2026-01-15")
-        XCTAssertNil(store.entry(for: "2026-01-15"))
-        XCTAssertTrue(store.entries.isEmpty)
-    }
-
-    func testEntriesStaySortedByDayKeyDescending() {
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = makeStore { now }
-
-        store.save(content: "later", dayKey: "2026-01-20")
-        store.save(content: "earlier", dayKey: "2026-01-05")
-        store.save(content: "newest month", dayKey: "2026-02-01")
-        XCTAssertEqual(store.entries.map(\.dayKey), ["2026-02-01", "2026-01-20", "2026-01-05"])
-    }
-
-    // MARK: Month grouping
-
-    func testEntriesInMonthReturnsOnlyThatMonthNewestFirst() {
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = makeStore { now }
-        store.save(content: "september first", dayKey: "2026-09-03")
-        store.save(content: "september last", dayKey: "2026-09-28")
-        store.save(content: "august", dayKey: "2026-08-31")
-        store.save(content: "october", dayKey: "2026-10-01")
-
-        XCTAssertEqual(store.entries(inMonth: date(2026, 9, 15), calendar: calendar).map(\.dayKey),
-                       ["2026-09-28", "2026-09-03"])
-        XCTAssertEqual(store.entries(inMonth: date(2026, 10, 2), calendar: calendar).map(\.dayKey),
-                       ["2026-10-01"])
-        XCTAssertTrue(store.entries(inMonth: date(2025, 9, 1), calendar: calendar).isEmpty)
-    }
-
-    // MARK: Day keys
-
-    func testDayKeyHelpersFormatAndParseWithInjectedCalendar() {
-        let instant = calendar.date(from: DateComponents(year: 2026, month: 9, day: 26,
-                                                         hour: 23, minute: 30))!
-        XCTAssertEqual(SummaryStore.dayKey(instant, calendar: calendar), "2026-09-26")
-        XCTAssertEqual(SummaryStore.date(fromDayKey: "2026-09-26", calendar: calendar),
-                       calendar.startOfDay(for: instant))
-        XCTAssertNil(SummaryStore.date(fromDayKey: "not-a-day", calendar: calendar))
-    }
-
-    // MARK: Persistence
-
-    func testFlushPersistsEntriesForTheNextStoreInstance() async throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = SummaryStore(clock: { now }, directory: directory)
-
-        store.save(content: "持久化的摘要", dayKey: "2026-01-15")
-        let done = expectation(description: "flush")
-        store.flush { error in
-            XCTAssertNil(error)
-            done.fulfill()
+    private var monday: Date { calendar.date(from: DateComponents(year: 2026, month: 10, day: 19))! }
+    private func flush(_ store: SummaryStore) async {
+        await withCheckedContinuation { continuation in
+            store.flush { error in XCTAssertNil(error); continuation.resume() }
         }
-        await fulfillment(of: [done], timeout: 5)
-
-        let reloaded = SummaryStore(clock: { now }, directory: directory)
-        XCTAssertEqual(reloaded.entry(for: "2026-01-15")?.content, "持久化的摘要")
-        XCTAssertEqual(reloaded.entries.map(\.dayKey), ["2026-01-15"])
+    }
+    private func folder(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(name + "-" + UUID().uuidString)
     }
 
-    // MARK: - 富文本正文（document）
+    func testJournalAndDisplayOptionsPersistIndependently() async {
+        let directory = folder("summary-store")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SummaryStore(clock: { self.monday }, directory: directory)
+        var options = SummaryDocumentOptions.standard
+        options.grouping = .list
+        options.filter.status = .completed
+        options.includesNextWeek = true
+        store.save(content: "周一手记", dayKey: "2026-10-19")
+        store.updateOptions(options)
+        await flush(store)
 
-    func testSaveDocumentStoresRichTextAndSyncsPlainText() {
-        var now = Date(timeIntervalSince1970: 1_800_000_000)
-        let store = makeStore { now }
-        let document = NativeDocument(plainText: "10月19日至25日\n已完成\n写周报")
+        let restored = SummaryStore(directory: directory)
+        XCTAssertEqual(restored.entry(for: "2026-10-19")?.content, "周一手记")
+        XCTAssertEqual(restored.options, options)
+        XCTAssertEqual(restored.entries.count, 1)
 
-        store.save(document: document, dayKey: "2026-10-25")
-
-        let entry = store.entry(for: "2026-10-25")
-        XCTAssertNotNil(entry?.document)
-        // 纯文本同步一份，供旧预览 / 搜索使用。
-        XCTAssertEqual(entry?.content, entry?.document?.plainText)
-        XCTAssertEqual(entry?.resolvedDocument, document)
-        XCTAssertEqual(entry?.updatedAt, now)
-
-        // 再次保存：富文本与纯文本一起更新，不新增条目。
-        now = now.addingTimeInterval(60)
-        let updated = NativeDocument(plainText: "改过的正文")
-        store.save(document: updated, dayKey: "2026-10-25")
-        XCTAssertEqual(store.entries.count, 1)
-        XCTAssertEqual(store.entry(for: "2026-10-25")?.content, "改过的正文")
-        XCTAssertEqual(store.entry(for: "2026-10-25")?.updatedAt, now)
+        restored.updateOptions(.standard)
+        restored.save(content: "补充记录", dayKey: "2026-10-19")
+        XCTAssertEqual(restored.options, .standard)
+        XCTAssertEqual(restored.entry(for: "2026-10-19")?.content, "补充记录")
     }
 
-    func testSaveEmptyDocumentDeletesEntry() {
-        let store = makeStore { Date(timeIntervalSince1970: 1_800_000_000) }
-        store.save(document: NativeDocument(plainText: "有内容"), dayKey: "2026-10-25")
-        XCTAssertNotNil(store.entry(for: "2026-10-25"))
-
-        store.save(document: NativeDocument(plainText: "   \n  "), dayKey: "2026-10-25")
-        XCTAssertNil(store.entry(for: "2026-10-25"))
+    func testListScopeIsNeverBakedIntoTheSavedRecipe() async {
+        let directory = folder("summary-options")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SummaryStore(directory: directory)
+        var options = SummaryDocumentOptions.standard
+        options.filter.listName = "工作"
+        options.grouping = .priority
+        store.updateOptions(options)
+        XCTAssertNil(store.options.filter.listName)
+        XCTAssertEqual(store.options.grouping, .priority)
+        await flush(store)
+        let restored = SummaryStore(directory: directory)
+        XCTAssertNil(restored.options.filter.listName)
+        XCTAssertEqual(restored.options.grouping, .priority)
     }
 
-    func testLegacyEntryWithoutDocumentResolvesFromContent() {
-        // 旧 summary.json 只有 content，document 为 nil 时用它兜底成单段文档。
-        let entry = DailySummary(dayKey: "2026-01-15", content: "旧格式摘要",
-                                 document: nil,
-                                 updatedAt: Date(timeIntervalSince1970: 0))
-        XCTAssertNil(entry.document)
-        XCTAssertEqual(entry.resolvedDocument.plainText, "旧格式摘要")
+    func testGeneratedSummaryIsNotStoredAsAJournalOrSnapshot() async {
+        let directory = folder("summary-live")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SummaryStore(clock: { self.monday }, directory: directory)
+        let builder = WeeklyReportBuilder(calendar: calendar)
+        let task = Task(id: UUID(), title: "实时摘要任务", tags: [], list: TaskList(name: "工作"),
+                        priority: .medium, schedule: .init(dueAt: monday), status: .active,
+                        childOrder: 0, createdAt: monday, updatedAt: monday)
+        _ = builder.document(for: builder.report(tasks: [task], weekOf: monday))
+        await flush(store)
+        let restored = SummaryStore(directory: directory)
+        XCTAssertTrue(restored.entries.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("weekly-summaries.json").path))
     }
 }

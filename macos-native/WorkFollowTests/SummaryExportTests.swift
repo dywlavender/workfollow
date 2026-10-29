@@ -120,26 +120,28 @@ final class SummaryExportTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "keep")
     }
 
-    func testMailDraftEmbedsShortBodyAndFallsBackForLongBody() throws {
-        let short = try XCTUnwrap(SummaryMailDraft.make(
-            subject: "摘要 10月19日-10月25日",
-            body: "已完成\n• 写周报"))
-        XCTAssertFalse(short.copiesBodyToPasteboard)
-        let shortURL = try XCTUnwrap(short.url)
-        XCTAssertEqual(shortURL.scheme, "mailto")
-        let shortItems = try XCTUnwrap(URLComponents(url: shortURL, resolvingAgainstBaseURL: false)?.queryItems)
-        XCTAssertEqual(shortItems.first { $0.name == "subject" }?.value, "摘要 10月19日-10月25日")
-        XCTAssertEqual(shortItems.first { $0.name == "body" }?.value, "已完成\n• 写周报")
+    func testExportBaseNameUsesBracketedRange() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 28800)!
+        let anchor = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 21)))
+        let range = SummaryDateRange.week(containing: anchor, calendar: calendar)
+        XCTAssertEqual(SummaryExportService.baseName(for: range, calendar: calendar),
+                       "摘要 (10月19日-10月25日)")
+    }
 
-        let longBody = String(repeating: "很长的摘要内容\n", count: 2_000)
-        let long = try XCTUnwrap(SummaryMailDraft.make(subject: "摘要", body: longBody))
-        XCTAssertTrue(long.copiesBodyToPasteboard)
-        let longURL = try XCTUnwrap(long.url)
-        let longItems = try XCTUnwrap(URLComponents(url: longURL, resolvingAgainstBaseURL: false)?.queryItems)
-        XCTAssertNil(longItems.first { $0.name == "body" })
-        XCTAssertEqual(long.body, longBody)
+    func testMailDraftUsesRichBodyAndNormalizesSubject() throws {
+        let draft = try XCTUnwrap(SummaryMailDraft.make(
+            subject: " 摘要 (10月19日-10月25日) ",
+            document: document))
+        XCTAssertEqual(draft.subject, "摘要 (10月19日-10月25日)")
+        XCTAssertTrue(draft.plainText.contains("写周报"))
+        XCTAssertTrue(draft.body.string.contains("写周报"))
+        let range = (draft.body.string as NSString).range(of: "写周报")
+        XCTAssertNotEqual(range.location, NSNotFound)
+        let font = try XCTUnwrap(draft.body.attributes(at: range.location, effectiveRange: nil)[.font] as? NSFont)
+        XCTAssertTrue(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
 
-        XCTAssertNil(SummaryMailDraft.make(subject: "摘要", body: " \n\t "))
+        XCTAssertNil(SummaryMailDraft.make(subject: "摘要", document: .empty))
     }
 
     func testExportAndCopyReflectContentOrderListGroupAndPlainDetail() throws {
@@ -165,14 +167,19 @@ final class SummaryExportTests: XCTestCase {
         let output = builder.document(for: report, options: options)
 
         let plain = SummaryExportService.plainText(output)
-        XCTAssertTrue(plain.contains("• （工作 / 项目A） · 写周报"))
+        XCTAssertTrue(plain.contains("• 写周报"))
+        XCTAssertTrue(plain.contains("▤ 项目A / 工作"))
         XCTAssertTrue(plain.contains("│ 正文"))
         let markdown = SummaryExportService.markdown(output)
-        XCTAssertTrue(markdown.contains("- （工作 / 项目A） · [写周报](<"))
+        XCTAssertTrue(markdown.contains("写周报"))
+        XCTAssertFalse(markdown.contains("**写周报**"))
+        XCTAssertFalse(markdown.contains(NativeResourceLink.task(done.id).url.absoluteString))
+        XCTAssertTrue(markdown.contains("项目A / 工作"))
         XCTAssertTrue(markdown.contains("> 正文"))
         XCTAssertFalse(markdown.contains("**正文**"))
         let attributed = SummaryExportService.attributedText(output)
-        XCTAssertTrue(attributed.string.contains("（工作 / 项目A） · 写周报"))
+        XCTAssertTrue(attributed.string.contains("写周报"))
+        XCTAssertTrue(attributed.string.contains("项目A / 工作"))
         XCTAssertTrue(attributed.string.contains("│ 正文"))
         XCTAssertNoThrow(try SummaryExportService.imageData(output))
         XCTAssertNoThrow(try SummaryExportService.pdfData(output))

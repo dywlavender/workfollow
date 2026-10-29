@@ -14,8 +14,8 @@ enum TaskInspectorMetrics {
     static let titleTopPadding: CGFloat = 10
     static let titleDocumentGap: CGFloat = 16
     // NSTextContainer's default fragment padding is additional to the host inset.
-    // Compensate at the Task boundary; leave Note/TextKit layout unchanged.
-    static let documentFragmentPadding: CGFloat = 5
+    // Task inspector and note page both subtract it so body ink meets the title.
+    static let documentFragmentPadding = DocumentEditorPresentationMetrics.textContainerFragmentPadding
     static var documentLeadingPadding: CGFloat { horizontalPadding - documentFragmentPadding }
     static let headerDividerWidth: CGFloat = 1
     static let headerDividerHeight: CGFloat = 20

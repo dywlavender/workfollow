@@ -11,7 +11,8 @@ final class GlobalQuickAddTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(true, forKey: GlobalQuickAddController.enabledDefaultsKey)
-        let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: calendar, seedDemoData: false)
+        let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: calendar, seedDemoData: false, initialLists: ["工作"])
+        XCTAssertTrue(workspace.setDefaultList("工作"))
         let controller = GlobalQuickAddController(workspace: workspace, defaults: defaults)
         defer { controller.setEnabled(false) }
         func field(in view: NSView) -> QuickAddFocusReportingField? {
@@ -41,6 +42,7 @@ final class GlobalQuickAddTests: XCTestCase {
         try InspectorPanelTestSupport.sendReturn(to: reopened)
         let created = try XCTUnwrap(workspace.allTasks.first)
         XCTAssertEqual(created.title, "复盘会议")
+        XCTAssertEqual(created.list.name, "工作", "实际全局面板的回车提交遵循默认清单")
         XCTAssertEqual(created.document.plainText, "整理结论")
         XCTAssertEqual(created.priority, .high)
         XCTAssertEqual(created.tags, ["工作"])

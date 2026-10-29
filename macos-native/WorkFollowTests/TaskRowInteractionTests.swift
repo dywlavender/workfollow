@@ -284,7 +284,7 @@ final class TaskRowInteractionTests: XCTestCase {
         session.coordinator.update()
         InspectorPanelTestSupport.settle(window)
         for title in ["添加子任务", "关联主任务", "置顶", "放弃", "移动到", "标签", "开始专注",
-                      "创建副本", "复制链接", "打开便签", "转换为笔记", "删除"] {
+                      "创建副本", "复制链接", "打开浮窗", "转换为笔记", "删除"] {
             XCTAssertNotNil(actions[.action(title)], "缺少截图中的菜单项：" + title)
         }
         func open(_ title: String, panelTitle: String) throws -> NSPanel {

@@ -66,6 +66,7 @@ struct ReminderTaskExport {
     var reference: CalendarTaskReference
     var fields: ReminderTaskFields
     var notes: String
+    var suppressesAlerts = false
 }
 
 enum ReminderTaskMapping {

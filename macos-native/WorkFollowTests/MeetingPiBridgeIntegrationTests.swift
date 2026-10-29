@@ -5,9 +5,8 @@ import XCTest
 /// explicitly synthetic extension; it never calls a model or uploads audio.
 final class MeetingPiBridgeIntegrationTests: XCTestCase {
     func testInstalledPiDispatchesAudioCommandAndReturnsStructuredNotification() async throws {
-        guard ProcessInfo.processInfo.environment["MEETING_PI_INTEGRATION"] == "1",
-              FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/pi") else {
-            throw XCTSkip("Enable MEETING_PI_INTEGRATION=1 with Pi installed to verify the transport")
+        guard ProcessInfo.processInfo.environment["MEETING_PI_INTEGRATION"] == "1" else {
+            throw XCTSkip("Enable MEETING_PI_INTEGRATION=1 to verify the bundled engine transport")
         }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("meeting-pi-transport-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

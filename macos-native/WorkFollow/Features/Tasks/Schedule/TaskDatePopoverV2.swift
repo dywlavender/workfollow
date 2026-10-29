@@ -134,7 +134,8 @@ struct LeadingScheduleClockField: View {
 ///   永不结束/按日期结束/按次数结束。
 /// A draft: nothing mutates the task until 确定 (清除 applies the clear plan; Esc or clicking away discards).
 struct TaskDatePopoverV2: View {
-    enum Page {
+    /// 显式 `Equatable`：识别 chip 用它把「点了哪一项」映射成面板初始页。
+    enum Page: Equatable {
         case main, time, reminder, recurrence
     }
 
@@ -415,6 +416,7 @@ struct TaskDatePopoverV2: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .popupMenuRowBackground(cornerRadius: 8)
         .scheduleRenderAnchor(.option("period-\(title)"),
                               label: date.map { periodDateText($0) } ?? title,
                               active: date != nil)
@@ -556,6 +558,7 @@ struct TaskDatePopoverV2: View {
                 syncTimeField()
             },
             onHover: { presentation.hover(sheet, inside: $0) })
+            .popupMenuRowBackground(cornerRadius: 8)
             // 条件插入「重复结束」行时，NSViewRepresentable 会沿用上一行 host frame，
             // 用稳定 id 强制 SwiftUI 区分各行，避免重叠。
             .id(sheet)
@@ -684,10 +687,10 @@ struct TaskDatePopoverV2: View {
                         .id(option)
                     }
                 }
+                .compactScrollbars()
             }
             .frame(height: ScheduleMetrics.timeOptionsHeight)
             .onAppear {
-                .compactScrollbars()
                 let target = options.first { option in
                     guard let selected else { return false }
                     return matches(option, selected)
@@ -905,6 +908,7 @@ struct TaskDatePopoverV2: View {
                     .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
+            .hoverTip("上一月")
             .disabled(lunarPickerIndex == 0)
             Spacer()
             Text(title.isEmpty ? "农历" : "农历\(title)")
@@ -921,6 +925,7 @@ struct TaskDatePopoverV2: View {
                     .background(WFColors.hover, in: RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
+            .hoverTip("下一月")
             .disabled(index >= months.count - 1)
         }
         .padding(.horizontal, 12)
@@ -1041,7 +1046,7 @@ struct TaskDatePopoverV2: View {
                         Spacer()
                         Button { model.chooseSelectedDates(model.selectedRepeatDates.filter { $0 != day }) } label: {
                             Image(systemName: "xmark")
-                        }.buttonStyle(.plain).accessibilityLabel("移除重复日期")
+                        }.buttonStyle(.plain).hoverTip("移除重复日期").accessibilityLabel("移除重复日期")
                     }
                 }
             } else {
@@ -1108,6 +1113,7 @@ struct TaskDatePopoverV2: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverTip(symbol == "plus" ? "增加" : "减少")
     }
 
     private static func frequencyUsesInterval(_ frequency: TaskRepeat) -> Bool {
@@ -1222,7 +1228,9 @@ struct TaskDatePopoverV2: View {
     /// 子面板选项行（Flutter `ScheduleOptionRow`）：34pt、选中强调色 + ✓。
     private func optionsRow(_ title: String, checked: Bool = false, arrow: Bool = false,
                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        PopupMenuRow(action: action,
+                     minHeight: ScheduleMetrics.optionRowHeight,
+                     horizontalPadding: 12) {
             HStack {
                 optionLabel(title, checked: checked)
                     .font(.system(size: 13))
@@ -1238,11 +1246,7 @@ struct TaskDatePopoverV2: View {
                         .foregroundStyle(WFColors.tertiaryText)
                 }
             }
-            .padding(.horizontal, 12)
-            .frame(height: ScheduleMetrics.optionRowHeight)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         // 点选后不留系统焦点框（弹窗里的蓝色描边看起来像脏线）。
         .focusEffectDisabled()
         .scheduleRenderAnchor(.option(title), label: title, active: checked)

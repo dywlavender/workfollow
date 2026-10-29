@@ -25,7 +25,6 @@ struct TaskInspectorShell: View {
     @State private var inlineChildEditorID: UUID?
     @State private var showNewList = false
     @State private var actionPresentation = TaskInspectorActionPresentationState()
-    @State private var showFormattingToolbar = false
     /// 优先级浮层（自绘，带彩色旗；SwiftUI Menu 不渲染菜单项图标）。
     @State private var showPriorityMenu = false
     /// 「更多」菜单里的"设置预计专注"浮层（专注摘要行改为有数据才显示后保留入口）。
@@ -60,12 +59,22 @@ struct TaskInspectorShell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let task = workspace.selectedTask {
+            if let task = workspace.selectedTask, workspace.isListArchived(task.list.name) {
+                ArchivedTaskInspectorView(task: task, showsBack: showBack || allowsClosing) { _ = handleEscape() }
+            } else if let task = workspace.selectedTask {
                 headerBar(task)
                 Divider()
                 // 未设置提醒时整行不出现（用户反馈：多余）；有提醒才摘要。
                 if !ReminderSchedule.fireDates(for: task, calendar: workspace.calendar).isEmpty {
                     reminderSummaryRow(task)
+                }
+                if !selectedTaskHasFloatingEditor {
+                    DocumentFormattingToolbarRow(
+                        handle: editorHandle,
+                        leadingPadding: TaskInspectorMetrics.documentLeadingPadding,
+                        trailingPadding: TaskInspectorMetrics.horizontalPadding)
+                        .inspectorRenderAnchor(.formattingToolbar)
+                    Divider()
                 }
                 GeometryReader { viewport in
                     ScrollView {
@@ -91,8 +100,6 @@ struct TaskInspectorShell: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(WFColors.content)
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
-        .documentFormattingToolbar(isPresented: showFormattingToolbar && !selectedTaskHasFloatingEditor,
-                                   handle: editorHandle)
         .onReceive(workspace.selectionWillChange) { nextID in
             guard editorHandle.textView?.documentIdentity != nextID else { return }
             editorHandle.prepareForDocumentChange()
@@ -111,7 +118,6 @@ struct TaskInspectorShell: View {
             presentation.editingTarget = .none
             revealPendingChecklistItem()
             dismissTransientPanels()
-            showFormattingToolbar = false
             showComments = false
             pendingChecklistTaskID = nil
         }
@@ -177,7 +183,6 @@ struct TaskInspectorShell: View {
                             onRepeat: { openSchedulePanel(.recurrence) },
                             onDetach: {
                                 dismissTransientPanels()
-                                showFormattingToolbar = false
                                 editorHandle.prepareForDocumentChange()
                                 TaskDetailWindowController.shared.show(workspace: workspace,
                                                                        environment: environment)
@@ -213,7 +218,8 @@ struct TaskInspectorShell: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("更多操作")
+        .popupMenuRowBackground()
+        .hoverTip("更多操作", placement: .above)
         .accessibilityLabel("更多任务操作")
         .background {
             AnchoredPropertyPanel(
@@ -391,25 +397,20 @@ struct TaskInspectorShell: View {
     }
 
     private func focusSubmenuRow(_ task: Task) -> some View {
-        Button {
+        PopupMenuRow(action: {
             // A click after hover must keep the already-open submenu visible.
             cancelFocusSubmenuIntent()
             actionPresentation.openSubmenu(.focus)
-        } label: {
+        }, onHoverChanged: { focusSubmenuHover($0, taskID: task.id) }) {
             HStack {
                 Label("开始专注", systemImage: "circle.inset.filled")
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.system(size: 10))
             }
             .font(WFType.menu)
-            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain).foregroundStyle(WFColors.text).padding(.horizontal, 8)
+        .foregroundStyle(WFColors.text)
         .inspectorRenderAnchor(.focusMenuRow)
-        // Leaving this row does NOT dismiss: the pointer can cross the gap.
-        // Entering another actionable row dismisses the submenu instead.
-        .onHover { focusSubmenuHover($0, taskID: task.id) }
         .background(AnchoredPropertyPanel(
             isPresented: Binding(get: { actionPresentation.submenu == .focus },
                                  set: { if !$0 { actionPresentation.dismissSubmenu() } }),
@@ -462,24 +463,19 @@ struct TaskInspectorShell: View {
         symbol: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button {
+        PopupMenuRow(action: {
             actionPresentation.dismiss(.more)
             action()
-        } label: {
-            Label(title, systemImage: symbol)
-                .font(WFType.menu)
-                .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(WFColors.text)
-        .padding(.horizontal, 8)
-        .onHover {
-            if $0 {
+        }, onHoverChanged: { entering in
+            if entering {
                 cancelFocusSubmenuIntent()
                 actionPresentation.dismissSubmenu()
             }
+        }) {
+            Label(title, systemImage: symbol)
+                .font(WFType.menu)
         }
+        .foregroundStyle(WFColors.text)
     }
 
     // MARK: - 主体：标题 → 正文 → 一级子任务
@@ -685,10 +681,13 @@ struct TaskInspectorShell: View {
             }
             .font(WFType.control)
             .foregroundStyle(overdue ? WFColors.danger : WFColors.secondaryText)
+            .padding(.horizontal, WFSpace.xs)
+            .padding(.vertical, WFSpace.xs)
             .contentShape(Rectangle())
+            .popupMenuRowBackground()
         }
         .buttonStyle(.plain)
-        .help("修改截止日期")
+        .hoverTip("修改截止日期", placement: .above)
         .accessibilityLabel("截止日期：\(day)")
     }
 
@@ -812,11 +811,6 @@ struct TaskInspectorShell: View {
                 }
                 .inspectorRenderAnchor(.footerMerge)
             }
-            // A 出口（mdEditButton）：字面 "A"，切换正文格式工具条。
-            if !floatingTasks.isOpen(task.id) {
-                DocumentFormattingToggle(isPresented: $showFormattingToolbar, handle: editorHandle)
-                    .inspectorRenderAnchor(.footerFormatting)
-            }
             // 评论出口（commentButton）：打开任务评论面板；有条数角标（TI2-09）。
             footerIconButton("bubble.left", label: "评论") { showComments.toggle() }
                 .overlay(alignment: .topTrailing) {
@@ -837,7 +831,8 @@ struct TaskInspectorShell: View {
     private func footerIconButton(_ symbol: String, label: String,
                                   action: @escaping () -> Void) -> some View {
         AppKitIconButton(symbol: symbol, pointSize: 14, tint: .inspectorSecondary,
-                         accessibilityLabel: label, action: action)
+                         accessibilityLabel: label, action: action,
+                         hoverTipPlacement: .above)
             .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
     }
 
@@ -939,10 +934,6 @@ struct TaskInspectorShell: View {
             dismissFooterPopover()
             return .dismissPopover
         }
-        if showFormattingToolbar {
-            showFormattingToolbar = false
-            return .dismissPopover
-        }
         // 浮层优先于"退回列表"：原版里 popup 的 Esc 就是把浮层关掉。
         if let onRequestClose {
             onRequestClose()
@@ -968,10 +959,10 @@ struct TaskInspectorShell: View {
             if floatingTasks.isOpen(task.id) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Text("正在便签中编辑").font(WFType.supporting)
+                        Text("正在浮窗中编辑").font(WFType.supporting)
                             .foregroundStyle(WFColors.secondaryText)
                         Spacer()
-                        Button("定位便签") { floatingTasks.bringToFront(taskID: task.id) }
+                        Button("定位浮窗") { floatingTasks.bringToFront(taskID: task.id) }
                             .buttonStyle(.plain).foregroundStyle(WFColors.accent)
                     }
                     // 编辑权在浮窗，这里仍按原生版式展示同一份富文本，禁止修改。
@@ -1083,7 +1074,7 @@ struct TaskInspectorShell: View {
     private func kindPopover(_ task: Task) -> some View {
         VStack(spacing: 2) {
             ForEach(TaskKind.menuOrder, id: \.self) { kind in
-                Button {
+                PopupMenuRow(action: {
                     showKindMenu = false
                     if kind == .checklist,
                        let document = try? task.document.materialized(),
@@ -1092,7 +1083,7 @@ struct TaskInspectorShell: View {
                     } else {
                         workspace.setKind(task.id, kind)
                     }
-                } label: {
+                }) {
                     HStack(spacing: 8) {
                         Image(systemName: kind.symbol)
                             .font(.system(size: 12))
@@ -1107,12 +1098,8 @@ struct TaskInspectorShell: View {
                         }
                     }
                     .font(WFType.menu)
-                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .foregroundStyle(WFColors.text)
-                .padding(.horizontal, 8)
             }
         }
         .padding(8)
@@ -1126,10 +1113,10 @@ struct TaskInspectorShell: View {
         VStack(spacing: 2) {
             // 顺序取 `TaskPriority.menuOrder`（滴答：高 → 中 → 低 → 无）。
             ForEach(TaskPriority.menuOrder, id: \.self) { priority in
-                Button {
+                PopupMenuRow(action: {
                     showPriorityMenu = false
                     _ = workspace.setPriority(task.id, priority)
-                } label: {
+                }) {
                     HStack(spacing: WFSpace.dense) {
                         Image(systemName: priority == .none ? "flag" : "flag.fill")
                             .foregroundStyle(priorityColor(priority))
@@ -1137,12 +1124,8 @@ struct TaskInspectorShell: View {
                         Spacer(minLength: 0)
                     }
                     .font(WFType.menu)
-                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
                 .foregroundStyle(WFColors.text)
-                .padding(.horizontal, 8)
             }
         }
         .padding(8)
@@ -1175,11 +1158,14 @@ struct TaskInspectorShell: View {
             Label(task.list.name, systemImage: "tray")
                 .font(WFType.control)
                 .foregroundStyle(WFColors.secondaryText)
+                .padding(.horizontal, WFSpace.xs)
+                .padding(.vertical, WFSpace.xs)
+                .popupMenuRowBackground()
         }
         .fixedSize()
         .disabled(!workspace.canMoveToList(task.id))
         .id(task.id)
-        .help("移动到清单")
+        .hoverTip("移动到清单", placement: .above)
         .accessibilityLabel("清单：\(task.list.name)")
         }
     }

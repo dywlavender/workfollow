@@ -109,7 +109,7 @@ struct MatrixWorkspaceView: View {
                     .contentShape(Rectangle())
             }
             .fixedSize()
-            .help("四象限设置")
+            .hoverTip("四象限设置")
         }
         .padding(.leading, WFSpace.relaxed)
         .padding(.top, WFSpace.cardInset)
@@ -436,7 +436,7 @@ struct MatrixQuadrantCard: View {
         .disabled(!visible)
         .allowsHitTesting(visible)
         .accessibilityHidden(!visible)
-        .help(tooltip)
+        .hoverTip(tooltip)
     }
 
     /// 象限菜单：新建、显示/隐藏已完成、展开全部、折叠全部。
@@ -477,7 +477,7 @@ struct MatrixQuadrantCard: View {
         .disabled(!hovering && !menuOpen)
         .allowsHitTesting(hovering || menuOpen)
         .accessibilityHidden(!hovering && !menuOpen)
-        .help("\(style.title)更多操作")
+        .hoverTip("\(style.title)更多操作")
     }
 }
 
@@ -647,7 +647,7 @@ struct MatrixTaskRowView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(completed ? "恢复任务" : "完成任务")
+        .hoverTip(completed ? "恢复任务" : "完成任务")
         .accessibilityLabel(completed ? "恢复：\(task.title)" : "完成：\(task.title)")
     }
 
@@ -702,6 +702,7 @@ struct MatrixTaskRowView: View {
         Image(systemName: symbol)
             .font(.system(size: 15))
             .foregroundStyle(WFColors.tertiaryText)
+            .hoverTip(label)
             .accessibilityLabel(label)
     }
 }

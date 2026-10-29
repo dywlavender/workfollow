@@ -50,7 +50,7 @@ final class StickyNoteWindowController: ObservableObject {
 
     func open(taskID: UUID) {
         guard let workspace, let task = workspace.task(for: taskID), task.deletedAt == nil else { return }
-        windows.open(id: .task(taskID), title: "任务便签", appearance: environment?.appearance ?? .system) { handle in
+        windows.open(id: .task(taskID), title: "任务浮窗", appearance: environment?.appearance ?? .system) { handle in
             FloatingTaskView(taskID: taskID, workspace: workspace, environment: environment,
                 editorHandle: handle, onClose: { [weak self] in self?.close(taskID: taskID) },
                 onOpenInMain: { [weak self] in self?.openInMain(taskID) })

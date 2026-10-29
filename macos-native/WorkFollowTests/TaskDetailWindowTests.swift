@@ -23,7 +23,7 @@ final class TaskDetailWindowTests: XCTestCase {
         XCTAssertLessThan(detach.maxX, priority.minX + 0.5, "入口在优先级左侧")
 
         let narrow = try render(TaskInspectorShell(workspace: workspace, showBack: true))
-        XCTAssertNotNil(narrow[.detach], "移除更多菜单入口后，窄布局也应能从顶部打开便签")
+        XCTAssertNotNil(narrow[.detach], "移除更多菜单入口后，窄布局也应能从顶部打开浮窗")
     }
 
     func testControllerReusesTheSameWindow() throws {
@@ -38,7 +38,7 @@ final class TaskDetailWindowTests: XCTestCase {
 
         TaskDetailWindowController.shared.show(workspace: workspace, environment: environment)
         let first = try XCTUnwrap(TaskDetailWindowController.shared.window)
-        XCTAssertEqual(first.title, "任务便签")
+        XCTAssertEqual(first.title, "任务浮窗")
         let panel = try XCTUnwrap(first as? FloatingEditorPanel)
         InspectorPanelTestSupport.settle(panel)
         XCTAssertEqual(panel.editorHandle.textView?.documentIdentity, id)

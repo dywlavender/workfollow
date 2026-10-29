@@ -57,9 +57,11 @@ struct FocusTimerRing: View {
             if store.currentMode == .pomodoro, store.phase == .focusing || store.phase == .pausedFocus {
                 HStack(spacing: 12) {
                     Button { _ = store.adjustCurrentTarget(byMinutes: -5) } label: { Image(systemName: "minus") }
+                        .hoverTip("减少 5 分钟")
                         .accessibilityIdentifier("focus-current-minus")
                     Text("本次时长").font(.caption)
                     Button { _ = store.adjustCurrentTarget(byMinutes: 5) } label: { Image(systemName: "plus") }
+                        .hoverTip("增加 5 分钟")
                         .accessibilityIdentifier("focus-current-plus")
                 }.buttonStyle(.plain).foregroundStyle(theme.text2)
                     .padding(10).background(theme.canvas, in: Capsule())

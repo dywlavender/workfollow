@@ -46,7 +46,7 @@ struct FocusPresetLibraryPane: View {
                 Spacer()
                 Button(action: onAddTimer) {
                     Image(systemName: "plus").font(.system(size: 17)).frame(width: 28, height: 28)
-                }.buttonStyle(.plain).help("添加常用专注")
+                }.buttonStyle(.plain).hoverTip("添加常用专注")
                     .accessibilityIdentifier("focus-library-add-preset")
                 BusinessMenu {
                     Button("概览") { store.showLibraryOverview() }
@@ -58,6 +58,7 @@ struct FocusPresetLibraryPane: View {
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28)
                 }.fixedSize()
+                    .hoverTip("更多专注操作")
                     .accessibilityIdentifier("focus-library-menu")
             }
             HStack(spacing: 2) {
@@ -97,7 +98,7 @@ struct FocusPresetLibraryPane: View {
                     Image(systemName: "play.fill").font(.system(size: 13)).frame(width: 28, height: 36)
                 }
                 .buttonStyle(.plain).foregroundStyle(theme.accent).disabled(!store.canStartTimerPreset)
-                .help(store.canStartTimerPreset ? "开始此专注" : "当前会话尚未结束")
+                .hoverTip(store.canStartTimerPreset ? "开始此专注" : "当前会话尚未结束")
                 .accessibilityIdentifier("focus-library-play-\(preset.id.uuidString)")
             }
         }
@@ -141,7 +142,7 @@ struct FocusPresetLibraryPane: View {
                 Image(systemName: primaryAction == .pause ? "pause.fill" : "play.fill")
                     .font(.system(size: 17)).foregroundStyle(theme.accent)
                     .frame(width: 36, height: 36).background(theme.accent.opacity(0.10), in: Circle())
-            }.buttonStyle(.plain).help(primaryAction?.title ?? "开始")
+            }.buttonStyle(.plain).hoverTip(primaryAction?.title ?? "开始", placement: .above)
                 .accessibilityIdentifier("focus-library-timer-primary")
         }
         .padding(.horizontal, 20).frame(height: FocusLayoutMetrics.libraryTimerBarHeight)

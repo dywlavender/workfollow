@@ -174,7 +174,8 @@ struct TaskContextMenuPopover: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("选择日期")
+                .popupMenuRowBackground()
+                .hoverTip("选择日期")
                 .accessibilityLabel("选择日期")
                 .taskContextMenuAnchor(.customDate)
                 // 第五个快选钮「清除日期」：Flutter `clearDate` / 滴答日期行第 5 钮。
@@ -188,9 +189,10 @@ struct TaskContextMenuPopover: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .popupMenuRowBackground()
                 .disabled(task.schedule.dueAt == nil)
                 .foregroundStyle(WFColors.text)
-                .help("清除日期")
+                .hoverTip("清除日期")
                 .accessibilityLabel("清除日期")
                 .taskContextMenuAnchor(.clearDate)
             }
@@ -205,6 +207,7 @@ struct TaskContextMenuPopover: View {
                         .padding(.horizontal, 16).frame(height: 34)
                 }
                 .buttonStyle(.plain)
+                .popupMenuRowBackground()
                 .disabled(task.isClosed || RecurrenceEngine.next(for: task, now: workspace.clock(), calendar: workspace.calendar) == nil)
                 .onHover { hoverRow(nil, entering: $0) }
             }
@@ -357,7 +360,7 @@ struct TaskContextMenuPopover: View {
                             message: copied ? "已复制任务链接" : "无法复制任务链接"))
                     }
                 }
-                actionRow("打开便签", symbol: "task.sticky") {
+                actionRow("打开浮窗", symbol: "task.sticky") {
                     perform { StickyNoteWindowController.shared.open(taskID: task.id) }
                 }
                 actionRow(task.kind == .note ? "转换为任务" : "转换为笔记", symbol: "task.note") {
@@ -396,7 +399,8 @@ struct TaskContextMenuPopover: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(offset == 7 ? "安排到 7 天后" : title)
+        .popupMenuRowBackground()
+        .hoverTip(offset == 7 ? "安排到 7 天后" : title)
         .accessibilityLabel(offset == 7 ? "7 天后" : title)
         .overlay {
             if offset == 7 {
@@ -461,7 +465,8 @@ struct TaskContextMenuPopover: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(priorityTitle(priority))
+        .popupMenuRowBackground()
+        .hoverTip(priorityTitle(priority))
         .accessibilityLabel(priorityTitle(priority))
         .taskContextMenuAnchor(.priority(priority))
     }
@@ -514,7 +519,7 @@ struct TaskContextMenuPopover: View {
     /// 用户按 Esc 或点菜单外来收尾 —— 这也正是系统菜单的习惯。
     ///
     /// ⚠️ 别把「一次性的」混进来：「跳过此周期」虽然是日期动作，但它是一次性命令，
-    /// 点完要收；「自定义日期」「打开便签」「添加子任务」会开别的窗口，也要收。
+    /// 点完要收；「自定义日期」「打开浮窗」「添加子任务」会开别的窗口，也要收。
     private func apply(_ action: () -> Void) {
         action()
     }

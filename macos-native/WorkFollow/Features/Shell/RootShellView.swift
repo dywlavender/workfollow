@@ -107,7 +107,7 @@ struct RootShellView: View {
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 0) {
                 // HUD 放在安全区内：有提示时把页面顶上去，不浮在底栏按钮上抢点击
-                // （摘要页「撤销采用」等）。交互本身由 FeedbackCenter 的优先级保证。
+                // （任务完成后的撤销提示等）。交互本身由 FeedbackCenter 的优先级保证。
                 FeedbackHostView(center: environment.feedback)
                 if let error = environment.storageError {
                     // 保存失败不是"看一眼就好"：重试成功后提示自己消失。
@@ -296,7 +296,7 @@ private struct ModuleShellView: View {
                 if !navigationVisible {
                     Button { showNavigation.toggle() } label: {
                         Image(systemName: "sidebar.left")
-                    }.buttonStyle(.plain).help("显示导航")
+                    }.buttonStyle(.plain).hoverTip("显示导航")
                         .background(AnchoredPropertyPanel(isPresented: $showNavigation,
                                                           width: WFMetrics.navigationWidth) {
                             NavigationColumnView(workspace: workspace, navigation: navigation,

@@ -96,7 +96,7 @@ struct TaskTimelineView: View {
                 viewport.step(-1, availableWidth: gridWidth, calendar: workspace.calendar)
                 scrollRevision += 1
             } label: { Image(systemName: "chevron.left").frame(width: 24, height: 24) }
-                .help("上一段日期").accessibilityLabel("上一段日期")
+                .hoverTip("上一段日期").accessibilityLabel("上一段日期")
             Button("今天") {
                 viewport.goToday(workspace.clock(), calendar: workspace.calendar)
                 scrollRevision += 1
@@ -106,7 +106,7 @@ struct TaskTimelineView: View {
                 viewport.step(1, availableWidth: gridWidth, calendar: workspace.calendar)
                 scrollRevision += 1
             } label: { Image(systemName: "chevron.right").frame(width: 24, height: 24) }
-                .help("下一段日期").accessibilityLabel("下一段日期")
+                .hoverTip("下一段日期").accessibilityLabel("下一段日期")
         }
         .buttonStyle(.plain).font(WFType.supporting)
     }
@@ -128,7 +128,7 @@ struct TaskTimelineView: View {
                 BusinessMenuChoices(selection: $colorSource, options: TaskTimelineColorSource.allCases.map { BusinessChoice($0, $0.title) })
             } label: { Image(systemName: "paintpalette").frame(width: 22, height: 24) }
             .fixedSize()
-            .help("按\(colorSource.title)显示任务颜色")
+            .hoverTip("按\(colorSource.title)显示任务颜色")
             Button { showsPool.toggle() } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "sidebar.right")

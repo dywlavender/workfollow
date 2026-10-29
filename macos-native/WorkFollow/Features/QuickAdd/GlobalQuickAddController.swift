@@ -36,7 +36,7 @@ struct GlobalQuickAddComposer {
     func submit(text: String, description: String = "",
                 dismissedTokenIDs: Set<String> = []) -> UUID? {
         workspace.submitCapture(QuickCaptureSession(text: text, description: description,
-            dismissedTokenIDs: dismissedTokenIDs)).first
+            dismissedTokenIDs: dismissedTokenIDs), useDefaultList: true).first
     }
 }
 
@@ -171,7 +171,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
     }
 
     func submit(_ session: QuickCaptureSession, attachments: [NativeAttachment] = []) {
-        let ids = composer.workspace.submitCapture(session)
+        let ids = composer.workspace.submitCapture(session, useDefaultList: true)
         guard let first = ids.first else { return }
         // 属性菜单里选的附件在创建成功后挂到新任务（与列表条同一口径）。
         if !attachments.isEmpty, let task = composer.workspace.task(for: first) {
@@ -296,6 +296,8 @@ private struct GlobalQuickAddPanelView: View {
     /// 输入框显示模式：与列表条共用同一持久化键（「输入框设置」在两端同值）。
     @AppStorage(QuickAddDisplayMode.defaultsKey) private var displayModeRaw = QuickAddDisplayMode.compact.rawValue
     @State private var showSchedule = false
+    /// 打开日程面板时落在哪一页：点识别 chip 时定位到对应属性页。
+    @State private var schedulePage: TaskDatePopoverV2.Page = .main
     @State private var showProperties = false
     @State private var showTemplates = false
     @State private var scheduleDraftID = UUID()
@@ -440,17 +442,18 @@ private struct GlobalQuickAddPanelView: View {
                 requestedSelection: $requestedInputSelection
             )
             .frame(maxWidth: .infinity)
-            Button { showSchedule = true } label: {
+            Button { schedulePage = .main; showSchedule = true } label: {
                 Image(systemName: "calendar")
                     .foregroundStyle(timing.dueAt == nil ? WFColors.secondaryText : WFColors.accent)
                     .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("安排日期、提醒和重复")
+            .buttonStyle(.plain).popupMenuRowBackground().hoverTip("安排日期、提醒和重复")
             .accessibilityLabel("安排日期、提醒和重复")
             .schedulePopover(isPresented: $showSchedule) {
                 TaskDatePopoverV2(task: scheduleDraftTask, workspace: composer.workspace,
-                    draftCommit: { scheduleOverride = QuickAddScheduleDraft($0) }) { showSchedule = false }
+                    initialPage: schedulePage,
+                    draftCommit: applySchedulePlan) { showSchedule = false }
             }
             Button { showProperties = true } label: {
                 Image(systemName: "chevron.down")
@@ -458,7 +461,7 @@ private struct GlobalQuickAddPanelView: View {
                     .frame(width: WFMetrics.controlHeight, height: WFMetrics.controlHeight)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain).help("更多任务属性").accessibilityLabel("更多任务属性")
+            .buttonStyle(.plain).popupMenuRowBackground().hoverTip("更多任务属性").accessibilityLabel("更多任务属性")
             .background(AnchoredPropertyPanel(isPresented: $showProperties, width: PopupMetrics.quickAddPropertiesWidth) {
                 QuickAddPropertiesPopover(workspace: composer.workspace,
                     selectedPriority: priorityOverride ?? parsed.priority,
@@ -493,28 +496,37 @@ private struct GlobalQuickAddPanelView: View {
         .padding(.leading, 24)
     }
 
+    /// 面板提交：把等价文字写回输入框，让 chip 立刻反映新值。
+    /// 没有可落的日程片段时退回 override（与列表条同一口径）。
+    private func applySchedulePlan(_ plan: TaskDateDraftModel.CommitPlan) {
+        let scheduleDraft = QuickAddScheduleDraft(plan)
+        if let rewritten = QuickAddScheduleTextSync.rewrite(
+            text, to: scheduleDraft, now: composer.workspace.clock(),
+            calendar: composer.workspace.calendar,
+            knownLists: Set(composer.workspace.availableListNames),
+            dismissedTokenIDs: dismissedTokens) {
+            draft.text = rewritten
+            // 文字改了就不再保留 override：否则旧 override 会盖住刚写回的值。
+            scheduleOverride = nil
+        } else {
+            scheduleOverride = scheduleDraft
+        }
+    }
+
     private var tokenStrip: some View {
         QuickAddTokenFlowLayout(horizontalSpacing: 5, verticalSpacing: 5) {
             ForEach(parsed.tokens) { token in
-                // 与列表条一致：识别错了要能撤销。面板原先这里是纯 `Text`，
-                // 点不掉——用户在面板里打错一个「明天」就只能整个重打。
-                Button {
-                    dismissedTokens.insert(token.id)
-                } label: {
-                    let color = QuickAddTokenColor.swiftUIColor(for: token.kind)
-                    HStack(spacing: 3) {
-                        Text(token.label)
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 9))
-                    }
-                    .font(WFType.supporting)
-                    .foregroundStyle(color)
-                    .padding(.horizontal, WFSpace.sm)
-                    .padding(.vertical, WFSpace.xs / 2)
-                    .background(color.opacity(0.12), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .help("移除识别项：\(token.label)")
+                // 与列表条一致：识别错了要能撤销。日程类 chip 还能点开面板改值，
+                // 「提前3分钟」不必删掉重打。
+                QuickAddTokenChip(
+                    token: token,
+                    onEdit: TaskDatePopoverV2.Page(editing: token).map { page in
+                        {
+                            schedulePage = page
+                            showSchedule = true
+                        }
+                    },
+                    onRemove: { dismissedTokens.insert(token.id) })
             }
         }
         .padding(.leading, 24)

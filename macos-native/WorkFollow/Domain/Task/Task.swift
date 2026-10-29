@@ -74,10 +74,14 @@ struct TaskListMeta: Equatable, Codable {
     /// 归档只改变清单的可见性与提醒资格，保留任务和原有组织属性。
     var archivedAt: Date?
     var isArchived: Bool { archivedAt != nil }
+    var hidesFromSmartLists: Bool
+    var remindersMuted: Bool
+    var isDefault: Bool
 
     init(name: String, colorIndex: Int? = nil, isPinned: Bool = false, sortOrder: Int = 0,
          colorARGB: UInt32? = nil, icon: String? = nil, folderName: String? = nil,
-         referenceID: UUID? = nil, archivedAt: Date? = nil) {
+         referenceID: UUID? = nil, archivedAt: Date? = nil,
+         hidesFromSmartLists: Bool = false, remindersMuted: Bool = false, isDefault: Bool = false) {
         self.referenceID = referenceID
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.colorIndex = colorIndex
@@ -87,10 +91,14 @@ struct TaskListMeta: Equatable, Codable {
         self.icon = icon
         self.folderName = folderName
         self.archivedAt = archivedAt
+        self.hidesFromSmartLists = hidesFromSmartLists
+        self.remindersMuted = remindersMuted
+        self.isDefault = isDefault
     }
 
     private enum CodingKeys: String, CodingKey {
         case name, colorIndex, colorARGB, isPinned, sortOrder, icon, folderName, referenceID, archivedAt
+        case hidesFromSmartLists, remindersMuted, isDefault
     }
 
     init(from decoder: Decoder) throws {
@@ -105,6 +113,9 @@ struct TaskListMeta: Equatable, Codable {
         folderName = try values.decodeIfPresent(String.self, forKey: .folderName)
             .flatMap { $0.isEmpty ? nil : $0 }
         archivedAt = try values.decodeIfPresent(Date.self, forKey: .archivedAt)
+        hidesFromSmartLists = try values.decodeIfPresent(Bool.self, forKey: .hidesFromSmartLists) ?? false
+        remindersMuted = try values.decodeIfPresent(Bool.self, forKey: .remindersMuted) ?? false
+        isDefault = try values.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -118,6 +129,9 @@ struct TaskListMeta: Equatable, Codable {
         try values.encodeIfPresent(icon, forKey: .icon)
         try values.encodeIfPresent(folderName, forKey: .folderName)
         try values.encodeIfPresent(archivedAt, forKey: .archivedAt)
+        if hidesFromSmartLists { try values.encode(true, forKey: .hidesFromSmartLists) }
+        if remindersMuted { try values.encode(true, forKey: .remindersMuted) }
+        if isDefault { try values.encode(true, forKey: .isDefault) }
     }
 }
 
@@ -131,19 +145,22 @@ struct TaskListFolder: Equatable, Codable, Identifiable {
     var id: String { name }
     var name: String
     var sortOrder: Int
+    var icon: String?
 
-    init(name: String, sortOrder: Int = 0) {
+    init(name: String, sortOrder: Int = 0, icon: String? = nil) {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.sortOrder = sortOrder
+        self.icon = icon
     }
 
-    private enum CodingKeys: String, CodingKey { case name, sortOrder }
+    private enum CodingKeys: String, CodingKey { case name, sortOrder, icon }
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         name = (try values.decode(String.self, forKey: .name))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         sortOrder = try values.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        icon = try values.decodeIfPresent(String.self, forKey: .icon)
     }
 }
 

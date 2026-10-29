@@ -62,7 +62,7 @@ struct SchedulePropertyRow: View {
             .buttonStyle(.plain)
             .frame(width: 18, height: 18)
             .scheduleRenderAnchor(.trailing(property), label: trailingSymbol)
-            .help(presentation.trailingControl == .clear
+            .hoverTip(presentation.trailingControl == .clear
                   ? "清除\(presentation.title)" : "展开\(presentation.title)")
             .accessibilityLabel(presentation.trailingControl == .clear
                                 ? "清除\(presentation.title)" : "展开\(presentation.title)")

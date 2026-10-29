@@ -134,7 +134,7 @@ struct CountdownWorkspaceView: View {
                     .contentShape(Rectangle())
             }
             .fixedSize()
-            .help("新建")
+            .hoverTip("新建")
             .accessibilityLabel("新建")
             // 参考图的「更多」菜单内容不可见，这里只放本页真正需要的入口：
             // 归档记录得有个地方能进得去。
@@ -146,7 +146,7 @@ struct CountdownWorkspaceView: View {
                     .contentShape(Rectangle())
             }
             .fixedSize()
-            .help("更多")
+            .hoverTip("更多")
             .accessibilityLabel("更多")
         }
         .foregroundStyle(WFColors.text)
@@ -348,7 +348,7 @@ struct CountdownCardView: View {
                     .contentShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
-            .help(event.pinned ? "取消置顶" : "置顶")
+            .hoverTip(event.pinned ? "取消置顶" : "置顶")
             .accessibilityLabel(event.pinned ? "取消置顶" : "置顶")
 
             BusinessMenu(isPresented: $menuPresented) {
@@ -363,7 +363,7 @@ struct CountdownCardView: View {
                     .contentShape(RoundedRectangle(cornerRadius: 7))
             }
             .fixedSize()
-            .help("更多")
+            .hoverTip("更多")
             .accessibilityLabel("更多")
         }
     }

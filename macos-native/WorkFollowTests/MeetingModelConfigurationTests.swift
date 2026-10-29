@@ -52,7 +52,7 @@ final class MeetingModelConfigurationTests: XCTestCase {
         let received = try String(contentsOf: arguments, encoding: .utf8).split(separator: "\n").map(String.init)
         let modelFlag = try XCTUnwrap(received.firstIndex(of: "--model"))
         XCTAssertEqual(received[modelFlag + 1], "text-provider/text-model")
-        XCTAssertTrue(received.contains("--skill"))
+        XCTAssertTrue(received.contains("--no-context-files"))
         XCTAssertFalse(received.contains("--extension"))
         XCTAssertFalse(received.contains(configuration.resolvedTranscriptionModel))
     }

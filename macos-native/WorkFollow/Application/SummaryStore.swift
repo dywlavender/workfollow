@@ -1,16 +1,16 @@
 import Combine
 import Foundation
 
-/// Journals and weekly reports have separate files and identities. JSON stores
-/// debounce disk writes; flush drains both files during backup or termination.
+/// Journals keep their own file; the live summary only persists its display
+/// recipe, never a snapshot of the generated text.
 @MainActor
 final class SummaryStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var entries: [DailySummary] = []
-    @Published private(set) var weeklyEntries: [WeeklySummary] = []
+    @Published private(set) var options: SummaryDocumentOptions
     /// Last flush failure for inline display; cleared by the next successful flush.
     @Published private(set) var lastError: String?
     private let persistence: JSONFileStore<[DailySummary]>
-    private let weeklyPersistence: JSONFileStore<[WeeklySummary]>
+    private let optionsPersistence: JSONFileStore<SummaryDocumentOptions>
     private let clock: () -> Date
 
     init(clock: @escaping () -> Date = Date.init, directory: URL? = nil) {
@@ -22,50 +22,26 @@ final class SummaryStore: ObservableObject, ModuleStoreFlushable {
             store = JSONFileStore(filename: "summary.json")
         }
         persistence = store
-        weeklyPersistence = JSONFileStore(filename: "weekly-summaries.json", directory: directory ?? JSONFileStore<[DailySummary]>.moduleDirectory)
+        let optionsStore = JSONFileStore<SummaryDocumentOptions>(
+            filename: "summary-options.json", directory: directory ?? JSONFileStore<[DailySummary]>.moduleDirectory)
+        optionsPersistence = optionsStore
+        var loaded = optionsStore.load() ?? .standard
+        // List scope follows the shared week/context selection, not the saved recipe.
+        loaded.filter.listName = nil
+        options = loaded
         entries = (store.load() ?? []).sorted { $0.dayKey > $1.dayKey }
-        weeklyEntries = (weeklyPersistence.load() ?? []).sorted { $0.updatedAt > $1.updatedAt }
     }
 
     func entry(for dayKey: String) -> DailySummary? {
         entries.first { $0.dayKey == dayKey }
     }
 
-    func weeklyEntry(weekKey: String, scopeID: String = "all") -> WeeklySummary? {
-        weeklyEntries.first { $0.weekKey == weekKey && $0.scopeID == scopeID }
-    }
-
-    func saveWeekly(document: NativeDocument, weekKey: String, scopeID: String = "all", listName: String? = nil,
-                    options: SummaryDocumentOptions? = nil, range: SummaryDateRange? = nil, listNames: [String]? = nil) {
-        if let index = weeklyEntries.firstIndex(where: { $0.weekKey == weekKey && $0.scopeID == scopeID }) {
-            let resolvedOptions = options ?? weeklyEntries[index].options
-            let resolvedRange = range ?? weeklyEntries[index].range
-            let resolvedLists = listNames ?? weeklyEntries[index].listNames
-            guard weeklyEntries[index].document != document || weeklyEntries[index].options != resolvedOptions
-                || weeklyEntries[index].range != resolvedRange || weeklyEntries[index].listNames != resolvedLists
-                || weeklyEntries[index].listName != listName else { return }
-            weeklyEntries[index].document = document
-            weeklyEntries[index].options = resolvedOptions
-            weeklyEntries[index].range = resolvedRange
-            weeklyEntries[index].listNames = resolvedLists
-            weeklyEntries[index].updatedAt = clock()
-            weeklyEntries[index].listName = listName
-        } else {
-            weeklyEntries.append(WeeklySummary(weekKey: weekKey, scopeID: scopeID, listName: listName,
-                                                document: document, updatedAt: clock(), options: options, range: range, listNames: listNames))
-        }
-        weeklyEntries.sort { $0.updatedAt > $1.updatedAt }
-        weeklyPersistence.schedule(weeklyEntries)
-    }
-
-    /// The old weekly editor was the rich-document writer at Monday's key;
-    /// journals wrote plain content. Copy rich documents even when AI or the
-    /// user removed their generated heading, and retain the original entry.
-    func migrateLegacyWeekly(weekStart: Date, calendar: Calendar) {
-        let key = Self.dayKey(weekStart, calendar: calendar)
-        guard weeklyEntry(weekKey: key) == nil, let legacy = entry(for: key),
-              let document = legacy.document else { return }
-        saveWeekly(document: document, weekKey: key)
+    func updateOptions(_ value: SummaryDocumentOptions) {
+        var normalized = value
+        normalized.filter.listName = nil
+        guard options != normalized else { return }
+        options = normalized
+        optionsPersistence.schedule(normalized)
     }
 
     /// 保存富文本正文（P0 起摘要正文走 document）。`content` 同步一份纯文本，
@@ -142,9 +118,9 @@ final class SummaryStore: ObservableObject, ModuleStoreFlushable {
     }
 
     func flush(_ completion: @escaping (Error?) -> Void) {
-        persistence.flush { [weak self, weeklyPersistence] dailyError in
-            weeklyPersistence.flush { weeklyError in
-            let error = dailyError ?? weeklyError
+        persistence.flush { [weak self, optionsPersistence] dailyError in
+            optionsPersistence.flush { optionsError in
+            let error = dailyError ?? optionsError
             // `Task` names the domain entity in this module; qualify the
             // concurrency type explicitly.
             _Concurrency.Task { @MainActor in

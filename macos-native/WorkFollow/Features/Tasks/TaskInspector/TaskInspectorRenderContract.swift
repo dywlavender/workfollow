@@ -12,12 +12,14 @@ enum InspectorRenderAnchor: Hashable {
     case collapsedCount
     /// 正文后、子任务前的两行属性：附件列表 / 标签 chips（TI2-02/TI2-03）。
     case attachments, tagStrip
-    case footerList, footerFormatting, footerMore, footerTag, footerMerge, footerComment
+    /// 正文上方的常驻格式工具条（不在底栏）。
+    case formattingToolbar
+    case footerList, footerMore, footerTag, footerMerge, footerComment
     /// 评论出口的条数角标（有评论才渲染）。
     case commentBadge
     /// 内联评论区（TI2-09）。
     case commentSection
-    /// 任务／笔记顶栏的公共「打开便签」入口。
+    /// 任务／笔记顶栏的公共「打开浮窗」入口。
     case detach
     /// 顶栏「笔记信息」（TI2-15）。
     case noteInfo

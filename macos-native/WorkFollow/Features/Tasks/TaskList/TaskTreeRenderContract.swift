@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum TaskTreeRenderPart: Hashable { case disclosure, checkbox, title, preview, date, row }
+enum TaskTreeRenderPart: Hashable { case disclosure, checkbox, title, preview, date, row, checklist(UUID) }
 struct TaskTreeRenderAnchor: Hashable {
     let taskID: UUID
     let part: TaskTreeRenderPart

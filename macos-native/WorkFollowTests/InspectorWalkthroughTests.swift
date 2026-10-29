@@ -125,9 +125,9 @@ final class InspectorWalkthroughTests: XCTestCase {
         }
         try InspectorPanelTestSupport.sendEscape(to: window)
 
-        try InspectorPanelTestSupport.clickButton(containing: "打开便签", in: window)
+        try InspectorPanelTestSupport.clickButton(containing: "打开浮窗", in: window)
         RunLoop.main.run(until: Date().addingTimeInterval(0.4))
-        if let detail = NSApp.windows.first(where: { $0.title == "任务便签" && $0.isVisible }) {
+        if let detail = NSApp.windows.first(where: { $0.title == "任务浮窗" && $0.isVisible }) {
             try capture(detail, "11-detach-window")
         }
 

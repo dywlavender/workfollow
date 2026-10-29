@@ -40,7 +40,8 @@ final class WidgetQuickAddController {
         panel.appearance = style == .system ? nil : NSAppearance(named: style == .dark ? .darkAqua : .aqua)
         let schedule = TaskSchedule(dueAt: workspace.calendar.startOfDay(for: workspace.clock()))
         let card = TaskQuickComposer(workspace: workspace, fallbackSchedule: schedule,
-            presetSchedule: schedule, presetPriority: .none, selectsCreatedTask: false,
+            presetSchedule: schedule, presetPriority: .none,
+            presetList: TaskList(name: workspace.defaultListName), selectsCreatedTask: false,
             requestClose: { [weak self] in self?.dismiss() })
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))

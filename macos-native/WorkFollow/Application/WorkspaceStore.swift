@@ -23,6 +23,9 @@ final class WorkspaceStore {
         Set(listMetas.filter { $0.isArchived && $0.name != TaskList.inbox.name }.map(\.name))
     }
     var onListArchiveChange: ((Set<String>) -> Void)?
+    var smartHiddenListNames: Set<String> { Set(listMetas.filter(\.hidesFromSmartLists).map(\.name)) }
+    var mutedListNames: Set<String> { Set(listMetas.filter(\.remindersMuted).map(\.name)) }
+    var onListSettingsChange: (() -> Void)?
     /// 清单文件夹（滴答层级第一级）。**独立于 lists**：允许空文件夹，
     /// 随 commit/undo/transaction 与清单同进同退。
     private(set) var listFolders: [TaskListFolder] = []
@@ -407,6 +410,10 @@ final class WorkspaceStore {
             $0.isArchived && $0.name != TaskList.inbox.name
         }.map(\.name))
         if previousArchived != archivedListNames { onListArchiveChange?(archivedListNames) }
+        if Set(previousMetas.filter(\.remindersMuted).map(\.name)) != mutedListNames
+            || Set(previousMetas.filter(\.hidesFromSmartLists).map(\.name)) != smartHiddenListNames {
+            onListSettingsChange?()
+        }
         func listNames(_ tasks: [Task], _ metas: [TaskListMeta]) -> [UUID: String] {
             var names: [UUID: String] = [:]
             for task in tasks { if let id = task.listID { names[id] = task.list.name } }

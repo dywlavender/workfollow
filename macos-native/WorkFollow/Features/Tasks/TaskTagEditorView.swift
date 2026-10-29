@@ -101,7 +101,8 @@ struct TaskTagColorGrid: View {
                                 }
                             }
                     }
-                    .buttonStyle(.plain).accessibilityLabel("标签颜色 \(index + 1)")
+                    .buttonStyle(.plain).hoverTip("标签颜色 \(index + 1)")
+                        .accessibilityLabel("标签颜色 \(index + 1)")
                     .taskTagEditorFrame(.color(value))
                 }
             }

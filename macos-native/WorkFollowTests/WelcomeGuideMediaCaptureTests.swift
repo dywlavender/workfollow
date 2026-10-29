@@ -78,14 +78,71 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
             $0.title == "日期属性" && $0.isVisible
         })
         let content = try XCTUnwrap(panel.contentView)
+        func clickPanel(_ rect: CGRect) throws {
+            try InspectorPanelTestSupport.click(rect, in: content, window: panel)
+        }
         let tomorrow = try XCTUnwrap(fixture.scheduleFrames[.shortcut("明天")]?.frame)
         let tomorrowPoint = fixture.point(
             screenFrame: panel.convertToScreen(content.convert(tomorrow, to: nil)))
         recorder.moveCursor(to: tomorrowPoint, over: 0.35)
         recorder.wait(0.25)
         recorder.click(at: tomorrowPoint)
-        try InspectorPanelTestSupport.click(tomorrow, in: content, window: panel)
+        try clickPanel(tomorrow)
         recorder.wait(0.5)
+
+        // 日期之后接着演示提醒：展开提醒行 → 勾选提前一天 → 确认子卡。
+        let reminderRow = try XCTUnwrap(fixture.scheduleFrames[.row(.reminder)]?.frame)
+        let reminderPoint = fixture.point(
+            screenFrame: panel.convertToScreen(content.convert(reminderRow, to: nil)))
+        recorder.moveCursor(to: reminderPoint, over: 0.4)
+        recorder.wait(0.25)
+        recorder.click(at: reminderPoint)
+        try clickPanel(reminderRow)
+        fixture.settle(0.6)
+
+        func childPanel() throws -> NSPanel {
+            try XCTUnwrap(panel.childWindows?.compactMap { $0 as? NSPanel }
+                .first { $0.isVisible && $0.frame.width > 20 })
+        }
+        func clickChild(_ rect: CGRect) throws {
+            let child = try childPanel()
+            try InspectorPanelTestSupport.click(rect, in: try XCTUnwrap(child.contentView),
+                                                window: child)
+        }
+
+        var offset: CGRect?
+        let deadline = Date().addingTimeInterval(1.5)
+        while Date() < deadline, offset == nil {
+            offset = fixture.scheduleChildFrames[.reminderOffset(-1440)]?.frame
+            if offset == nil { fixture.settle(0.05) }
+        }
+        let reminder = try XCTUnwrap(offset)
+        let child = try childPanel()
+        let reminderPoint2 = fixture.point(screenFrame: child.convertToScreen(
+            try XCTUnwrap(child.contentView).convert(reminder, to: nil)))
+        recorder.moveCursor(to: reminderPoint2, over: 0.35)
+        recorder.wait(0.25)
+        recorder.click(at: reminderPoint2)
+        try clickChild(reminder)
+        recorder.wait(0.4)
+
+        var reminderFooterFrame: CGRect?
+        let footerDeadline = Date().addingTimeInterval(1.5)
+        while Date() < footerDeadline, reminderFooterFrame == nil {
+            reminderFooterFrame = fixture.scheduleChildFrames[.editorFooter(.reminder)]?.frame
+            if reminderFooterFrame == nil { fixture.settle(0.05) }
+        }
+        let reminderFooter = try XCTUnwrap(reminderFooterFrame,
+            "child keys: \(fixture.scheduleChildFrames.keys.map(String.init(describing:)))")
+        let reminderConfirm = CGRect(x: reminderFooter.minX + reminderFooter.width * 0.75,
+                                     y: reminderFooter.midY - 10, width: 20, height: 20)
+        let reminderConfirmPoint = fixture.point(screenFrame: child.convertToScreen(
+            try XCTUnwrap(child.contentView).convert(reminderConfirm, to: nil)))
+        recorder.moveCursor(to: reminderConfirmPoint, over: 0.35)
+        recorder.wait(0.25)
+        recorder.click(at: reminderConfirmPoint)
+        try clickChild(reminderConfirm)
+        recorder.wait(0.6)
 
         let footer = try XCTUnwrap(fixture.scheduleFrames[.mainFooter]?.frame)
         let confirm = CGRect(x: footer.minX + footer.width * 0.75, y: footer.midY - 10,
@@ -95,11 +152,12 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
         recorder.moveCursor(to: confirmPoint, over: 0.35)
         recorder.wait(0.3)
         recorder.click(at: confirmPoint)
-        try InspectorPanelTestSupport.click(confirm, in: content, window: panel)
+        try clickPanel(confirm)
         recorder.wait(1.0)
         recorder.stop()
 
         XCTAssertEqual(workspace.task(for: taskID)?.schedule.dueAt, workspace.dateFromToday(1))
+        XCTAssertEqual(workspace.task(for: taskID)?.reminderOffsets, [-1440])
         XCTAssertFalse(panel.isVisible)
     }
 
@@ -217,11 +275,19 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
     func testRecordFocusTour() throws {
         try recordTour("guide-focus", navAnchor: "rail.专注") { fixture in
             fixture.environment.navigate(to: .focus)
-        } seed: { _ in
+        } seed: { fixture in
+            _ = fixture.environment.taskWorkspace.createDraft(
+                title: "完成季度复盘", list: "工作",
+                schedule: TaskSchedule(dueAt: fixture.now), priority: .high,
+                tags: [], reminder: nil, repeatFrequency: .never,
+                selectCreatedTask: false)
         } after: { fixture, recorder in
-            _ = fixture.environment.focusStore.start(minutes: 25)
-            recorder.wait(1.0)
+            let workspace = fixture.environment.taskWorkspace
+            let task = try XCTUnwrap(workspace.allTasks.first { $0.title == "完成季度复盘" })
+            _ = fixture.environment.focusStore.start(taskID: task.id, minutes: 25)
+            recorder.wait(1.2)
             recorder.moveCursor(to: CGPoint(x: 760, y: 400), over: 0.6)
+            XCTAssertEqual(fixture.environment.focusStore.currentTaskID, task.id)
         }
     }
 
@@ -241,11 +307,63 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
             - 下周一安排 3 位用户访谈
             """)
             store.selectedID = id
+
+            try? FileManager.default.createDirectory(at: fixture.directory, withIntermediateDirectories: true)
+            let script = fixture.directory.appendingPathComponent("fixture-pi")
+            try? """
+            #!/bin/sh
+            cat <<'RESULT'
+            {"tasks":[{"title":"交付新版首页设计稿","quote":"10 月 24 日前交付新版首页设计稿"},{"title":"安排用户访谈","quote":"下周一安排 3 位用户访谈"}]}
+            RESULT
+
+            """.write(to: script, atomically: true, encoding: .utf8)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+            fixture.environment.meetingStore.configuration.executable = script.path
         } after: { fixture, recorder in
-            XCTAssertEqual(fixture.environment.meetingStore.meetings.count, 1)
-            let extractPoint = try fixture.tourPoint("meeting.extract")
-            recorder.moveCursor(to: extractPoint, over: 0.9)
-            recorder.wait(1.1)
+            let store = fixture.environment.meetingStore
+            XCTAssertEqual(store.meetings.count, 1)
+            let frame = try fixture.tourFrame("meeting.extract")
+            let point = CGPoint(x: frame.midX, y: frame.midY)
+            recorder.moveCursor(to: point, over: 0.9)
+            recorder.wait(0.3)
+            recorder.click(at: point)
+            let screen = fixture.window.convertToScreen(fixture.host.convert(frame, to: nil))
+            try InspectorPanelTestSupport.click(screenFrame: screen, in: fixture.window)
+
+            // SwiftUI 只在 AX 虚拟元素上暴露「候选任务标题」，NSTextField 自身读不到；
+            // 用有内容的标题输入框判断预览就绪。
+            var sheet: NSWindow?
+            let deadline = Date().addingTimeInterval(8)
+            while Date() < deadline {
+                if let attached = fixture.window.attachedSheet,
+                   fixture.descendants(of: attached).compactMap({ $0 as? NSTextField })
+                    .contains(where: { !$0.stringValue.isEmpty && $0.isEditable }) {
+                    sheet = attached
+                    break
+                }
+                fixture.settle(0.2)
+            }
+            let preview = try XCTUnwrap(sheet, "AI 提取预览未出现")
+            let content = try XCTUnwrap(preview.contentView)
+            content.layoutSubtreeIfNeeded()
+
+            let draftField = try XCTUnwrap(fixture.descendants(of: preview)
+                .compactMap { $0 as? NSTextField }.first { !$0.stringValue.isEmpty })
+            let rowScreen = preview.convertToScreen(draftField.convert(draftField.bounds, to: nil))
+            let rowPoint = fixture.point(screenFrame: rowScreen.insetBy(dx: -30, dy: -12))
+            recorder.moveCursor(to: rowPoint, over: 0.6)
+            recorder.wait(0.9)
+
+            let create = CGRect(x: content.bounds.width - 122, y: content.bounds.height - 46,
+                                width: 106, height: 30)
+            let createPoint = fixture.point(
+                screenFrame: preview.convertToScreen(content.convert(create, to: nil)))
+            recorder.moveCursor(to: createPoint, over: 0.5)
+            recorder.wait(0.35)
+            recorder.click(at: createPoint)
+            try InspectorPanelTestSupport.click(create, in: content, window: preview)
+            recorder.wait(1.6)
+            XCTAssertNil(fixture.window.attachedSheet, "创建后预览应关闭")
         }
     }
 
@@ -259,7 +377,40 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
                 $0.title = "读书笔记"
                 $0.document = NativeDocument(plainText: "把想法和任务放在一起：\n· 读到有启发的一段，先记下来\n· 需要行动的部分，直接转成任务")
             }
-        } after: { _, recorder in
+        } after: { fixture, recorder in
+            let editor = try XCTUnwrap(fixture.descendants(of: fixture.window)
+                .compactMap { $0 as? NativeTextView }
+                .first { $0.isEditable }, "笔记编辑器未出现")
+            fixture.window.makeFirstResponder(editor)
+            let text = editor.string as NSString
+            let range = text.range(of: "需要行动的部分，直接转成任务")
+            XCTAssertNotEqual(range.location, NSNotFound)
+            editor.setSelectedRange(range)
+            editor.refreshSelectionToolbar()
+            recorder.wait(0.5)
+
+            var toolbar: NSPanel?
+            let deadline = Date().addingTimeInterval(2)
+            while Date() < deadline {
+                toolbar = fixture.window.childWindows?.compactMap { $0 as? NSPanel }
+                    .first { $0.isVisible && $0.frame.height > 20 && $0.frame.height < 80 }
+                if toolbar != nil { break }
+                fixture.settle(0.05)
+            }
+            let panel = try XCTUnwrap(toolbar, "选区工具条未出现")
+            let content = try XCTUnwrap(panel.contentView)
+            let actionRect = CGRect(x: 10, y: content.bounds.midY - 13, width: 68, height: 26)
+            let actionPoint = fixture.point(
+                screenFrame: panel.convertToScreen(content.convert(actionRect, to: nil)))
+            recorder.moveCursor(to: actionPoint, over: 0.6)
+            recorder.wait(0.4)
+            recorder.click(at: actionPoint)
+            try InspectorPanelTestSupport.click(actionRect, in: content, window: panel)
+            recorder.wait(1.2)
+
+            let notes = fixture.environment.notesWorkspace
+            let note = try XCTUnwrap(notes.notes.first { $0.title == "读书笔记" })
+            XCTAssertFalse(note.linkedTaskIDs.isEmpty)
             recorder.moveCursor(to: CGPoint(x: 760, y: 380), over: 0.7)
         }
     }
@@ -301,10 +452,22 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
             let copyFrame = try fixture.tourFrame("summary.footer.复制")
             let copyPoint = CGPoint(x: copyFrame.midX, y: copyFrame.midY)
             recorder.moveCursor(to: copyPoint, over: 0.5)
-            recorder.wait(0.2)
+            recorder.wait(0.25)
             recorder.click(at: copyPoint)
-            NotificationCenter.default.post(name: .guideTourCopySummary, object: nil)
+            let copyScreen = fixture.window.convertToScreen(fixture.host.convert(copyFrame, to: nil))
+            try InspectorPanelTestSupport.click(screenFrame: copyScreen, in: fixture.window)
+
+            try fixture.waitForMenuRows(3)
+            let menu = try InspectorPanelTestSupport.panel(title: "复制", below: fixture.window)
+            let content = try XCTUnwrap(menu.contentView)
+            let row = try XCTUnwrap(fixture.menuRows.first)
+            let rowPoint = fixture.point(
+                screenFrame: menu.convertToScreen(content.convert(row.rect, to: nil)))
+            recorder.moveCursor(to: rowPoint, over: 0.5)
             recorder.wait(0.3)
+            recorder.click(at: rowPoint)
+            try InspectorPanelTestSupport.click(row.rect, in: content, window: menu)
+            recorder.wait(0.4)
             recorder.moveCursor(to: CGPoint(x: 760, y: 360), over: 0.3)
             recorder.wait(0.2)
             XCTAssertTrue(NSPasteboard.general.string(forType: .string)?.contains("交付新版首页") == true)
@@ -381,13 +544,15 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
         var floating: NSWindow?
         // 悬浮笔记是独立 NSPanel，不在主窗口的 childWindows 里。
         recorder.extraWindows = { floating.map { [$0] } ?? [] }
+        // 控制器是全局单例；用例自己接线，别依赖其它用例先跑过。
+        FloatingNoteWindowController.shared.attach(environment: fixture.environment)
         recorder.start()
         recorder.parkCursor(at: CGPoint(x: 700, y: 640))
 
         let noteID = try XCTUnwrap(fixture.environment.newFloatingNote())
         defer { FloatingNoteWindowController.shared.close(noteID: noteID) }
         let window = try XCTUnwrap(NSApp.windows.first {
-            $0.title == "悬浮笔记" && $0.isVisible
+            $0.title == "笔记浮窗" && $0.isVisible
         })
         floating = window
         let mainFrame = fixture.window.frame
@@ -485,6 +650,7 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
         let frameBox = TaskFrameBox()
         let scheduleBox = ScheduleFrameBox()
         let tourBox = GuideTourFrameBox()
+        let menuBox = MenuRowBox()
 
         init(destination: NativeDestination) {
             var calendar = Calendar(identifier: .gregorian)
@@ -498,6 +664,7 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
             let frames = frameBox
             let schedule = scheduleBox
             let tour = tourBox
+            let menu = menuBox
             host = NSHostingView(rootView: AnyView(
                 RootShellView(workspace: environment.taskWorkspace, navigation: environment.navigation)
                     .environmentObject(environment)
@@ -512,6 +679,9 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
                             .onPreferenceChange(ScheduleFramesKey.self) { values in
                                 if values[.panel] != nil { schedule.main = values }
                                 else if !values.isEmpty { schedule.child = values }
+                            }
+                            .onPreferenceChange(BusinessMenuRowFrames.self) { values in
+                                if !values.isEmpty { menu.rows = values }
                             })
                     })))
             window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1280, height: 800)
@@ -550,6 +720,7 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
 
         var taskFrames: [TaskTreeRenderAnchor: CGRect] { frameBox.frames }
         var scheduleFrames: [ScheduleRenderAnchor: ScheduleRenderValue] { scheduleBox.main }
+        var scheduleChildFrames: [ScheduleRenderAnchor: ScheduleRenderValue] { scheduleBox.child }
 
         func button(accessibilityLabelPrefix prefix: String) throws -> NSButton {
             let deadline = Date().addingTimeInterval(2)
@@ -579,6 +750,17 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
         func tourPoint(_ id: String) throws -> CGPoint {
             let frame = try tourFrame(id)
             return CGPoint(x: frame.midX, y: frame.midY)
+        }
+
+        var menuRows: [BusinessMenuRowFrame] { menuBox.rows }
+
+        func waitForMenuRows(_ count: Int, timeout: TimeInterval = 2) throws {
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline {
+                if menuBox.rows.count >= count { return }
+                settle(0.05)
+            }
+            throw XCTSkip("Menu rows did not appear: \(menuBox.rows.count)/\(count)")
         }
 
         /// 月视图格心。日历页没有暴露日期格锚点，按工具栏/周标题/6 行网格
@@ -675,6 +857,11 @@ private final class ScheduleFrameBox {
 @MainActor
 private final class GuideTourFrameBox {
     var frames: [String: CGRect] = [:]
+}
+
+@MainActor
+private final class MenuRowBox {
+    var rows: [BusinessMenuRowFrame] = []
 }
 
 // MARK: - 录制器
@@ -796,13 +983,19 @@ private final class GuideGIFRecorder {
             context.draw(main, in: CGRect(x: 0, y: 0, width: width, height: height))
         }
         let mainScreen = window.convertToScreen(content.convert(content.bounds, to: nil))
-        var overlays = window.childWindows ?? []
-        if let sheet = window.attachedSheet { overlays.append(sheet) }
-        overlays += extraWindows()
+        // 弹层可以再挂弹层（日程面板 → 属性子卡片），只抓直接子窗口会漏掉孙窗口。
+        var overlays: [NSWindow] = []
         var seen = Set<ObjectIdentifier>()
+        func appendTree(_ root: NSWindow) {
+            guard seen.insert(ObjectIdentifier(root)).inserted else { return }
+            overlays.append(root)
+            for child in root.childWindows ?? [] { appendTree(child) }
+        }
+        for child in window.childWindows ?? [] { appendTree(child) }
+        if let sheet = window.attachedSheet { appendTree(sheet) }
+        for extra in extraWindows() { appendTree(extra) }
         for child in overlays where child.isVisible {
-            guard seen.insert(ObjectIdentifier(child)).inserted,
-                  let childContent = child.contentView,
+            guard let childContent = child.contentView,
                   childContent.bounds.width >= 2, childContent.bounds.height >= 2,
                   let image = render(childContent) else { continue }
             let screen = child.convertToScreen(childContent.convert(childContent.bounds, to: nil))
@@ -867,7 +1060,9 @@ private final class GuideGIFRecorder {
 
         context.saveGState()
         context.translateBy(x: point.x * sx, y: CGFloat(height) - point.y * sy)
-        context.scaleBy(x: 1.35, y: 1.35)
+        // 位图上下文 y 轴向上；箭头路径按屏幕坐标（y 向下）编写，纵向翻转后再画，
+        // 否则笔尖朝下、尾巴朝上，看起来是倒着的箭头。
+        context.scaleBy(x: 1.35, y: -1.35)
         let arrow = CGMutablePath()
         arrow.move(to: CGPoint(x: 0, y: 0))
         arrow.addLine(to: CGPoint(x: 0, y: 17))

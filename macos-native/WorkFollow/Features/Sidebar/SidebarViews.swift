@@ -12,6 +12,7 @@ struct IconRailView: View {
     @Environment(\.mainWindowRailInset) private var mainWindowRailInset
     @FocusState private var focusedDestination: NativeDestination?
     @State private var focusRequest = UUID()
+    @StateObject var tooltips = RailTooltipState()
 
     var body: some View {
         VStack(spacing: RailMetrics.itemGap) {
@@ -52,17 +53,22 @@ struct IconRailView: View {
             if let sync {
                 AppleSyncStatusButton(integration: sync, onRetry: onRetrySync,
                     onOpenSettings: { onOpenSyncSettings(); openSettings() })
+                    .railTooltip("Apple 同步", state: tooltips)
             }
-            Button(action: onOpenQuickOpen) {
+            Button { tooltips.dismiss(); onOpenQuickOpen() } label: {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: RailMetrics.iconSize))
                     .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
-            }.help("快速打开（⌘K）").accessibilityLabel("快速打开")
-            Button { openSettings() } label: {
+            }
+            .railTooltip("快速打开（⌘K）", state: tooltips)
+            .accessibilityLabel("快速打开")
+            Button { tooltips.dismiss(); openSettings() } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: RailMetrics.iconSize))
                     .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
-            }.help("设置（⌘,）").accessibilityLabel("设置")
+            }
+            .railTooltip("设置（⌘,）", state: tooltips)
+            .accessibilityLabel("设置")
         }
         .buttonStyle(.plain)
         .foregroundStyle(WFColors.secondaryText)
@@ -70,6 +76,15 @@ struct IconRailView: View {
         .padding(.bottom, RailMetrics.topPadding)
         .frame(width: RailMetrics.width)
         .background(WFColors.canvas)
+        .coordinateSpace(name: RailTooltipOverlay.space)
+        .overlay(alignment: .topLeading) { RailTooltipOverlay(state: tooltips) }
+        // Draw across the rail boundary above the adjacent navigation column.
+        .zIndex(1)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            tooltips.dismiss()
+        }
+        .onChange(of: navigation.destination) { _, _ in tooltips.dismiss() }
+        .onDisappear { tooltips.dismiss() }
         .focusRenderAnchor(.rail)
     }
 
@@ -92,7 +107,8 @@ struct IconRailView: View {
             activate(destination, eventType: .keyDown)
             return .handled
         }
-        .help(title).accessibilityLabel(title)
+        .railTooltip(title, state: tooltips)
+        .accessibilityLabel(title)
         .guideTourAnchor("rail." + title)
     }
 
@@ -112,6 +128,7 @@ struct IconRailView: View {
     }
 
     private func activate(_ destination: NativeDestination, eventType: NSEvent.EventType?) {
+        tooltips.dismiss()
         let keyboard = eventType == .keyDown || eventType == .keyUp
         let pointer = eventType == .leftMouseDown || eventType == .leftMouseUp
         let window = NSApp.currentEvent?.window ?? NSApp.keyWindow
@@ -399,7 +416,7 @@ private struct NotesNavigationSection: View {
                         if notes.addFolder(name) { notes.folderFilter = name; notes.favoritesOnly = false; environment.navigate(to: .notes) }
                         else { TaskNamePrompt.invalidName() }
                     }
-                } label: { Image(systemName: "plus") }.buttonStyle(.plain).help("新建文件夹")
+                } label: { Image(systemName: "plus") }.buttonStyle(.plain).hoverTip("新建文件夹")
             }.foregroundStyle(WFColors.secondaryText)
              .padding(.horizontal, WFSpace.sm).padding(.top, WFSpace.lg).padding(.bottom, WFSpace.sm)
             ScrollView {
@@ -482,7 +499,7 @@ private struct TaskFiltersSectionView: View {
                 }
                 .buttonStyle(.plain)
                 .fixedSize()
-                .help("新建过滤器")
+                .hoverTip("新建过滤器")
                 .accessibilityLabel("新建过滤器")
             }
             if !collapsed {

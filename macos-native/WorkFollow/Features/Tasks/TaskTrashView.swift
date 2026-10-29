@@ -87,7 +87,7 @@ struct TaskTrashView: View {
                 Spacer(minLength: 0)
                 Button { confirmClear = true } label: { Image(systemName: "trash.slash") }
                     .buttonStyle(.plain)
-                    .help("清空垃圾桶")
+                    .hoverTip("清空垃圾桶")
                     .disabled(workspace.deletedTasks.isEmpty)
             }
             .padding(.horizontal, WFSpace.xl)
@@ -172,10 +172,10 @@ private struct TrashTaskRow: View {
             .buttonStyle(.plain)
             Button { workspace.restoreDeleted(task.id) } label: {
                 Image(systemName: "arrow.uturn.backward")
-            }.buttonStyle(.plain).help("恢复任务")
+            }.buttonStyle(.plain).hoverTip("恢复任务")
                 .disabled(task.parentID.flatMap { workspace.task(for: $0)?.deletedAt } != nil)
             Button(action: onPurge) { Image(systemName: "trash.slash") }
-                .buttonStyle(.plain).help("永久删除任务")
+                .buttonStyle(.plain).hoverTip("永久删除任务")
         }
         .padding(.horizontal, WFSpace.sm)
         .contentShape(Rectangle())
@@ -212,7 +212,7 @@ private struct TaskTrashConfirmationOverlay: View {
                         .background(.red, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .help("取消")
+                .hoverTip("取消")
                 .padding(.bottom, WFSpace.xs)
                 Text(title)
                     .font(WFType.pageTitle)

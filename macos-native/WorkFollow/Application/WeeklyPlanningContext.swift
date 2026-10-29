@@ -22,9 +22,4 @@ final class WeeklyPlanningContext: ObservableObject {
     var nextWeek: Date { calendar.date(byAdding: .day, value: 7, to: weekStart)! }
     func shift(_ delta: Int) { weekStart = calendar.date(byAdding: .day, value: delta * 7, to: weekStart)! }
     func goCurrent() { weekStart = SummaryReviewBuilder.weekStart(of: clock(), calendar: calendar) }
-
-    func scopeID(workspace: TaskWorkspaceModel?) -> String {
-        guard let listName else { return "all" }
-        return workspace?.listReferenceID(for: listName).uuidString ?? listName
-    }
 }

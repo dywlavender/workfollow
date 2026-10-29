@@ -1,9 +1,10 @@
 from fastapi import APIRouter
 
-from app.api.routes import admin, agent, attachments, audit, auth, events, folders, health, note_shares, note_templates, notes, notifications, quick_links, resource_relations, search, team_notes, team_tasks, teams, todos
+from app.api.routes import admin, agent, ai, attachments, audit, auth, events, folders, health, note_shares, note_templates, notes, notifications, quick_links, resource_relations, search, team_notes, team_tasks, teams, todos
 
 
 api_router = APIRouter()
+api_router.include_router(ai.router)
 api_router.include_router(health.router)
 api_router.include_router(events.router)
 api_router.include_router(auth.router)

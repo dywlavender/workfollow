@@ -18,7 +18,7 @@ final class TaskTreeGeometryContractTests: XCTestCase {
             let date = try XCTUnwrap(frames[.init(taskID: id, part: .date)])
             XCTAssertEqual(preview.minX, title.minX, accuracy: 0.5)
             XCTAssertGreaterThan(preview.width, title.width + 30)
-            XCTAssertEqual(preview.maxX, width - TaskListMetrics.rowHorizontalPadding, accuracy: 0.5)
+            XCTAssertEqual(preview.maxX, width - TaskListMetrics.rowTrailingPadding, accuracy: 0.5)
             XCTAssertGreaterThanOrEqual(title.width, 96)
             XCTAssertLessThanOrEqual(title.maxX, date.minX)
         }
@@ -36,7 +36,7 @@ final class TaskTreeGeometryContractTests: XCTestCase {
         let rootBox = try XCTUnwrap(frames[.init(taskID: root, part: .checkbox)])
         let childBox = try XCTUnwrap(frames[.init(taskID: child, part: .checkbox)])
         XCTAssertEqual(parentBox.minX, rootBox.minX, accuracy: 0.5)
-        XCTAssertEqual(parentBox.minX, 31, accuracy: 0.5)
+        XCTAssertEqual(parentBox.minX, 16, accuracy: 0.5)
         XCTAssertEqual(childBox.minX - parentBox.minX, 21, accuracy: 0.5)
         for id in [parent, root, child] {
             let gutter = try XCTUnwrap(frames[.init(taskID: id, part: .disclosure)])

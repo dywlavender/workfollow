@@ -47,6 +47,7 @@ final class RemindersSyncCoordinator: ObservableObject, ModuleStoreFlushable {
     private let clock: () -> Date
     private var tasks: [Task] = []
     private var activeLists: [String] = []
+    private var mutedLists: Set<String> = []
     private var generation = 0
     private var work: _Concurrency.Task<Void, Never>?
     private var choices: [String: Bool] = [:]
@@ -114,8 +115,8 @@ final class RemindersSyncCoordinator: ObservableObject, ModuleStoreFlushable {
         refreshAccess()
         return created
     }
-    func requestSync(tasks: [Task], activeLists: [String]) {
-        self.tasks = tasks; self.activeLists = activeLists; generation += 1
+    func requestSync(tasks: [Task], activeLists: [String], mutedLists: Set<String> = []) {
+        self.tasks = tasks; self.activeLists = activeLists; self.mutedLists = mutedLists; generation += 1
         guard work == nil else { return }
         work = _Concurrency.Task {
             syncing = true
@@ -135,7 +136,10 @@ final class RemindersSyncCoordinator: ObservableObject, ModuleStoreFlushable {
         var values: [String: ReminderTaskExport] = [:]
         func append(_ task: Task, _ reference: CalendarTaskReference) {
             guard config.includes(task), task.status != .completed || bound.contains(reference.id) else { return }
-            values[reference.id] = ReminderTaskMapping.export(task, reference: reference, calendar: calendar)
+            var value = ReminderTaskMapping.export(task, reference: reference, calendar: calendar)
+            value.suppressesAlerts = mutedLists.contains(task.list.name)
+            if value.suppressesAlerts { value.fields.alarms = [] }
+            values[reference.id] = value
         }
         for task in eligible { append(task, ReminderTaskMapping.reference(task, calendar: calendar)) }
         let range = DateInterval(start: clock(), end: calendar.date(byAdding: .day, value: 30, to: clock())!)
@@ -183,10 +187,12 @@ final class RemindersSyncCoordinator: ObservableObject, ModuleStoreFlushable {
                     var result = value.fields
                     if let old, let existing, existing.fields != old.lastSynced {
                         let choice = choices.removeValue(forKey: old.id)
-                        let merged = ReminderTaskMapping.merge(base: old.lastSynced, task: value.fields, reminder: existing.fields)
+                        var base = old.lastSynced, remote = existing.fields
+                        if value.suppressesAlerts { base.alarms = []; remote.alarms = [] }
+                        let merged = ReminderTaskMapping.merge(base: base, task: value.fields, reminder: remote)
                         if choice == false { result = value.fields }
                         else if choice == true || (config.bidirectional && merged != nil) {
-                            result = choice == true ? existing.fields : merged!
+                            result = choice == true ? remote : merged!
                             if result != value.fields {
                                 guard await applyExternal?(value.reference, result, value.fields) == true else {
                                     throw CalendarIntegrationError.message("任务已变化，提醒事项修改将在下次同步时重试。")

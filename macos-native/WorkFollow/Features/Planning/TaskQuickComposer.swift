@@ -106,6 +106,7 @@ struct TaskQuickComposer: View {
                 .padding(.horizontal, WFSpace.xs)
                 .padding(.vertical, WFSpace.inline)
                 .contentShape(Rectangle())
+                .popupMenuRowBackground()
             }
             .buttonStyle(.plain)
             .help("设置日期")
@@ -123,9 +124,10 @@ struct TaskQuickComposer: View {
                     .foregroundStyle(priorityColor)
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
                     .contentShape(Rectangle())
+                    .popupMenuRowBackground()
             }
             .fixedSize()
-            .help("设置优先级")
+            .hoverTip("设置优先级")
             .accessibilityLabel("优先级：\(Self.priorityTitle(priority))")
         }
         .padding(.horizontal, WFSpace.md)
@@ -172,9 +174,10 @@ struct TaskQuickComposer: View {
                 .padding(.horizontal, WFSpace.xs)
                 .padding(.vertical, WFSpace.inline)
                 .contentShape(Rectangle())
+                .popupMenuRowBackground()
             }
             .fixedSize()
-            .help("移动到清单")
+            .hoverTip("移动到清单", placement: .above)
             .accessibilityLabel("清单：\(listName)")
 
             Spacer(minLength: 0)
@@ -191,9 +194,10 @@ struct TaskQuickComposer: View {
                     .foregroundStyle(QuickAddBarStyle.iconColor)
                     .frame(width: WFCalendarMetrics.chipHeight, height: WFCalendarMetrics.chipHeight)
                     .contentShape(Rectangle())
+                    .popupMenuRowBackground()
             }
             .fixedSize()
-            .help("更多属性")
+            .hoverTip("更多属性")
             .accessibilityLabel("更多属性")
         }
         .padding(.horizontal, WFSpace.cardInset)

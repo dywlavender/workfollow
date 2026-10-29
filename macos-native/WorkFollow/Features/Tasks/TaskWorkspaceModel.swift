@@ -68,6 +68,7 @@ final class TaskWorkspaceModel: ObservableObject {
     /// Committed domain changes, separate from selection/filter/UI invalidation.
     let taskChanges = PassthroughSubject<TaskChangeSet, Never>()
     let listArchiveChanges = PassthroughSubject<Set<String>, Never>()
+    let listSettingsChanges = PassthroughSubject<Void, Never>()
     /// Editors finish their outgoing input before selection publishes a new host.
     let selectionWillChange = PassthroughSubject<UUID?, Never>()
     /// Invalidates date-derived projections and labels without treating time
@@ -154,6 +155,7 @@ final class TaskWorkspaceModel: ObservableObject {
         }
         store.onTaskChanges = { [weak self] changes in self?.taskChanges.send(changes) }
         store.onListArchiveChange = { [weak self] names in self?.listArchiveChanges.send(names) }
+        store.onListSettingsChange = { [weak self] in self?.listSettingsChanges.send(()) }
         store.onOrganizationRename = { [weak self] change in
             guard let self else { return }
             if change.kind == .list, self.activeList == change.oldName { self.activeList = change.newName }
@@ -165,7 +167,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     var listNames: [String] {
-        Array(Set(store.lists + allTasks.filter { !$0.isNoteTask }.map { $0.list.name }))
+        Array(Set(store.lists + allTasks.filter { !$0.isNoteTask && $0.deletedAt == nil }.map { $0.list.name }))
             .filter { $0 != TaskList.inbox.name && $0 != TaskList.notes.name }.sorted()
     }
 
@@ -188,6 +190,24 @@ final class TaskWorkspaceModel: ObservableObject {
         _ = revision
         let archived = store.archivedListNames
         return store.tasks.filter { !$0.isNoteTask && !archived.contains($0.list.name) }
+    }
+    var defaultListName: String {
+        store.listMetas.first { $0.isDefault && !$0.isArchived }?.name ?? TaskList.inbox.name
+    }
+    var tasksForLocalReminders: [Task] {
+        let muted = store.mutedListNames
+        return tasksInActiveLists.filter { !muted.contains($0.list.name) }
+    }
+    var mutedListNames: Set<String> { _ = revision; return store.mutedListNames }
+    var tasksForSmartWidgets: [Task] {
+        let hidden = store.smartHiddenListNames
+        return tasksInActiveLists.filter { !hidden.contains($0.list.name) }
+    }
+    var listOpenCounts: [String: Int] {
+        var result: [String: Int] = [:]
+        for task in allTasks where !task.isNoteTask && !task.isClosed && !task.isConverted
+            && task.deletedAt == nil && task.skippedAt == nil { result[task.list.name, default: 0] += 1 }
+        return result
     }
     var taskTags: [TaskTag] { _ = revision; return store.tags }
     var orderedTags: [TaskTag] { TaskTag.ordered(taskTags) }
@@ -349,6 +369,11 @@ final class TaskWorkspaceModel: ObservableObject {
         if changed { revision += 1 }
         return changed
     }
+    @discardableResult
+    func saveListFolderDetails(_ name: String, replacing old: String?, icon: String?) -> Bool {
+        guard actions.saveListFolderDetails(name, replacing: old, icon: icon) else { return false }
+        revision += 1; return true
+    }
 
     /// 拖拽建夹：把两个清单放进同一文件夹（文件夹不存在则建），一步撤销。
     @discardableResult
@@ -462,6 +487,33 @@ final class TaskWorkspaceModel: ObservableObject {
         revision += 1
         return true
     }
+    @discardableResult
+    func saveListDetails(_ draft: TaskListEditingDraft, replacing old: String? = nil) -> Bool {
+        guard actions.saveListDetails(draft, replacing: old) else { return false }
+        if activeList == old { activeList = draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+        revision += 1
+        return true
+    }
+    @discardableResult
+    func setDefaultList(_ name: String?) -> Bool {
+        guard actions.setDefaultList(name) else { return false }
+        revision += 1; return true
+    }
+    @discardableResult
+    func copyList(_ name: String, to target: String, scope: TaskListCopyScope) -> Bool {
+        guard actions.copyList(name, to: target, scope: scope) else { return false }
+        revision += 1
+        report(FeedbackEvent(kind: .undoable, message: "已复制清单「\(name)」", actionTitle: "撤销", action: undoStep()))
+        return true
+    }
+    @discardableResult
+    func deleteList(_ name: String) -> Bool {
+        guard actions.deleteList(name) else { return false }
+        if activeList == name { activeList = nil }
+        clearBulkSelection(); select(nil); revision += 1
+        report(FeedbackEvent(kind: .undoable, message: "已删除清单「\(name)」", actionTitle: "撤销", action: undoStep()))
+        return true
+    }
     func removeList(_ name: String) {
         actions.removeList(name)
         if activeList == name { activeList = nil }
@@ -518,9 +570,11 @@ final class TaskWorkspaceModel: ObservableObject {
         return filterStore?.filter(withID: activeFilterID)
     }
     func applyBulk(_ operation: TaskBatchOperation) {
-        let count = bulkSelection.count
+        let eligible = Set(bulkSelection.filter { id in task(for: id).map { !isListArchived($0.list.name) } ?? false })
+        guard !eligible.isEmpty else { clearBulkSelection(); return }
+        let count = eligible.count
         let tasksBeforeBatch = store.tasks
-        actions.batch(bulkSelection, operation: operation)
+        actions.batch(eligible, operation: operation)
         clearBulkSelection()
         revision += 1
         reportBulk(operation, count: count, changed: store.tasks != tasksBeforeBatch)
@@ -560,7 +614,7 @@ final class TaskWorkspaceModel: ObservableObject {
     /// 批量复制文本（补齐轮）：所选任务标题逐行进剪贴板（列表手动排序的
     /// 存储序）。只读操作,不动集合不产生撤销步。
 
-    /// 批量打开便签（滴答对齐）：每个所选任务各开一个浮窗,重复打开置前。
+    /// 批量打开浮窗（滴答对齐）：每个所选任务各开一个浮窗,重复打开置前。
     func openBulkStickyNotes() {
         let ids = bulkSelection
         for id in ids { StickyNoteWindowController.shared.open(taskID: id) }
@@ -807,9 +861,10 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
-    func submitCapture(_ session: QuickCaptureSession, defaultDueAt: Date? = nil, selectCreatedTask: Bool = true) -> [UUID] {
+    func submitCapture(_ session: QuickCaptureSession, defaultDueAt: Date? = nil, selectCreatedTask: Bool = true,
+                       useDefaultList: Bool = false) -> [UUID] {
         let drafts = session.drafts(now: clock(), calendar: calendar, knownLists: Set(availableListNames),
-            contextList: activeList.flatMap { isListArchived($0) ? nil : $0 },
+            contextList: activeList.flatMap { isListArchived($0) ? nil : $0 } ?? (useDefaultList ? defaultListName : nil),
             contextTag: activeTag, defaultDueAt: defaultDueAt)
         let ids = actions.createCaptures(drafts)
         if let last = ids.last {
@@ -1257,6 +1312,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     private func withMaterializedTask(_ id: UUID, _ mutation: (UUID) -> TaskActionResult) -> TaskActionResult {
+        if let task = task(for: id), isListArchived(task.list.name) { return .failure(.invalidList) }
         guard store.task(id) == nil, let occurrence = selectedOccurrence,
               occurrence.task.id == id else { return mutation(id) }
         var result: TaskActionResult = .failure(.missingTask)
@@ -1959,7 +2015,7 @@ final class TaskWorkspaceModel: ObservableObject {
     func installWelcomeGuide() -> Bool {
         guard !store.tasks.contains(where: { $0.guideAction != nil }) else { return false }
         var created = false
-        var actionsByTask: [UUID: String] = [:]
+        var guideByTask: [UUID: (raw: String, order: Int)] = [:]
         store.transaction {
             if !store.lists.contains(WelcomeGuide.listName) {
                 actions.renameList(nil, to: WelcomeGuide.listName)
@@ -1973,7 +2029,7 @@ final class TaskWorkspaceModel: ObservableObject {
             let sectionIDs = Dictionary(store.listSections
                 .filter { $0.listName == WelcomeGuide.listName }
                 .map { ($0.title, $0.id) }, uniquingKeysWith: { first, _ in first })
-            for item in WelcomeGuide.items {
+            for (index, item) in WelcomeGuide.items.enumerated() {
                 let result = actions.createDraft(
                     title: item.title,
                     list: WelcomeGuide.listName,
@@ -1988,14 +2044,15 @@ final class TaskWorkspaceModel: ObservableObject {
                 if let sectionID = sectionIDs[item.section.title] {
                     _ = actions.setTaskSection(id, sectionID: sectionID)
                 }
-                actionsByTask[id] = item.action.rawValue
+                guideByTask[id] = (item.action.rawValue, index)
                 created = true
             }
-            if !actionsByTask.isEmpty {
+            if !guideByTask.isEmpty {
                 store.commit(store.tasks.map { task in
-                    guard let raw = actionsByTask[task.id] else { return task }
+                    guard let guide = guideByTask[task.id] else { return task }
                     var value = task
-                    value.guideAction = raw
+                    value.guideAction = guide.raw
+                    value.childOrder = guide.order
                     return value
                 })
             }
@@ -2005,7 +2062,7 @@ final class TaskWorkspaceModel: ObservableObject {
         return created
     }
 
-    /// 内容升级：按 `guideAction` 原位刷新标题和正文，补齐新版本新增的条目。
+    /// 内容升级：按 `guideAction` 原位刷新标题、正文、分组和顺序，补齐新版本新增的条目。
     /// 完成状态、日期、提醒、子任务和用户自己的任务都不动；用户删掉的条目不会复活。
     @discardableResult
     func upgradeWelcomeGuide() -> Bool {
@@ -2013,8 +2070,9 @@ final class TaskWorkspaceModel: ObservableObject {
         guard !liveGuideTasks.isEmpty else { return false }
         let listExists = store.lists.contains(WelcomeGuide.listName)
         var changed = false
-        var createdActions: [UUID: String] = [:]
+        var createdActions: [UUID: (raw: String, order: Int)] = [:]
         var updates: [UUID: (title: String, document: NativeDocument)] = [:]
+        var placements: [UUID: (sectionID: String, order: Int)] = [:]
 
         store.transaction {
             if listExists {
@@ -2029,10 +2087,15 @@ final class TaskWorkspaceModel: ObservableObject {
                 .filter { $0.listName == WelcomeGuide.listName }
                 .map { ($0.title, $0.id) }, uniquingKeysWith: { first, _ in first })
 
-            for item in WelcomeGuide.items {
+            for (index, item) in WelcomeGuide.items.enumerated() {
                 if let task = liveGuideTasks.first(where: { $0.guideAction == item.action.rawValue }) {
                     if task.title != item.title || !WelcomeGuide.documentMatches(task.document, item: item) {
                         updates[task.id] = (item.title, WelcomeGuide.document(for: item))
+                    }
+                    if listExists, task.list.name == WelcomeGuide.listName,
+                       let sectionID = sectionIDs[item.section.title],
+                       task.sectionID != sectionID || task.childOrder != index {
+                        placements[task.id] = (sectionID, index)
                     }
                     continue
                 }
@@ -2051,26 +2114,28 @@ final class TaskWorkspaceModel: ObservableObject {
                 if let sectionID = sectionIDs[item.section.title] {
                     _ = actions.setTaskSection(id, sectionID: sectionID)
                 }
-                createdActions[id] = item.action.rawValue
+                createdActions[id] = (item.action.rawValue, index)
                 changed = true
             }
 
-            if !updates.isEmpty || !createdActions.isEmpty {
+            if !updates.isEmpty || !createdActions.isEmpty || !placements.isEmpty {
                 let now = clock()
                 store.commit(store.tasks.map { task in
+                    var value = task
                     if let update = updates[task.id] {
-                        var value = task
                         value.title = update.title
                         value.document = update.document
                         value.updatedAt = now
-                        return value
                     }
-                    if let raw = createdActions[task.id] {
-                        var value = task
-                        value.guideAction = raw
-                        return value
+                    if let placement = placements[task.id] {
+                        value.sectionID = placement.sectionID
+                        value.childOrder = placement.order
                     }
-                    return task
+                    if let guide = createdActions[task.id] {
+                        value.guideAction = guide.raw
+                        value.childOrder = guide.order
+                    }
+                    return value == task ? task : value
                 }, undoPolicy: .skip)
                 changed = true
             }

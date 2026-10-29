@@ -83,10 +83,11 @@ final class SummaryAlignmentTests: XCTestCase {
         let records = [PomodoroRecord(id: UUID(), taskID: focused.id, startedAt: date(21, hour: 10), minutes: 25, completed: true)]
         let tasks = [untouched, checklist, focused, abandoned, done]
         var filter = SummaryFilter.all; filter.status = .inProgress
-        XCTAssertEqual(Set(builder.report(tasks: tasks, weekOf: date(21), filter: filter, focusRecords: records).pending.map(\.id)), [checklist.id, focused.id])
+        XCTAssertEqual(Set(builder.report(tasks: tasks, weekOf: date(21), filter: filter, focusRecords: records).pending.map(\.id)),
+                       [checklist.id], "只有清单进度才算进行中，专注记录不算")
         filter.status = .uncompleted
         let pending = builder.report(tasks: tasks, weekOf: date(21), filter: filter, focusRecords: records)
-        XCTAssertEqual(pending.pending.map(\.id), [untouched.id]); XCTAssertTrue(pending.abandoned.isEmpty)
+        XCTAssertEqual(Set(pending.pending.map(\.id)), [untouched.id, focused.id]); XCTAssertTrue(pending.abandoned.isEmpty)
         filter.status = .abandoned
         let closed = builder.report(tasks: tasks, weekOf: date(21), filter: filter, focusRecords: records)
         XCTAssertEqual(closed.abandoned.map(\.id), [abandoned.id]); XCTAssertTrue(closed.pending.isEmpty)
@@ -102,15 +103,19 @@ final class SummaryAlignmentTests: XCTestCase {
         var options = SummaryDocumentOptions.standard
         options.content = Set(SummaryContentField.allCases)
         let full = builder.document(for: report, options: options)
-        for value in ["已完成", "进度 1/1", "[10月20日]", "任务时间 10月19日 09:00", "子任务名称",
-                      "主任务：项目主任务", "#交付", "专注 25分0秒 / 1个番茄", "（工作）", "详细验收说明"] {
+        for value in ["100%", "10月20日", "10月19日 09:00", "子任务名称",
+                      "项目主任务", "交付", "25m/1番茄", "工作", "详细验收说明"] {
             XCTAssertTrue(full.plainText.contains(value), value)
         }
         options.content = [.taskName]
-        let names = builder.document(for: report, options: options).plainText
-        for hidden in ["进度", "[10月", "任务时间", "主任务：", "#交付", "专注", "（工作）", "详细验收说明"] {
+        let namesDocument = builder.document(for: report, options: options)
+        let names = namesDocument.plainText
+        XCTAssertFalse(namesDocument.blocks.contains { $0.runs.contains { $0.marks.contains(.caption) } })
+        for hidden in ["100%", "交付", "个番茄", "工作", "详细验收说明"] {
             XCTAssertFalse(names.contains(hidden), hidden)
         }
+        XCTAssertEqual(names.components(separatedBy: "项目主任务").count - 1, 1,
+                       "主任务字段隐藏后只保留父任务自身那一行")
         options.content = [.completedTime]
         let dates = builder.document(for: report, options: options)
         XCTAssertFalse(dates.plainText.contains(child.title)); XCTAssertTrue(dates.plainText.contains("10月20日"))
@@ -162,31 +167,59 @@ final class SummaryAlignmentTests: XCTestCase {
         let open = task("未完成任务", due: 21)
         let document = builder.document(for: builder.report(tasks: [done, open], weekOf: date(21)))
         XCTAssertEqual(document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText), ["已完成", "未完成"])
-        XCTAssertTrue(document.blocks.contains { $0.kind == .bullet && $0.runs.first?.text == "[10月20日] " })
+        for index in document.blocks.indices where document.blocks[index].kind == .heading(2) {
+            XCTAssertEqual(document.blocks[index - 1].kind, .paragraph)
+            XCTAssertTrue(document.blocks[index - 1].plainText.isEmpty)
+        }
+        XCTAssertTrue(document.blocks.contains { $0.kind == .bullet && $0.plainText == "[10月20日] 已完成任务" })
         XCTAssertFalse(document.plainText.contains("本周成果"))
         XCTAssertFalse(document.plainText.contains("本周复盘"))
         XCTAssertFalse(document.plainText.contains("进展与调整"))
     }
 
-    func testDefaultRecipeKeepsGoldenOrderPrefixAndLinks() {
+    func testDefaultRecipeKeepsGoldenOrderPrefixAndPlainTitles() {
         let parent = task("项目主任务", due: 24)
         var child = task("子任务名称", due: 19, completed: 20, tags: ["交付"])
         child.parentID = parent.id
         let report = builder.report(tasks: [parent, child], weekOf: date(21))
         let document = builder.document(for: report)
         let bullets = document.blocks.filter { $0.kind == .bullet }
-        XCTAssertEqual(bullets.map(\.plainText), ["[10月20日] 子任务名称", "项目主任务 · 进度 1/1"])
-        XCTAssertEqual(bullets.first?.runs, [
-            DocumentRun(text: "[10月20日] "),
-            DocumentRun(text: "子任务名称",
-                        marks: [.link(NativeResourceLink.task(child.id).url.absoluteString)]),
+        XCTAssertEqual(bullets.map(\.plainText), ["[10月20日] 子任务名称", "100% 项目主任务"])
+        XCTAssertEqual(bullets.first?.runs.first { $0.text == child.title }?.marks, [])
+        XCTAssertEqual(bullets.last?.runs.first { $0.text == parent.title }?.marks, [])
+    }
+
+    func testInProgressSectionUsesPercentagePrefixAndCompletedHasNoProgress() {
+        var progress = task("推进中的任务")
+        progress.document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "第一步")]),
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "第二步")]),
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "第三步")]),
         ])
-        XCTAssertEqual(bullets.last?.runs, [
-            DocumentRun(text: "项目主任务",
-                        marks: [.link(NativeResourceLink.task(parent.id).url.absoluteString)]),
-            DocumentRun(text: " · "),
-            DocumentRun(text: "进度 1/1"),
-        ])
+        let done = task("已完成任务", completed: 20)
+        let open = task("未开始任务")
+        let document = builder.document(for: builder.report(tasks: [progress, done, open], weekOf: date(21)))
+        XCTAssertEqual(document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText),
+                       ["已完成", "进行中", "未完成"])
+        let bullets = document.blocks.filter { $0.kind == .bullet }
+        XCTAssertTrue(bullets.contains { $0.plainText == "33% 推进中的任务" })
+        XCTAssertFalse(document.plainText.contains("进度 1/3"))
+        XCTAssertFalse(document.plainText.contains("[33%] 已完成任务"))
+    }
+
+    func testCompletedParentNestsCompletedChildrenWithTheirOwnDate() throws {
+        let parent = task("父任务", completed: 1)
+        var child = task("子任务", completed: 19)
+        child.parentID = parent.id
+        child.completedAt = date(19, month: 9, hour: 18)
+        let range = try XCTUnwrap(SummaryDateRange.custom(
+            start: date(1, month: 9), through: date(31), calendar: calendar))
+        let report = builder.report(tasks: [parent, child], weekOf: range.start, range: range)
+        let document = builder.document(for: report)
+        let bullets = document.blocks.filter { $0.kind == .bullet }
+        XCTAssertEqual(bullets.map(\.plainText), ["[10月1日] 父任务", "[9月19日] 子任务"])
+        XCTAssertEqual(bullets.map(\.indentLevel), [0, 1])
+        XCTAssertFalse(bullets.contains { $0.plainText.contains("%") }, "已完成父子任务不写进度")
     }
 
     func testCustomOrderKeepsPrefixAndDetailOutsideInlineParts() {
@@ -209,11 +242,14 @@ final class SummaryAlignmentTests: XCTestCase {
         options.contentStyles.list = .listGroup
         let document = builder.document(for: report, options: options)
         let bullet = document.blocks.first { $0.kind == .bullet }
-        XCTAssertEqual(bullet?.plainText, """
-        [10月20日] （工作 / 项目A） · 子任务名称 · #交付 · 已完成 · 进度 1/2 · \
-        任务时间 10月19日 09:00 · 主任务：项目主任务 · 专注 25分0秒 / 1个番茄
-        """)
-        XCTAssertEqual(bullet?.runs.first?.text, "[10月20日] ")
+        XCTAssertEqual(bullet?.plainText, "[10月20日] 子任务名称   ·   ▤ 项目A / 工作   ·   #交付   ·   ◷ 10月19日 09:00   ·   ↳ 项目主任务   ·   ◴ 25m/1番茄")
+        let values = bullet?.runs.filter { run in
+            run.marks.contains(.caption)
+                && !run.marks.contains(where: { if case .symbol = $0 { return true }; return false })
+                && run.text.trimmingCharacters(in: .whitespaces) != "·"
+        }.map { $0.text.trimmingCharacters(in: .whitespaces) }
+        XCTAssertEqual(values, ["项目A / 工作", "交付", "10月19日 09:00", "项目主任务", "25m/1番茄"])
+        XCTAssertTrue(bullet?.runs.filter { $0.marks.contains(.caption) }.allSatisfy { $0.marks.contains(.muted) } == true)
         let bulletIndex = document.blocks.firstIndex { $0.kind == .bullet } ?? -1
         let quoteIndexes = document.blocks.indices.filter { document.blocks[$0].kind == .quote }
         XCTAssertFalse(quoteIndexes.isEmpty)
@@ -223,7 +259,7 @@ final class SummaryAlignmentTests: XCTestCase {
         XCTAssertFalse(bullet?.plainText.contains("已核对") == true)
     }
 
-    func testCarrySuffixStaysAtEndOfReorderableInlinePart() throws {
+    func testMovedOutTaskLeavesTheLiveSummaryButStaysInCarryList() {
         var moved = task("结转任务", due: 21)
         moved.weeklyPlanning = TaskWeeklyPlanning(currentWeek: "2026-10-26", history: [
             TaskWeeklyPlanning.Entry(weekKey: "2026-10-19", enteredAt: date(19),
@@ -233,13 +269,9 @@ final class SummaryAlignmentTests: XCTestCase {
         ])
         let report = builder.report(tasks: [moved], weekOf: date(21))
         XCTAssertEqual(report.carried.map(\.id), [moved.id])
-        var options = SummaryDocumentOptions.standard
-        options.content = [.taskName, .list]
-        options.contentOrder = [.list, .taskName, .status, .progress,
-                                .taskTime, .parentTask, .tags, .focus]
-        let bullet = try XCTUnwrap(builder.document(for: report, options: options)
-            .blocks.first { $0.kind == .bullet })
-        XCTAssertTrue(bullet.plainText.hasPrefix("（工作） · 结转任务 · 已结转到 "))
+        let document = builder.document(for: report)
+        XCTAssertFalse(document.plainText.contains(moved.title))
+        XCTAssertTrue(document.plainText.contains("当前范围内没有符合条件的任务"))
     }
 
     func testCompletedAndTaskTimeStylesCoverDateTimeAllDayAndMissingDate() {
@@ -254,19 +286,20 @@ final class SummaryAlignmentTests: XCTestCase {
 
         let defaultText = builder.document(for: report, options: options).plainText
         XCTAssertTrue(defaultText.contains("[10月20日] 完成样式"))
-        XCTAssertTrue(defaultText.contains("任务时间 10月19日 09:00"))
-        XCTAssertTrue(defaultText.contains("全天任务 · 任务时间 10月19日"))
-        XCTAssertTrue(defaultText.contains("无日期 · 未安排日期"))
+        XCTAssertTrue(defaultText.contains("10月19日 09:00"))
+        XCTAssertTrue(defaultText.contains("全天任务   ·   ◷ 10月19日"))
+        XCTAssertTrue(defaultText.contains("无日期"))
+        XCTAssertFalse(defaultText.contains("未安排日期"))
 
         options.contentStyles.completedTime = .dateTime
         options.contentStyles.taskTime = .date
         let styled = builder.document(for: report, options: options).plainText
         XCTAssertTrue(styled.contains("[10月20日 18:00] 完成样式"))
-        XCTAssertTrue(styled.contains("任务时间 10月19日"))
+        XCTAssertTrue(styled.contains("10月19日"))
         XCTAssertFalse(styled.contains("09:00"))
     }
 
-    func testCompletedTimeUsesAbandonedStampForAbandonedRows() throws {
+    func testAbandonedRowsDoNotGetACompletedDatePrefix() throws {
         var abandoned = task("放弃任务", due: 21)
         abandoned.abandonedAt = date(21, hour: 11)
         let report = builder.report(tasks: [abandoned], weekOf: date(21))
@@ -276,7 +309,7 @@ final class SummaryAlignmentTests: XCTestCase {
         options.contentStyles.completedTime = .dateTime
         let bullet = try XCTUnwrap(builder.document(for: report, options: options)
             .blocks.first { $0.kind == .bullet })
-        XCTAssertEqual(bullet.plainText, "[10月21日 11:00] 放弃任务")
+        XCTAssertEqual(bullet.plainText, "放弃任务")
     }
 
     func testTaskTimeRangeKeepsBothEndsAndHonoursDateOnlyStyle() {
@@ -285,10 +318,10 @@ final class SummaryAlignmentTests: XCTestCase {
         var options = SummaryDocumentOptions.standard
         options.content = [.taskName, .taskTime]
         XCTAssertTrue(builder.document(for: report, options: options).plainText
-            .contains("任务时间 10月20日 09:00–10月22日 18:00"))
+            .contains("10月20日 09:00–10月22日 18:00"))
         options.contentStyles.taskTime = .date
         XCTAssertTrue(builder.document(for: report, options: options).plainText
-            .contains("任务时间 10月20日–10月22日"))
+            .contains("10月20日–10月22日"))
     }
 
     func testListGroupStyleUsesFolderAndFallsBackWhenMissing() {
@@ -297,19 +330,19 @@ final class SummaryAlignmentTests: XCTestCase {
         options.content = [.taskName, .list]
         options.contentStyles.list = .listGroup
         let folder = builder.report(tasks: [done], weekOf: date(21), listFolders: ["工作": "项目A"])
-        XCTAssertTrue(builder.document(for: folder, options: options).plainText.contains("（工作 / 项目A）"))
+        XCTAssertTrue(builder.document(for: folder, options: options).plainText.contains("项目A / 工作"))
 
         let plainList = builder.report(tasks: [done], weekOf: date(21))
-        XCTAssertTrue(builder.document(for: plainList, options: options).plainText.contains("（工作）"))
+        XCTAssertTrue(builder.document(for: plainList, options: options).plainText.contains("工作"))
         let emptyFolder = builder.report(tasks: [done], weekOf: date(21), listFolders: ["工作": ""])
-        XCTAssertTrue(builder.document(for: emptyFolder, options: options).plainText.contains("（工作）"))
-        XCTAssertFalse(builder.document(for: emptyFolder, options: options).plainText.contains(" / "))
+        XCTAssertTrue(builder.document(for: emptyFolder, options: options).plainText.contains("工作"))
+        XCTAssertFalse(builder.document(for: emptyFolder, options: options).plainText.contains("工作-"))
         let blankFolder = builder.report(tasks: [done], weekOf: date(21), listFolders: ["工作": "   "])
-        XCTAssertTrue(builder.document(for: blankFolder, options: options).plainText.contains("（工作）"))
-        XCTAssertFalse(builder.document(for: blankFolder, options: options).plainText.contains(" / "))
+        XCTAssertTrue(builder.document(for: blankFolder, options: options).plainText.contains("工作"))
+        XCTAssertFalse(builder.document(for: blankFolder, options: options).plainText.contains("工作-"))
 
         options.contentStyles.list = .list
-        XCTAssertTrue(builder.document(for: folder, options: options).plainText.contains("（工作）"))
+        XCTAssertTrue(builder.document(for: folder, options: options).plainText.contains("工作"))
         XCTAssertFalse(builder.document(for: folder, options: options).plainText.contains("项目A"))
     }
 
@@ -378,7 +411,7 @@ final class SummaryAlignmentTests: XCTestCase {
         options.content = [.taskName, .parentTask, .tags, .list]
         let bullet = try XCTUnwrap(builder.document(for: report, options: options)
             .blocks.first { $0.kind == .bullet })
-        XCTAssertEqual(bullet.plainText, "无标签任务 · （工作）")
+        XCTAssertEqual(bullet.plainText, "无标签任务   ·   ▤ 工作")
     }
 
     func testHidingTaskNameKeepsLinkAndEmptyContentShowsPlaceholder() {
@@ -387,9 +420,9 @@ final class SummaryAlignmentTests: XCTestCase {
         var options = SummaryDocumentOptions.standard
         options.content = [.status]
         let statusOnly = builder.document(for: report, options: options)
-        let bullet = statusOnly.blocks.first { $0.kind == .bullet }
-        XCTAssertEqual(bullet?.runs.first?.text, "已完成")
-        XCTAssertTrue(bullet?.runs.first?.marks
+        let caption = statusOnly.blocks.first { $0.runs.contains { $0.marks.contains(.caption) } }
+        XCTAssertEqual(caption?.plainText, "✓ 已完成")
+        XCTAssertTrue(caption?.runs.flatMap(\.marks)
             .contains(.link(NativeResourceLink.task(done.id).url.absoluteString)) == true)
 
         options.content = []
@@ -406,39 +439,54 @@ final class SummaryAlignmentTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(SummaryDocumentOptions.self, from: JSONEncoder().encode(old)), old)
     }
 
-    func testRangeAndMultipleListArchivesSurviveReloadWithoutReplacingWeeklyOrJournal() async throws {
-        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("summary-ranges-" + UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let store = SummaryStore(directory: folder)
-        let week = SummaryDateRange.week(containing: date(21), calendar: calendar)
-        let day = SummaryDateRange.preset(.today, now: date(21), calendar: calendar)
-        let month = SummaryDateRange.preset(.thisMonth, now: date(21), calendar: calendar)
-        store.saveWeekly(document: .init(plainText: "原有手写周回顾"), weekKey: week.storageKey(calendar: calendar))
-        store.save(content: "当天手记", dayKey: "2026-10-21")
-        store.saveWeekly(document: .init(plainText: "跨清单月度总结"), weekKey: month.storageKey(calendar: calendar),
-            scopeID: "work-study", options: .standard, range: month, listNames: ["工作", "学习"])
-        store.saveWeekly(document: .init(plainText: "当天总结"), weekKey: day.storageKey(calendar: calendar), range: day)
-        await withCheckedContinuation { continuation in store.flush { error in XCTAssertNil(error); continuation.resume() } }
-        let restored = SummaryStore(directory: folder)
-        XCTAssertEqual(restored.weeklyEntries.count, 3)
-        XCTAssertEqual(restored.weeklyEntry(weekKey: "2026-10-19")?.document.plainText, "原有手写周回顾")
-        XCTAssertEqual(restored.entry(for: "2026-10-21")?.content, "当天手记")
-        let entry = try XCTUnwrap(restored.weeklyEntry(weekKey: month.storageKey(calendar: calendar), scopeID: "work-study"))
-        XCTAssertEqual(entry.range, month); XCTAssertEqual(entry.listNames, ["工作", "学习"])
-        restored.saveWeekly(document: .init(plainText: "续写月报"), weekKey: entry.weekKey, scopeID: entry.scopeID)
-        XCTAssertEqual(restored.weeklyEntry(weekKey: entry.weekKey, scopeID: entry.scopeID)?.range, month)
+    func testSamplingUsesDueRangeOrCompletionTimeLikeTickTick() {
+        let completedLate = task("上周到期本周完成", due: 15, completed: 20)
+        let dueOnly = task("本周到期尚未完成")
+        let next = task("下周才到期", due: 28)
+        let report = builder.report(tasks: [completedLate, dueOnly, next], weekOf: date(21))
+        XCTAssertEqual(report.completed.map(\.id), [completedLate.id])
+        XCTAssertEqual(report.pending.map(\.id), [dueOnly.id])
+        let document = builder.document(for: report)
+        XCTAssertTrue(document.plainText.contains(completedLate.title))
+        XCTAssertFalse(document.plainText.contains(next.title))
+    }
+
+    func testFourStatusSectionsAlwaysFollowTickTickOrderAndSorting() {
+        let older = task("较早完成", completed: 20)
+        let newer = task("较晚完成", completed: 22)
+        var abandoned = task("已放弃任务"); abandoned.abandonedAt = date(21, hour: 12)
+        var half = task("半数推进")
+        half.document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "一")]),
+            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "二")]),
+        ])
+        var full = task("全部工序完成")
+        full.document = NativeDocument(blocks: [
+            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "一")]),
+        ])
+        let later = task("较晚到期", due: 24)
+        let sooner = task("较早到期", due: 19)
+        let report = builder.report(tasks: [older, newer, abandoned, half, full, later, sooner], weekOf: date(21))
+        let document = builder.document(for: report)
+        XCTAssertEqual(document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText),
+                       ["已完成", "已放弃", "进行中", "未完成"])
+        let bullets = document.blocks.filter { $0.kind == .bullet }.map(\.plainText)
+        XCTAssertEqual(Array(bullets.prefix(2)), ["[10月22日] 较晚完成", "[10月20日] 较早完成"])
+        XCTAssertEqual(bullets[2], "已放弃任务")
+        XCTAssertEqual(bullets[3], "100% 全部工序完成")
+        XCTAssertEqual(bullets[4], "50% 半数推进")
+        XCTAssertTrue(bullets[5].contains("较早到期"))
+        XCTAssertTrue(bullets[6].contains("较晚到期"))
     }
 
     func testNonWeeklyAIKeepsPeriodHeadingsAndDateRange() {
-        var options = SummaryAIOptions.weeklyReview; options.isWeeklyPeriod = false
-        let prompt = SummaryPiOptimizer.prompt(text: "10月1日-10月31日的任务事实", options: options)
-        XCTAssertTrue(prompt.contains("本期成果、进展与调整、本期复盘、下一周期任务"))
-        XCTAssertTrue(prompt.contains("遵守原文的日期范围"))
         let document = WeeklyReportBuilder.aiDocument(text: "本期成果\n- 按期交付\n本期复盘\n下次提前评审\n下一周期任务\n", title: "10月1日-10月31日")
-        XCTAssertEqual(WeeklyReportBuilder.reflection(in: document).first?.plainText, "下次提前评审")
+        XCTAssertEqual(document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText),
+                       ["本期成果", "本期复盘", "下一周期任务"])
+        XCTAssertTrue(document.plainText.contains("下次提前评审"))
     }
 
-    func testFocusSnapshotLoadsOnlySelectedPeriodAndRetainsEarlierStartedStatus() throws {
+    func testFocusSnapshotLoadsOnlySelectedPeriodAndDoesNotImplyProgress() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("summary-focus-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -452,13 +500,14 @@ final class SummaryAlignmentTests: XCTestCase {
         let store = FocusStore(clock: { self.date(21) }, calendar: calendar, directory: folder)
         let before = store.hydratedRecordCount
         let range = SummaryDateRange.preset(.today, now: date(21), calendar: calendar)
-        let snapshot = store.summarySnapshot(in: range)
-        XCTAssertEqual(snapshot.records.map(\.taskID), [current.id])
-        XCTAssertEqual(snapshot.startedTaskIDs, [earlier.id, current.id])
+        let records = store.summarySnapshot(in: range)
+        XCTAssertEqual(records.map(\.taskID), [current.id])
         XCTAssertEqual(store.hydratedRecordCount - before, 1)
         var filter = SummaryFilter.all; filter.status = .inProgress
         let report = builder.report(tasks: [earlier, current], weekOf: range.start, filter: filter,
-            focusRecords: snapshot.records, range: range, startedTaskIDs: snapshot.startedTaskIDs)
-        XCTAssertEqual(Set(report.pending.map(\.id)), [earlier.id, current.id]); XCTAssertEqual(report.focusSeconds, 50 * 60)
+            focusRecords: records, range: range)
+        XCTAssertTrue(report.pending.isEmpty, "专注记录不算进行中")
+        let all = builder.report(tasks: [earlier, current], weekOf: range.start, focusRecords: records, range: range)
+        XCTAssertEqual(Set(all.pending.map(\.id)), [earlier.id, current.id]); XCTAssertEqual(all.focusSeconds, 50 * 60)
     }
 }

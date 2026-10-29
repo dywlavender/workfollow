@@ -89,7 +89,7 @@ struct TaskCommentSection: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .help("回复")
+                        .hoverTip("回复")
                         .accessibilityLabel("回复评论")
                     }
                     Button { beginEdit(comment) } label: {
@@ -100,7 +100,7 @@ struct TaskCommentSection: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("编辑评论")
+                    .hoverTip("编辑评论")
                     .accessibilityLabel("编辑评论")
                     Button { store.delete(comment.id) } label: {
                         Image(systemName: "xmark")
@@ -110,7 +110,7 @@ struct TaskCommentSection: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("删除评论")
+                    .hoverTip("删除评论")
                     .accessibilityLabel("删除评论")
                 }
             }
@@ -201,7 +201,7 @@ struct TaskCommentSection: View {
                             .foregroundStyle(WFColors.tertiaryText)
                     }
                     .buttonStyle(.plain)
-                    .help("取消回复")
+                    .hoverTip("取消回复")
                     .accessibilityLabel("取消回复")
                 }
             }

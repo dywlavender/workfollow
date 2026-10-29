@@ -80,6 +80,8 @@ struct TaskListView: View {
     /// 清单动态弹层（事件模型与任务动态共用 `TaskActivityStore`）。
     @State private var showListActivity = false
     @State private var showDisplaySettings = false
+    @State private var showListEditor = false
+    @State private var showListCopy = false
     @State private var timelineCreation: TaskTimelineCreation?
     @State private var showQuickAddSchedule = false
     @State private var quickAddSchedulePage: TaskDatePopoverV2.Page = .main
@@ -204,7 +206,7 @@ struct TaskListView: View {
             if !workspace.bulkSelection.isEmpty {
                 TaskBulkActionBar(workspace: workspace, onOpenPanel: openBatchPanel)
                     .zIndex(2)
-            } else if canAdd, let scope {
+            } else if canAdd, let scope, viewMode != .kanban || environment.viewPreferences.kanbanOptions(for: preferenceKey).showsInput {
                 quickAddBar(in: scope)
                     .zIndex(1)
                     // 占位文案实测过"清单已经是学习、却仍写着收集箱"：内容按 activeList
@@ -222,7 +224,8 @@ struct TaskListView: View {
                                hidesCompleted: environment.viewPreferences.hidesCompleted(for: preferenceKey),
                                hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                                hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
-                               scope: scope ?? .allTasks, allowsCreation: canAdd)
+                               scope: scope ?? .allTasks, allowsCreation: canAdd,
+                               display: environment.viewPreferences.kanbanOptions(for: preferenceKey))
             } else if viewMode == .timeline {
                 TaskTimelineView(tasks: timelineTasks, workspace: workspace, allowsCreation: canAdd,
                     onCreate: { timelineCreation = TaskTimelineCreation(schedule: $0) },
@@ -290,7 +293,24 @@ struct TaskListView: View {
                 }
             }
         }
-        .sheet(isPresented: $showDisplaySettings) { TaskDisplaySettingsView() }
+        .sheet(isPresented: $showDisplaySettings) {
+            if viewMode == .kanban { TaskKanbanSettingsView(preferences: environment.viewPreferences, key: preferenceKey) }
+            else { TaskDisplaySettingsView() }
+        }
+        .sheet(isPresented: $showListEditor) {
+            if let list = workspace.activeList {
+                TaskListEditorView(workspace: workspace, preferences: environment.viewPreferences, name: list)
+            }
+        }
+        .sheet(isPresented: $showListCopy) {
+            if let list = workspace.activeList {
+                TaskListCopyView(workspace: workspace, source: list) { copied in
+                    environment.viewPreferences.copyScope(from: preferenceKey,
+                        to: TaskViewScopeKey.key(destination: .allTasks, activeList: copied, activeTag: nil))
+                    workspace.activeList = copied
+                }
+            }
+        }
         .sheet(item: $timelineCreation) { creation in
             TaskComposer(workspace: workspace, onClose: { _ in timelineCreation = nil },
                 title: "", list: workspace.activeList ?? TaskList.inbox.name,
@@ -328,9 +348,10 @@ struct TaskListView: View {
                     .frame(width: TaskListMetrics.headerActionSize,
                            height: TaskListMetrics.headerActionSize)
                     .contentShape(Rectangle())
+                    .popupMenuRowBackground()
             }
             .buttonStyle(.plain)
-            .help(navigationVisible
+            .hoverTip(navigationVisible
                   ? (environment.sidebarVisible ? "隐藏导航" : "显示导航")
                   : "显示导航")
             .background(AnchoredPropertyPanel(isPresented: $showNavigation,
@@ -385,10 +406,15 @@ struct TaskListView: View {
     /// 「⋯」按滴答只留显示类操作，清单动态/添加分组改从标题右键进入，入口不丢。
     @ViewBuilder
     private var listTitleMenu: some View {
-        Button("清单动态", systemImage: "clock.arrow.circlepath") {
-            DispatchQueue.main.async { showListActivity = true }
+        if let list = workspace.activeList, list != TaskList.inbox.name {
+            TaskListCommands(workspace: workspace, name: list,
+                onEdit: { showListEditor = true }, onCopy: { showListCopy = true },
+                onActivity: { showListActivity = true })
+        } else {
+            Button("清单动态", systemImage: "clock.arrow.circlepath") {
+                DispatchQueue.main.async { showListActivity = true }
+            }.disabled(workspace.activeList == nil)
         }
-        .disabled(workspace.activeList == nil)
         if canAdd, let list = workspace.activeList, list != TaskList.inbox.name {
             Button("添加分组", systemImage: "plus") {
                 guard let title = TaskNamePrompt.ask("添加分组") else { return }
@@ -418,9 +444,10 @@ struct TaskListView: View {
                 .frame(width: TaskListMetrics.headerActionSize,
                        height: TaskListMetrics.headerActionSize)
                 .contentShape(Rectangle())
+                .popupMenuRowBackground()
         }
         .fixedSize()
-        .help("分组与排序")
+        .hoverTip("分组与排序")
         .id(preferenceKey)
     }
 
@@ -512,9 +539,10 @@ struct TaskListView: View {
                 .frame(width: TaskListMetrics.headerActionSize,
                        height: TaskListMetrics.headerActionSize)
                 .contentShape(Rectangle())
+                .popupMenuRowBackground()
         }
         .fixedSize()
-        .help("列表操作")
+        .hoverTip("列表操作")
         .id(preferenceKey)
     }
 
@@ -583,7 +611,8 @@ struct TaskListView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("安排日期、提醒和重复")
+                    .popupMenuRowBackground()
+                    .hoverTip("安排日期、提醒和重复")
                     .quickAddRenderAnchor(.schedule)
                     .schedulePopover(isPresented: $showQuickAddSchedule) {
                         TaskDatePopoverV2(
@@ -605,7 +634,8 @@ struct TaskListView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("更多任务属性")
+                    .popupMenuRowBackground()
+                    .hoverTip("更多任务属性")
                     .background(AnchoredPropertyPanel(isPresented: $showQuickAddProperties, width: PopupMetrics.quickAddPropertiesWidth) {
                         QuickAddPropertiesPopover(
                             workspace: workspace,
@@ -654,22 +684,20 @@ struct TaskListView: View {
             if !parsed.tokens.isEmpty {
                 QuickAddTokenFlowLayout(horizontalSpacing: 5, verticalSpacing: 5) {
                     ForEach(parsed.tokens) { token in
-                        Button {
-                            dismissedQuickAddTokens.insert(token.id)
-                        } label: {
-                            let color = QuickAddTokenColor.swiftUIColor(for: token.kind)
-                            HStack(spacing: 3) {
-                                Text(token.label)
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 9))
-                            }
-                            .font(WFType.control)
-                            .foregroundStyle(color)
-                            .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(color.opacity(0.09), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .help("移除识别项：\(token.label)")
+                        QuickAddTokenChip(
+                            token: token,
+                            // 日程类 chip 点开面板对应页改值；标签/清单/优先级仍走属性面板。
+                            onEdit: TaskDatePopoverV2.Page(editing: token).map { page in
+                                {
+                                    quickAddSchedulePage = page
+                                    showQuickAddSchedule = true
+                                }
+                            },
+                            onRemove: { dismissedQuickAddTokens.insert(token.id) },
+                            font: WFType.control,
+                            horizontalPadding: 6,
+                            verticalPadding: 3,
+                            backgroundOpacity: 0.09)
                     }
                 }
                 .padding(.leading, 24)
@@ -856,7 +884,21 @@ struct TaskListView: View {
 
     private func applyQuickAddSchedulePlan(_ plan: TaskDateDraftModel.CommitPlan) {
         // 常量构造：宿主不再逐字段手抄，加字段时不会漏（见 `QuickAddScheduleDraft.init(_:)`）。
-        quickAddScheduleOverride = QuickAddScheduleDraft(plan)
+        let scheduleDraft = QuickAddScheduleDraft(plan)
+        // 面板改完把等价文字写回输入框：chip 是按文字解析出来的，不改文字
+        // 就会出现「chip 写 3 分钟、实际建 30 分钟」。
+        // 没有可落的日程片段（用户只打了标题）时保持文字不动，由 override 承担。
+        if let rewritten = QuickAddScheduleTextSync.rewrite(
+            draft, to: scheduleDraft, now: workspace.clock(), calendar: workspace.calendar,
+            knownLists: Set(workspace.availableListNames),
+            dismissedTokenIDs: dismissedQuickAddTokens) {
+            draft = rewritten
+            // 文字已经承载了新值，override 不必再叠加（避免两套值各说各话）。
+            scheduleSourceText = rewritten
+            quickAddScheduleOverride = nil
+        } else {
+            quickAddScheduleOverride = scheduleDraft
+        }
     }
 
     private func quickAddSummary(for scope: TaskListScope) -> String {
@@ -1101,7 +1143,7 @@ struct TaskListView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("在此分组新建任务")
+                .hoverTip("在此分组新建任务")
                 .accessibilityLabel("在「\(groupTitle(group))」新建任务")
             }
             if headerActions.showsMenu, let sectionID = group.sectionID,
@@ -1118,7 +1160,7 @@ struct TaskListView: View {
                         .contentShape(Rectangle())
                 }
                 .fixedSize()
-                .help("分组操作")
+                .hoverTip("分组操作")
             }
             // 滴答唯一常驻的分组头文字动作：已过期 →「顺延」（26×20）。
             if headerActions.showsPostpone {
@@ -1304,7 +1346,7 @@ struct TaskListView: View {
                         showsListBadge: showsListBadge,
                         hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                         hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
-                        allowsReordering: sortMode == .manual && !node.task.isClosed,
+                        allowsReordering: sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name),
                         progress: workspace.checklistProgress(for: node.task)
                             ?? workspace.subtaskProgress(for: node.task.id),
                         day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision)
@@ -1418,7 +1460,7 @@ struct TaskListView: View {
                 showsListBadge: showsListBadge,
                 hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                 hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
-                allowsReordering: sortMode == .manual && !node.task.isClosed,
+                allowsReordering: sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name),
                 onTitleEditingRequested: {
                     editingRowTitle = true
                     quickAddFocused = false
@@ -1465,7 +1507,7 @@ struct TaskListView: View {
                         trailing: WFSpace.lg)
                 }
             }
-        if sortMode == .manual && !node.task.isClosed {
+        if sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name) {
             row
                 .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id,
                                                   depth: node.depth, feedback: dropFeedback))
@@ -1561,6 +1603,7 @@ struct TaskRowView: View {
     /// Flutter / 滴答的完成态都只置灰，这里只补「划一下」的手势反馈）。
     @State private var strikeSweep: CGFloat = 0
     @State private var strikeOpacity: Double = 0
+    private var readOnly: Bool { workspace.isListArchived(task.list.name) }
 
     private var showsTagRow: Bool {
         !hidesDetails && !hiddenFields.contains(.tags) && !task.tags.isEmpty
@@ -1579,7 +1622,7 @@ struct TaskRowView: View {
                                 .foregroundStyle(WFColors.secondaryText)
                         }
                         .buttonStyle(.plain)
-                        .help(expanded ? "收起子任务" : "展开子任务")
+                        .hoverTip(expanded ? "收起子任务" : "展开子任务")
                     } else {
                         Color.clear
                     }
@@ -1591,7 +1634,8 @@ struct TaskRowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(task.isClosed ? "恢复任务" : "完成任务")
+                .hoverTip(task.isClosed ? "恢复任务" : "完成任务")
+                .disabled(readOnly)
                 .accessibilityLabel(task.isClosed ? "恢复：\(task.title)" : "完成：\(task.title)")
                 .frame(width: TaskListMetrics.checkboxSize, height: TaskListMetrics.checkboxSize)
                 .taskTreeRenderAnchor(task.id, .checkbox)
@@ -1600,6 +1644,11 @@ struct TaskRowView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top, spacing: WFSpace.sm) {
+                    if readOnly {
+                        Text(task.title).foregroundStyle(WFColors.text)
+                            .frame(minWidth: 96, maxWidth: .infinity, alignment: .leading)
+                            .frame(height: 18)
+                    } else {
                     TaskRowTitleField(title: task.title,
                                       color: task.status == .completed ? WFColors.taskCompletedTitle : task.isClosed ? WFColors.secondaryText : WFColors.text,
                                       handle: titleHandle,
@@ -1613,11 +1662,13 @@ struct TaskRowView: View {
                         .frame(minWidth: 96, maxWidth: .infinity)
                         .frame(height: 18)
                         .taskTreeRenderAnchor(task.id, .title)
+                    }
                     TaskRowMetadataTrail(task: task, workspace: workspace,
                                          showsListBadge: showsListBadge,
                                          hidesDetails: hidesDetails,
                                          hiddenFields: hiddenFields,
                                          onOpenDate: { contextDateAnchor = nil; showDatePopover = true })
+                        .allowsHitTesting(!readOnly)
                 }
                 if let preview = rowPreview {
                     Text(preview)
@@ -1647,14 +1698,14 @@ struct TaskRowView: View {
         }
         // 对齐滴答：标题/勾选框都从行顶 +10 起，基础行 40。
         .padding(.vertical, TaskListMetrics.rowVerticalPadding)
-        .padding(.leading, CGFloat(depth) * TaskListMetrics.hierarchyIndent)
-        .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
+        .padding(.leading, CGFloat(depth) * TaskListMetrics.hierarchyIndent
+            + TaskListMetrics.rowContentLeading)
+        .padding(.trailing, TaskListMetrics.rowTrailingPadding)
         .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .topLeading)
         // 选中底色用中性灰（`listSelection`，滴答实测 #F2F2F2），不用强调色。
-        // 滴答的选中行也没有任何描边；可视底色左右各内缩 16pt，但追踪区域仍是整行，
-        // 这样鼠标移到左侧拖拽柄上时底色和柄不会一起消失。
+        // 行底色铺满 Cell 宿主；宿主左右的 18 / 1pt 内边距决定与列表边界的距离。
         .rowHoverBackground(selected: selected || recentlyCreated,
-                            horizontalInset: TaskListMetrics.rowHorizontalPadding,
+                            horizontalInset: 0,
                             onHoverChanged: { pointer.update($0) })
         // 整行可点（含左右内缩留白）：标题旁的留白、行内空隙、元数据区点下去也能选中；
         // 行内按钮（勾选框/日期）优先级更高。
@@ -1676,14 +1727,17 @@ struct TaskRowView: View {
         // 滴答的拖拽柄在行背景左侧的留白里（14×14，行左 +1），悬停才出现。
         .overlay(alignment: .leading) {
             if allowsReordering {
-                TaskRowReorderHandle(taskID: task.id, title: task.title, pointer: pointer)
+                TaskRowReorderHandle(taskID: task.id, title: task.title, selected: selected,
+                                     pointer: pointer)
                     .padding(.leading, 1 + CGFloat(depth) * TaskListMetrics.hierarchyIndent)
+                    .offset(x: -(TaskListMetrics.outlineLeadingInset - WFSpace.xs))
             }
         }
         .overlay {
             // Context-origin scheduling is anchored to this click, including
             // tasks without a date badge. It must not borrow the whole row.
             SecondaryClickCapture { rowView, point in
+                guard !readOnly else { return }
                 guard let current = workspace.task(for: task.id) else { return }
                 TaskContextMenuPresenter.show(in: rowView, at: point,
                                               environment: environment,
@@ -1710,7 +1764,7 @@ struct TaskRowView: View {
         .exclusively(before: TapGesture().modifiers(.shift).onEnded {
             if let onRangeSelect { onRangeSelect(task.id) } else { onSelect() }
         })
-        .exclusively(before: TapGesture().onEnded { titleHandle.beginEditing() })
+        .exclusively(before: TapGesture().onEnded { if readOnly { onSelect() } else { titleHandle.beginEditing() } })
     }
 
     /// Folding hides children; only this task's own body supplies its preview.
@@ -1920,11 +1974,14 @@ private struct TaskRowMetadataTrail: View {
             if !hiddenFields.contains(.indicators) {
                 ForEach(Array(secondaryMetadata.prefix(WFMetrics.secondaryMetadataLimit))) { item in
                     if let value = item.value {
-                        Text(value).foregroundStyle(muted).accessibilityLabel(item.accessibilityLabel)
+                        Text(value).foregroundStyle(muted)
+                            .hoverTip(item.accessibilityLabel)
+                            .accessibilityLabel(item.accessibilityLabel)
                     } else if let symbol = item.symbol {
                         Image(systemName: symbol)
                             .frame(width: 14, height: 14)
                             .foregroundStyle(muted)
+                            .hoverTip(item.accessibilityLabel)
                             .accessibilityLabel(item.accessibilityLabel)
                     }
                 }

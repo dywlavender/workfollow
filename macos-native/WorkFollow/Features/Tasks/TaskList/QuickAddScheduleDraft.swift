@@ -43,6 +43,7 @@ struct QuickAddScheduleDraft: Equatable, Codable {
         self.init(dueAt: parsed.dueAt ?? defaultDueAt,
                   hasTime: parsed.hasTime,
                   reminderAt: parsed.reminderAt,
+                  reminderOffsets: parsed.reminderOffsets,
                   repeatFrequency: parsed.recurrence,
                   recurrenceRule: parsed.recurrenceRule)
     }
@@ -55,7 +56,8 @@ struct QuickAddScheduleDraft: Equatable, Codable {
         func scheduleTokens(in text: String) -> [String] {
             QuickAddParser.parse(text, now: now, calendar: calendar, knownLists: knownLists,
                                  dismissedTokenIDs: dismissedTokenIDs).tokens
-                .filter { $0.kind == .date || $0.kind == .time || $0.kind == .recurrence }
+                .filter { $0.kind == .date || $0.kind == .time
+                    || $0.kind == .recurrence || $0.kind == .reminder }
                 .map { $0.kind.rawValue + ":" + $0.raw }
         }
         return scheduleTokens(in: previous) != scheduleTokens(in: current)

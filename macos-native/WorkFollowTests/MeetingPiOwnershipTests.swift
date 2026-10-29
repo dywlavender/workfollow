@@ -10,14 +10,11 @@ final class MeetingPiOwnershipTests: XCTestCase {
                          "WorkFollow/Features/Meetings/MeetingStore.swift"] {
             let text = try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
             for forbidden in ["URLSession", "webSocketTask", "maas.aliyuncs.com", "Authorization: Bearer"] {
-                XCTAssertFalse(text.contains(forbidden), "Model transport must remain inside Pi: \(relative)")
+                XCTAssertFalse(text.contains(forbidden), "Model transport must remain inside the AI backend: \(relative)")
             }
         }
         let client = try String(contentsOf: root.appendingPathComponent("WorkFollow/Infrastructure/Meeting/MeetingPiClient.swift"), encoding: .utf8)
-        XCTAssertTrue(client.contains("\"--extension\", configuration.resolvedAudioExtension"))
-        XCTAssertTrue(client.contains("\"--no-session\""))
-        XCTAssertTrue(client.contains("/wf-meeting-audio"))
-        XCTAssertTrue(client.contains("/wf-meeting-minutes"))
+        XCTAssertFalse(client.contains("Process()"), "Native AI callers must not launch engine processes")
     }
 
     /// 2026-10-07：设置框里粘成多行会让 Pi `Error: Model "…" not found` 直接退出，
@@ -33,12 +30,9 @@ final class MeetingPiOwnershipTests: XCTestCase {
         configuration.model = "   "
         XCTAssertEqual(configuration.resolvedModel, "", "全空白等同于留空，沿用 Pi 当前模型")
 
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        for relative in ["WorkFollow/Infrastructure/Meeting/MeetingPiClient.swift",
-                         "WorkFollow/Infrastructure/Meeting/MeetingPiStreamingSession.swift"] {
-            let text = try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
-            XCTAssertTrue(text.contains("\"--model\", configuration.resolvedModel"),
-                          "拉起 Pi 时必须用归一化后的模型值：\(relative)")
-        }
+        configuration.minutesModel = " P/text \n重复值"
+        configuration.transcriptionModel = " P/voice \n重复值"
+        XCTAssertEqual(configuration.backendParameters(transcription: false)["model"] as? String, "P/text")
+        XCTAssertEqual(configuration.backendParameters(transcription: true)["model"] as? String, "P/voice")
     }
 }

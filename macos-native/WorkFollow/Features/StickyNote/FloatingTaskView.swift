@@ -16,10 +16,15 @@ struct FloatingTaskView: View {
             FloatingEditorView(documentID: taskID,
                 title: Binding(get: { workspace.task(for: taskID)?.title ?? "" },
                                set: { _ = workspace.setTitle(taskID, $0) }),
-                titlePlaceholder: "未命名任务", document: task.document,
+                titlePlaceholder: "未命名任务",
+                titleAccessibilityLabel: "任务标题",
+                document: task.document,
                 onDocumentChange: { _ = workspace.setDocument(taskID, $0) },
                 profile: profile(task), editorHandle: editorHandle,
-                onClose: onClose, onOpenInMain: onOpenInMain, actions: actions(task))
+                onClose: onClose, actions: actions(task),
+                topBar: {
+                    FloatingTaskTopBar(taskID: taskID, workspace: workspace)
+                })
         }
     }
 
@@ -60,10 +65,10 @@ struct FloatingTaskView: View {
             Button { picker = picker == .tags ? nil : .tags } label: {
                 Image(systemName: "tag").frame(width: 24, height: 24)
             }
-            .help("标签")
+            .hoverTip("标签")
             .background(AnchoredPropertyPanel(isPresented: binding(.tags),
                 width: PopupMetrics.tagPickerWidth, prefersAbove: true,
-                placement: .verticalInOwner, title: "便签标签") {
+                placement: .verticalInOwner, title: "任务标签") {
                     TaskTagPickerPopover(initialTags: task.tags, workspace: workspace,
                         onCancel: { picker = nil }, onApply: { tags in
                             workspace.setTags(taskID, tags)
@@ -73,10 +78,10 @@ struct FloatingTaskView: View {
             Button { picker = picker == .relation ? nil : .relation } label: {
                 Image(systemName: "link").frame(width: 24, height: 24)
             }
-            .help("关联任务或笔记")
+            .hoverTip("关联任务或笔记")
             .background(AnchoredPropertyPanel(isPresented: binding(.relation),
                 width: PopupMetrics.relationPickerWidth, prefersAbove: true,
-                placement: .verticalInOwner, title: "便签关联") {
+                placement: .verticalInOwner, title: "任务关联") {
                     TaskRelationPicker(sourceTaskID: taskID, tasks: workspace.allTasks,
                         notes: environment?.notesWorkspace.notes ?? [], sourceNoteID: task.sourceNoteID,
                         onSelect: { target in

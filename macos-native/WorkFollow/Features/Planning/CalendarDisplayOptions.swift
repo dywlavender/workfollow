@@ -78,7 +78,7 @@ struct CalendarDayAgenda: View {
             HStack {
                 Text(day.formatted(.dateTime.month().day().weekday())).font(WFType.sectionSemibold)
                 Spacer()
-                Button(action: onCreate) { Image(systemName: "plus") }.buttonStyle(.plain).help("新建任务")
+                Button(action: onCreate) { Image(systemName: "plus") }.buttonStyle(.plain).hoverTip("新建任务")
             }
             Divider()
             ScrollView {

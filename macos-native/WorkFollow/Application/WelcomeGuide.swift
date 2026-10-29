@@ -6,7 +6,7 @@ import Foundation
 enum WelcomeGuide {
     static let listName = "👋欢迎"
     static let sectionTitles = ["新手入门", "功能模块", "探索更多"]
-    static let version = 3
+    static let version = 7
 
     enum Section: Int, CaseIterable {
         case start, modules, explore
@@ -28,6 +28,7 @@ enum WelcomeGuide {
         case summary
         case commandPalette = "command-palette"
         case agentAccess = "agent-access"
+        case aiConfiguration = "ai-configuration"
 
         var title: String {
             switch self {
@@ -45,6 +46,7 @@ enum WelcomeGuide {
             case .summary: return "打开摘要"
             case .commandPalette: return "快速打开"
             case .agentAccess: return "查看 AI 接入说明"
+            case .aiConfiguration: return "配置 AI 模型"
             }
         }
 
@@ -79,24 +81,6 @@ enum WelcomeGuide {
                 "想补充细节时，点开任务右侧的详情面板。"
              ]),
         Item(section: .start,
-             title: "📅 设置日期和提醒",
-             action: .schedule,
-             summary: "给任务一个时间，它才会在该出现的时候出现。",
-             steps: [
-                "打开任务详情，点击日期区域，选择今天、明天或具体日期。",
-                "担心忘记就加上提醒时间；固定发生的事情可以设置重复。",
-                "设置后，任务会自动进入「今天」「最近 7 天」等智能清单。"
-             ]),
-        Item(section: .start,
-             title: "✔️ 完成任务，收进「今天」",
-             action: .complete,
-             summary: "完成的事情及时打勾，今天的清单才会越做越轻。",
-             steps: [
-                "点击任务左侧的圆圈即可完成，再点一次可以恢复。",
-                "「今天」汇总今天到期的任务，「最近 7 天」帮你提前安排。",
-                "做完的任务可以在侧栏「已完成」里回看。"
-             ]),
-        Item(section: .modules,
              title: "📋 用清单和分组管理任务",
              action: .list,
              summary: "任务多起来后，用清单按项目或场景分类；清单内还能再分「分组」。",
@@ -106,13 +90,22 @@ enum WelcomeGuide {
                 "看板视图会把分组显示成列，适合推进多阶段项目。"
              ]),
         Item(section: .modules,
-             title: "🎯 四象限：先做重要的事",
-             action: .matrix,
-             summary: "每天事情很多时，先按「重要 / 紧急」把任务放进四个象限。",
+             title: "📅 设置日期和提醒",
+             action: .schedule,
+             summary: "给任务一个时间，它才会在该出现的时候出现。",
              steps: [
-                "打开四象限，把任务拖到对应象限；拖动会同步修改优先级和安排日。",
-                "优先处理重要且紧急的事，给重要不紧急的事留出固定时间。",
-                "每个象限可以单独折叠、排序，长列表不会挤乱其他象限。"
+                "打开任务详情，点击日期区域，选择今天、明天或具体日期。",
+                "担心忘记就加上提醒时间；固定发生的事情可以设置重复。",
+                "设置后，任务会自动进入「今天」「最近 7 天」等智能清单。"
+             ]),
+        Item(section: .modules,
+             title: "✔️ 完成任务，收进「今天」",
+             action: .complete,
+             summary: "完成的事情及时打勾，今天的清单才会越做越轻。",
+             steps: [
+                "点击任务左侧的圆圈即可完成，再点一次可以恢复。",
+                "「今天」汇总今天到期的任务，「最近 7 天」帮你提前安排。",
+                "做完的任务可以在侧栏「已完成」里回看。"
              ]),
         Item(section: .modules,
              title: "🗓 日历：把任务排进日程",
@@ -124,6 +117,15 @@ enum WelcomeGuide {
                 "任务和日程同屏显示，冲突一眼可见。"
              ]),
         Item(section: .modules,
+             title: "🎯 四象限：先做重要的事",
+             action: .matrix,
+             summary: "每天事情很多时，先按「重要 / 紧急」把任务放进四个象限。",
+             steps: [
+                "打开四象限，把任务拖到对应象限；拖动会同步修改优先级和安排日。",
+                "优先处理重要且紧急的事，给重要不紧急的事留出固定时间。",
+                "每个象限可以单独折叠、排序，长列表不会挤乱其他象限。"
+             ]),
+        Item(section: .modules,
              title: "🍅 专注：一次只做一件事",
              action: .focus,
              summary: "给重要任务开一个专注计时，减少切换。",
@@ -132,7 +134,18 @@ enum WelcomeGuide {
                 "番茄时长和休息节奏可以在设置里调整。",
                 "专注记录会累计到任务和统计里，回头能看到时间花在哪。"
              ]),
-        Item(section: .modules,
+        Item(section: .explore,
+             title: "✨ AI 配置说明",
+             action: .aiConfiguration,
+             summary: "按需开启文字 AI 或会议转写；日常待办和笔记可以直接使用。",
+             steps: [
+                "文字 AI 有两种方式：「直接调用」使用 App 内的 LangChain，在设置页面填写模型 ID、API URL 和 API Key，协议选择 OpenAI 兼容或 OpenAI Responses；「Pi」读取本机 Pi 自己的模型配置。",
+                "使用 Pi 或会议转写时，需要本机 Node.js 22.19.0 或更新版本。点击「下载 Node.js」，选择 macOS 的 Apple 芯片版 LTS 安装程序（.pkg），安装后打开终端执行 node --version，确认版本。推荐 Node.js 24 LTS；已有兼容版本可跳过安装。",
+                "Pi 也使用本机安装。复制下方「Pi 安装命令」到终端执行；已有可用 Pi 时可跳过。App 自动查找 Pi，也可在设置的高级选项指定程序路径。直接调用文字模型无需 Node 或 Pi。",
+                "展开下方「Pi 模型配置」，点击「打开 Pi 配置」，在 models.json 中填写文字及语音模型的服务地址、Key 和模型 ID，删除不用的示例。默认文件在当前用户的 ~/.pi/agent/models.json；已有配置不会被覆盖。",
+                "保存文件后，到「设置 → AI 模型」点击「刷新 Pi 模型」，分别选择文字和语音模型。百炼实时语音使用业务空间 HTTPS 地址；会议纪要编写使用文字模型。"
+             ]),
+        Item(section: .explore,
              title: "🎙 会议纪要：开完会就有待办",
              action: .meetings,
              summary: "会议纪要里的行动项可以直接转成任务，不用再抄一遍。",
@@ -141,7 +154,7 @@ enum WelcomeGuide {
                 "点「提取待办」，把结论里的行动项转成任务。",
                 "会议和任务互相关联，回看时能追到出处。"
              ]),
-        Item(section: .modules,
+        Item(section: .explore,
              title: "📝 笔记：想法和任务放在一起",
              action: .notes,
              summary: "想法先记成笔记，需要行动时再转成任务。",
@@ -157,7 +170,7 @@ enum WelcomeGuide {
              steps: [
                 "菜单「文件 → 新建悬浮笔记」，或按 ⌥⌘N。",
                 "点击笔记输入内容；鼠标移到 PDF 上滚轮翻页，键盘输入仍在笔记里。",
-                "点「在主页打开」可以把内容交回主页继续编辑。"
+                "关闭浮窗后内容会保留，可在笔记页继续编辑。"
              ]),
         Item(section: .explore,
              title: "🏷 标签与过滤器：按场景找任务",

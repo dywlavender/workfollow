@@ -28,6 +28,7 @@ struct ListActivitySheet: View {
                 Spacer()
                 Button(action: onClose) { Image(systemName: "xmark") }
                     .buttonStyle(.plain)
+                    .hoverTip("关闭清单动态")
                     .accessibilityLabel("关闭清单动态")
             }
             .padding(16)
@@ -74,6 +75,7 @@ struct ListActivitySheet: View {
         }
         .task(id: queryKey) { await history.reset(store: activity, taskIDs: taskIDs) }
         .frame(width: PopupMetrics.activitySheetWidth, height: 420)
+        .onExitCommand(perform: onClose)
         .environment(\.calendar, workspace.calendar)
         .environment(\.timeZone, workspace.calendar.timeZone)
     }

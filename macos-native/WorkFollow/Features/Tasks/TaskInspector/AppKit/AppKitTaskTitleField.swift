@@ -7,12 +7,17 @@ import SwiftUI
 /// SwiftUI 侧只保留锚点与内边距，文字控件本身是原生 `NSTextField`，
 /// 这样换行、选词、输入法、双击选词走系统文本控件，而不是 SwiftUI 的桥接层。
 ///
-/// 视觉口径不变：19pt Medium（`WFType.taskTitle` 同一取值）、无边框无背景、
-/// 多行按宽度换行、高度随内容。锚点仍由外层 SwiftUI 提供，渲染契约不受影响。
+/// 视觉口径：详情用 19pt Medium、多行按宽度换行；浮窗标题复用同一控件，
+/// 传入 15pt Semibold + 单行。无边框无背景、高度随内容（浮窗由标题行固定高度）。
+/// 锚点仍由外层 SwiftUI 提供，渲染契约不受影响。
 struct AppKitTaskTitleField: NSViewRepresentable {
     @Binding var text: String
     @Binding var isEditing: Bool
     let placeholder: String
+    var font: NSFont = .systemFont(ofSize: 19, weight: .medium)
+    var accessibilityLabel: String = "任务标题"
+    /// 浮窗标题只有一行；详情标题按宽度多行换行。
+    var singleLine: Bool = false
     /// Return 的落点：标题编辑结束后把焦点交给正文（滴答 `focusOnContentIfNeeded`）。
     /// nil 时保持旧行为（只结束编辑）。
     var onSubmit: (() -> Void)? = nil
@@ -29,22 +34,22 @@ struct AppKitTaskTitleField: NSViewRepresentable {
         field.isBezeled = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.usesSingleLineMode = false
-        field.lineBreakMode = .byWordWrapping
-        field.cell?.wraps = true
-        field.cell?.isScrollable = false
-        field.maximumNumberOfLines = 0
-        field.font = .systemFont(ofSize: 19, weight: .medium)
+        field.usesSingleLineMode = singleLine
+        field.lineBreakMode = singleLine ? .byTruncatingTail : .byWordWrapping
+        field.cell?.wraps = !singleLine
+        field.cell?.isScrollable = singleLine
+        field.maximumNumberOfLines = singleLine ? 1 : 0
+        field.font = font
         field.textColor = .labelColor
         // 占位符灰与待办框唯一真源同源（默认灰偏深）。
         field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
             .foregroundColor: QuickAddBarStyle.placeholderNSColor,
-            .font: NSFont.systemFont(ofSize: 19, weight: .medium)
+            .font: font
         ])
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         field.stringValue = text
-        field.setAccessibilityLabel("任务标题")
+        field.setAccessibilityLabel(accessibilityLabel)
         field.onBeginEditing = { [weak coordinator = context.coordinator] in
             coordinator?.noteEditingBegan()
         }
@@ -58,7 +63,7 @@ struct AppKitTaskTitleField: NSViewRepresentable {
         if (field.placeholderString as String?) != placeholder {
             field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
                 .foregroundColor: QuickAddBarStyle.placeholderNSColor,
-                .font: NSFont.systemFont(ofSize: 19, weight: .medium)
+                .font: font
             ])
         }
         // 宽度变化会改变换行位置，必须同步给 cell 才能算对高度。

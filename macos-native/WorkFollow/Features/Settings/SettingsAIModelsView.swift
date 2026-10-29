@@ -2,17 +2,23 @@ import SwiftUI
 
 struct SettingsAIModelsView: View {
     @ObservedObject var store: MeetingStore
+    @ObservedObject var models: AIModelStore
     @StateObject private var catalog: PiModelCatalog
     @State private var refresh = 0
     @State private var advanced = false
     @State private var executableDraft: String
     @State private var speechSearch = ""
     @State private var textSearch = ""
+    @State private var textEngine: AITextEngine
+    @State private var configurationError: String?
 
-    init(store: MeetingStore, catalog: PiModelCatalog? = nil) {
+    init(store: MeetingStore, models: AIModelStore, catalog: PiModelCatalog? = nil) {
         self.store = store
+        self.models = models
+        _textEngine = State(initialValue: models.engine)
         _catalog = StateObject(wrappedValue: catalog ?? PiModelCatalog())
-        _executableDraft = State(initialValue: store.configuration.executable)
+        let executable = store.configuration.executable
+        _executableDraft = State(initialValue: ["/opt/homebrew/bin/pi", "/usr/local/bin/pi"].contains(executable) ? "" : executable)
     }
 
     private var speechBusy: Bool { store.recordingID != nil || store.transcribing || store.requestingPermission }
@@ -20,8 +26,26 @@ struct SettingsAIModelsView: View {
     var body: some View {
         SettingsPage {
             WFFormSection {
+                WFFormRow("文字处理", showsDivider: true) {
+                    BusinessMenu(width: 220, title: "调用方式") {
+                        BusinessMenuOption("直接调用", selected: textEngine == .langchain) {
+                            do { try models.useLangchain(); textEngine = .langchain; configurationError = nil }
+                            catch { configurationError = error.localizedDescription }
+                        }
+                        BusinessMenuOption("Pi", selected: textEngine == .pi) {
+                            do { try models.usePi(); textEngine = .pi; configurationError = nil }
+                            catch { configurationError = error.localizedDescription }
+                        }
+                    } label: {
+                        HStack { Text(textEngine == .langchain ? "直接调用" : "Pi"); Image(systemName: "chevron.down").font(.system(size: 10)) }
+                    }.accessibilityLabel("文字处理调用方式")
+                }
+                if textEngine == .langchain { SettingsDirectAIModelView(models: models) }
+                else { modelRow(speech: false) }
+                if let configurationError { WFFormNote(configurationError) }
+            }
+            WFFormSection {
                 modelRow(speech: true)
-                modelRow(speech: false)
                 if speechBusy { WFFormNote("正在录音或转写，结束后可以更换语音模型。") }
                 HStack(spacing: 8) {
                     if catalog.loading {
@@ -29,35 +53,40 @@ struct SettingsAIModelsView: View {
                         Text("正在读取模型…")
                     }
                     Spacer()
-                    Button("刷新模型") { refresh += 1 }.disabled(catalog.loading)
+                    Button("刷新 Pi 模型") { refresh += 1 }.disabled(catalog.loading)
                 }.font(WFType.supporting).padding(.horizontal, WFSpace.md)
                 if let error = catalog.error {
                     Text(error).font(WFType.supporting).foregroundStyle(.red).padding(.horizontal, WFSpace.md)
                 } else if !catalog.loading && catalog.models.isEmpty {
-                    WFFormNote("请先在 Pi 配置模型并完成登录，再刷新列表。")
+                    WFFormNote("请先按欢迎清单的“AI 配置说明”配置本机 Pi，再刷新模型列表。")
                 }
             }
-            DisclosureGroup("高级选项", isExpanded: $advanced) {
+            DisclosureGroup("Pi 高级选项", isExpanded: $advanced) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Pi 程序")
+                    Text("本机 Pi 程序")
                     HStack {
-                        TextField("Pi 可执行文件路径", text: $executableDraft).textFieldStyle(.roundedBorder)
+                        TextField("留空自动查找本机 Pi", text: $executableDraft).textFieldStyle(.roundedBorder)
                             .onSubmit { applyExecutable() }
                         Button("应用") { applyExecutable() }
-                            .disabled(executableDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || executableDraft == store.configuration.executable)
+                            .disabled(executableDraft == store.configuration.executable)
                     }
                     Text("音频扩展")
                     TextField("留空使用内置转写通道", text: $store.configuration.audioExtension).textFieldStyle(.roundedBorder)
-                    Text("模型与登录信息在 Pi 中管理。")
+                    Text("Pi 和 Node.js 使用本机安装；模型列表读取本机 Pi 配置。安装命令与模型文件示例见欢迎清单中的「AI 配置说明」。")
                         .foregroundStyle(WFColors.secondaryText)
                 }.padding(.top, 10).disabled(speechBusy)
             }.font(WFType.body).padding(.horizontal, WFSpace.md)
         }
+        .coordinateSpace(name: "ai-model-settings")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai-model-settings")
         .task(id: store.configuration.executable + "#\(refresh)") { await catalog.refresh(executable: store.configuration.executable) }
+        .onChange(of: models.engine) { _, value in textEngine = value }
     }
 
     private func modelRow(speech: Bool) -> some View {
-        let title = speech ? "语音转写" : "文字处理"
+        let title = speech ? "语音转写" : "文字模型"
+        let modelTitle = speech ? "语音转写模型" : "Pi 文字模型"
         let saved = speech ? store.configuration.resolvedTranscriptionModel : store.configuration.resolvedMinutesModel
         let current = catalog.model(for: saved)
         let customAudio = !store.configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -66,7 +95,7 @@ struct SettingsAIModelsView: View {
         let matches = available.filter { search.wrappedValue.isEmpty || ($0.menuTitle + " " + $0.modelID).localizedStandardContains(search.wrappedValue) }
         return VStack(alignment: .leading, spacing: 2) {
             WFFormRow(title, showsDivider: speech) {
-                BusinessMenu(width: 360, title: title + "模型", search: available.count > 8 ? search : nil) {
+                BusinessMenu(width: 360, title: modelTitle, search: available.count > 8 ? search : nil) {
                     if !speech {
                         BusinessMenuOption("跟随 Pi 默认模型", selected: saved.isEmpty) { store.configuration.minutesModel = "" }
                         if !matches.isEmpty { Divider() }
@@ -85,7 +114,7 @@ struct SettingsAIModelsView: View {
                         Image(systemName: "chevron.down").font(.system(size: 10))
                     }.frame(maxWidth: 310, alignment: .trailing).contentShape(Rectangle())
                 }
-                .accessibilityLabel(title + "模型")
+                .accessibilityLabel(modelTitle)
                 .help(current?.menuTitle ?? title + "模型")
                 .disabled(catalog.loading || (speech && (speechBusy || available.isEmpty)))
             }
@@ -97,7 +126,7 @@ struct SettingsAIModelsView: View {
 
     private func applyExecutable() {
         let path = executableDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !speechBusy, !path.isEmpty else { return }
+        guard !speechBusy else { return }
         store.configuration.executable = path
     }
 }

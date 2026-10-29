@@ -2,6 +2,7 @@
 """Build and update the local daily app; task data is never modified here."""
 
 import argparse
+import importlib.util
 import os
 from pathlib import Path
 import plistlib
@@ -18,6 +19,7 @@ PROJECT = Path(__file__).resolve().parents[1] / "WorkFollow.xcodeproj"
 DESTINATION = Path("/Applications/WorkFollow.app")
 UPDATES = Path.home() / "Library/Application Support/WorkFollowNativeUpdates"
 LOG = Path.home() / "Library/Logs/WorkFollowNativeUpdates/build.log"
+AI_BUNDLE_SCRIPT = Path(__file__).with_name("bundle-ai-backend.py")
 
 
 class AppError(Exception):
@@ -66,6 +68,16 @@ def validate(app):
         app / "Contents/MacOS" / executable, os.X_OK
     ):
         raise AppError("应用可执行文件不存在。")
+    if value.get("WorkFollowAIBackendProtocol"):
+        spec = importlib.util.spec_from_file_location("ai_bundle", AI_BUNDLE_SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        try:
+            module.validate_layout(app)
+            if value.get("WorkFollowAppleSiliconOnly"):
+                module.validate_arm64_only(app)
+        except (OSError, ValueError, RuntimeError) as error:
+            raise AppError(str(error)) from error
     plugins = app / "Contents/PlugIns"
     if plugins.exists():
         for plugin in plugins.iterdir():
@@ -175,11 +187,13 @@ def build(output, build_number, identity):
         require_quit(output)
     LOG.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="workfollow-release-") as folder, LOG.open("w") as log:
+        run_logged([sys.executable, str(AI_BUNDLE_SCRIPT), "prepare"], log)
         derived = Path(folder) / "DerivedData"
         command = ["/usr/bin/xcodebuild", "-project", str(PROJECT), "-scheme", "WorkFollow",
                    "-configuration", "Release", "-destination", "platform=macOS",
                    "-derivedDataPath", str(derived), f"CODE_SIGNING_ALLOWED={'NO' if identity == '-' else 'YES'}",
                    "ENABLE_DEBUG_DYLIB=NO", f"CURRENT_PROJECT_VERSION={build_number}",
+                   "ARCHS=arm64", "ONLY_ACTIVE_ARCH=YES",
                    "WF_ACCEPTANCE_STORAGE_ROOT="]
         if identity != "-":
             # Xcode uses the configured team and profiles to authorize App Groups.
@@ -189,8 +203,21 @@ def build(output, build_number, identity):
         command.append("build")
         run_logged(command, log)
         package = derived / "Build/Products/Release/WorkFollow.app"
+        # Xcode's resource phase embeds the current sources and prepared runtimes.
+        # Sign every nested native library before sealing the containing App.
+        spec = importlib.util.spec_from_file_location("ai_bundle", AI_BUNDLE_SCRIPT)
+        ai_bundle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ai_bundle)
+        if not (package / "Contents/Resources/AIBackend/runtime.json").exists():
+            raise AppError("AI 后端未打包，构建已停止。")
+        ai_bundle.sign(package, identity, log)
         plist = package / "Contents/Info.plist"
         value = info(package)
+        value["WorkFollowAIBackendProtocol"] = 1
+        value["WorkFollowAIModelConfiguration"] = 1
+        value["WorkFollowAppleSiliconOnly"] = True
+        value["WorkFollowExternalNode"] = True
+        value["WorkFollowExternalPi"] = True
         for key in list(value):
             if key.startswith("WorkFollowAcceptance"):
                 del value[key]

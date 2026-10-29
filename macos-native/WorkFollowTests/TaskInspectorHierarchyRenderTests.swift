@@ -138,13 +138,15 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
 
     private func assertFooter(_ frames: [InspectorRenderAnchor: CGRect]) throws {
         let list = try XCTUnwrap(frames[.footerList])
-        let formatting = try XCTUnwrap(frames[.footerFormatting])
         let more = try XCTUnwrap(frames[.footerMore])
         XCTAssertEqual(list.minX, TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
         XCTAssertEqual(more.maxX, 880 - TaskInspectorMetrics.horizontalPadding, accuracy: 0.5)
-        XCTAssertLessThan(list.maxX, formatting.minX)
-        XCTAssertLessThan(formatting.maxX, more.minX)
+        XCTAssertLessThan(list.maxX, more.minX)
         XCTAssertEqual(list.midY, more.midY, accuracy: 0.5)
+        // 格式工具条改为正文上方的常驻行，不再占底栏。
+        let toolbar = try XCTUnwrap(frames[.formattingToolbar])
+        let title = try XCTUnwrap(frames[.title])
+        XCTAssertLessThan(toolbar.maxY, title.minY, "格式工具条应在正文上方")
     }
 
     private func render(_ workspace: TaskWorkspaceModel, name: String) throws -> [InspectorRenderAnchor: CGRect] {

@@ -53,7 +53,7 @@ struct TaskTagsSectionView: View {
                         Image(systemName: "plus").font(.system(size: 12)).frame(width: 20, height: 20)
                     }
                     .foregroundStyle(WFColors.secondaryText)
-                    .help("新建标签").accessibilityLabel("新建标签")
+                    .hoverTip("新建标签").accessibilityLabel("新建标签")
                 }
                 .fixedSize()
             }
@@ -92,7 +92,7 @@ struct TaskTagsSectionView: View {
                 .contentShape(Rectangle())
         }
         .fixedSize()
-        .help("标签显示")
+        .hoverTip("标签显示")
         .accessibilityLabel("标签显示")
     }
 
@@ -106,6 +106,7 @@ struct TaskTagsSectionView: View {
                     Image(systemName: collapsed.contains(tag.id) ? "chevron.right" : "chevron.down")
                         .font(.system(size: 9)).frame(width: 12, height: NavigationMetrics.rowHeight)
                 }
+                .hoverTip(collapsed.contains(tag.id) ? "展开" : "收起")
                 .accessibilityLabel((collapsed.contains(tag.id) ? "展开" : "收起") + tag.name)
             }
             Button {

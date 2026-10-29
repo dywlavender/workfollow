@@ -17,8 +17,8 @@ final class WelcomeGuideMediaTests: XCTestCase {
         let actions = Set(WelcomeGuide.items.map(\.action))
         XCTAssertEqual(actions.count, WelcomeGuide.items.count,
                        "每条引导都需要独立动作，否则会共用同一张演示")
-        // 接入说明提供实际可复制的文本和命令，其余功能引导保留演示。
-        for action in actions where action != .agentAccess {
+        // 配置说明提供可复制的文本和命令，其余功能引导保留演示。
+        for action in actions where action != .agentAccess && action != .aiConfiguration {
             let url = try XCTUnwrap(WelcomeGuide.mediaURL(for: action),
                                     "Missing " + WelcomeGuide.mediaResourceName(for: action) + ".gif")
             let source = try XCTUnwrap(CGImageSourceCreateWithURL(url as CFURL, nil))
@@ -79,6 +79,37 @@ final class WelcomeGuideMediaTests: XCTestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(0.9))
         let late = try fixture.snapshot(image)
         XCTAssertNotEqual(early, late, "进入引导任务后 GIF 应自动播放")
+    }
+
+    /// 同一个详情栏里切换引导任务：NSImageView 会被复用，演示图也必须跟着换。
+    func testSwitchingGuideTaskSwapsThePlayingDemo() throws {
+        let fixture = InspectorFixture()
+        defer { fixture.close() }
+        let workspace = fixture.environment.taskWorkspace
+        workspace.installWelcomeGuide()
+        fixture.environment.navigation.destination = .allTasks
+        workspace.activeList = WelcomeGuide.listName
+        fixture.settle(0.4)
+
+        let quickAdd = try XCTUnwrap(workspace.allTasks.first {
+            $0.guideAction == WelcomeGuide.Action.quickAdd.rawValue
+        })
+        let schedule = try XCTUnwrap(workspace.allTasks.first {
+            $0.guideAction == WelcomeGuide.Action.schedule.rawValue
+        })
+
+        workspace.select(quickAdd.id)
+        fixture.settle(0.8)
+        let imageView = try XCTUnwrap(fixture.animatingImage())
+        let quickAddImage = try XCTUnwrap(imageView.image)
+
+        workspace.select(schedule.id)
+        fixture.settle(0.8)
+        let switchedView = try XCTUnwrap(fixture.animatingImage())
+        XCTAssertTrue(imageView === switchedView, "同一详情栏应复用同一个演示视图")
+        let scheduleImage = try XCTUnwrap(switchedView.image)
+        XCTAssertFalse(quickAddImage === scheduleImage, "切换引导任务后演示图应换成新任务的 GIF")
+        XCTAssertTrue(switchedView.animates, "新 GIF 仍应自动播放")
     }
 
     func testOrdinaryTaskHasNoDemoCard() throws {

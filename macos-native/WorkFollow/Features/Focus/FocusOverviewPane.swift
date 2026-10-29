@@ -56,7 +56,7 @@ struct FocusOverviewPane: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.text2)
-                .help("补记专注")
+                .hoverTip("补记专注")
                 .accessibilityIdentifier("focus-add-record")
             }
             .padding(.top, FocusLayoutMetrics.recordHeaderTop)
@@ -203,7 +203,7 @@ struct FocusOverviewPane: View {
                         .background(theme.canvas.opacity(0.94), in: RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
-                .help("删除记录")
+                .hoverTip("删除记录")
                 .transition(.opacity)
             }
         }

@@ -71,7 +71,7 @@ private struct FeedbackToastView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(WFColors.secondaryText)
-                .help(event.actionTitle ?? "撤销")
+                .hoverTip(event.actionTitle ?? "撤销")
                 .accessibilityLabel(event.actionTitle ?? "撤销")
             }
         }

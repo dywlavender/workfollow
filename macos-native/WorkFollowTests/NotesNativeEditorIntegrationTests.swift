@@ -40,11 +40,6 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         return view.subviews.lazy.compactMap { self.editor(in: $0) }.first
     }
 
-    private func formattingToggle(in view: NSView) -> NSButton? {
-        if let button = view as? NSButton, button.title == "A" { return button }
-        return view.subviews.lazy.compactMap { self.formattingToggle(in: $0) }.first
-    }
-
     func testNoteUsesTaskEditorAndRealFormattingControls() throws {
         let environment = fixture()
         let notes = environment.notesWorkspace
@@ -62,9 +57,8 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         XCTAssertEqual(editor.font?.pointSize, DocumentEditorPresentationMetrics.bodyFontSize)
         XCTAssertTrue(editor.usesHostScrollView)
         editor.setSelectedRange(NSRange(location: 0, length: 2))
-        let toggle = try XCTUnwrap(formattingToggle(in: host))
-        XCTAssertTrue(toggle.sendAction(toggle.action, to: toggle.target))
-        try InspectorPanelTestSupport.waitUntil("Formatting toolbar did not appear") {
+        // 格式工具条常驻在正文上方，不再依赖底栏 A 开关。
+        try InspectorPanelTestSupport.waitUntil("Formatting toolbar did not render") {
             toolbarFrames["format.bold"] != nil && toolbarBounds.width > 0
         }
         let bold = try XCTUnwrap(toolbarFrames["format.bold"])

@@ -42,7 +42,7 @@ struct AppKitMonthGridView: View {
                             }
                             .frame(width: 18, height: 22)
                             .accessibilityLabel("回到今天")
-                            .help("回到今天")
+                            .hoverTip("回到今天")
                             .scheduleRenderAnchor(.option("回到今天"))
                         }
                         navigation("下个月", delta: 1)
@@ -65,7 +65,7 @@ struct AppKitMonthGridView: View {
         } label: { Color.clear.contentShape(Rectangle()) }
             .frame(width: 18, height: 22)
             .accessibilityLabel(title)
-            .help(title)
+            .hoverTip(title)
             .scheduleRenderAnchor(.option(title))
     }
 

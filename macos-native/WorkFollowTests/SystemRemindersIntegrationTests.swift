@@ -26,10 +26,51 @@ final class SystemRemindersIntegrationTests: XCTestCase {
     }
     private func attach(_ value: RemindersSyncCoordinator, _ workspace: TaskWorkspaceModel) {
         value.applyExternal = { reference, fields, expected in
-            guard let occurrence = CalendarTaskReference.resolve(reference, tasks: workspace.allTasks, calendar: self.calendar),
-                  ReminderTaskMapping.fields(occurrence.task, calendar: self.calendar) == expected else { return false }
+            guard let occurrence = CalendarTaskReference.resolve(reference, tasks: workspace.allTasks, calendar: self.calendar) else { return false }
+            var current = ReminderTaskMapping.fields(occurrence.task, calendar: self.calendar)
+            if workspace.mutedListNames.contains(occurrence.task.list.name) { current.alarms = [] }
+            guard current == expected else { return false }
             return workspace.applyRemindersEdit(occurrence, fields: fields).taskID != nil
         }
+    }
+
+    func testListMuteSuppressesEveryOccurrenceAndKeepsPhoneEditsAndSavedReminders() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        var source = task(); source.list = TaskList(name: "工作"); source.recurrence = .weekly
+        source.series = TaskSeries(task: source, calendar: calendar, now: now)
+        source.occurrenceKey = source.series?.initialKey
+        let workspace = TaskWorkspaceModel(clock: { self.now }, calendar: calendar,
+            seedDemoData: false, initialTasks: [source], initialLists: ["工作"])
+        let client = FakeSystemRemindersClient(), value = coordinator(folder, client)
+        attach(value, workspace)
+        func syncList() async {
+            value.requestSync(tasks: workspace.tasksInActiveLists, activeLists: workspace.availableListNames,
+                              mutedLists: workspace.mutedListNames)
+            await value.waitForSync()
+        }
+        await syncList()
+        XCTAssertGreaterThan(client.values.count, 1, "包含未来周期实例")
+        XCTAssertTrue(client.values.values.allSatisfy { !$0.fields.alarms.isEmpty })
+        let reference = ReminderTaskMapping.reference(source, calendar: calendar)
+        let id = try XCTUnwrap(value.store.snapshot.bindings.first { $0.id == reference.id }?.reminderID)
+        let originalIDs = Set(client.values.keys)
+        client.values[id]!.fields.title = "手机修改的周计划"
+        client.values[id]!.fields.due = source.schedule.dueAt!.addingTimeInterval(3600)
+        var draft = TaskListEditingDraft(meta: workspace.listMeta(for: "工作"))
+        draft.remindersEnabled = false
+        XCTAssertTrue(workspace.saveListDetails(draft, replacing: "工作"))
+        await syncList()
+        XCTAssertNil(value.message); XCTAssertTrue(value.conflicts.isEmpty)
+        XCTAssertTrue(client.values.values.allSatisfy { $0.fields.alarms.isEmpty })
+        XCTAssertEqual(workspace.task(for: source.id)?.title, "手机修改的周计划")
+        XCTAssertEqual(workspace.task(for: source.id)?.reminderOffsets, source.reminderOffsets)
+        draft.remindersEnabled = true
+        XCTAssertTrue(workspace.saveListDetails(draft, replacing: "工作"))
+        await syncList()
+        XCTAssertEqual(Set(client.values.keys), originalIDs)
+        XCTAssertFalse(try XCTUnwrap(client.values[id]).fields.alarms.isEmpty)
+        XCTAssertEqual(client.values[id]?.fields.alarms,
+                       ReminderTaskMapping.fields(try XCTUnwrap(workspace.task(for: source.id)), calendar: calendar).alarms)
     }
 
     func testConnectCreatesOneDedicatedListAndAutomaticallyIncludesNewLists() async {

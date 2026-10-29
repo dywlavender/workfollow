@@ -92,6 +92,12 @@ struct NativeTaskOutline: NSViewRepresentable {
         scroll.autohidesScrollers = true
         scroll.scrollerStyle = .overlay
         CompactScrollStyle.apply(to: scroll)
+        // Legacy tiling reserves the 12pt gutter even when content fits;
+        // otherwise AppKit widens row cells and the hover background drifts
+        // between Today, Tomorrow and other lists. The custom scroller still
+        // draws only a slim knob and no track.
+        scroll.scrollerStyle = .legacy
+        scroll.autohidesScrollers = false
         scroll.wantsLayer = true
 
         let outline = OutlineView()
@@ -191,8 +197,10 @@ struct NativeTaskOutline: NSViewRepresentable {
             host.sizingOptions = [.intrinsicContentSize]
             addSubview(host)
             NSLayoutConstraint.activate([
-                host.leadingAnchor.constraint(equalTo: leadingAnchor, constant: WFSpace.md),
-                host.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -WFSpace.md),
+                host.leadingAnchor.constraint(equalTo: leadingAnchor,
+                                              constant: TaskListMetrics.outlineLeadingInset),
+                host.trailingAnchor.constraint(equalTo: trailingAnchor,
+                                               constant: -TaskListMetrics.outlineTrailingInset),
                 host.topAnchor.constraint(equalTo: topAnchor),
                 host.bottomAnchor.constraint(equalTo: bottomAnchor)
             ])

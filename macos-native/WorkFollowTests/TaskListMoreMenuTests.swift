@@ -134,13 +134,14 @@ final class TaskListMoreMenuTests: XCTestCase {
         }
         XCTAssertTrue(opened, "页头标题右键应打开清单操作菜单")
         _ = try InspectorPanelTestSupport.panel(title: "操作菜单", below: window)
-        try sendKey(125, to: window)
+        for _ in 0..<5 { try sendKey(125, to: window) }
         try sendKey(36, to: window)
         let sheet = try attachedSheet(of: window)
         InspectorPanelTestSupport.settle(sheet)
-        XCTAssertGreaterThan(sheet.contentView?.bounds.width ?? 0, 100,
-                             "第一项清单动态应打开清单动态 sheet")
+        XCTAssertEqual(sheet.contentView?.bounds.width ?? 0, PopupMetrics.activitySheetWidth, accuracy: 1)
+        XCTAssertEqual(sheet.contentView?.bounds.height ?? 0, 420, accuracy: 1)
         try InspectorPanelTestSupport.sendEscape(to: sheet)
+        try InspectorPanelTestSupport.waitUntil("Esc 应关闭清单动态") { window.attachedSheet == nil }
     }
 
     func testViewModeIconsExposeAllModesAndSwitchSelection() throws {

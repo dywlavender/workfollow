@@ -13,6 +13,7 @@ struct TaskActivityPanel: View {
                 Spacer()
                 Button(action: onClose) { Image(systemName: "xmark") }
                     .buttonStyle(.plain)
+                    .hoverTip("关闭任务动态")
                     .accessibilityLabel("关闭任务动态")
             }
             .padding(16)

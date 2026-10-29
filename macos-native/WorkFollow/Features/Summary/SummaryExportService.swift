@@ -5,14 +5,6 @@ import UniformTypeIdentifiers
 enum SummaryExportFormat: String, CaseIterable, Hashable {
     case plainText, markdown, image, pdf
 
-    var menuTitle: String {
-        switch self {
-        case .plainText: "文本 (.txt)"
-        case .markdown: "Markdown (.md)"
-        case .image: "图片 (.png)"
-        case .pdf: "PDF (.pdf)"
-        }
-    }
     var fileExtension: String {
         switch self {
         case .plainText: "txt"
@@ -55,6 +47,11 @@ enum SummaryExportError: LocalizedError, Equatable {
 /// 文本/Markdown 保留文档块结构；图片与 PDF 用固定的浅色版式渲染，
 /// 不依赖当前窗口主题，导出的文件可以直接分享。
 enum SummaryExportService {
+    /// 文件名与邮件主题共用：`摘要 (10月19日-10月25日)`，与滴答一致。
+    static func baseName(for range: SummaryDateRange, calendar: Calendar) -> String {
+        "摘要 (" + range.title(calendar: calendar) + ")"
+    }
+
     @MainActor
     static func data(for document: NativeDocument, format: SummaryExportFormat) throws -> Data {
         switch format {
@@ -155,6 +152,8 @@ enum SummaryExportService {
             if !run.text.isEmpty { return run.text }
             if let file = run.attachment { return "📎 " + file.name }
             if let diagram = run.diagram { return "流程图：" + diagram.title }
+            if let table = run.table { return "表格（\(table.rowCount)×\(table.columnCount)）" }
+            if let formula = run.formula { return formula.latex }
             return ""
         }.joined()
     }
@@ -165,6 +164,12 @@ enum SummaryExportService {
         }
         if let diagram = run.diagram {
             return "[流程图：" + escape(diagram.title, linkLabel: true) + "]"
+        }
+        if let table = run.table {
+            return "[表格：\(table.rowCount)×\(table.columnCount)]"
+        }
+        if let formula = run.formula {
+            return "$" + escape(formula.latex, linkLabel: false) + "$"
         }
         guard !run.text.isEmpty else { return "" }
         var text: String
@@ -272,7 +277,7 @@ enum SummaryExportService {
     }
 
     @MainActor
-    static func attributedText(_ document: NativeDocument) -> NSAttributedString {
+    static func attributedText(_ document: NativeDocument, inlineSymbols: Bool = false) -> NSAttributedString {
         let result = NSMutableAttributedString()
         var ordinal = 1
         var previousWasOrdered = false
@@ -288,11 +293,12 @@ enum SummaryExportService {
                 previousWasOrdered = false
                 number = 1
             }
-            append(block, ordinal: number, to: result)
+            append(block, ordinal: number, inlineSymbols: inlineSymbols, to: result)
             if index < document.blocks.count - 1 {
                 let style = paragraphStyle(for: block)
                 result.append(NSAttributedString(string: "\n",
-                    attributes: attributes(for: block.kind, marks: [], style: style)))
+                    attributes: attributes(for: block.kind,
+                        marks: block.runs.contains(where: { $0.marks.contains(.caption) }) ? [.caption, .muted] : [], style: style)))
             }
         }
         return result
@@ -300,7 +306,7 @@ enum SummaryExportService {
 
     @MainActor
     private static func renderedCanvas(for document: NativeDocument) throws -> NSView {
-        let content = attributedText(document)
+        let content = attributedText(document, inlineSymbols: true)
         guard content.length > 0,
               !content.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw SummaryExportError.emptyDocument
@@ -331,7 +337,7 @@ enum SummaryExportService {
     }
 
     @MainActor
-    private static func append(_ block: DocumentBlock, ordinal: Int, to result: NSMutableAttributedString) {
+    private static func append(_ block: DocumentBlock, ordinal: Int, inlineSymbols: Bool, to result: NSMutableAttributedString) {
         let style = paragraphStyle(for: block)
         func add(_ text: String, marks: Set<DocumentMark> = []) {
             guard !text.isEmpty else { return }
@@ -349,12 +355,27 @@ enum SummaryExportService {
         default: break
         }
         for run in block.runs {
+            if inlineSymbols, let symbol = run.marks.compactMap({ mark -> DocumentInlineSymbol? in
+                if case .symbol(let symbol) = mark { return symbol }; return nil
+            }).first, run.text == symbol.textFallback {
+                let attachment = NSTextAttachment()
+                var attrs = attributes(for: block.kind, marks: run.marks, style: style)
+                attachment.attachmentCell = DocumentInlineSymbolCell(symbol: symbol,
+                    tint: attrs[.foregroundColor] as? NSColor ?? secondaryTextColor)
+                attrs[.attachment] = attachment
+                result.append(NSAttributedString(string: "\u{FFFC}", attributes: attrs))
+                continue
+            }
             if !run.text.isEmpty {
                 add(run.text, marks: run.marks)
             } else if let file = run.attachment {
                 add("📎 " + file.name, marks: run.marks)
             } else if let diagram = run.diagram {
                 add("流程图：" + diagram.title, marks: run.marks)
+            } else if let table = run.table {
+                add("表格（\(table.rowCount)×\(table.columnCount)）", marks: run.marks)
+            } else if let formula = run.formula {
+                add(formula.latex, marks: run.marks)
             }
         }
     }
@@ -390,6 +411,12 @@ enum SummaryExportService {
             style.headIndent = indent
             style.paragraphSpacing = 5
         }
+        if block.runs.contains(where: { $0.marks.contains(.caption) }) {
+            style.firstLineHeadIndent = indent + 22
+            style.headIndent = style.firstLineHeadIndent
+            style.lineSpacing = 3
+            style.paragraphSpacing = 10
+        }
         return style
     }
 
@@ -397,6 +424,7 @@ enum SummaryExportService {
     private static func attributes(for kind: DocumentBlockKind, marks: Set<DocumentMark>,
                                    style: NSParagraphStyle) -> [NSAttributedString.Key: Any] {
         var font = baseFont(for: kind)
+        if marks.contains(.caption) { font = .systemFont(ofSize: 12) }
         if marks.contains(.code) {
             font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
         }
@@ -423,7 +451,10 @@ enum SummaryExportService {
             return false
         }) {
             color = accentColor
+        } else if marks.contains(.muted) {
+            color = secondaryTextColor
         }
+        if let ink = marks.documentInk, let light = NSAppearance(named: .aqua) { color = ink.resolved(in: light) }
         attrs[.foregroundColor] = color
         return attrs
     }

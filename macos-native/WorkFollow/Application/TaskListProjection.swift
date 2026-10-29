@@ -211,20 +211,23 @@ enum TaskListProjection {
     static func matches(in scope: TaskListScope, store: WorkspaceStore,
                         now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery()) -> [Task] {
         matches(in: scope, tasks: store.tasks, now: now, calendar: calendar, query: query,
-                archivedLists: store.archivedListNames, tags: store.tags)
+                archivedLists: store.archivedListNames, tags: store.tags, smartHiddenLists: store.smartHiddenListNames)
     }
 
     /// Value-input overload for feature projections that need the exact same
     /// scope/query membership rules without owning or mutating a WorkspaceStore.
     static func matches(in scope: TaskListScope, tasks: [Task],
                         now: Date, calendar: Calendar, query: TaskListQuery = TaskListQuery(),
-                        archivedLists: Set<String> = [], tags: [TaskTag] = []) -> [Task] {
+                        archivedLists: Set<String> = [], tags: [TaskTag] = [],
+                        smartHiddenLists: Set<String> = []) -> [Task] {
         let matchingTags = query.tag.map { TaskTagHierarchy(tags).names(includingDescendantsOf: $0) }
         return tasks.filter { task in
             guard task.deletedAt == nil && task.skippedAt == nil && !task.isConverted else { return false }
             // Notes live in the same store, but the task page is their other
             // projection. They only appear when explicitly included.
             guard !task.isNoteTask else { return false }
+            if scope == .today || scope == .tomorrow || scope == .nextSevenDays,
+               smartHiddenLists.contains(task.list.name) { return false }
             guard !archivedLists.contains(task.list.name)
                 || (scope == .allTasks && query.list == task.list.name) else { return false }
             guard query.matches(task, matchingTags: matchingTags) else { return false }
@@ -502,6 +505,9 @@ enum TaskListProjection {
 /// 11/12/13 三个无彩色**没动**：它们是「显式选色」才用得到的槽，
 /// 不在自动取色范围内（见 `chromaticSlotCount`）。
 enum WFListPalette {
+    static func argb(for name: String, meta: TaskListMeta?) -> UInt32 {
+        meta?.colorARGB ?? argb[colorIndex(for: name, explicit: meta?.colorIndex)]
+    }
     /// 槽 0…10 为提艳后的值，括号内是提艳前的原值。
     static let argb: [UInt32] = [
         0xFFFF4153, // red      (原 0xFFE35D6A)

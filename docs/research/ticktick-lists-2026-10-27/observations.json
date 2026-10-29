@@ -1,0 +1,648 @@
+{
+  "date": "2026-10-27",
+  "target": {
+    "path": "/Applications/TickTick.app",
+    "version": "8.0.80",
+    "build": "492"
+  },
+  "sources": {
+    "E1": {
+      "operation": "decode_interface_builder",
+      "selected_documents": 21,
+      "nodes": 1958,
+      "edges": 949,
+      "scope": "Only the 21 selected original compiled resources; runtime-created menus are outside this inventory."
+    },
+    "E2": {
+      "path": "/Applications/TickTick.app/Contents/Resources/zh-Hans.lproj/Localizable.strings",
+      "kind": "packaged localization; confirms wording and documented behavior, not execution"
+    },
+    "E3": {
+      "kind": "current accessibility observation via cua_repl",
+      "confirmed": [
+        "ordinary task list row",
+        "note list row",
+        "folder hierarchy",
+        "archived lists entry",
+        "list counts",
+        "current list task area"
+      ],
+      "not_confirmed": [
+        "ordinary-list context menu: right-click did not open it",
+        "header menus: automation did not open them"
+      ]
+    }
+  },
+  "resources": {
+    "TTFolderEditViewController.nib": {
+      "outlets": [
+        "cancelButton",
+        "emojiButton",
+        "nameBorderedView",
+        "nameInvalidationLabel",
+        "nameInvalidationLabelHeightLC",
+        "saveButton",
+        "titleBar",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "emojiButtonClicked:",
+        "saveButtonClicked:"
+      ],
+      "authored_text": [
+        "Cancel",
+        "Labelrwqe rqwe rwqerqwereqwrqwerqwer",
+        "OK",
+        "Hello World"
+      ]
+    },
+    "TTKanbanDisplaySettingsVC.nib": {
+      "outlets": [
+        "displayTitle",
+        "showCheckItemLabel",
+        "showCheckItemSwitch",
+        "showDateTypeLabel",
+        "showDateTypePopButton",
+        "showInputBoxLabel",
+        "showInputBoxSwitch",
+        "sizeLabel",
+        "sizePopButton",
+        "view"
+      ],
+      "actions": [
+        "showInputBoxButtonClicked:",
+        "showCheckItemButtonClicked:"
+      ],
+      "authored_text": [
+        "Show Input Box",
+        "Show Check Item",
+        "Display Settings",
+        "Show Date by",
+        "Task Time",
+        "Kanban Size",
+        "Large"
+      ]
+    },
+    "TTListActivitiesViewController.nib": {
+      "outlets": [
+        "closeButton",
+        "returnButton",
+        "returnButtonRightLC",
+        "titleLabel",
+        "topView",
+        "topViewTopConstraint",
+        "view"
+      ],
+      "actions": [
+        "closeButtonClicked:",
+        "returnButtonClicked:"
+      ],
+      "authored_text": [
+        "List activites"
+      ]
+    },
+    "TTListDisplaySettingsVC.nib": {
+      "outlets": [
+        "detailLayoutDescLabel",
+        "detailLayoutTitleLabel",
+        "detailPopupButton",
+        "detailPopupCheckButton",
+        "detailSidePickButton",
+        "detailSidePickCheckButton",
+        "showDateTypeLabel",
+        "showDateTypePopButton",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "detailPopupButtonClicked:",
+        "detailPopupButtonClicked:",
+        "detailSidePickButtonClicked:",
+        "detailSidePickButtonClicked:"
+      ],
+      "authored_text": [
+        "If the window is too narrow, the task details will appear according to your choice.",
+        "Task Detail Layout",
+        "Button",
+        "Show Date by",
+        "Task Time",
+        "Display Settings"
+      ]
+    },
+    "TTListSectionMenuCellView.nib": {
+      "outlets": [
+        "imageView",
+        "rightImageView",
+        "textField"
+      ],
+      "actions": [],
+      "authored_text": [
+        "Move ToMove ToMove ToMove ToMove To"
+      ]
+    },
+    "TTListSectionMenuViewController.nib": {
+      "outlets": [
+        "tableView",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [],
+      "authored_text": [
+        "Text Cell"
+      ]
+    },
+    "TTNewProjectEditViewController.nib": {
+      "outlets": [
+        "belongsButtonTopLC",
+        "belongsPopUpButton",
+        "cancelButton",
+        "colorLabel",
+        "colorPickerView",
+        "colorTopLC",
+        "emojiButton",
+        "groupHintLabel",
+        "groupPopUpButton",
+        "kindHintLabel",
+        "kindPopUpButton",
+        "nameBorderedView",
+        "nameInvalidationLabel",
+        "nameInvalidationLabelHeightLC",
+        "previewContainer",
+        "previewImageView",
+        "previewTitleLabel",
+        "previewWidthLC",
+        "reminderHintLabel",
+        "reminderPopUpButton",
+        "saveButton",
+        "showInSmartListHintLabel",
+        "showInSmartListPopUpButton",
+        "teamHintLabel",
+        "titleBar",
+        "titleLabel",
+        "view",
+        "viewModeHintLabel",
+        "viewModeKanbanButton",
+        "viewModeListButton",
+        "viewModeTimelineButton",
+        "viewModeTimelineProIcon",
+        "viewModeTopLC"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "emojiButtonClicked:",
+        "saveButtonClicked:"
+      ],
+      "authored_text": [
+        "Button",
+        "Cancel",
+        "Color",
+        "Label",
+        "Folder",
+        "Type",
+        "Project Title",
+        "Reminder",
+        "OK",
+        "Show in Smart List Show in Smart List",
+        "Space",
+        "Hello World",
+        "View Mode"
+      ]
+    },
+    "TTPopupMutiSectionPickerVC.nib": {
+      "outlets": [
+        "bottomView",
+        "bottomViewHeightLC",
+        "cancelButton",
+        "okButton",
+        "tableView",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [
+        "okClicked:",
+        "cancelButtonClicked:"
+      ],
+      "authored_text": [
+        "OK",
+        "Cancel",
+        "Text Cell"
+      ]
+    },
+    "TTProjectEditViewController.nib": {
+      "outlets": [
+        "belongsButtonTopLC",
+        "belongsPopUpButton",
+        "cancelButton",
+        "colorLabel",
+        "colorPickerView",
+        "colorTopLC",
+        "emojiButton",
+        "groupHintLabel",
+        "groupPopUpButton",
+        "hideSwitchButton",
+        "hideTooltipImageView",
+        "kindHintLabel",
+        "kindPopUpButton",
+        "muteSwitchButton",
+        "muteTooltipImageView",
+        "nameBorderedView",
+        "nameInvalidationLabel",
+        "nameInvalidationLabelHeightLC",
+        "previewContainer",
+        "previewImageView",
+        "previewTitleLabel",
+        "previewWidthLC",
+        "saveButton",
+        "teamChangeButton",
+        "teamHintLabel",
+        "teamNameLabel",
+        "titleBar",
+        "titleLabel",
+        "view",
+        "viewModeHintLabel",
+        "viewModeKanbanButton",
+        "viewModeListButton",
+        "viewModeTimelineButton",
+        "viewModeTimelineProIcon",
+        "viewModeTopLC"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "emojiButtonClicked:",
+        "hideSwitchButtonClicked:",
+        "muteSwitchButtonClicked:",
+        "saveButtonClicked:",
+        "teamChangeButtonClicked:"
+      ],
+      "authored_text": [
+        "Button",
+        "Cancel",
+        "Color",
+        "Label",
+        "Folder",
+        "Type",
+        "Project Title",
+        "OK",
+        "Switch to team space",
+        "Space",
+        "personal",
+        "Hello World",
+        "View Mode"
+      ]
+    },
+    "TTProjectListCellView.nib": {
+      "outlets": [
+        "colorView",
+        "colorViewTraillingLC",
+        "containerView",
+        "countLabel",
+        "countLabelTraillingLC",
+        "emojiIconLabel",
+        "exceedButton",
+        "exceedImageView",
+        "iconImageView",
+        "leadingLC",
+        "titleLabel",
+        "triangleIcon"
+      ],
+      "actions": [
+        "titleEndEditing:",
+        "exceedButtonClicked:"
+      ],
+      "authored_text": [
+        "😀",
+        "Very long, very long, very long, very long, very long, very long, very long, very long, very long, very long, very long, very long",
+        "528"
+      ]
+    },
+    "TTProjectListContainerViewController.nib": {
+      "outlets": [
+        "view"
+      ],
+      "actions": [],
+      "authored_text": []
+    },
+    "TTProjectListSmartListCell.nib": {
+      "outlets": [
+        "colorView",
+        "containerView",
+        "countLabel",
+        "iconImageView",
+        "titleLabel",
+        "warnningButton",
+        "warnningImageView"
+      ],
+      "actions": [
+        "warnningButtonClicked:"
+      ],
+      "authored_text": [
+        "Very long, very long, very long, very long, very long, very long, very long, very long, very long, very long, very long, very long",
+        "8"
+      ]
+    },
+    "TTProjectListTypeHeaderCell.nib": {
+      "outlets": [
+        "addButton",
+        "containerView",
+        "iconImageView",
+        "limitButton",
+        "moreButton",
+        "titleLabel",
+        "triangleIcon"
+      ],
+      "actions": [
+        "moreButtonClicked:",
+        "addButtonClicked:",
+        "limitButtonClicked:"
+      ],
+      "authored_text": [
+        "Project",
+        "Used: 8/9"
+      ]
+    },
+    "TTProjectListView.nib": {
+      "outlets": [
+        "outlineView",
+        "view"
+      ],
+      "actions": [],
+      "authored_text": [
+        "Text Cell"
+      ]
+    },
+    "TTProjectPinViewController.nib": {
+      "outlets": [
+        "collapseButton",
+        "collectionView",
+        "view",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [
+        "collapseButtonClicked:"
+      ],
+      "authored_text": []
+    },
+    "TTProjectSharingViewController.nib": {
+      "outlets": [
+        "applyPermissionButton",
+        "inputContainer",
+        "invitingPermissionButton",
+        "invitingTextFieldView",
+        "invitingTextFieldViewTailLC",
+        "memberListContainer",
+        "memberListTableView",
+        "membersContainer",
+        "membersContainerTopLC",
+        "noPermissionContainer",
+        "noPermissionLabel",
+        "notiPrivateContainer",
+        "notiPrivateDescLabel",
+        "notiPrivateHintLabel",
+        "notiPrivateLockIcon",
+        "notiSwitchesAddedButton",
+        "notiSwitchesAddedLabel",
+        "notiSwitchesCompletedButton",
+        "notiSwitchesCompletedLabel",
+        "notiSwitchesContainer",
+        "notiSwitchesDeletedButton",
+        "notiSwitchesDeletedLabel",
+        "notiSwitchesDescLabel",
+        "notificationsContainer",
+        "notificationsContainerTopLC",
+        "privateContainer",
+        "privateDescLabel",
+        "privateHintLabel",
+        "privateLockIcon",
+        "segmentContainer",
+        "segmentContainerTopLC",
+        "segmentedControl",
+        "selectContactsButton",
+        "sharingLinkContainer",
+        "sharingLinkContainerHeightLC",
+        "sharingLinkSwitch",
+        "sharingLinkSwitchLabel",
+        "sharingLinkTextFieldView",
+        "teamSharingLinkContainer",
+        "titleContainer",
+        "titleLabel",
+        "view",
+        "linkButtonsContainer",
+        "linkContainer",
+        "linkCopyButton",
+        "linkDescLabel",
+        "linkPermissionButton",
+        "linkSwitch",
+        "linkSwitchLabel",
+        "linkTextField"
+      ],
+      "actions": [
+        "applyToEditButtonClicked:",
+        "selectContactsButtonClicked:",
+        "invitingPermissionButtonClicked:",
+        "shareLinkButtonClicked:",
+        "switchValueChanged:",
+        "permissionButtonClicked:",
+        "copySharedLinkButtonClicked:",
+        "notifyOptionsButtonClicked:",
+        "notifyOptionsButtonClicked:",
+        "notifyOptionsButtonClicked:"
+      ],
+      "authored_text": [
+        "Button",
+        "Editable",
+        "Text Cell",
+        "Complete a task/Undo",
+        "This is your private list",
+        "This is your private listThis is your private listThis is your private listThis is your private list.",
+        "Enable Shareable Link",
+        "Label",
+        "Add a task",
+        "You will be notified if the following changes are made to tasks in this list.",
+        "Delete/Move a task"
+      ]
+    },
+    "TTProjectTransferViewController.nib": {
+      "outlets": [
+        "cancelButton",
+        "confirmButton",
+        "descLabel",
+        "memberPopupButton",
+        "titleContainer",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "cancelButtonClicked:",
+        "confirmButtonClicked:"
+      ],
+      "authored_text": [
+        "Button",
+        "You can transfer this list to other shared members. Once the transfer is confirmed, the other party will become the owner of this list and you will become an ordinary member of this list."
+      ]
+    },
+    "TTSortOptionPickerCell.nib": {
+      "outlets": [
+        "descLabel",
+        "iconImageView",
+        "titleLabel",
+        "triangleImageView"
+      ],
+      "actions": [],
+      "authored_text": [
+        "Group by",
+        "None"
+      ]
+    },
+    "TTSortOptionPickerViewController.nib": {
+      "outlets": [
+        "tableView",
+        "view"
+      ],
+      "actions": [],
+      "authored_text": [
+        "Text Cell"
+      ]
+    },
+    "TTTaskListViewController.nib": {
+      "outlets": [
+        "aiRecTaskButton",
+        "closeButton",
+        "closeButtonTailingLC",
+        "conditionBar",
+        "conditionBarHeightConstraint",
+        "emptyHolderView",
+        "emptyTrashButton",
+        "hamburgerButton",
+        "hamburgerButtonRightLC",
+        "inputContainer",
+        "inputContainerHeightLC",
+        "moreButton",
+        "outlineOffsetDivider",
+        "outlineView",
+        "projectNameEditBackgroundLeadingLC",
+        "projectNameEditBackgroundView",
+        "saveFilterButton",
+        "shareButton",
+        "sortButton",
+        "titleLabel",
+        "view",
+        "dateButton",
+        "listsButton",
+        "statusButton",
+        "tagsButton",
+        "dataSource",
+        "delegate"
+      ],
+      "actions": [
+        "aiRecTaskButtonClicked:",
+        "sortButtonClicked:",
+        "moreButtonClicked:",
+        "emptyTrashButtonClicked:",
+        "closeButtonClicked:",
+        "hamburgerButtonClicked:",
+        "dateButtonClicked:",
+        "listsButtonClicked:",
+        "tagButtonClicked:",
+        "statusButtonClicked:",
+        "shareButtonClicked:",
+        "saveFilterButtonClicked:"
+      ],
+      "authored_text": [
+        "All Dates",
+        "All Lists",
+        "All Tags",
+        "All Status",
+        "Save as filter",
+        "LIST TITLE",
+        "Text Cell"
+      ]
+    },
+    "TTTaskProjectMoverViewController.nib": {
+      "outlets": [
+        "dividerView",
+        "searchContainer",
+        "searchIconView",
+        "searchTextfield",
+        "tableView",
+        "tableViewTopLC",
+        "view"
+      ],
+      "actions": [],
+      "authored_text": [
+        "Text Cell"
+      ]
+    }
+  },
+  "localized_behavior": {
+    "task_list": "任务清单",
+    "note_list": "笔记清单",
+    "project_type_change_message": "修改清单类型后，此清单中已存在的任务将不会转换为笔记，但此后的新建内容将变为笔记。",
+    "Show in Smart List": "在智能清单显示",
+    "show_in_smart_list_hint": "在“今天”、“明天”、“最近7天”中显示",
+    "not_show_in_smart_list": "不在智能清单中显示",
+    "archive_list": "归档清单",
+    "archive_confirm_message": "归档后，该清单将放入文件夹“已归档的清单”中。清单中的任务或笔记将不在智能清单中显示，到期也不提醒。",
+    "unarchive_confirm_message": "取消归档后，该清单将从“已归档的清单”中移出。",
+    "cannot_drag_archived_list": "不能拖动已归档的清单",
+    "cannot_edit_archived_list": "抱歉，已归档清单中的内容不能被编辑。",
+    "CannotArchiveDefault": "默认清单无法归档",
+    "Duplicate List": "复制清单",
+    "duplicate_list_alert_message": "请确认复制范围",
+    "duplicate_list_alert_all_task_keep_status": "复制全部任务，保留已完成状态",
+    "duplicate_list_alert_all_task_loose_status": "复制全部任务，不保留已完成状态",
+    "duplicate_list_alert_only_uncomplete": "只复制未完成任务",
+    "Default_List": "默认清单",
+    "Add Folder": "添加文件夹",
+    "Edit Folder": "编辑文件夹",
+    "Ungroup Folder": "解散文件夹",
+    "Lists within this folder will be shown in the left sidebar separately": "解散后，清单将直接显示在侧边栏",
+    "Pin": "置顶",
+    "Unpin": "取消置顶",
+    "List View": "列表视图",
+    "Kanban View": "看板视图",
+    "Timeline View": "时间线视图",
+    "sort_by": "排序",
+    "sort_direction_title": "顺序",
+    "sort_rule_ascending_priority": "从低到高",
+    "sort_rule_descending_priority": "从高到低",
+    "sort_rule_ascending_time": "从旧到新",
+    "sort_rule_descending_time": "从新到旧",
+    "sort_rule_ascending_title": "升序",
+    "sort_rule_descending_title": "降序",
+    "Add Section": "添加分组",
+    "Add Section Above": "在上方添加分组",
+    "Add Section Below": "在下方添加分组",
+    "Add Section to the Left": "在左侧添加分组",
+    "Add Section to the Right": "在右侧添加分组",
+    "move_section": "移动分组",
+    "delete_only_section_and_move_%@": "仅删除分组，并将%@移动到...",
+    "dragging_not_supported_in_grouping_hint": "当前分组不支持拖动",
+    "dragging_not_supported_in_sorting_hint": "当前排序不支持拖动",
+    "show_date_by": "日期显示为",
+    "task_detail_layout": "任务详情样式",
+    "task_detail_layout_desc": "当窗口宽度不足时，任务详情将根据你的选择显示。",
+    "task_detail_layout_popup": "弹窗",
+    "task_detail_layout_side_peek": "侧边栏",
+    "List Activities": "清单动态",
+    "Share List": "共享清单",
+    "Read Only": "只读",
+    "Transfer List Owner": "转让清单",
+    "Transfer_list_%@": "转让清单“%@”？",
+    "You can choose to transfer the ownership of this list to a member. The member will then become the new owner while you will become a normal member.": "你可以将此清单转让给其他共享成员。确定转让后，对方将成为此清单的所有者，你将成为此清单的普通成员。",
+    "You will be notified if the following changes are made to tasks in this list.": "该共享清单内，任务发生以下变更时，你可以选择接收消息通知。",
+    "delete_list_%@": "删除清单“%@” ？",
+    "delete_all_tasks_in_list": "清单内的所有任务也将被删除。",
+    "delete_all_tasks_in_share_list": "清单中的所有任务将被删除，共享成员将无法继续使用此清单。",
+    "With %@ Premium, you can check list activities and stay updated with every action that members make.": "如果你是项目负责人，你可能需要了解项目内所有成员和所有事情的进展，清单动态正好能满足所需，升级到高级会员，你可以方便地查看谁完成了什么任务、谁创建了什么任务。"
+  },
+  "limitations": [
+    "Compiled controls and action connections do not prove successful execution or current account entitlement.",
+    "Native dispatch metadata had a record-budget limit and unresolved pointer fields; it was not used to assert the absence of any feature.",
+    "No list, task, reminder, sharing, ownership or archive state was changed."
+  ]
+}

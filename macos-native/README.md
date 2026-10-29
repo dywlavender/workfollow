@@ -31,6 +31,24 @@ python3 macos-native/scripts/local-app.py rollback
 
 安装流程验证：`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s macos-native/scripts/tests -p 'test_local_app.py'`。应用功能验证使用 `scripts/run-tests.sh` 指定相关测试类，避免为局部改动重复全量回归。
 
+## ZIP 安装包
+
+双击仓库根目录的 `打包安装包.command`，或运行：
+
+```sh
+python3 macos-native/scripts/package-release.py
+```
+
+默认从当前源码构建 Release，再输出 `../安装包/WorkFollow-版本-构建号-Mac.zip`，同版本重复打包会替换同名 ZIP。脚本会检查 Apple 芯片支持、签名及解压后的应用，保留小组件、CLI 和程序资源；不改动当前安装，也不打包个人数据或模型密钥。
+
+打包已有日用版可跳过构建：
+
+```sh
+python3 macos-native/scripts/package-release.py --app /Applications/WorkFollow.app
+```
+
+可用 `--output-dir` 指定输出目录，源码构建时也可用 `--build-number` 指定构建号。另一台 Mac 解压后，将 `WorkFollow.app` 拖到“应用程序”中打开；AI 引擎随应用安装，模型和登录信息使用该 Mac 自己的 Pi 配置。
+
 ## 开发运行
 
 用 Xcode 打开 `WorkFollow.xcodeproj`，选择 WorkFollow scheme / My Mac，Run。无需第三方依赖。
@@ -63,6 +81,8 @@ App 内附 `workfollowctl`，可查询、新建、修改待办与笔记，完成
 笔记更多菜单与会议纪要操作区提供“提取待办”，任务详情更多菜单提供“拆分子任务”。共用候选预览，勾选或改标题后一次创建，日期和优先级按需展开。结果保留来源，创建可一次撤销；沿用统一 AI 设置中的文字模型。当前真实生成服务复测尚未通过，交互及验证边界见 [AI 待办的简化交互](../docs/native-ai-task-actions-2026-10-26.md)。
 
 “设置 → AI 模型”分别选择语音转写、文字处理模型。列表自动从 Pi 查询，也可手动刷新；模型和认证在 Pi 中维护。会议、周报和待办 AI 的设置入口统一跳转到此页，详见 [统一模型设置](../docs/native-ai-model-settings-2026-10-26.md)。
+
+AI 调用统一经过 App 内置 Python 后端，随 App 启动和退出。Node 和 Pi 使用本机安装；欢迎清单的“AI 配置说明”提供安装命令及 Pi 模型文件示例。文字处理选择“直接调用”时，使用 App 内置 LangChain，仅支持 OpenAI 兼容和 OpenAI Responses，在页面填写模型 ID、API URL 和 Key；Key 保存在钥匙串。选择“Pi”及语音转写时，读取本机 Pi 的模型与认证配置，设置页刷新后选择模型。直接调用无需 Node/Pi。详见 [模型配置](../docs/native-direct-model-settings.md)与 [AI 后端](../docs/macos-bundled-ai-backend.md)。
 
 ## Apple 同步与 iPhone
 

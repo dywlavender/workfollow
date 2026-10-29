@@ -66,6 +66,7 @@ struct FocusPresetDetailPane: View {
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28)
             }.fixedSize().foregroundStyle(theme.text2)
+                .hoverTip("更多预设操作")
                 .accessibilityIdentifier("focus-preset-detail-menu")
         }.font(.system(size: 13)).frame(height: 28)
     }
@@ -118,10 +119,10 @@ struct FocusPresetDetailPane: View {
             }.frame(height: 29)
             HStack(spacing: 6) {
                 Button { movePeriod(-1) } label: { Image(systemName: "chevron.left").frame(width: 16, height: 18) }
-                    .buttonStyle(.plain).accessibilityIdentifier("focus-preset-period-previous")
+                    .buttonStyle(.plain).hoverTip("上一周期").accessibilityIdentifier("focus-preset-period-previous")
                 Text(periodLabel(statistics.periodInterval)).font(.system(size: 12))
                 Button { movePeriod(1) } label: { Image(systemName: "chevron.right").frame(width: 16, height: 18) }
-                    .buttonStyle(.plain).accessibilityIdentifier("focus-preset-period-next")
+                    .buttonStyle(.plain).hoverTip("下一周期").accessibilityIdentifier("focus-preset-period-next")
             }.foregroundStyle(theme.text2).frame(height: 20)
             FocusPresetChart(days: statistics.days, period: period,
                              targetSeconds: preset.stopwatch ? nil : preset.minutes * 60,

@@ -68,7 +68,7 @@ struct TemplateManagementView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(WFColors.secondaryText)
-            .help("删除模板")
+            .hoverTip("删除模板")
             .accessibilityLabel("删除模板：\(template.name)")
         }
         .padding(.vertical, 13)

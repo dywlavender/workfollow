@@ -41,7 +41,7 @@ enum PiModelCatalogError: LocalizedError {
         switch self {
         case .unavailable: "找不到 Pi，请在高级选项中检查程序路径。"
         case .timedOut: "读取 Pi 模型列表超时，请稍后刷新。"
-        case .invalidResponse: "Pi 未返回模型列表，请确认 Pi 已配置模型并完成登录后刷新。"
+        case .invalidResponse: "本机 Pi 未返回模型列表，请按新手引导配置 models.json 或完成登录后刷新。"
         }
     }
 }
@@ -49,53 +49,11 @@ enum PiModelCatalogError: LocalizedError {
 struct PiModelCatalogClient {
     var timeout: TimeInterval = 15
 
+    var backend: AIBackendBridge = .shared
     func fetch(executable: String) async throws -> [PiModelChoice] {
-        let control = PiProcessControl()
-        return try await withTaskCancellationHandler {
-            try _Concurrency.Task.checkCancellation()
-            return try await _Concurrency.Task.detached(priority: .utility) {
-                try run(executable: executable, control: control)
-            }.value
-        } onCancel: { control.cancel() }
-    }
-
-    private func run(executable: String, control: PiProcessControl) throws -> [PiModelChoice] {
-        guard FileManager.default.isExecutableFile(atPath: executable) else { throw PiModelCatalogError.unavailable }
-        let process = Process(), input = Pipe(), output = Pipe()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = ["--mode", "rpc", "--no-session", "--no-tools", "--no-extensions",
-            "--no-skills", "--no-prompt-templates", "--no-context-files", "--offline"]
-        var environment = ProcessInfo.processInfo.environment
-        environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (environment["PATH"] ?? "")
-        process.environment = environment
-        process.currentDirectoryURL = FileManager.default.temporaryDirectory
-        process.standardInput = input; process.standardOutput = output; process.standardError = FileHandle.nullDevice
-        try control.start(process)
-        let deadline = Date().addingTimeInterval(timeout)
-        let timer = DispatchWorkItem { control.cancel() }
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout, execute: timer)
-        defer {
-            timer.cancel()
-            try? input.fileHandleForWriting.close()
-            if process.isRunning { process.terminate() }
-            process.waitUntilExit()
-            try? output.fileHandleForReading.close()
-        }
-        let command = Data(#"{"id":"workfollow-models","type":"get_available_models"}"#.utf8) + Data([10])
-        try input.fileHandleForWriting.write(contentsOf: command)
-        var buffer = Data()
-        while true {
-            let bytes = output.fileHandleForReading.availableData
-            if bytes.isEmpty { break }
-            buffer.append(bytes)
-            while let newline = buffer.firstIndex(of: 10) {
-                let line = Data(buffer[..<newline]); buffer.removeSubrange(...newline)
-                if let models = try Self.models(from: line) { return models }
-            }
-        }
-        if Date() >= deadline { throw PiModelCatalogError.timedOut }
-        if control.isCancelled { throw CancellationError() }
-        throw PiModelCatalogError.invalidResponse
+        struct Response: Decodable { let models: [PiModelChoice] }
+        let value: Response = try await backend.call("models", params: ["piExecutable": executable], timeout: timeout)
+        return value.models
     }
 
     static func models(from line: Data) throws -> [PiModelChoice]? {

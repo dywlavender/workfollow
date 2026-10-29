@@ -43,6 +43,24 @@ final class UXWorkflowSurfaceTests: XCTestCase {
             XCTAssertNotNil(view.window, "Anchor is not attached to a window: " + identifier)
             return view
         }
+        func copySummaryText() throws -> String {
+            NSPasteboard.general.clearContents()
+            try click("summary.footer.复制")
+            _ = try waitForAction("summary.copy.plainText", timeout: 2)
+            try click("summary.copy.plainText")
+            settle()
+            return NSPasteboard.general.string(forType: .string) ?? ""
+        }
+        func waitForSummary(containing value: String, timeout: TimeInterval = 2) throws -> String {
+            let deadline = Date().addingTimeInterval(timeout)
+            var text = ""
+            repeat {
+                text = try copySummaryText()
+                if text.contains(value) { return text }
+                settle()
+            } while Date() < deadline
+            return text
+        }
         func settle() { InspectorPanelTestSupport.settle(window) }
         func close() {
             window.attachedSheet.map { window.endSheet($0) }
@@ -87,29 +105,28 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         XCTAssertEqual(environment.searchSession.selectedIndex, 17)
     }
 
-    func testSummaryPreviewAdoptionAndUndoThroughNativeButtons() throws {
+    func testSummaryRebuildsImmediatelyWhenTasksChange() throws {
         let fixture = Fixture(destination: .summary)
-        defer { fixture.close() }
+        defer {
+            fixture.close()
+            NSPasteboard.general.clearContents()
+        }
         let environment = fixture.environment
         let context = environment.weeklyPlanning
         fixture.settle()
-        let scope = context.scopeID(workspace: environment.taskWorkspace)
-        let original = try XCTUnwrap(environment.summaryStore.weeklyEntry(weekKey: context.weekKey, scopeID: scope)?.document)
-        let id = try XCTUnwrap(environment.taskWorkspace.createDraft(title: "摘要按钮验收成果", list: "工作",
+        XCTAssertFalse(try fixture.copySummaryText().contains("摘要实时验收成果"))
+
+        let id = try XCTUnwrap(environment.taskWorkspace.createDraft(title: "摘要实时验收成果", list: "工作",
             schedule: .init(dueAt: context.weekStart), priority: .none, tags: [], reminder: nil,
             repeatFrequency: .never, selectCreatedTask: false).taskID)
         _ = environment.taskWorkspace.complete(id)
         fixture.settle()
-        try fixture.click("summary.footer.更新摘要")
-        let sheet = try XCTUnwrap(fixture.window.attachedSheet)
-        try fixture.screenshot("summary-comparison", view: try XCTUnwrap(sheet.contentView))
-        try fixture.click("summary.preview.adopt")
-        fixture.settle()
-        let updated = try XCTUnwrap(environment.summaryStore.weeklyEntry(weekKey: context.weekKey, scopeID: scope)?.document)
-        XCTAssertTrue(updated.plainText.contains("摘要按钮验收成果"))
-        try fixture.click("summary.footer.撤销采用")
-        fixture.settle()
-        XCTAssertEqual(environment.summaryStore.weeklyEntry(weekKey: context.weekKey, scopeID: scope)?.document, original)
+
+        let copied = try fixture.waitForSummary(containing: "摘要实时验收成果")
+        XCTAssertTrue(copied.contains("摘要实时验收成果"))
+        XCTAssertTrue(copied.contains("已完成"))
+        XCTAssertTrue(copied.contains("• "))
+        try fixture.screenshot("summary-live-rebuild", view: fixture.window.contentView)
     }
 
     func testSummaryCopyMenuOpensAboveFooterAndCopiesPlainText() throws {
@@ -126,9 +143,7 @@ final class UXWorkflowSurfaceTests: XCTestCase {
             repeatFrequency: .never, selectCreatedTask: false).taskID)
         _ = environment.taskWorkspace.complete(id)
         fixture.settle()
-        try fixture.click("summary.footer.更新摘要")
-        try fixture.click("summary.preview.adopt")
-        fixture.settle()
+        _ = try fixture.waitForSummary(containing: "摘要复制验收成果")
 
         NSPasteboard.general.clearContents()
         try fixture.click("summary.footer.复制")
@@ -212,20 +227,15 @@ final class UXWorkflowSurfaceTests: XCTestCase {
 
         try InspectorPanelTestSupport.sendEscape(to: popup)
         fixture.settle()
-        try fixture.click("summary.options.preview")
-        fixture.settle()
-        try fixture.click("summary.preview.adopt")
-        fixture.settle()
+        let copied = try fixture.waitForSummary(containing: "<工作>")
+        XCTAssertTrue(copied.contains("<工作>"))
+        XCTAssertTrue(copied.contains("[10月21日]"),
+                      "完成时间样式改为日期+时间后仍按任务事实重建")
         try fixture.screenshot("summary-content-adopted", view: fixture.window.contentView)
 
-        let scope = context.scopeID(workspace: environment.taskWorkspace)
-        let entry = try XCTUnwrap(environment.summaryStore.weeklyEntry(weekKey: context.weekKey, scopeID: scope))
-        let applied = try XCTUnwrap(entry.options)
+        let applied = environment.summaryStore.options
         XCTAssertTrue(applied.content.contains(.list))
         XCTAssertEqual(applied.contentStyles.completedTime, .dateTime)
         XCTAssertEqual(applied.contentStyles.list, .listGroup)
-        XCTAssertTrue(entry.document.plainText.contains("（工作）"))
-        XCTAssertTrue(entry.document.plainText.contains("12:00]"),
-                      "完成时间样式改为日期+时间后，前缀应带具体时间")
     }
 }

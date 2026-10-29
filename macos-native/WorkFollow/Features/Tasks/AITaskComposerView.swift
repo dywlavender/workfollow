@@ -44,7 +44,10 @@ struct AITaskComposerView: View {
             var client = SummaryPiOptimizer()
             client.executable = environment.meetingStore.configuration.executable
             client.model = environment.meetingStore.configuration.resolvedMinutesModel
-            await session.generate(request: request) { try await client.generate(prompt: $0) }
+            await session.generate(request: request) { source in
+                client.textModel = try environment.aiModels.request()
+                return try await client.generateTasks(source)
+            }
         }
         .accessibilityIdentifier("ai-task-composer")
         .accessibilityElement(children: .contain)

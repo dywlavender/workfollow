@@ -125,7 +125,8 @@ extension AppEnvironment {
             navigate(to: .summary)
         case .commandPalette:
             commandPalettePresented = true
-        case .agentAccess:
+        case .agentAccess, .aiConfiguration:
+            if action == .aiConfiguration { settingsSection = .ai }
             openWelcomeGuide()
             if let task = taskWorkspace.allTasks.first(where: {
                 $0.guideAction == action.rawValue && $0.deletedAt == nil

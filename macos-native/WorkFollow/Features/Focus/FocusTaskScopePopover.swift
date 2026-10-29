@@ -48,7 +48,9 @@ struct FocusTaskScopePopover: View {
 
     private func scopeRow(_ scope: FocusTaskPickerScope) -> some View {
         let selected = scope == selectedScope
-        return Button { onSelect(scope) } label: {
+        return PopupMenuRow(action: { onSelect(scope) },
+                            minHeight: FocusTaskPickerMetrics.scopeRowHeightCompact,
+                            horizontalPadding: FocusTaskPickerMetrics.scopeHorizontalPadding) {
             HStack(spacing: 8) {
                 if case let .list(name) = scope {
                     Circle().fill(listColor(name))
@@ -72,11 +74,7 @@ struct FocusTaskScopePopover: View {
                         .foregroundStyle(theme.accent)
                 }
             }
-            .padding(.horizontal, FocusTaskPickerMetrics.scopeHorizontalPadding)
-            .frame(maxWidth: .infinity, minHeight: FocusTaskPickerMetrics.scopeRowHeightCompact)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("focus-task-scope-\(scope.id)")
     }
 }

@@ -36,6 +36,7 @@ final class AppEnvironment: ObservableObject {
     let weeklyPlanning: WeeklyPlanningContext
     let countdownStore: CountdownStore
     let meetingStore: MeetingStore
+    let aiModels: AIModelStore
     let filterStore: FilterStore
     /// 任务列表的排序/分组记忆（modules/view-preferences.json，独立于任务快照）。
     let viewPreferences: TaskViewPreferenceStore
@@ -128,7 +129,10 @@ final class AppEnvironment: ObservableObject {
         summaryStore = SummaryStore(clock: clock, directory: directory.appendingPathComponent("modules"))
         weeklyPlanning = WeeklyPlanningContext(clock: clock, calendar: calendar)
         countdownStore = CountdownStore(clock: clock)
-        meetingStore = MeetingStore()
+        let aiModels = AIModelStore(directory: directory.appendingPathComponent("modules"))
+        self.aiModels = aiModels
+        meetingStore = MeetingStore(directory: directory.appendingPathComponent("modules"),
+            ai: MeetingPiClient(textModel: { try aiModels.request() }))
         filterStore = FilterStore(clock: clock)
         viewPreferences = TaskViewPreferenceStore(directory: directory.appendingPathComponent("modules"))
         taskWorkspace.attachFilterStore(filterStore)
@@ -162,8 +166,10 @@ final class AppEnvironment: ObservableObject {
         systemReminders.onSyncFinished = { [weak self] in self?.updateReminderProvider() }
         systemReminders.applyExternal = { [weak self] reference, fields, expected in
             guard let self, !self.loadFailed, !self.storageNeedsReload, !self.storageReplacementPending,
-                  let occurrence = CalendarTaskReference.resolve(reference, tasks: self.taskWorkspace.tasksInActiveLists, calendar: calendar),
-                  ReminderTaskMapping.fields(occurrence.task, calendar: calendar) == expected else { return false }
+                  let occurrence = CalendarTaskReference.resolve(reference, tasks: self.taskWorkspace.tasksInActiveLists, calendar: calendar) else { return false }
+            var current = ReminderTaskMapping.fields(occurrence.task, calendar: calendar)
+            if self.taskWorkspace.mutedListNames.contains(occurrence.task.list.name) { current.alarms = [] }
+            guard current == expected else { return false }
             guard self.taskWorkspace.applyRemindersEdit(occurrence, fields: fields).taskID != nil else { return false }
             return await withCheckedContinuation { continuation in
                 self.persistence.flush { continuation.resume(returning: $0 == nil) }
@@ -239,13 +245,19 @@ final class AppEnvironment: ObservableObject {
             .sink { [weak self] _ in
                 guard let self, !self.loadFailed else { return }
                 self.updateReminderProvider()
-                self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
+                self.reminders.reconcile(self.taskWorkspace.tasksForLocalReminders)
             }.store(in: &subscriptions)
         taskWorkspace.listArchiveChanges.sink { [weak self] _ in
             guard let self, !self.loadFailed else { return }
-            self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
+            self.reminders.reconcile(self.taskWorkspace.tasksForLocalReminders)
             self.calendarNeedsSync = true
             DispatchQueue.main.async { [weak self] in self?.flushThenSyncReminders() }
+        }.store(in: &subscriptions)
+        taskWorkspace.listSettingsChanges.sink { [weak self] _ in
+            guard let self, !self.loadFailed else { return }
+            self.reminders.reconcile(self.taskWorkspace.tasksForLocalReminders)
+            self.calendarNeedsSync = true
+            self.flushThenSyncReminders()
         }.store(in: &subscriptions)
         taskWorkspace.taskChanges.sink { [weak self] changes in
             guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
@@ -275,11 +287,11 @@ final class AppEnvironment: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self, !self.loadFailed else { return }
-                self.reminders.reconcile(self.taskWorkspace.tasksInActiveLists)
+                self.reminders.reconcile(self.taskWorkspace.tasksForLocalReminders)
             }
             .store(in: &subscriptions)
         if !loadFailed {
-            reminders.reconcile(taskWorkspace.tasksInActiveLists)
+            reminders.reconcile(taskWorkspace.tasksForLocalReminders)
             syncRemindersNow()
             if let snapshot {
                 // Hydration runs before change listeners are installed. Persist
@@ -340,7 +352,8 @@ final class AppEnvironment: ObservableObject {
     private func syncRemindersNow() {
         guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
         systemReminders.requestSync(tasks: taskWorkspace.tasksInActiveLists,
-                                    activeLists: taskWorkspace.availableListNames)
+                                    activeLists: taskWorkspace.availableListNames,
+                                    mutedLists: taskWorkspace.mutedListNames)
     }
     func retryRemindersSync() {
         flushThenSyncReminders()
@@ -356,7 +369,7 @@ final class AppEnvironment: ObservableObject {
     }
     private func refreshSystemIntegrations() {
         guard !loadFailed, !storageNeedsReload, !storageReplacementPending else { return }
-        reminders.reconcile(taskWorkspace.tasksInActiveLists, force: true)
+        reminders.reconcile(taskWorkspace.tasksForLocalReminders, force: true)
         systemCalendar.refreshAccess(); flushThenSyncReminders()
     }
     @discardableResult

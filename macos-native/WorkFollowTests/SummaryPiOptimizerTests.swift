@@ -1,41 +1,9 @@
 import XCTest
 @testable import WorkFollow
 
-/// 摘要 AI 优化：底层直接调本机 `pi`。默认不跑（真实模型调用慢且要网络），
+/// 摘要 AI 优化通过内置后端。真实模型调用默认不跑，
 /// 需要时用 `SUMMARY_AI_INTEGRATION=1` 打开。
 final class SummaryPiOptimizerTests: XCTestCase {
-    func testWeeklyDraftUsesFixedStructureAndFactualConstraints() {
-        let prompt = SummaryPiOptimizer.prompt(text: "原任务事实", options: .weeklyReview)
-        for section in ["本周成果", "进展与调整", "本周复盘", "下周重点"] { XCTAssertTrue(prompt.contains(section)) }
-        XCTAssertTrue(prompt.contains("不编造"))
-        XCTAssertTrue(prompt.contains("子任务推进不能描述成整个父任务已完成"))
-        XCTAssertTrue(prompt.contains("原任务事实"))
-    }
-
-    func testPromptCarriesOptionsAndSource() {
-        var options = SummaryAIOptions()
-        options.length = .brief
-        options.style = .formal
-        options.profession = "产品经理"
-        options.hint = "不要用第一人称"
-        let prompt = SummaryPiOptimizer.prompt(text: "已完成：写周报", options: options)
-        XCTAssertTrue(prompt.contains("长度：简短"))
-        XCTAssertTrue(prompt.contains("语言风格：正式"))
-        XCTAssertTrue(prompt.contains("职业：产品经理"))
-        XCTAssertTrue(prompt.contains("额外要求：不要用第一人称"))
-        XCTAssertTrue(prompt.contains("已完成：写周报"))
-        XCTAssertTrue(prompt.contains("只输出改写后的正文"))
-    }
-
-    func testSummaryPromptPreservesGroupHeadingsInsteadOfAddingWeeklySections() {
-        let prompt = SummaryPiOptimizer.prompt(text: "已完成\n- 写周报", options: SummaryAIOptions())
-        XCTAssertTrue(prompt.contains("保留原文的日期范围"))
-        XCTAssertTrue(prompt.contains("不要新增或删除分组标题"))
-        XCTAssertTrue(prompt.contains("Markdown 标题与列表"))
-        XCTAssertFalse(prompt.contains("本周成果"))
-        XCTAssertFalse(prompt.contains("进展与调整"))
-    }
-
     func testMarkdownHeadingsKeepFlatSummaryStructure() {
         let title = "10月19日-10月25日"
         let response = """
@@ -55,7 +23,7 @@ final class SummaryPiOptimizerTests: XCTestCase {
         XCTAssertEqual(document.blocks.filter { $0.kind == .bullet }.count, 3)
     }
 
-    func testFormattedResponseKeepsOneDateTitleAndEditableReflection() {
+    func testFormattedResponseKeepsOneDateTitleAndSections() {
         let title = "10月19日-10月25日"
         let response = """
         10月19日-10月25日
@@ -71,7 +39,9 @@ final class SummaryPiOptimizerTests: XCTestCase {
         let document = WeeklyReportBuilder.aiDocument(text: response, title: title)
         XCTAssertEqual(document.blocks.first?.kind, .heading(1))
         XCTAssertEqual(document.blocks.filter { $0.plainText == title }.count, 1)
-        XCTAssertTrue(WeeklyReportBuilder.reflection(in: document).contains { $0.plainText == "下次评审前先核对接口清单。" })
+        XCTAssertEqual(document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText),
+                       ["本周成果", "进展与调整", "本周复盘", "下周重点"])
+        XCTAssertTrue(document.plainText.contains("下次评审前先核对接口清单。"))
     }
 
     func testOptimizerReportsUnavailableForMissingBinary() async {
@@ -80,12 +50,8 @@ final class SummaryPiOptimizerTests: XCTestCase {
         do {
             _ = try await optimizer.optimize(text: "任一文本", options: SummaryAIOptions())
             XCTFail("缺失 pi 时应抛错")
-        } catch let error as SummaryPiError {
-            guard case .unavailable = error else {
-                return XCTFail("期望 unavailable，实际 \(error)")
-            }
         } catch {
-            XCTFail("期望 SummaryPiError，实际 \(error)")
+            XCTAssertTrue(error.localizedDescription.contains("AI"))
         }
     }
 
@@ -115,7 +81,7 @@ final class SummaryPiOptimizerTests: XCTestCase {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let script = folder.appendingPathComponent("fake-pi")
-        try "#!/usr/bin/env python3\nprint('x' * 100000)\n".write(to: script, atomically: true, encoding: .utf8)
+        try "#!/usr/bin/env python3\nimport json\nprint(json.dumps({'type':'message_end','message':{'role':'assistant','content':[{'type':'text','text':'x'*100000}]}}),flush=True)\nprint(json.dumps({'type':'agent_settled'}),flush=True)\n".write(to: script, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         var optimizer = SummaryPiOptimizer(); optimizer.executable = script.path; optimizer.timeout = 3
         let text = try await optimizer.optimize(text: "任务事实", options: .weeklyReview)
@@ -127,9 +93,6 @@ final class SummaryPiOptimizerTests: XCTestCase {
             throw XCTSkip("Enable SUMMARY_AI_INTEGRATION=1 to call the real model")
         }
         let optimizer = SummaryPiOptimizer()
-        guard FileManager.default.isExecutableFile(atPath: optimizer.executable) else {
-            throw XCTSkip("pi not installed")
-        }
         for isWeekly in [true, false] {
             var options = SummaryAIOptions.weeklyReview
             options.isWeeklyPeriod = isWeekly
@@ -154,7 +117,7 @@ final class SummaryPiOptimizerTests: XCTestCase {
             XCTAssertEqual(document.blocks.filter { $0.plainText == title }.count, 1)
             let headings = document.blocks.filter { $0.kind == .heading(2) }.map(\.plainText)
             XCTAssertEqual(headings, [results, "进展与调整", reflection, next])
-            XCTAssertFalse(WeeklyReportBuilder.reflection(in: document).isEmpty)
+            XCTAssertTrue(document.plainText.contains("下次评审前先核对接口清单。"))
             print("AI 真实调用验收（虚构任务，\(title)）：\n\(result)")
         }
     }

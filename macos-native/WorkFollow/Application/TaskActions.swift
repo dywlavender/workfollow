@@ -1027,7 +1027,14 @@ final class TaskActions {
             result = edit(id) { value in
                 value.title = fields.title.trimmingCharacters(in: .whitespacesAndNewlines)
                 value.schedule = schedule; value.priority = fields.priority
-                value.reminderAt = reminder.absolute; value.reminderOffsets = reminder.offsets
+                if store.mutedListNames.contains(task.list.name) {
+                    // Muting changes delivery, not the task's saved reminder settings.
+                    if let old = task.schedule.dueAt, let new = schedule.dueAt {
+                        value.reminderAt = task.reminderAt?.addingTimeInterval(new.timeIntervalSince(old))
+                    }
+                } else {
+                    value.reminderAt = reminder.absolute; value.reminderOffsets = reminder.offsets
+                }
                 if let key = value.occurrenceKey, schedule != task.schedule {
                     value.occurrenceOverride = .init(occurrence: key, actualSchedule: schedule,
                         outcome: value.occurrenceOverride?.outcome ?? .active)
@@ -1443,6 +1450,7 @@ final class TaskActions {
             return .failure(.missingTask)
         }
         guard snapshot[index].deletedAt == nil else { return .failure(.deletedTask) }
+        guard !store.archivedListNames.contains(snapshot[index].list.name) else { return .failure(.invalidList) }
         mutation(&snapshot[index])
         guard snapshot[index] != store.tasks[index] else { return .success(id) }
         snapshot[index].updatedAt = clock()
@@ -2051,6 +2059,7 @@ final class TaskActions {
     @discardableResult
     func setListArchived(_ name: String, _ archived: Bool) -> Bool {
         guard canManageList(name),
+              !archived || store.listMeta(for: name)?.isDefault != true,
               store.lists.contains(name) || store.tasks.contains(where: { $0.list.name == name }),
               (store.listMeta(for: name)?.isArchived ?? false) != archived else { return false }
         return commitListMeta(name) { $0.archivedAt = archived ? clock() : nil }
@@ -2331,6 +2340,160 @@ final class TaskActions {
         tasks[index].updatedAt = clock()
         store.commit(tasks)
         return .success(id)
+    }
+}
+
+extension TaskActions {
+    @discardableResult
+    func saveListFolderDetails(_ raw: String, replacing old: String?, icon: String?) -> Bool {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name == old || !store.listFolders.contains(where: { $0.name == name }) else { return false }
+        if let old, !store.listFolders.contains(where: { $0.name == old }) { return false }
+        store.transaction {
+            if let old, old != name { _ = renameListFolder(from: old, to: name) }
+            else if old == nil { _ = saveListFolder(name) }
+            var folders = store.listFolders
+            if let index = folders.firstIndex(where: { $0.name == name }) { folders[index].icon = icon }
+            store.commit(store.tasks, listFolders: folders)
+        }
+        return true
+    }
+
+    @discardableResult
+    func saveListDetails(_ draft: TaskListEditingDraft, replacing old: String? = nil) -> Bool {
+        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = Array(Set(store.lists + store.tasks.filter { $0.deletedAt == nil }.map { $0.list.name }))
+        guard TaskListEditingDraft.nameError(name, existing: existing, replacing: old) == nil,
+              old.map({ !store.archivedListNames.contains($0) }) ?? true else { return false }
+        let folder = draft.folderName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        store.transaction {
+            if old != name { renameList(old, to: name) }
+            var metas = store.listMetas
+            if !metas.contains(where: { $0.name == name }) { metas.append(TaskListMeta(name: name)) }
+            for i in metas.indices {
+                if draft.isDefault { metas[i].isDefault = metas[i].name == name }
+                guard metas[i].name == name else { continue }
+                metas[i].referenceID = metas[i].referenceID ?? listReferenceID(name)
+                metas[i].colorIndex = draft.colorIndex
+                metas[i].colorARGB = draft.colorARGB
+                let icon = draft.icon?.trimmingCharacters(in: .whitespacesAndNewlines)
+                metas[i].icon = icon?.isEmpty == false ? icon : nil
+                metas[i].folderName = folder?.isEmpty == false ? folder : nil
+                metas[i].hidesFromSmartLists = !draft.showsInSmartLists
+                metas[i].remindersMuted = !draft.remindersEnabled
+                metas[i].isDefault = draft.isDefault
+            }
+            var folders = store.listFolders
+            if let folder, !folder.isEmpty, !folders.contains(where: { $0.name == folder }) {
+                folders.append(TaskListFolder(name: folder, sortOrder: nextListFolderOrder(metas: metas, folders: folders)))
+            }
+            store.commit(store.tasks, lists: store.lists.contains(name) ? store.lists : store.lists + [name],
+                         listMetas: metas, listFolders: folders)
+        }
+        return true
+    }
+
+    @discardableResult
+    func setDefaultList(_ name: String?) -> Bool {
+        if let name, (!store.lists.contains(name) && !store.tasks.contains(where: { $0.list.name == name && $0.deletedAt == nil }))
+            || store.archivedListNames.contains(name) { return false }
+        var metas = store.listMetas
+        if let name, !metas.contains(where: { $0.name == name }) {
+            metas.append(TaskListMeta(name: name, referenceID: listReferenceID(name)))
+        }
+        metas = metas.map { original in
+            var value = original; value.isDefault = value.name == name; return value
+        }
+        guard metas != store.listMetas else { return false }
+        let lists = name.map { store.lists.contains($0) ? store.lists : store.lists + [$0] } ?? store.lists
+        store.commit(store.tasks, lists: lists, listMetas: metas)
+        return true
+    }
+
+    @discardableResult
+    func copyList(_ source: String, to raw: String, scope: TaskListCopyScope) -> Bool {
+        let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let names = Array(Set(store.lists + store.tasks.filter { $0.deletedAt == nil }.map { $0.list.name }))
+        guard canManageList(source), names.contains(source),
+              TaskListEditingDraft.nameError(name, existing: names) == nil else { return false }
+        let now = clock(), reference = UUID()
+        let tasks = store.tasks.filter {
+            $0.list.name == source && !$0.isNoteTask && !$0.isConverted && $0.deletedAt == nil
+                && $0.skippedAt == nil && (scope != .incomplete || !$0.isClosed)
+        }
+        let ids = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, UUID()) })
+        let originalSections = store.listSections.filter { $0.listName == source }
+        let sectionIDs = Dictionary(uniqueKeysWithValues: originalSections.map { ($0.id, UUID().uuidString) })
+        let seriesIDs = Dictionary(uniqueKeysWithValues: Set(tasks.compactMap { $0.series?.id }).map { ($0, UUID()) })
+        let copies = tasks.map { original -> Task in
+            var value = Task(id: ids[original.id]!, title: original.title, document: original.document,
+                tags: original.tags, recurrence: original.recurrence, recurrenceRule: original.recurrenceRule,
+                reminderAt: original.reminderAt, reminderOffsets: original.reminderOffsets,
+                attachments: original.attachments, list: TaskList(name: name), priority: original.priority,
+                schedule: original.schedule, status: original.status,
+                parentID: original.parentID.flatMap { ids[$0] }, childOrder: original.childOrder,
+                createdAt: now, updatedAt: now, completedAt: original.completedAt,
+                isPinned: original.isPinned, abandonedAt: original.abandonedAt,
+                sourceNoteID: original.sourceNoteID, sourceMeetingID: original.sourceMeetingID)
+            value.listID = reference; value.tagReferences = original.tagReferences
+            value.sectionID = original.sectionID.flatMap { sectionIDs[$0] }
+            value.focusEstimate = original.focusEstimate; value.kind = original.kind
+            if scope == .allResettingStatus {
+                value.status = .active; value.completedAt = nil; value.abandonedAt = nil
+                if value.kind == .checklist {
+                    value.document = Self.resetChecklistItems(value.document, shiftingRemindersBy: nil, now: now, calendar: calendar)
+                }
+            }
+            if var series = original.series, let id = seriesIDs[series.id] {
+                series.id = id; series.template.list = value.list; series.template.listID = reference
+                series.template.sectionID = series.template.sectionID.flatMap { sectionIDs[$0] }
+                if scope == .allResettingStatus, value.kind == .checklist {
+                    series.template.document = Self.resetChecklistItems(series.template.document, shiftingRemindersBy: nil, now: now, calendar: calendar)
+                }
+                value.series = series
+                value.occurrenceKey = original.occurrenceKey.map {
+                    OccurrenceKey(seriesID: id, nominalDate: $0.nominalDate, ordinal: $0.ordinal)
+                }
+                value.occurrenceOverride = original.occurrenceOverride.map {
+                    var override = $0; override.occurrence.seriesID = id
+                    if scope == .allResettingStatus { override.outcome = .active }
+                    return override
+                }
+            }
+            return value
+        }
+        var meta = store.listMeta(for: source) ?? TaskListMeta(name: source)
+        meta.name = name; meta.referenceID = reference; meta.isPinned = false; meta.isDefault = false; meta.archivedAt = nil
+        let sections = originalSections.map {
+            TaskListSection(id: sectionIDs[$0.id]!, listName: name, title: $0.title, sortOrder: $0.sortOrder)
+        }
+        store.commit(store.tasks + copies, lists: store.lists + [name], listMetas: store.listMetas + [meta],
+                     listSections: store.listSections + sections)
+        return true
+    }
+
+    /// The UI delete command goes through Trash; removeList remains the existing
+    /// dissolve-to-Inbox operation used by automation and older callers.
+    @discardableResult
+    func deleteList(_ name: String) -> Bool {
+        guard canManageList(name), store.lists.contains(name) || store.tasks.contains(where: { $0.list.name == name && $0.deletedAt == nil }),
+              store.listMeta(for: name)?.isDefault != true else { return false }
+        let now = clock()
+        let values = store.tasks.map { original in
+            var value = original
+            if value.list.name == name {
+                if value.deletedAt == nil { value.deletedAt = now }
+                value.list = .inbox; value.listID = listReferenceID(TaskList.inbox.name)
+                value.sectionID = nil; value.updatedAt = now
+                value.series?.template.list = .inbox; value.series?.template.listID = value.listID
+                value.series?.template.sectionID = nil
+            }
+            return value
+        }
+        store.commit(values, lists: store.lists.filter { $0 != name },
+                     listMetas: store.listMetas.filter { $0.name != name },
+                     listSections: store.listSections.filter { $0.listName != name })
+        return true
     }
 }
 

@@ -1,0 +1,4 @@
+# Only the AI core; the macOS App does not start the old web application.
+langchain==1.2.18
+langchain-openai==1.0.3
+certifi>=2026.1.4

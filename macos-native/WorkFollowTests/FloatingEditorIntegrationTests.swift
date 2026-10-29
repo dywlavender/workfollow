@@ -49,7 +49,7 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         InspectorPanelTestSupport.settle(owner)
         XCTAssertTrue(editors(in: host).contains { $0.documentIdentity == id })
         let trigger = try XCTUnwrap(frames[.detach])
-        XCTAssertLessThan(trigger.maxY, 100, "便签应从编辑栏顶部独立按钮打开")
+        XCTAssertLessThan(trigger.maxY, 100, "浮窗应从编辑栏顶部独立按钮打开")
         XCTAssertGreaterThan(trigger.midX, 800)
         try InspectorPanelTestSupport.click(trigger, in: host, window: owner)
         let floating = try XCTUnwrap(windows.panel(for: .note(id)))
@@ -96,7 +96,7 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         let mainEditor = try XCTUnwrap(editors(in: host).first { $0.documentIdentity == id })
         mainEditor.setMarkedText("切出组合", selectedRange: NSRange(location: 4, length: 0),
                                  replacementRange: mainEditor.selectedRange())
-        try InspectorPanelTestSupport.clickButton(containing: "打开便签", in: owner)
+        try InspectorPanelTestSupport.clickButton(containing: "打开浮窗", in: owner)
         let floating = try XCTUnwrap(windows.panel(for: .task(id)))
         let editor = try editor(in: floating)
         InspectorPanelTestSupport.settle(owner)

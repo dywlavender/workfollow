@@ -44,7 +44,8 @@ struct TaskTagPickerPopover: View {
                                         .foregroundStyle(WFColors.secondaryText)
                                         .frame(width: 14, height: 20).contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain).accessibilityLabel("取消选择标签：" + tag)
+                                .buttonStyle(.plain).hoverTip("取消选择标签：" + tag)
+                                    .accessibilityLabel("取消选择标签：" + tag)
                                 .tagPickerRenderAnchor(.remove(tag))
                             }
                             .font(WFType.body).foregroundStyle(WFColors.accent)
@@ -96,8 +97,8 @@ struct TaskTagPickerPopover: View {
                     }
                 }
                 .padding(.vertical, WFSpace.xs)
-            }
                 .compactScrollbars()
+            }
             PopupActionBar {
                 PopupActionButton(title: "取消", action: onCancel)
                     .tagPickerRenderAnchor(.cancel)

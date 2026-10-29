@@ -104,6 +104,11 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowLaunch?.didFinishLaunching()
+        _Concurrency.Task { await AIBackendBridge.shared.prewarm() }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        AIBackendBridge.shared.shutdown()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

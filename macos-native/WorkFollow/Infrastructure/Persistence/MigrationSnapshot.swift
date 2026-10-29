@@ -43,6 +43,9 @@ struct MigrationListRecord: Equatable {
     /// 所属文件夹（滴答层级：文件夹 → 清单）。旧包缺键 → nil（顶层）。
     let folderName: String?
     var archivedAt: String? = nil
+    var hidesFromSmartLists: Bool = false
+    var remindersMuted: Bool = false
+    var isDefault: Bool = false
 }
 
 struct MigrationFolderRecord: Equatable {
@@ -139,6 +142,7 @@ struct MigrationBundle: Equatable {
     let notes: [MigrationNoteRecord]
     /// 附件名 -> base64。
     let embeddedFiles: [String: String]
+    var listFolderIcons: [String: String] = [:]
 
     var attachmentCount: Int { embeddedFiles.count }
 }
@@ -208,7 +212,8 @@ enum MigrationSnapshot {
             folders: try records(object["folders"], folderRecord),
             tasks: try records(object["tasks"], taskRecord),
             notes: try records(object["notes"], noteRecord),
-            embeddedFiles: embeddedFiles(object["attachmentFiles"])
+            embeddedFiles: embeddedFiles(object["attachmentFiles"]),
+            listFolderIcons: object["listFolderIcons"] as? [String: String] ?? [:]
         )
     }
 
@@ -222,7 +227,10 @@ enum MigrationSnapshot {
             isPinned: tolerantBool(json["pinned"]),
             icon: nullableString(json["icon"]),
             folderName: nullableString(json["folder"] ?? json["folderName"]),
-            archivedAt: nullableString(json["archivedAt"])
+            archivedAt: nullableString(json["archivedAt"]),
+            hidesFromSmartLists: tolerantBool(json["hidesFromSmartLists"]),
+            remindersMuted: tolerantBool(json["remindersMuted"]),
+            isDefault: tolerantBool(json["isDefault"])
         )
     }
 
@@ -569,7 +577,7 @@ enum MigrationSnapshot {
             taskLists: orderedNames,
             taskListMeta: listMetas,
             taskListFolders: listFolderEntities(bundle.listFolders, metas: listMetas,
-                                                local: local.taskListFolders ?? []),
+                                                local: local.taskListFolders ?? [], icons: bundle.listFolderIcons),
             taskTags: taskTags,
             noteFolders: savedFolderNames,
             noteFolderMetadata: orderedFolderRecords)
@@ -633,7 +641,7 @@ enum MigrationSnapshot {
         let snapshot = NativeWorkspaceSnapshot(tasks: resolvingTagReferences(tasks, directory: taskTags), notes: notes,
                                                taskLists: orderedNames, taskListMeta: listMetas,
                                                taskListFolders: listFolderEntities(bundle.listFolders,
-                                                                                   metas: listMetas),
+                                                                                   metas: listMetas, icons: bundle.listFolderIcons),
                                                taskTags: taskTags,
                                                noteFolders: uniqueFolderNames(folderRecords.map(\.name)),
                                                noteFolderMetadata: folderRecords)
@@ -694,7 +702,7 @@ enum MigrationSnapshot {
     /// 最后补上被清单隐式引用的名字（旧包只有清单上的 `folder` 字段）。
     /// 返回顺序即侧栏顺序。
     static func listFolderEntities(_ names: [String], metas: [TaskListMeta],
-                                   local: [TaskListFolder] = []) -> [TaskListFolder] {
+                                   local: [TaskListFolder] = [], icons: [String: String] = [:]) -> [TaskListFolder] {
         var orders: [String: Int] = [:]
         func claim(_ raw: String?) {
             guard let name = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -705,7 +713,10 @@ enum MigrationSnapshot {
         for name in uniqueFolderNames(names) { claim(name) }
         for meta in metas { claim(meta.folderName) }
         return orders.sorted { ($0.value, $0.key) < ($1.value, $1.key) }
-            .map { TaskListFolder(name: $0.key, sortOrder: $0.value) }
+            .map { item in
+                TaskListFolder(name: item.key, sortOrder: item.value,
+                    icon: local.first { $0.name == item.key }?.icon ?? icons[item.key])
+            }
     }
 
     /// 收集箱永远在最前，其余按出现顺序去重。
@@ -730,7 +741,9 @@ enum MigrationSnapshot {
                             colorARGB: colorIndex == nil ? argb : nil,
                             icon: record.icon,
                             folderName: record.folderName,
-                            archivedAt: parseDate(record.archivedAt))
+                            archivedAt: parseDate(record.archivedAt),
+                            hidesFromSmartLists: record.hidesFromSmartLists,
+                            remindersMuted: record.remindersMuted, isDefault: record.isDefault)
     }
 
     private static func listARGB(from raw: String?) -> UInt32? {
@@ -1036,12 +1049,18 @@ enum MigrationSnapshot {
                 if let icon = meta?.icon, !icon.isEmpty { record["icon"] = icon }
                 if let folder = meta?.folderName, !folder.isEmpty { record["folder"] = folder }
                 if let archivedAt = meta?.archivedAt { record["archivedAt"] = formatDate(archivedAt) }
+                if meta?.hidesFromSmartLists == true { record["hidesFromSmartLists"] = true }
+                if meta?.remindersMuted == true { record["remindersMuted"] = true }
+                if meta?.isDefault == true { record["isDefault"] = true }
                 return record
             },
             "folders": folders,
             // 清单文件夹（空文件夹也写出来，否则导入后消失）。
             "listFolders": listFolderEntities([], metas: snapshot.taskListMeta ?? [],
                                               local: snapshot.taskListFolders ?? []).map(\.name),
+            "listFolderIcons": Dictionary(uniqueKeysWithValues: (snapshot.taskListFolders ?? []).compactMap { folder in
+                folder.icon.map { (folder.name, $0) }
+            }),
             "taskTags": TaskTag.reconciled(snapshot.taskTags ?? [], tasks: snapshot.tasks).map { tag in
                 ["id": tag.id.uuidString, "name": tag.name,
                  "colorARGB": tag.colorARGB.map { $0 as Any } ?? NSNull(),

@@ -425,7 +425,9 @@ private struct ChecklistItemReminderCard: View {
 
     private func optionRow(_ title: String, checked: Bool, destructive: Bool = false,
                            action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        PopupMenuRow(action: action,
+                     minHeight: ScheduleMetrics.optionRowHeight,
+                     horizontalPadding: 12) {
             HStack {
                 Text(title)
                     .font(.system(size: 13))
@@ -439,11 +441,7 @@ private struct ChecklistItemReminderCard: View {
                         .foregroundStyle(destructive ? WFColors.danger : WFColors.accent)
                 }
             }
-            .padding(.horizontal, 12)
-            .frame(height: ScheduleMetrics.optionRowHeight)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .focusEffectDisabled()
     }
 

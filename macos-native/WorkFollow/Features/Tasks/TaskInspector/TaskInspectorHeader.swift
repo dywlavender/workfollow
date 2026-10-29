@@ -15,6 +15,8 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
     /// 任务形态按钮（TI2-05b）：滴答标题 cell 的 kindButton。
     var onKind: (() -> Void)? = nil
     var kindSymbol: String = "text.alignleft"
+    var horizontalPadding: CGFloat = TaskInspectorMetrics.horizontalPadding
+    var height: CGFloat = TaskInspectorMetrics.headerHeight
     @ViewBuilder let schedule: () -> Schedule
     @ViewBuilder let priority: () -> Priority
 
@@ -51,7 +53,7 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(task.isClosed ? "恢复任务" : "完成任务")
+            .hoverTip(task.isClosed ? "恢复任务" : "完成任务")
             .accessibilityLabel(task.isClosed ? "恢复任务" : "完成任务")
             .inspectorRenderAnchor(.completion)
             Rectangle().fill(WFColors.border)
@@ -78,7 +80,6 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                                  tint: .inspectorSecondary, accessibilityLabel: "任务类型",
                                  action: onKind)
                     .frame(width: 24, height: WFMetrics.controlHeight)
-                    .help("任务类型")
                     .propertyPanelTrigger(TaskInspectorHeaderPanel.kind)
                     .inspectorRenderAnchor(.kind)
             }
@@ -87,7 +88,6 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
                                  tint: .inspectorSecondary, accessibilityLabel: "笔记信息",
                                  action: onInfo)
                     .frame(width: 24, height: WFMetrics.controlHeight)
-                    .help("笔记信息")
                     .propertyPanelTrigger(TaskInspectorHeaderPanel.info)
                     .inspectorRenderAnchor(.noteInfo)
             }
@@ -97,8 +97,8 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
             priority().fixedSize()
                 .inspectorRenderAnchor(.priority)
         }
-        .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
-        .frame(height: TaskInspectorMetrics.headerHeight)
+        .padding(.horizontal, horizontalPadding)
+        .frame(height: height)
         .inspectorRenderAnchor(.header)
     }
 

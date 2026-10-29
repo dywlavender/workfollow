@@ -83,7 +83,7 @@ struct TaskDisplaySettingsView: View {
                         .contentShape(Rectangle().inset(by: -4))
                 }
                 .buttonStyle(.plain)
-                .help(TaskDisplaySettingsText.close)
+                .hoverTip(TaskDisplaySettingsText.close)
                 .accessibilityLabel(TaskDisplaySettingsText.close)
                 .displaySettingsAnchor(.close)
                 Spacer()

@@ -27,8 +27,8 @@ final class TaskCompletedRowRenderTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(TaskListMetrics.dividerLeading(completed: true, depth: 0), 52)
-        XCTAssertEqual(TaskListMetrics.dividerLeading(completed: true, depth: 1), 73)
+        XCTAssertEqual(TaskListMetrics.dividerLeading(completed: true, depth: 0), 37)
+        XCTAssertEqual(TaskListMetrics.dividerLeading(completed: true, depth: 1), 58)
         XCTAssertEqual(TaskListMetrics.dividerLeading(completed: false, depth: 0), TaskListMetrics.dividerLeading)
     }
 

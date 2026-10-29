@@ -8,10 +8,10 @@ final class AITaskDraftSession: ObservableObject {
     @Published private(set) var phase: Phase = .loading
     var selectedCount: Int { drafts.filter { $0.selected && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count }
 
-    func generate(request: AITaskRequest, using generate: (String) async throws -> String) async {
+    func generate(request: AITaskRequest, using generate: (AITaskRequest) async throws -> String) async {
         phase = .loading
         do {
-            let text = try await generate(request.prompt)
+            let text = try await generate(request)
             try _Concurrency.Task.checkCancellation()
             drafts = try AITaskDraft.decode(text, request: request)
             phase = .ready

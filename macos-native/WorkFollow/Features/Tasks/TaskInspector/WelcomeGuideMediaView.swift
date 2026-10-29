@@ -23,7 +23,13 @@ struct WelcomeGuideMediaView: View {
 
 /// SwiftUI 的 `Image` 只取 GIF 首帧；`NSImageView` 才会按 GIF 帧表自动循环。
 private struct AnimatedGIFImageView: NSViewRepresentable {
+    final class Coordinator {
+        var loadedURL: URL?
+    }
+
     let url: URL
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSImageView {
         let view = NSImageView()
@@ -32,12 +38,15 @@ private struct AnimatedGIFImageView: NSViewRepresentable {
         view.imageFrameStyle = .none
         view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        load(into: view)
+        load(into: view, context: context)
         return view
     }
 
     func updateNSView(_ view: NSImageView, context: Context) {
-        if view.image == nil { load(into: view) }
+        // 切换引导任务时 SwiftUI 会复用同一个 NSImageView；只比对 image 是否为空
+        // 会把上一条的 GIF 一直留在卡片里。
+        guard context.coordinator.loadedURL != url else { return }
+        load(into: view, context: context)
     }
 
     /// 比例来自 GIF 首帧，SwiftUI 按提议宽度定高，避免 NSImageView 用像素高度
@@ -52,7 +61,8 @@ private struct AnimatedGIFImageView: NSViewRepresentable {
         return image.size
     }
 
-    private func load(into view: NSImageView) {
+    private func load(into view: NSImageView, context: Context) {
+        context.coordinator.loadedURL = url
         view.image = NSImage(contentsOf: url)
         // 减少动态效果时停在首帧，仍然把这一步的界面交代清楚。
         view.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

@@ -215,7 +215,7 @@ enum InspectorPanelTestSupport {
                 "标签": .tagsMenuRow, "任务动态": .activityMenuRow, "创建副本": .duplicateMenuRow,
                 "开始番茄专注": .focusPomodoro, "开始正计时": .focusStopwatch,
                 "设置预计专注": .focusEstimate, "截止日期": .deadlineLabel,
-                "任务类型": .kind, "笔记信息": .noteInfo, "打开便签": .detach, "评论": .footerComment,
+                "任务类型": .kind, "笔记信息": .noteInfo, "打开浮窗": .detach, "评论": .footerComment,
                 "转换为笔记": .noteConversionMenuRow, "转换为任务": .noteConversionMenuRow,
                 "拆分子任务…": .aiBreakdownMenuRow
             ]

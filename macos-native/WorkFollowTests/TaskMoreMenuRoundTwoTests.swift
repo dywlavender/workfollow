@@ -40,7 +40,7 @@ final class TaskMoreMenuRoundTwoTests: XCTestCase {
         // 2026-10-25 按用户要求对齐滴答：「打印」「复制链接」从菜单移除；
         // 「插入本周摘要」不是滴答项，也去掉，本工程只额外保留「流程图」。
         for removedEntry in ["其他操作", "更多属性", "截止日期", "跳过本周期", "设置预计专注",
-                             "打印", "复制链接", "插入本周摘要", "打开便签"] {
+                             "打印", "复制链接", "插入本周摘要", "打开浮窗"] {
             XCTAssertFalse(menu.contains(removedEntry), "Unexpected more menu entry: \(removedEntry)")
         }
     }

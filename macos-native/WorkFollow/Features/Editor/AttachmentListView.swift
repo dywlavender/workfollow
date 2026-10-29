@@ -48,10 +48,10 @@ private struct AttachmentRow: View {
                 Button { NSWorkspace.shared.activateFileViewerSelecting([fileURL]) } label: {
                     Image(systemName: "folder")
                 }
-                .help("在 Finder 中显示")
+                .hoverTip("在 Finder 中显示")
             }
             Button(action: onRemove) { Image(systemName: "xmark") }
-                .help("移除附件关联")
+                .hoverTip("移除附件关联")
         }
         .padding(.horizontal, 6).padding(.vertical, 4)
         .contentShape(Rectangle())

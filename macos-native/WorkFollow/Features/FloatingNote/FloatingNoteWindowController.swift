@@ -51,13 +51,12 @@ final class FloatingNoteWindowController: ObservableObject {
         guard let environment,
               environment.notesWorkspace.notes.contains(where: { $0.id == noteID && $0.deletedAt == nil })
         else { return }
-        windows.open(id: .note(noteID), title: "悬浮笔记", appearance: environment.appearance,
+        windows.open(id: .note(noteID), title: "笔记浮窗", appearance: environment.appearance,
             onClose: { [weak self] in self?.didClose(noteID) }) { handle in
                 FloatingNoteView(noteID: noteID, notes: environment.notesWorkspace,
                     tasks: environment.taskWorkspace, editorHandle: handle,
                     focusAtEnd: createdNoteIDs.contains(noteID),
-                    onClose: { [weak self] in self?.close(noteID: noteID) },
-                    onOpenInMain: { [weak self] in self?.openInMain(noteID: noteID) })
+                    onClose: { [weak self] in self?.close(noteID: noteID) })
             }
     }
 
@@ -67,15 +66,6 @@ final class FloatingNoteWindowController: ObservableObject {
 
     private func didClose(_ id: UUID) {
         if createdNoteIDs.remove(id) != nil { environment?.notesWorkspace.discardEmptyNote(id) }
-    }
-
-    private func openInMain(noteID: UUID) {
-        guard let environment else { return }
-        createdNoteIDs.remove(noteID)
-        close(noteID: noteID)
-        environment.navigation.destination = .notes
-        environment.navigation.noteRevealRequest = noteID
-        NativeMainWindowPresenter.activate()
     }
 
     private func pruneClosedNotes() {

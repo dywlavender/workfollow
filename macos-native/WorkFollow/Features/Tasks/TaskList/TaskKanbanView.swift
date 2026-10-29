@@ -17,13 +17,14 @@ struct TaskKanbanView: View {
     var hiddenFields: [TaskRowDetailField] = []
     var scope: TaskListScope = .allTasks
     var allowsCreation = true
+    var display = TaskKanbanOptions()
     @State private var addingGroupID: String?
     @State private var newCardTitle = ""
     @State private var closedExpansion = TaskGroupExpansionState()
     @State private var targetedColumnID: String?
     @FocusState private var newCardFocused: Bool
 
-    private static let columnWidth: CGFloat = 264
+    private var columnWidth: CGFloat { display.size.columnWidth }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: true) {
@@ -81,7 +82,7 @@ struct TaskKanbanView: View {
                                 .font(.system(size: QuickAddBarStyle.iconSize))
                                 .foregroundStyle(QuickAddBarStyle.iconColor)
                                 .frame(width: 22, height: 24).contentShape(Rectangle())
-                        }.buttonStyle(.plain).help("添加任务").accessibilityLabel("在" + (group.label ?? "此分组") + "添加任务")
+                        }.buttonStyle(.plain).hoverTip("添加任务").accessibilityLabel("在" + (group.label ?? "此分组") + "添加任务")
                     }
                 }
                 .padding(.horizontal, WFSpace.sm)
@@ -142,7 +143,7 @@ struct TaskKanbanView: View {
                 }
                 .kanbanDropFrame(.viewport)
             }
-            .frame(width: Self.columnWidth, alignment: .topLeading)
+            .frame(width: columnWidth, alignment: .topLeading)
             .frame(maxHeight: .infinity, alignment: .topLeading)
             .background(WFColors.content)
             .contentShape(Rectangle())
@@ -154,7 +155,7 @@ struct TaskKanbanView: View {
                 }
             }
         }
-        .frame(width: Self.columnWidth)
+        .frame(width: columnWidth)
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -164,6 +165,7 @@ struct TaskKanbanView: View {
                            hidesCompleted: hidesCompleted && !scope.isClosedScope,
                            hidesDetails: hidesDetails,
                            hiddenFields: hiddenFields,
+                           showsChecklist: display.showsChecklist,
                            onSelect: onSelect)
     }
 

@@ -27,6 +27,7 @@ final class TaskWidgetBridge {
         self.flush = flush; self.reload = reload
         workspace.taskChanges.sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
         workspace.listArchiveChanges.sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
+        workspace.listSettingsChanges.sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
         if let countdowns {
             countdowns.$events.dropFirst().sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
             countdowns.$dateRevision.dropFirst().sink { [weak self] _ in self?.schedulePublish() }.store(in: &subscriptions)
@@ -54,7 +55,7 @@ final class TaskWidgetBridge {
     @discardableResult
     func publish() -> Bool {
         guard canProcess() else { return false }
-        let items = Self.items(workspace.tasksInActiveLists)
+        let items = Self.items(workspace.tasksForSmartWidgets)
         let now = workspace.clock()
         let countdowns = Self.countdownItems(countdownStore?.events ?? [], now: now, calendar: workspace.calendar)
         guard items != lastItems || countdowns != lastCountdowns else { return true }

@@ -251,7 +251,7 @@ struct TaskBatchPanelView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(priorityTitle(priority))
+        .hoverTip(priorityTitle(priority))
         .accessibilityLabel("批量设置\(priorityTitle(priority))")
     }
 
@@ -330,7 +330,7 @@ struct TaskBatchPanelView: View {
             actionTile("复制文本", symbol: "doc.plaintext", tint: WFColors.tileBlue) {
                 workspace.copyBulkTitlesToPasteboard()
             }
-            actionTile("打开便签", symbol: "note", tint: WFColors.tileYellow) {
+            actionTile("打开浮窗", symbol: "note", tint: WFColors.tileYellow) {
                 workspace.openBulkStickyNotes()
             }
             actionTile("删除", symbol: "trash", tint: WFColors.flagHigh) {

@@ -17,6 +17,7 @@ typealias TaskRowHoverView = RowHoverView
 struct TaskRowReorderHandle: View {
     let taskID: UUID
     let title: String
+    let selected: Bool
     @ObservedObject var pointer: TaskRowPointerState
     @State private var hovering = false
 
@@ -26,9 +27,9 @@ struct TaskRowReorderHandle: View {
             .foregroundStyle(WFColors.secondaryText)
             .frame(width: 14, height: 14)
             .contentShape(Rectangle())
-            .opacity(pointer.inside || hovering ? 1 : 0)
+            .opacity(pointer.inside || hovering || selected ? 1 : 0)
             .onHover { hovering = $0 }
-            .help("拖动调整任务顺序")
+            .hoverTip("拖动调整任务顺序")
             .accessibilityLabel("拖动调整任务顺序")
             .draggable(taskID.uuidString) { TaskDragPreview(title: title) }
             .modifier(TaskReorderDragPolicy())

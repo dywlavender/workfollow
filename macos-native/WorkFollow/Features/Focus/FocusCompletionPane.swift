@@ -61,7 +61,7 @@ struct FocusCompletionPane: View {
                 Image(systemName: "chevron.down").font(.system(size: 13, weight: .medium))
                     .frame(width: 24, height: 28)
             }
-            .buttonStyle(.plain).help("返回常用专注库")
+            .buttonStyle(.plain).hoverTip("返回常用专注库")
             .accessibilityIdentifier("focus-completion-navigation")
             .focusRenderAnchor(.timerBackToLibrary)
             Spacer()
@@ -75,6 +75,7 @@ struct FocusCompletionPane: View {
                 Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28)
             }
             .fixedSize()
+            .hoverTip("更多专注操作")
             .accessibilityIdentifier("focus-completion-menu")
         }.foregroundStyle(theme.text2)
     }

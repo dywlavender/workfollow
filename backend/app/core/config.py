@@ -3,13 +3,14 @@ from pathlib import Path
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from app.ai_runtime.settings import AISettings
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 PROJECT_DIR = BACKEND_DIR.parent
 
 
-class Settings(BaseSettings):
+class Settings(AISettings, BaseSettings):
     app_name: str = "备忘录 API"
     app_version: str = "0.1.0"
     database_url: str = f"sqlite:///{(PROJECT_DIR / 'data' / 'workfollow.db').as_posix()}"
@@ -44,7 +45,6 @@ class Settings(BaseSettings):
     database_pool_size: int = 15
     database_max_overflow: int = 10
     database_pool_pre_ping: bool = True
-
     model_config = SettingsConfigDict(
         env_file=(PROJECT_DIR / ".env", BACKEND_DIR / ".env"),
         env_prefix="WORKFOLLOW_",

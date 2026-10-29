@@ -19,7 +19,7 @@ struct SettingsCalendarReminderView: View {
                             }
                         }
                     } else {
-                        Button("允许通知") { reminders.enable(for: workspace.tasksInActiveLists) }
+                        Button("允许通知") { reminders.enable(for: workspace.tasksForLocalReminders) }
                     }
                 }
                 WFFormToggleRow("提醒声音", isOn: Binding(get: { reminders.state.snapshot.preferences.soundEnabled },
@@ -35,7 +35,7 @@ struct SettingsCalendarReminderView: View {
                         }
                         .buttonStyle(.borderless)
                         .accessibilityLabel("试听铃声")
-                        .help("试听铃声")
+                        .hoverTip("试听铃声")
                     }.disabled(!reminders.state.snapshot.preferences.soundEnabled)
                 }
                 WFFormRow("默认稍后提醒", showsDivider: false) {
@@ -80,7 +80,7 @@ struct SettingsCalendarReminderView: View {
             }
             .font(WFType.body).padding(.horizontal, WFSpace.md)
         }
-        .onAppear { reminders.reconcile(workspace.tasksInActiveLists, force: true) }
+        .onAppear { reminders.reconcile(workspace.tasksForLocalReminders, force: true) }
     }
 
     private var notificationsAllowed: Bool {

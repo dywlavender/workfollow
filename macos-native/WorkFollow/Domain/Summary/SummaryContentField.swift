@@ -7,7 +7,7 @@ enum SummaryContentField: String, CaseIterable, Codable {
 
     static let standard: Set<Self> = [.progress, .completedTime, .taskName]
 
-    /// 行内字段按这个顺序生成；完成时间固定为日期前缀，详细内容固定跟在条目后。
+    /// 标题独立展示；此顺序决定辅助信息的先后，完成时间在辅助行开头，详细内容尾随。
     static let inlineOrder: [Self] = [
         .taskName, .status, .progress, .taskTime, .parentTask, .tags, .focus, .list,
     ]

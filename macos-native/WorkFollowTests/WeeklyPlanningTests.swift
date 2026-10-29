@@ -162,21 +162,15 @@ final class WeeklyPlanningTests: XCTestCase {
         XCTAssertTrue(second.progress.isEmpty)
     }
 
-    func testRefreshingFactsKeepsReflectionAndOriginalTaskLinks() throws {
+    func testLiveRefreshKeepsOriginalTaskLinks() throws {
         let source = task("写交付文档", due: day(21))
         let builder = WeeklyReportBuilder(calendar: calendar)
         let report = builder.report(tasks: [source], weekOf: day(21))
-        var document = builder.document(for: report)
-        document.blocks.append(DocumentBlock(kind: .heading(2), runs: [DocumentRun(text: "本周复盘")]))
-        document.blocks.append(DocumentBlock(kind: .paragraph,
-            runs: [DocumentRun(text: "评审应提前一天，已和团队约定。", marks: [.bold])]))
-        let regenerated = builder.document(for: report, preserving: document)
-        XCTAssertTrue(regenerated.plainText.contains("评审应提前一天，已和团队约定。"))
-        XCTAssertEqual(WeeklyReportBuilder.reflection(in: regenerated).first?.runs.first?.marks, [.bold])
+        let first = builder.document(for: report)
+        let regenerated = builder.document(for: report)
+        XCTAssertEqual(regenerated.plainText, first.plainText)
         let links = regenerated.blocks.flatMap(\.runs).flatMap(\.marks)
         XCTAssertTrue(links.contains(.link(NativeResourceLink.task(source.id).url.absoluteString)))
-        let legacy = NativeDocument(plainText: "我手写的旧总结")
-        XCTAssertTrue(builder.document(for: report, preserving: legacy).plainText.contains(legacy.plainText))
     }
 
     func testWeekScopeAndFocusUseSameListAndNaturalWeek() {
@@ -211,7 +205,8 @@ final class WeeklyPlanningTests: XCTestCase {
         XCTAssertEqual(abandoned.abandoned.map(\.id), [source.id])
         XCTAssertTrue(abandoned.pending.isEmpty)
         let ai = WeeklyReportBuilder.aiDocument(text: "## 本周成果\n- 完成一项\n## 本周复盘\n下次提前评审\n## 下周重点\n- 推进交付", title: updated.title)
-        XCTAssertEqual(WeeklyReportBuilder.reflection(in: ai).first?.plainText, "下次提前评审")
+        XCTAssertTrue(ai.blocks.contains { $0.kind == .heading(2) && $0.plainText == "本周复盘" })
+        XCTAssertTrue(ai.plainText.contains("下次提前评审"))
     }
 
     func testWeeklyPlanningSurvivesTaskSnapshotAndPortableExport() throws {

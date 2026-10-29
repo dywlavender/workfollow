@@ -159,7 +159,7 @@ struct SummaryConfigurationView: View {
                         Image(systemName: "plus").font(.system(size: 16, weight: .light))
                             .foregroundStyle(WFColors.secondaryText).frame(width: 30, height: 30)
                             .background(WFColors.panelFill, in: Circle())
-                    }.help("将当前筛选与显示配置存为模板").accessibilityLabel("添加摘要模板")
+                    }.hoverTip("将当前筛选与显示配置存为模板").accessibilityLabel("添加摘要模板")
                 }.buttonStyle(.borderless).padding(.vertical, 1)
             }
         }
@@ -472,7 +472,8 @@ struct SummaryListPopover: View {
                                     Spacer()
                                     Button { toggleFolder(folder.name) } label: {
                                         Image(systemName: !all && Set(members(folder.name)).isSubset(of: draft) ? "checkmark.square.fill" : "square")
-                                    }.buttonStyle(.plain).accessibilityLabel("选择文件夹“\(folder.name)”下的清单")
+                                    }.buttonStyle(.plain).hoverTip("选择文件夹“\(folder.name)”下的清单")
+                                        .accessibilityLabel("选择文件夹“\(folder.name)”下的清单")
                                 }.font(WFType.body).padding(.vertical, 8)
                             }.padding(.leading, 8)
                         }
@@ -483,8 +484,8 @@ struct SummaryListPopover: View {
                             .onAppear { updateContentHeight(geometry.size.height) }
                             .onChange(of: geometry.size.height) { _, height in updateContentHeight(height) }
                     })
-            }
                     .compactScrollbars()
+            }
             .frame(height: min(contentHeight ?? estimatedHeight, SummaryPopoverMetrics.maximumListHeight))
             SummaryPopoverActions(canApply: all || !draft.isEmpty, onCancel: onCancel) { onApply(all ? [] : draft) }
         }.frame(width: SummaryPopoverMetrics.listWidth)
@@ -522,7 +523,7 @@ struct SummaryListPopover: View {
     }
 }
 
-/// 显示内容弹层：固定槽位（完成时间前缀、详细内容尾随）+ 可排序的行内字段。
+/// 标题与详细内容固定，辅助信息可排序；显示选项与正文的层级一致。
 struct SummaryContentPopover: View {
     @Binding var options: SummaryDocumentOptions
     @State private var expandedStyle: SummaryContentField?
@@ -531,10 +532,16 @@ struct SummaryContentPopover: View {
     @State private var hoveredField: SummaryContentField?
     @State private var hoveredStyleChoice: String?
 
+    private var metadataOrder: Binding<[SummaryContentField]> {
+        Binding(get: { options.contentOrder.filter { $0 != .taskName } },
+                set: { options.contentOrder = [.taskName] + $0 })
+    }
+
     var body: some View {
         VStack(spacing: 2) {
+            row(.taskName)
             row(.completedTime)
-            ForEach(options.contentOrder, id: \.self) { field in
+            ForEach(metadataOrder.wrappedValue, id: \.self) { field in
                 row(field)
             }
             row(.detail)
@@ -552,16 +559,16 @@ struct SummaryContentPopover: View {
     @ViewBuilder
     private func row(_ field: SummaryContentField) -> some View {
         VStack(spacing: 2) {
-            if field.isInline {
+            if field.isInline && field != .taskName {
                 surface(field)
                     .onDrop(of: [UTType.text], delegate: SummaryContentDropDelegate(
-                        target: field, order: $options.contentOrder,
+                        target: field, order: metadataOrder,
                         dragging: $dragging, dropTarget: $dropTarget))
                     .contextMenu {
-                        Button("上移") { options.moveContentField(field, by: -1) }
+                        Button("上移") { moveMetadata(field, by: -1) }
                             .disabled(index(of: field) == 0)
-                        Button("下移") { options.moveContentField(field, by: 1) }
-                            .disabled(index(of: field) >= options.contentOrder.count - 1)
+                        Button("下移") { moveMetadata(field, by: 1) }
+                            .disabled(index(of: field) >= metadataOrder.wrappedValue.count - 1)
                     }
             } else {
                 surface(field)
@@ -592,7 +599,7 @@ struct SummaryContentPopover: View {
 
     @ViewBuilder
     private func handle(_ field: SummaryContentField) -> some View {
-        if field.isInline {
+        if field.isInline && field != .taskName {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(WFColors.tertiaryText)
@@ -602,7 +609,7 @@ struct SummaryContentPopover: View {
                     dragging = field
                     return NSItemProvider(object: field.rawValue as NSString)
                 }
-                .help("拖动调整顺序")
+                .hoverTip("拖动调整顺序")
                 .accessibilityLabel("调整\(field.rawValue)顺序")
         } else {
             Color.clear.frame(width: 14, height: 28)
@@ -743,7 +750,14 @@ struct SummaryContentPopover: View {
     }
 
     private func index(of field: SummaryContentField) -> Int {
-        options.contentOrder.firstIndex(of: field) ?? 0
+        metadataOrder.wrappedValue.firstIndex(of: field) ?? 0
+    }
+    private func moveMetadata(_ field: SummaryContentField, by offset: Int) {
+        var order = metadataOrder.wrappedValue
+        guard let from = order.firstIndex(of: field) else { return }
+        let to = min(max(0, from + offset), order.count - 1)
+        guard to != from else { return }
+        order.remove(at: from); order.insert(field, at: to); metadataOrder.wrappedValue = order
     }
 }
 

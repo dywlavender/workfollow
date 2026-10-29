@@ -2,6 +2,8 @@
 
 打勾（WorkFollow）是一个本地优先的工作工具，在同一个工作空间内统一处理个人任务、协作任务和笔记。本仓库采用前后端独立工程：Vue 3 前端通过 REST API 访问 FastAPI 后端，业务数据存入 SQLite，附件存入 `data/files/`。
 
+现有 Python 后端已集成 LangChain 1.2.x 文字 AI，可调用 OpenAI 兼容服务，提供任务提取、子任务拆分、摘要优化和带上下文压缩的多轮 API。配置及接入说明见 [后端文字 AI](docs/backend-text-ai-langchain-2026-10-28.md)。
+
 ## 当前进度
 
 - Phase 1–6：基础工程、待办、日历与快捷入口、笔记和笔记联动

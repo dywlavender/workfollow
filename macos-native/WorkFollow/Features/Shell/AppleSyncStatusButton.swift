@@ -25,7 +25,7 @@ struct AppleSyncStatusButton: View {
                 }
         }
         .buttonStyle(.plain)
-        .help("Apple 同步：" + status.title)
+        .accessibilityHint(status.title)
         .accessibilityLabel("Apple 同步：" + status.title)
         // Open inward from the rail; keep the actual icon as the anchor.
         .background {

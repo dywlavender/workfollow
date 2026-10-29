@@ -91,7 +91,7 @@ struct FocusActiveSessionPane: View {
             } label: {
                 Image(systemName: "link").font(.system(size: 16, weight: .medium)).foregroundStyle(theme.text2)
             }
-            .buttonStyle(.plain).help("任务关联")
+            .buttonStyle(.plain).hoverTip("任务关联")
             .accessibilityIdentifier(isCompleted ? "focus-completed-edit-record" : "focus-session-associate")
         }
     }

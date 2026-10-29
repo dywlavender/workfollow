@@ -50,7 +50,7 @@ struct FocusTimerPane: View {
                     Image(systemName: "chevron.down").font(.system(size: 13, weight: .medium))
                         .frame(width: 24, height: FocusLayoutMetrics.headerButtonSize)
                 }
-                .buttonStyle(.plain).foregroundStyle(theme.text2).help("返回常用专注库")
+                .buttonStyle(.plain).foregroundStyle(theme.text2).hoverTip("返回常用专注库")
                 .accessibilityIdentifier("focus-timer-back-library").focusRenderAnchor(.timerBackToLibrary)
                 Spacer(minLength: 0)
                 headerIcons
@@ -111,7 +111,7 @@ struct FocusTimerPane: View {
 
 
             .foregroundStyle(theme.text2)
-            .help("结束铃声：\(currentBellLabel)")
+            .hoverTip("结束铃声：\(currentBellLabel)")
 
             Button { showRhythmPopover = true } label: {
                 Image(systemName: "ellipsis")
@@ -122,7 +122,7 @@ struct FocusTimerPane: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(theme.text2)
-            .help("节奏设置")
+            .hoverTip("节奏设置")
             .background(AnchoredPropertyPanel(isPresented: $showRhythmPopover, width: PopupMetrics.rhythmPopoverWidth) {
                 rhythmPopover
             })
@@ -423,6 +423,7 @@ struct FocusTimerPane: View {
                 .background(Circle().fill(theme.chipBackground))
         }
         .buttonStyle(.plain)
+        .hoverTip(symbol == "plus" ? "增加" : "减少")
     }
 
     private func taskTitle(for id: UUID?) -> String? {

@@ -117,6 +117,8 @@ final class WidgetQuickAddTests: XCTestCase {
         defer { environment.widgetQuickAdd.dismiss(); try? FileManager.default.removeItem(at: directory) }
         let workspace = environment.taskWorkspace
         let existing = try XCTUnwrap(workspace.createTask(title: "保持选中", in: .inbox).taskID)
+        XCTAssertTrue(workspace.saveList("工作"))
+        XCTAssertTrue(workspace.setDefaultList("工作"))
         workspace.select(existing)
         workspace.activeList = "其它清单"
         workspace.activeTag = "其它标签"
@@ -134,7 +136,7 @@ final class WidgetQuickAddTests: XCTestCase {
         XCTAssertEqual(task.title, "组件创建任务")
         XCTAssertEqual(task.schedule.dueAt, workspace.calendar.startOfDay(for: workspace.clock()))
         XCTAssertFalse(task.schedule.hasTime)
-        XCTAssertEqual(task.list, .inbox)
+        XCTAssertEqual(task.list.name, "工作", "组件快捷新增遵循默认清单，忽略主窗口当前浏览的清单")
         XCTAssertTrue(task.tags.isEmpty)
         XCTAssertEqual(workspace.selectedTaskID, existing)
         XCTAssertEqual(environment.navigation.destination, .notes)
