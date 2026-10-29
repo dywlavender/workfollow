@@ -61,6 +61,7 @@ struct TaskRelationPicker: View {
                         }.buttonStyle(.plain).relationPickerAnchor(.target(target.id))
                     }
                 }
+                .compactScrollbars()
             }
             if failed {
                 Text("无法插入关联，请返回正文后重试").font(.caption).foregroundStyle(.red)

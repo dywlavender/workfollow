@@ -92,6 +92,7 @@ struct CommandPaletteView: View {
                         }
                     }
                     .padding(.vertical, WFSpace.sm)
+                    .compactScrollbars()
                 }
                 .onChange(of: selectedIndex) { _, index in
                     if entries.indices.contains(index) { proxy.scrollTo(entries[index].id) }

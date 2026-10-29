@@ -109,6 +109,7 @@ struct FocusTaskPickerPopover: View {
                         .font(.system(size: FocusTaskPickerMetrics.taskFontSize))
                         .foregroundStyle(theme.text3)
                         .frame(maxWidth: .infinity, minHeight: 104)
+                        .compactScrollbars()
                 } else {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(groups) { group in
@@ -125,6 +126,7 @@ struct FocusTaskPickerPopover: View {
                             }
                         }
                     }
+                    .compactScrollbars()
                 }
             }
             .scrollIndicators(.automatic)

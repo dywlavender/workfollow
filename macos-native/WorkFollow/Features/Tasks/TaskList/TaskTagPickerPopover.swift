@@ -97,6 +97,7 @@ struct TaskTagPickerPopover: View {
                 }
                 .padding(.vertical, WFSpace.xs)
             }
+                .compactScrollbars()
             PopupActionBar {
                 PopupActionButton(title: "取消", action: onCancel)
                     .tagPickerRenderAnchor(.cancel)

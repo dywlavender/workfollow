@@ -86,6 +86,7 @@ struct TaskBatchPanelView: View {
                 .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
                 .padding(.vertical, WFSpace.lg)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
+                .compactScrollbars()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

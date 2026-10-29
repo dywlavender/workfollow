@@ -103,6 +103,7 @@ struct CalendarDayAgenda: View {
                         SystemCalendarEventBar(event: event) { onOpenEvent(event) }
                     }
                 }
+                .compactScrollbars()
             }
             if tasks.isEmpty && externalEvents.isEmpty { Text("当天没有安排").foregroundStyle(WFColors.secondaryText) }
         }.padding(14).background(WFColors.content)
@@ -148,6 +149,7 @@ struct CalendarArrangePane: View {
                     }
                 }
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                .compactScrollbars()
             }
             if tasks.isEmpty { Text("所有任务均已安排").font(WFType.caption).foregroundStyle(WFColors.secondaryText) }
         }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

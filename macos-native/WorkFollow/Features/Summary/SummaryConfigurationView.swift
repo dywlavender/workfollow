@@ -484,6 +484,7 @@ struct SummaryListPopover: View {
                             .onChange(of: geometry.size.height) { _, height in updateContentHeight(height) }
                     })
             }
+                    .compactScrollbars()
             .frame(height: min(contentHeight ?? estimatedHeight, SummaryPopoverMetrics.maximumListHeight))
             SummaryPopoverActions(canApply: all || !draft.isEmpty, onCancel: onCancel) { onApply(all ? [] : draft) }
         }.frame(width: SummaryPopoverMetrics.listWidth)

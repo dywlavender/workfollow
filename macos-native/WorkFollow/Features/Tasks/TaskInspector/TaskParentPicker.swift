@@ -103,6 +103,7 @@ struct TaskParentPicker: View {
                         }.buttonStyle(.plain).parentPickerAnchor(.candidate(task.id))
                     }
                 }
+                .compactScrollbars()
             }
             if failed {
                 Text("任务状态已变化，请重新选择").font(WFType.supporting).foregroundStyle(.red).padding(8)

@@ -687,6 +687,7 @@ struct TaskDatePopoverV2: View {
             }
             .frame(height: ScheduleMetrics.timeOptionsHeight)
             .onAppear {
+                .compactScrollbars()
                 let target = options.first { option in
                     guard let selected else { return false }
                     return matches(option, selected)

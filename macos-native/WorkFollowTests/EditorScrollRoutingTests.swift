@@ -79,10 +79,6 @@ final class EditorScrollRoutingTests: XCTestCase {
         }.frame(width: 420, height: 260))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 420, height: 260)
         defer { window.close() }
-        func findScroll(in view: NSView) -> NSScrollView? {
-            if let scroll = view as? NSScrollView { return scroll }
-            return view.subviews.lazy.compactMap { findScroll(in: $0) }.first
-        }
         let scroll = try XCTUnwrap(findScroll(in: host))
         XCTAssertEqual(scroll.scrollerStyle, .overlay)
         let scroller = try XCTUnwrap(scroll.verticalScroller as? CompactOverlayScroller)
@@ -93,6 +89,48 @@ final class EditorScrollRoutingTests: XCTestCase {
         XCTAssertEqual(thumb.midX, 7.5, accuracy: 0.01, "细条在命中轨道内居中")
         XCTAssertNotNil(scroller.target, "Keep the scroll view's native knob target")
         XCTAssertNotNil(scroller.action)
+    }
+
+    /// 选项面板的横向滚动同样要细：之前只处理竖向，横条会退回系统粗滚条。
+    func testHorizontalScrollHostUsesSlimDraggableOverlay() throws {
+        let host = NSHostingView(rootView: ScrollView(.horizontal) {
+            Text(String(repeating: "格式选项 ", count: 80)).fixedSize()
+                .frame(maxHeight: .infinity)
+                .compactScrollbars()
+        }.frame(width: 320, height: 120))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 320, height: 120)
+        defer { window.close() }
+        let scroll = try XCTUnwrap(findScroll(in: host))
+        XCTAssertEqual(scroll.scrollerStyle, .overlay)
+        let scroller = try XCTUnwrap(scroll.horizontalScroller as? CompactOverlayScroller)
+        XCTAssertEqual(scroller.controlSize, .small)
+        let thumb = CompactOverlayScroller.thumbRect(in: NSRect(x: 20, y: 0, width: 80, height: 15),
+                                                     isHorizontal: true)
+        XCTAssertEqual(thumb.height, 3)
+        XCTAssertEqual(thumb.midY, 7.5, accuracy: 0.01, "横条在命中轨道内居中")
+        XCTAssertNotNil(scroller.target)
+        XCTAssertNotNil(scroller.action)
+    }
+
+    /// `/` 菜单（行尾标着「文字格式」的那张选项框）此前没挂紧凑样式。
+    func testSlashMenuScrollerIsSlimOverlay() throws {
+        let host = NSHostingView(rootView: SlashCommandList(
+            commands: DocumentProfile.standardBlockMenuCommands,
+            selected: 0, compact: false,
+            onSelect: { _ in }, onHover: { _ in })
+            .frame(width: 300, height: 200))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 300, height: 200)
+        defer { window.close() }
+        let scroll = try XCTUnwrap(findScroll(in: host))
+        XCTAssertEqual(scroll.scrollerStyle, .overlay)
+        let scroller = try XCTUnwrap(scroll.verticalScroller as? CompactOverlayScroller)
+        XCTAssertEqual(scroller.controlSize, .small)
+        XCTAssertTrue(scroll.autohidesScrollers)
+    }
+
+    private func findScroll(in view: NSView) -> NSScrollView? {
+        if let scroll = view as? NSScrollView { return scroll }
+        return view.subviews.lazy.compactMap { self.findScroll(in: $0) }.first
     }
 
     private func wheel(in window: NSWindow, point: NSPoint, dx: CGFloat = 0, dy: CGFloat) throws -> NSEvent {

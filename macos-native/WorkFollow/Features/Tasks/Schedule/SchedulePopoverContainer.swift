@@ -30,6 +30,7 @@ struct SchedulePopoverContainer<CalendarSection: View, PropertyContent: View, Fo
             ScrollView(.vertical) {
                 propertyContent()
                     .frame(maxWidth: .infinity, alignment: .top)
+                    .compactScrollbars()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .scheduleRenderAnchor(.propertyViewport)

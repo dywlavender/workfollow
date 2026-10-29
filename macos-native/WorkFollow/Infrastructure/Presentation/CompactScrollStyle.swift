@@ -12,10 +12,29 @@ enum CompactScrollStyle {
             scroll.verticalScroller = CompactOverlayScroller(frame: NSRect(x: 0, y: 0, width: 12, height: 100))
         }
         if scroll.verticalScroller?.controlSize != .small { scroll.verticalScroller?.controlSize = .small }
+        // 横向同样是 3pt 细条：选项条/提示卡横滑时不能露出系统粗滚条。
+        // 没有横向滚条（showsIndicators: false）时保持原样，不凭空造一条。
+        if scroll.hasHorizontalScroller, !(scroll.horizontalScroller is CompactOverlayScroller) {
+            scroll.horizontalScroller = CompactOverlayScroller(
+                frame: NSRect(x: 0, y: 0, width: 100, height: 12), isHorizontal: true)
+        }
+        if scroll.horizontalScroller?.controlSize != .small { scroll.horizontalScroller?.controlSize = .small }
     }
 }
 
 final class CompactOverlayScroller: NSScroller {
+    private let isHorizontal: Bool
+
+    init(frame: NSRect, isHorizontal: Bool = false) {
+        self.isHorizontal = isHorizontal
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) {
+        isHorizontal = false
+        super.init(coder: coder)
+    }
+
     override class var isCompatibleWithOverlayScrollers: Bool { true }
 
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
@@ -23,14 +42,18 @@ final class CompactOverlayScroller: NSScroller {
     override func drawKnob() {
         let knob = rect(for: .knob)
         guard !knob.isEmpty else { return }
-        let thumb = Self.thumbRect(in: knob)
+        let thumb = Self.thumbRect(in: knob, isHorizontal: isHorizontal)
         NSColor.labelColor.withAlphaComponent(0.30).setFill()
-        NSBezierPath(roundedRect: thumb, xRadius: thumb.width / 2, yRadius: thumb.width / 2).fill()
+        NSBezierPath(roundedRect: thumb, xRadius: 1.5, yRadius: 1.5).fill()
     }
 
-    static func thumbRect(in knob: NSRect) -> NSRect {
+    static func thumbRect(in knob: NSRect, isHorizontal: Bool = false) -> NSRect {
         // 编辑区、任务列表、清单侧栏统一约 3pt 的自绘细条；
         // 外层 12pt 的 scroller 仍保留，拖拽命中不受细条宽度影响。
+        if isHorizontal {
+            let height = min(3, knob.height)
+            return NSRect(x: knob.minX, y: knob.midY - height / 2, width: knob.width, height: height)
+        }
         let width = min(3, knob.width)
         return NSRect(x: knob.midX - width / 2, y: knob.minY, width: width, height: knob.height)
     }

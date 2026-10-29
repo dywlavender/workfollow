@@ -199,6 +199,7 @@ struct SlashCommandList: View {
                     }
                 }
                 .padding(.vertical, compact ? SlashMenuMetrics.padding : 0)
+                .compactScrollbars()
             }
             .onChange(of: selected) { _, value in proxy.scrollTo(value, anchor: nil) }
             .onAppear { proxy.scrollTo(selected, anchor: nil) }

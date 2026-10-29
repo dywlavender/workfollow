@@ -269,6 +269,7 @@ private struct QuickAddListPickerPopover: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                .compactScrollbars()
                     }
                     if matches.isEmpty {
                         Text("没有匹配的清单").font(WFType.supporting)

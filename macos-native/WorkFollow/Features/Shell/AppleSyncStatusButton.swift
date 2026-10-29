@@ -59,6 +59,7 @@ struct AppleSyncStatusButton: View {
                             }
                         }
                     }
+                    .compactScrollbars()
                 }.frame(maxHeight: 230)
             }
             Text("“已写入”仅表示 Mac 本地写入成功；iPhone 接收由 iCloud 完成。")

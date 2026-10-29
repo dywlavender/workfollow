@@ -33,6 +33,7 @@ struct FocusTaskScopePopover: View {
                     }
                 }
             }
+            .compactScrollbars()
         }
         .scrollIndicators(.automatic)
         .padding(8)
