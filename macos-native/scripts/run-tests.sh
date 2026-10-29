@@ -114,6 +114,7 @@ ln -s "$XCTEST_SUPPORT" "$BUNDLE/Contents/Frameworks/libXCTestSwiftSupport.dylib
 RUNNER="$WORK/WorkFollowTestsRunner.app"
 mkdir -p "$RUNNER/Contents/MacOS" "$WORK/storage"
 ln -s "$APP/Contents/Resources" "$RUNNER/Contents/Resources"
+ln -s "$APP/Contents/MacOS/workfollowctl" "$RUNNER/Contents/MacOS/workfollowctl"
 cp "$(xcrun --find xctest)" "$RUNNER/Contents/MacOS/xctest"
 # Preserve the built app's declarations so tests can verify its URL schemes.
 cp "$APP/Contents/Info.plist" "$RUNNER/Contents/Info.plist"

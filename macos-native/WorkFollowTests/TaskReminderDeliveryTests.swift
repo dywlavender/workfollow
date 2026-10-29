@@ -20,6 +20,15 @@ final class TaskReminderDeliveryTests: XCTestCase {
         withExtendedLifetime(focus) {}
     }
 
+    func testLegacyReminderBellFallsBackToJingle() throws {
+        let legacy = try JSONDecoder().decode(TaskReminderPreferences.self,
+            from: Data("{\"soundEnabled\":true,\"bell\":\"Glass\",\"snoozeMinutes\":10}".utf8))
+        XCTAssertEqual(legacy.bell, "Jingle")
+        let chosen = try JSONDecoder().decode(TaskReminderPreferences.self,
+            from: Data("{\"soundEnabled\":true,\"bell\":\"Knock\",\"snoozeMinutes\":10}".utf8))
+        XCTAssertEqual(chosen.bell, "Knock")
+    }
+
     func testSnoozeSurvivesRestartWithoutChangingTaskSchedule() async throws {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let source = task(); let client = FakeTaskNotificationClient()

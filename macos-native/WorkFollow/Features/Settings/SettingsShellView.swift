@@ -73,6 +73,16 @@ private struct SettingsGeneralView: View {
                 WFFormToggleRow("完成任务时播放提示音", isOn: Binding(
                     get: { TaskCompletionFeedback.isSoundEnabled },
                     set: { TaskCompletionFeedback.isSoundEnabled = $0 }))
+                WFFormRow("完成提示音") {
+                    BusinessPicker("", selection: Binding(
+                        get: { TaskCompletionFeedback.sound.identifier },
+                        set: { TaskCompletionFeedback.sound = TaskCompletionFeedback.Sound.resolve($0) }),
+                        options: TaskCompletionFeedback.Sound.allCases.map {
+                            BusinessChoice($0.identifier, $0.rawValue)
+                        })
+                        .labelsHidden()
+                        .disabled(!TaskCompletionFeedback.isSoundEnabled)
+                }
                 WFFormToggleRow("登录时启动 WorkFollow", isOn: Binding(
                     get: { loginStatus == .enabled || loginStatus == .requiresApproval },
                     set: updateLoginItem), showsDivider: false)

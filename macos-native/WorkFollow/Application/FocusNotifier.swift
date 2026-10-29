@@ -6,6 +6,8 @@ import UserNotifications
 @MainActor
 final class FocusNotifier {
     private var authorizationRequested = false
+    /// `NSSound.play()` 不保证调用方之外还有强引用；保留当前铃声避免播到一半被释放。
+    private var playingSound: NSSound?
 
     func requestAuthorizationIfNeeded() {
         guard !authorizationRequested else { return }
@@ -16,7 +18,7 @@ final class FocusNotifier {
 
     /// 阶段切换：应用内铃声立即响，系统通知保证切走后也能看到。
     func announce(bell: String?, title: String, body: String) {
-        if let bell { NSSound(named: bell)?.play() }
+        play(bell)
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -29,7 +31,24 @@ final class FocusNotifier {
     }
 
     func preview(bell: String?) {
-        guard let bell else { return }
-        NSSound(named: bell)?.play()
+        play(bell)
+    }
+
+    private func play(_ bell: String?) {
+        guard let bell, let sound = FocusBellAudio.sound(bell) else { return }
+        playingSound?.stop()
+        playingSound = sound
+        sound.play()
+    }
+}
+
+/// 专注铃声先查应用内资源，再回退到系统音；内置铃声不依赖 macOS 音色库。
+@MainActor
+enum FocusBellAudio {
+    static func sound(_ name: String) -> NSSound? {
+        if let url = Bundle.main.url(forResource: name, withExtension: "wav") {
+            return NSSound(contentsOf: url, byReference: true)
+        }
+        return NSSound(named: name)
     }
 }

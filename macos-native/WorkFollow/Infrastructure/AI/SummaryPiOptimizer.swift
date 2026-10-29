@@ -53,6 +53,7 @@ struct SummaryPiOptimizer {
     var model: String = ""
     var backend: AIBackendBridge = .shared
     var textModel: AITextModelRequest?
+    var conversationDirectory: URL?
 
     func optimize(text: String, options: SummaryAIOptions, updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
         let encoded = try JSONEncoder().encode(options)
@@ -74,8 +75,14 @@ struct SummaryPiOptimizer {
 
     func rewriteNote(_ request: NoteRewriteRequest,
                      updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
-        return try await self.request("note.rewrite", params: ["action": request.action.rawValue,
-            "title": request.title, "content": request.content], updates: updates)
+        var params: [String: Any] = ["action": request.action.rawValue,
+            "title": request.title, "content": request.content,
+            "instruction": request.instruction]
+        if let id = request.conversationID, let conversationDirectory, textModel == nil {
+            params["conversationID"] = id.uuidString
+            params["sessionDirectory"] = conversationDirectory.path
+        }
+        return try await self.request("note.rewrite", params: params, updates: updates)
     }
 
     private func request(_ method: String, params: [String: Any], updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
@@ -86,12 +93,7 @@ struct SummaryPiOptimizer {
     }
 
     private func streamed<Result: Decodable>(_ method: String, params: [String: Any], updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> Result {
-        let channel = UUID().uuidString
-        backend.subscribe(channel) { data in
-            if let event = try? JSONDecoder().decode(AITextUpdate.self, from: data) { updates(event) }
-        }
-        defer { backend.unsubscribe(channel) }
-        return try await backend.call(method, params: parameters(params.merging(["progressChannel": channel]) { _, new in new }), timeout: 605)
+        try await AITextStreamRequest.call(backend: backend, method: method, params: parameters(params), updates: updates)
     }
 
     private func parameters(_ values: [String: Any]) -> [String: Any] {

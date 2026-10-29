@@ -37,6 +37,7 @@ final class AppEnvironment: ObservableObject {
     let countdownStore: CountdownStore
     let meetingStore: MeetingStore
     let aiModels: AIModelStore
+    let aiChat: AIChatStore
     let filterStore: FilterStore
     /// 任务列表的排序/分组记忆（modules/view-preferences.json，独立于任务快照）。
     let viewPreferences: TaskViewPreferenceStore
@@ -131,6 +132,7 @@ final class AppEnvironment: ObservableObject {
         countdownStore = CountdownStore(clock: clock)
         let aiModels = AIModelStore(directory: directory.appendingPathComponent("modules"))
         self.aiModels = aiModels
+        aiChat = AIChatStore(directory: directory.appendingPathComponent("modules"))
         meetingStore = MeetingStore(directory: directory.appendingPathComponent("modules"),
             ai: MeetingPiClient(textModel: { try aiModels.request() }))
         filterStore = FilterStore(clock: clock)
@@ -141,7 +143,8 @@ final class AppEnvironment: ObservableObject {
         // 倒计时的提醒也走同一个排程服务。偏移量语义与任务相反（非负整天，
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
-        moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences, reminders, systemCalendar, systemReminders]
+        moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences, reminders, systemCalendar, systemReminders, aiChat]
+        AISelectionWindowController.shared.makeClient = { [weak self] in self?.conversationClient() }
         taskWorkspace.placementFeedback = { [weak self] before, after, count in
             guard let self else { return false }
             return TaskPlacementFeedback.present(before: before, after: after, count: count,

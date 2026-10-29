@@ -26,7 +26,8 @@ extension AppEnvironment {
             existingTitles: taskWorkspace.allTasks.filter { $0.deletedAt == nil && $0.parentID == task.id }.map(\.title))
     }
 
-    func applyAITasks(_ drafts: [AITaskDraft], request: AITaskRequest, list: String, sectionID: String?) throws {
+    @discardableResult
+    func applyAITasks(_ drafts: [AITaskDraft], request: AITaskRequest, list: String, sectionID: String?) throws -> [UUID] {
         switch request.source {
         case let .note(id):
             guard notesWorkspace.notes.contains(where: { $0.id == id && $0.deletedAt == nil }) else { throw AITaskError.sourceMissing }
@@ -36,5 +37,6 @@ extension AppEnvironment {
         }
         let ids = try taskWorkspace.createAITasks(drafts, request: request, list: list, sectionID: sectionID)
         if ids.isEmpty { feedback.show(FeedbackEvent(kind: .info, message: "这些任务已存在，无需重复添加")) }
+        return ids
     }
 }

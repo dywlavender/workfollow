@@ -46,6 +46,7 @@ struct DocumentSelectionAction: Identifiable {
     let id: String
     let title: String
     var toolbarTitle: String? = nil
+    var symbol: String = "text.badge.plus"
     let perform: (String) -> Void
     var displayTitle: String { toolbarTitle ?? title }
 }

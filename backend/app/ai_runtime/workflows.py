@@ -81,6 +81,7 @@ class NoteRewriteRequest(BaseModel):
     action: Literal["organize", "polish"]
     title: str = Field(default="", max_length=1000)
     content: str = Field(min_length=1)
+    instruction: str = Field(default="", max_length=2000)
 
 
 def note_rules(action: str) -> str:
@@ -92,6 +93,7 @@ def note_rules(action: str) -> str:
         "不增加原文没有的事实、日期、数字、负责人、原因或评价，不把建议写成决定，不把未完成写成完成。",
         "完整处理提供的原文，保留记录编号、金额、日期和更正，不遗漏末尾内容。",
         "只输出处理后的正文，不重复标题，不说明过程；使用简洁的 Markdown 标题和列表。",
+        "若 instruction 非空，在不违反以上约束的前提下满足这条补充要求。",
     ])
 
 

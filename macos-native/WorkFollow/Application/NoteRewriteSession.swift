@@ -11,6 +11,9 @@ struct NoteRewriteRequest: Identifiable {
     let title: String
     let content: String
     let action: Action
+    /// 对话栏里对本次结果的补充要求；空字符串表示沿用原提示词。
+    var instruction: String = ""
+    var conversationID: UUID?
 }
 
 @MainActor

@@ -57,7 +57,7 @@ struct DocumentSelectionToolbarView: View {
                 Button {
                     onInvoke(action)
                 } label: {
-                    Label(action.displayTitle, systemImage: "text.badge.plus")
+                    Label(action.displayTitle, systemImage: action.symbol)
                         .labelStyle(.titleAndIcon)
                         .padding(.horizontal, 6)
                         .frame(height: 26)

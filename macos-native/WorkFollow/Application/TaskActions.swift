@@ -82,9 +82,8 @@ final class TaskActions {
                         _ = setDocument(id, draft.document(for: request))
                     }
                 } else {
-                    result = createDraft(title: draft.title, list: list, schedule: draft.schedule,
-                        priority: draft.priority, tags: [], reminder: nil, frequency: .never,
-                        document: draft.document(for: request))
+                    result = createDraft(title: draft.title, list: list, plan: draft.plan,
+                        priority: draft.priority, tags: [], document: draft.document(for: request))
                     if let id = result.taskID, let sectionID { _ = setTaskSection(id, sectionID: sectionID) }
                 }
                 guard let id = result.taskID else { continue }

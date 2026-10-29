@@ -8,6 +8,8 @@ struct AITaskRequest: Identifiable {
     let content: String
     let referenceDate: Date
     var existingTitles: [String] = []
+    /// 对话栏里对本次提取的补充要求（如「只提取工作相关」）。
+    var instruction: String = ""
     var isBreakdown: Bool { if case .task = source { true } else { false } }
     var actionTitle: String { isBreakdown ? "拆分子任务" : "提取待办" }
     var sourceURL: URL {
@@ -21,7 +23,7 @@ struct AITaskRequest: Identifiable {
         let day = DateFormatter(); day.dateFormat = "yyyy-MM-dd"; day.locale = Locale(identifier: "en_US_POSIX")
         day.calendar = Calendar(identifier: .gregorian)
         return ["action": isBreakdown ? "breakdown_task" : "extract_tasks", "title": title,
-                "content": content, "existingTitles": existingTitles,
+                "content": content, "existingTitles": existingTitles, "instruction": instruction,
                 "referenceDate": day.string(from: referenceDate), "timeZone": TimeZone.current.identifier]
     }
 
@@ -31,9 +33,41 @@ struct AITaskDraft: Identifiable {
     let id = UUID()
     var selected = true
     var title: String
-    var schedule: TaskSchedule = TaskSchedule()
+    /// 候选项可编辑的完整日程（含提醒/重复），创建时原样写入任务。
+    var plan: SchedulePlan
     var priority: TaskPriority = .none
     var quote = ""
+    /// 候选任务正文。提取结果以原文引用作为初稿，之后可在候选浮层里直接编辑。
+    var document: NativeDocument
+
+    var schedule: TaskSchedule {
+        get { plan.schedule }
+        set { plan.schedule = newValue }
+    }
+
+    init(title: String, schedule: TaskSchedule = TaskSchedule(),
+         priority: TaskPriority = .none, quote: String = "") {
+        self.title = title
+        self.plan = SchedulePlan(schedule: schedule, reminder: nil, reminderOffsets: [],
+                                 frequency: .never, recurrenceRule: nil)
+        self.priority = priority
+        self.quote = quote
+        self.document = Self.document(from: quote)
+    }
+
+    init(title: String, plan: SchedulePlan,
+         priority: TaskPriority = .none, quote: String = "") {
+        self.title = title
+        self.plan = plan
+        self.priority = priority
+        self.quote = quote
+        self.document = Self.document(from: quote)
+    }
+
+    private static func document(from quote: String) -> NativeDocument {
+        quote.isEmpty ? .empty
+            : NativeDocument(blocks: [DocumentBlock(kind: .quote, runs: [DocumentRun(text: quote)])])
+    }
 
     static func normalizedTitle(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined().lowercased()
@@ -83,7 +117,7 @@ struct AITaskDraft: Identifiable {
     func document(for request: AITaskRequest) -> NativeDocument {
         var blocks = [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "来源："),
             DocumentRun(text: request.title, marks: [.link(request.sourceURL.absoluteString)])])]
-        if !quote.isEmpty { blocks.append(DocumentBlock(kind: .quote, runs: [DocumentRun(text: quote)])) }
+        if !document.isEmpty { blocks.append(contentsOf: document.blocks) }
         return NativeDocument(blocks: blocks)
     }
 }

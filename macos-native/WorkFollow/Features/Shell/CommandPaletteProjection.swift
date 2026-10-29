@@ -220,6 +220,7 @@ enum CommandPaletteProjection {
             command("打开所有任务", "按日期查看全部任务", "list.bullet.rectangle", .navigate(.allTasks)),
             command("打开日历", "按日期查看任务", "calendar", .navigate(.calendar)),
             command("打开笔记", "继续写下刚才的想法", "text.alignleft", .navigate(.notes)),
+            command("打开 AI 对话", "开始或继续聊天", "bubble.left.and.bubble.right", .navigate(.aiChat)),
             command("打开任务垃圾桶", "恢复或彻底删除已移除的任务", "trash", .navigate(.trash)),
             command("打开笔记垃圾桶", "恢复或彻底删除已移除的笔记", "trash", .navigate(.notesTrash)),
             command("切换外观", "在浅色、深色和跟随系统之间轮换", "moon", .toggleAppearance)

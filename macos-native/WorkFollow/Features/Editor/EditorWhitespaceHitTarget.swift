@@ -35,6 +35,16 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
                           height: max(0, bounds.maxY - top)).intersection(visibleRect)
         }
 
+        /// 光标只铺到正文编辑器底边。宿主把命中层铺在整块内容上，便于点击空白
+        /// 定位到文末；但下方关联任务、附件等区块不是正文，不能继续显示 I-beam。
+        private func cursorBodyRect(for editor: NativeTextView) -> NSRect {
+            let body = bodyRect(for: editor)
+            let editorBottom = convert(editor.bounds, from: editor).maxY
+            let bottom = min(body.maxY, editorBottom)
+            return NSRect(x: body.minX, y: body.minY, width: body.width,
+                          height: max(0, bottom - body.minY))
+        }
+
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard let editor else { return nil }
             let local = convert(point, from: superview)
@@ -47,16 +57,22 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
         override func resetCursorRects() {
             super.resetCursorRects()
             guard let editor else { return }
-            let body = bodyRect(for: editor)
+            for space in cursorSpaces(for: editor) {
+                addCursorRect(space, cursor: .iBeam)
+            }
+        }
+
+        func cursorSpaces(for editor: NativeTextView) -> [NSRect] {
+            let body = cursorBodyRect(for: editor)
             let text = convert(editor.bounds, from: editor)
             let spaces = [
                 NSRect(x: body.minX, y: body.minY, width: max(0, text.minX - body.minX), height: body.height),
                 NSRect(x: text.maxX, y: body.minY, width: max(0, body.maxX - text.maxX), height: body.height),
                 NSRect(x: body.minX, y: text.maxY, width: body.width, height: max(0, body.maxY - text.maxY))
             ]
-            for space in spaces {
-                let visible = space.intersection(body)
-                if !visible.isEmpty { addCursorRect(visible, cursor: .iBeam) }
+            return spaces.compactMap {
+                let visible = $0.intersection(body)
+                return visible.isEmpty ? nil : visible
             }
         }
 

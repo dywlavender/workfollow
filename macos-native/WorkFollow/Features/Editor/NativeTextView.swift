@@ -1072,9 +1072,9 @@ final class NativeTextView: NSTextView {
         let formatting = NSMenuItem(title: "格式", action: nil, keyEquivalent: "")
         formatting.submenu = formatMenu()
         menu?.addItem(formatting)
-        if selectedRange().length > 0, !profile.selectionActions.isEmpty {
+        if selectedRange().length > 0, !selectionContextActions.isEmpty {
             menu?.addItem(.separator())
-            for (index, action) in profile.selectionActions.enumerated() {
+            for (index, action) in selectionContextActions.enumerated() {
                 let item = NSMenuItem(title: action.title, action: #selector(invokeSelectionAction(_:)), keyEquivalent: "")
                 item.tag = index
                 item.target = self
@@ -1087,8 +1087,19 @@ final class NativeTextView: NSTextView {
     @objc private func invokeSelectionAction(_ sender: NSMenuItem) {
         let range = selectedRange()
         guard range.length > 0, NSMaxRange(range) <= (string as NSString).length else { return }
-        guard profile.selectionActions.indices.contains(sender.tag) else { return }
-        profile.selectionActions[sender.tag].perform((string as NSString).substring(with: range))
+        guard selectionContextActions.indices.contains(sender.tag) else { return }
+        selectionContextActions[sender.tag].perform((string as NSString).substring(with: range))
+    }
+
+    private var selectionContextActions: [DocumentSelectionAction] {
+        var actions = profile.selectionActions
+        if AISelectionWindowController.shared.isAvailable {
+            actions.append(DocumentSelectionAction(id: "ai.polish", title: "AI 润色", symbol: "sparkles") { [weak self] _ in
+                guard let self else { return }
+                AISelectionWindowController.shared.present(editor: self)
+            })
+        }
+        return actions
     }
 
     // MARK: - 选区浮动工具条（迁移自 Flutter DocumentSelectionToolbar；笔记 profile）
@@ -1107,7 +1118,7 @@ final class NativeTextView: NSTextView {
         // 只读预览里选字只用于复制，不弹可修改格式的浮条。
         let eligible = isEditable && window != nil && !hasMarkedText() && range.length > 0
             && profile.supportsSelectionToolbar
-            && !profile.selectionActions.isEmpty && NSMaxRange(range) <= (string as NSString).length
+            && !selectionContextActions.isEmpty && NSMaxRange(range) <= (string as NSString).length
         guard eligible, !selectionToolbarSuppressed else {
             closeSelectionPanel()
             return
@@ -1170,7 +1181,7 @@ final class NativeTextView: NSTextView {
         let style = textStorage.map { DocumentTextCodec.style(of: $0.attributedSubstring(from: range)) }
             ?? DocumentSelectionStyle()
         return DocumentSelectionToolbarView(
-            actions: profile.selectionActions,
+            actions: selectionContextActions,
             onInvoke: { [weak self] action in self?.invokeSelectionToolbarAction(action) },
             onFormat: { [weak self] command in self?.invokeSelectionToolbarFormat(command) },
             onLink: { [weak self] in self?.invokeSelectionToolbarLink() },

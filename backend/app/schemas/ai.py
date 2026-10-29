@@ -37,6 +37,7 @@ class AIGenerateRequest(ApiModel):
     reference_date: date | None = None
     time_zone: str = "Asia/Shanghai"
     options: AIOptions = Field(default_factory=AIOptions)
+    instruction: str = Field(default="", max_length=2000)
 
     @field_validator("content")
     @classmethod

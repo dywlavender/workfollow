@@ -38,7 +38,16 @@ class PiEngine:
                 header = source.readline(128)
             if header.startswith(b"#!") and b"node" in header:
                 raise EngineError(str(node_error), "node_unavailable")
-        command += ["--mode", "rpc", "--no-session", "--no-tools", "--no-extensions", "--no-skills",
+        command += ["--mode", "rpc"]
+        if options.get("sessionFile"):
+            command += ["--session", options["sessionFile"], "--session-dir", str(Path(options["sessionFile"]).parent)]
+        else:
+            command += ["--no-session"]
+        if options.get("appTools"):
+            command += ["--tools", "read,bash", "--skill", options["workfollowSkill"]]
+        else:
+            command += ["--no-tools"]
+        command += ["--no-extensions", "--no-skills",
                     "--no-prompt-templates", "--no-context-files", "--offline"]
         if options.get("systemPrompt"):
             command += ["--system-prompt", options["systemPrompt"]]
@@ -47,8 +56,13 @@ class PiEngine:
         if extension:
             command += ["--extension", extension]
         env = os.environ.copy()
+        if options.get("appTools"):
+            env["WORKFOLLOW_CLI"] = options["workfollowCLI"]
+            env["WORKFOLLOW_APP"] = options.get("workfollowApp", "")
         if node:
             env["PATH"] = str(node.parent) + ":" + str(Path(command[0]).parent) + ":" + env.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+        if options.get("appTools"):
+            env["PATH"] = str(Path(options["workfollowCLI"]).parent) + ":" + env.get("PATH", "")
         return command, env
 
     async def session(self, options: dict, extension: str = "", on_event=None) -> "PiSession":
@@ -196,12 +210,14 @@ class PiSession:
                 except (ValueError, UnicodeError):
                     continue
                 kind, message = event.get("type"), event.get("message", "")
-                if self.mode == "text" and kind in {"agent_start", "message_start", "message_update", "message_end", "auto_compaction_start", "auto_compaction_end", "auto_retry_start", "auto_retry_end"}:
+                if self.mode == "text" and kind in {"agent_start", "message_start", "message_update", "message_end", "tool_execution_start", "tool_execution_update", "tool_execution_end", "auto_compaction_start", "auto_compaction_end", "auto_retry_start", "auto_retry_end"}:
                     self.touch(max(0, event.get("delayMs", 0)) / 1000)
                     if kind == "auto_compaction_start" and self.timer:
                         self.timer.reschedule(None)
                 if kind == "extension_error" or (kind == "response" and event.get("success") is False):
                     self.settle(error=model_failure(event.get("error", "")))
+                elif self.mode == "text" and kind in {"tool_execution_start", "tool_execution_end"}:
+                    self.publish("status", message="正在查询或更新待办、笔记…" if kind == "tool_execution_start" else "正在整理回复…")
                 elif self.mode == "text" and kind == "message_start" and isinstance(message, dict) and message.get("role") == "assistant":
                     self.partial = ""
                     self.publish("text", text="", force=True)

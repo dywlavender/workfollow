@@ -10,15 +10,23 @@ struct FocusSessionTiming: Equatable {
 }
 
 enum FocusBell: String, CaseIterable {
-    case crisp = "清脆", soft = "温和", chime = "灵动", off = "关闭"
+    case jingle = "叮", drip = "水滴", knock = "敲击", spiral = "螺旋", off = "关闭"
     var identifier: String {
-        switch self { case .crisp: "glass"; case .soft: "ping"; case .chime: "tink"; case .off: "off" }
+        switch self {
+        case .jingle: "jingle"; case .drip: "drip"
+        case .knock: "knock"; case .spiral: "spiral"; case .off: "off"
+        }
     }
     var soundName: String? {
-        switch self { case .crisp: "Glass"; case .soft: "Ping"; case .chime: "Tink"; case .off: nil }
+        switch self {
+        case .jingle: "WorkFollowBellJingle"; case .drip: "WorkFollowBellDrip"
+        case .knock: "WorkFollowBellKnock"; case .spiral: "WorkFollowBellSpiral"
+        case .off: nil
+        }
     }
     static func resolve(_ value: String?) -> FocusBell {
-        allCases.first { $0.identifier == value || $0.rawValue == value || $0.soundName == value } ?? .off
+        guard let value else { return .jingle }
+        return allCases.first { $0.identifier == value || $0.rawValue == value || $0.soundName == value } ?? .jingle
     }
 }
 

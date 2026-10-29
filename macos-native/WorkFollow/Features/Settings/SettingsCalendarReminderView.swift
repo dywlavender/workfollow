@@ -28,7 +28,8 @@ struct SettingsCalendarReminderView: View {
                     HStack(spacing: 10) {
                         BusinessPicker("", selection: Binding(get: { reminders.state.snapshot.preferences.bell },
                             set: { name in reminders.state.updatePreferences { $0.bell = name } }), options:
-                            [BusinessChoice("Glass", "清脆"), BusinessChoice("Ping", "轻响"), BusinessChoice("Hero", "和弦"), BusinessChoice("Submarine", "低鸣")])
+                            [BusinessChoice("Jingle", "叮"), BusinessChoice("Drip", "水滴"),
+                             BusinessChoice("Knock", "敲击"), BusinessChoice("Spiral", "螺旋")])
                             .labelsHidden()
                         Button { reminders.previewSound() } label: {
                             Image(systemName: "play.fill")

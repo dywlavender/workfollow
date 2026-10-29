@@ -6,6 +6,7 @@ extension AppEnvironment {
         client.executable = meetingStore.configuration.executable
         client.model = meetingStore.configuration.resolvedMinutesModel
         client.textModel = try aiModels.request()
+        client.conversationDirectory = aiChat.sessionDirectory
         return client
     }
 

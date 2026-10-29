@@ -7,6 +7,7 @@ struct FocusActiveSessionPane: View {
     var onAssociate: (() -> Void)? = nil
     @Environment(\.colorScheme) private var colorScheme
     @State private var recordDraft: FocusRecordDraft?
+    @State private var noteEditorIsEmpty = true
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
     private var isCompleted: Bool { store.completionContext != nil }
@@ -32,20 +33,23 @@ struct FocusActiveSessionPane: View {
                     .focusRenderAnchor(.activeFocusNoteHeader)
 
                 ZStack(alignment: .topLeading) {
-                    if note.isEmpty {
+                    if note.isEmpty && noteEditorIsEmpty {
                         Text("记录你的想法...")
                             .font(.system(size: 14))
                             .foregroundStyle(theme.text3)
                             .padding(.horizontal, 9).padding(.top, 8)
                             .allowsHitTesting(false)
+                            .livePlaceholderProbe("focus.note.placeholder")
                     }
-                    TextEditor(text: Binding(get: { note }, set: {
+                    // 组合串还没上屏时模型仍是空的，占位靠编辑器的实时空态让位。
+                    LiveTextEditor(text: Binding(get: { note }, set: {
                         if isCompleted { store.updateCompletedSessionNote($0) }
                         else { store.updateCurrentSessionNote($0) }
-                    }))
-                    .font(.system(size: 14)).foregroundStyle(theme.text)
-                    .scrollContentBackground(.hidden).background(.clear)
-                    .accessibilityIdentifier(isCompleted ? "focus-completed-note-editor" : "focus-session-note-editor")
+                    }),
+                    font: .systemFont(ofSize: 14),
+                    textColor: NSColor(theme.text),
+                    accessibilityIdentifier: isCompleted ? "focus-completed-note-editor" : "focus-session-note-editor",
+                    onLiveTextIsEmptyChange: { noteEditorIsEmpty = $0 })
                 }
                 .frame(height: isCompleted ? FocusLayoutMetrics.completionNoteHeight : FocusLayoutMetrics.focusNoteHeight)
                 .background(theme.chipBackground,

@@ -49,6 +49,8 @@ struct IconRailView: View {
                        selected: navigation.destination == .focus)
             railButton(.meetings, symbol: "mic.fill", title: "会议纪要",
                        selected: navigation.destination == .meetings)
+            railButton(.aiChat, symbol: "bubble.left.and.bubble.right.fill", title: "AI 对话",
+                       selected: navigation.destination == .aiChat)
             Spacer()
             if let sync {
                 AppleSyncStatusButton(integration: sync, onRetry: onRetrySync,

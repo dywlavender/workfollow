@@ -31,6 +31,7 @@ struct MeetingWorkspaceView: View {
     @Environment(\.openSettings) private var openSettings
     @State private var aiTaskRequest: AITaskRequest?
     @State private var transcriptQuery = ""
+    @State private var minutesEditorIsEmpty = true
 
     /// 窄窗口下只显示一栏时的「当前在哪一栏」。宽窗口下恒为 false（两栏都在）。
     @State private var detailOnly = false
@@ -699,22 +700,23 @@ struct MeetingWorkspaceView: View {
     /// 这是「可编辑」换来的，取舍点在这里。
     private func minutesEditor(_ meeting: MeetingRecord) -> some View {
         ZStack(alignment: .topLeading) {
-            TextEditor(text: Binding(
+            // `LiveTextEditor` 负责回传实时空态：输入法的拼音还没上屏时，
+            // 绑定仍是空的，占位文案不能压在组合串下面等提交。
+            LiveTextEditor(text: Binding(
                 get: { store.selected?.minutes ?? "" },
                 set: { store.editMinutes($0) }
-            ))
-            .font(WFType.body)
-            .scrollContentBackground(.hidden)
+            ),
+            font: .systemFont(ofSize: 14),
+            accessibilityLabel: "会议纪要",
+            onLiveTextIsEmptyChange: { minutesEditorIsEmpty = $0 })
             .background(WFColors.content)
-            .accessibilityLabel("会议纪要")
-            // `TextEditor` 没有 placeholder，按项目里既有的做法自己叠一层
-            // （`SummaryWorkspaceView` 的日记/周报两处都是这个写法）。
-            if meeting.minutes.isEmpty {
+            if meeting.minutes.isEmpty && minutesEditorIsEmpty {
                 Text("有定稿文字后，点击“AI 编写纪要”；录音中每 5 分钟自动编写，也可以直接在这里写。")
                     .font(WFType.body).foregroundStyle(WFColors.tertiaryText)
                     .padding(.top, WFSpace.sm)
                     .padding(.leading, WFSpace.xs)
                     .allowsHitTesting(false)
+                    .livePlaceholderProbe("meeting.minutes.placeholder")
             }
         }
         .padding(WFSpace.sm)

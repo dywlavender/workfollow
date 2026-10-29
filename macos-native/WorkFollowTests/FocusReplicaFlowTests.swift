@@ -143,6 +143,14 @@ final class FocusReplicaFlowTests: XCTestCase {
         XCTAssertEqual(store.records.count, 2)
     }
 
+    func testTaskCompletionSoundDefaultsToJingleAndResolvesLegacyValues() {
+        XCTAssertEqual(TaskCompletionFeedback.Sound.resolve(nil), .jingle)
+        XCTAssertEqual(TaskCompletionFeedback.Sound.resolve("叮"), .jingle)
+        XCTAssertEqual(TaskCompletionFeedback.Sound.resolve("Tink"), .jingle)
+        XCTAssertEqual(TaskCompletionFeedback.Sound.resolve("knock"), .knock)
+        XCTAssertEqual(TaskCompletionFeedback.Sound.jingle.soundName, "WorkFollowBellJingle")
+    }
+
     func testLegacyMinuteRowsRemainUnknownAndKeepTheirOriginalCredits() throws {
         let data = Data("{\"id\":\"11111111-1111-1111-1111-111111111111\",\"startedAt\":1234,\"minutes\":25,\"completed\":true,\"note\":\"旧笔记\"}".utf8)
         let record = try JSONDecoder().decode(PomodoroRecord.self, from: data)
@@ -150,9 +158,17 @@ final class FocusReplicaFlowTests: XCTestCase {
         XCTAssertEqual(record.mode, .legacy); XCTAssertEqual(record.source, .legacy)
         XCTAssertEqual(record.activeSeconds, 1500); XCTAssertEqual(record.creditedPomodoros, 1)
         let preferences = try JSONDecoder().decode(FocusPreferences.self, from: Data("{\"focusMinutes\":50,\"bellSound\":\"清脆\"}".utf8))
-        XCTAssertEqual(preferences.normalized().bell, .crisp)
-        XCTAssertEqual(preferences.normalized().bell.soundName, "Glass")
+        XCTAssertEqual(preferences.normalized().bell, .jingle)
+        XCTAssertEqual(preferences.normalized().bell.soundName, "WorkFollowBellJingle")
         XCTAssertNil(FocusBell.resolve("关闭").soundName)
+        XCTAssertEqual(FocusBell.resolve("叮咚"), .jingle)
+        XCTAssertEqual(FocusBell.resolve("WorkFollowBellDingDong"), .jingle)
+        XCTAssertEqual(FocusBell.resolve(nil), .jingle)
+        XCTAssertEqual(FocusBell.resolve("叮"), .jingle)
+        XCTAssertEqual(FocusBell.resolve("水滴"), .drip)
+        XCTAssertEqual(FocusBell.resolve("敲击"), .knock)
+        XCTAssertEqual(FocusBell.resolve("螺旋"), .spiral)
+        XCTAssertEqual(FocusBell.jingle.soundName, "WorkFollowBellJingle")
         XCTAssertTrue(preferences.autoStartBreak)
     }
     func testNewManualRecordUsesExplicitPomodoroCountAndLegacyDateEditPreservesUnknownEnd() throws {

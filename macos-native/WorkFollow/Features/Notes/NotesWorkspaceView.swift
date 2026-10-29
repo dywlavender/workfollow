@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+private struct NoteAIDraftEditTarget {
+    let exchangeID: UUID
+    let draftID: UUID
+    let anchor: PlanningAnchorRef
+}
+
 private enum NotesWorkspaceMetrics {
     static let contentInset: CGFloat = 28
     static let contentMaxWidth: CGFloat = 820
@@ -25,8 +31,13 @@ struct NotesWorkspaceView: View {
     @State private var detailOnly = false
     @State private var confirmClear = false
     @State private var purgeID: UUID?
-    @State private var aiTaskRequest: AITaskRequest?
-    @State private var aiRewriteRequest: NoteRewriteRequest?
+    @State private var showAIPane = false
+    @AppStorage("notes.ai.paneWidth") private var aiPaneWidth = Double(NoteAIPaneMetrics.defaultWidth)
+    @State private var aiDragOrigin: CGFloat?
+    @StateObject private var aiConversations = NoteAIConversationStore()
+    @State private var aiDraftEdit: NoteAIDraftEditTarget?
+    @State private var aiDestination = TaskList.inbox.name
+    @State private var aiSectionID: String?
     @StateObject private var editorHandle = DocumentEditorHandle()
     /// 浮窗打开时原编辑栏改成只读预览；独立身份避免与浮窗争同一份编辑状态。
     @State private var previewDocumentID = UUID()
@@ -43,52 +54,19 @@ struct NotesWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            // 双栏门槛与任务页/任务垃圾桶**共用同一个值**（原来非垃圾桶分支硬编码 760）。
-            // 两个页面是 RootShellView 同一个 HStack 的兄弟节点，读到的是同一个内容区宽度，
-            // 所以门槛可以直接比。各写各的时候，内容区宽度落在 [621,760) 这一段里
-            // （窗口 674–812pt 或 871–1009pt），任务页已经是双栏、笔记页却 `wide = false`
-            // → 列表铺满整页、检查器不渲染，切页时详情栏整个消失。
-            let wide = geometry.size.width >= WFMetrics.splitMinimum
-            let maximum = max(WFMetrics.listMinimum, min(WFMetrics.listMaximum,
-                geometry.size.width - WFMetrics.inspectorMinimum - WFMetrics.divider))
-            // 与任务列表列共用同一宽度（原来这里按窗口宽度硬编码 330 / 300）。
-            // 两个页面各写各的，用户在中栏之间切换就会看到忽宽忽窄；共用一个值之后，
-            // 在哪一边拖分隔条，另一边也跟着变——这才是「宽度一致」。
-            let paneWidth = min(max(tasks.taskListPaneWidth, WFMetrics.listMinimum), maximum)
-            HStack(spacing: 0) {
-                if wide || !detailOnly || visibleNote == nil {
-                    list.frame(width: wide ? paneWidth : nil)
-                        .frame(maxWidth: wide ? nil : .infinity)
-                }
-                if wide || (detailOnly && visibleNote != nil) {
-                    if wide {
-                        // 任务页与笔记页（含笔记垃圾桶）用同一条可拖分隔条。
-                        // 原来非垃圾桶分支只放了个静态 `Divider()`，于是「共用一个宽度」
-                        // 却只有任务页能改它——在笔记页够不着，等于半个功能。
-                        Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
-                            .overlay {
-                                Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
-                                    .onHover { inside in
-                                        if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-                                    }
-                                    .gesture(DragGesture(minimumDistance: 1).onChanged { value in
-                                        if dragOrigin == nil { dragOrigin = paneWidth }
-                                        tasks.setTaskListPaneWidth(min(max((dragOrigin ?? paneWidth) + value.translation.width,
-                                            WFMetrics.listMinimum), maximum))
-                                    }.onEnded { _ in dragOrigin = nil })
-                            }
-                    }
-                    inspector(compact: !wide)
-                }
+            let layout = layout(for: geometry.size.width)
+            ZStack(alignment: .topLeading) {
+                workspace(layout: layout, note: visibleNote)
+                aiDraftEditorOverlay(note: visibleNote)
             }
+            .coordinateSpace(name: PlanningCoordinateSpace.name)
         }
-        .onChange(of: navigation.destination) { _, _ in detailOnly = false; query = "" }
+        .onChange(of: navigation.destination) { _, _ in detailOnly = false; query = ""; aiDraftEdit = nil }
         .onChange(of: notes.folderFilter) { _, _ in detailOnly = false; query = "" }
         .onChange(of: notes.favoritesOnly) { _, _ in detailOnly = false; query = "" }
+        .onChange(of: notes.selectedID) { _, _ in aiDraftEdit = nil }
         .onChange(of: notes.revealRequest) { _, _ in query = ""; detailOnly = true }
         .onAppear { if notes.revealRequest != nil { query = ""; detailOnly = true } }
-        .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
-        .sheet(item: $aiRewriteRequest) { NoteRewriteComposerView(request: $0) }
         .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
             Button("取消", role: .cancel) {}
             Button("全部删除", role: .destructive) { notes.emptyTrash() }
@@ -96,6 +74,107 @@ struct NotesWorkspaceView: View {
         .alert("永久删除笔记？", isPresented: Binding(get: { purgeID != nil }, set: { if !$0 { purgeID = nil } })) {
             Button("取消", role: .cancel) { purgeID = nil }
             Button("删除", role: .destructive) { if let id = purgeID { notes.purge(id) }; purgeID = nil }
+        }
+    }
+
+    private struct Layout {
+        let wide: Bool
+        let paneWidth: CGFloat
+        let maximumPaneWidth: CGFloat
+        let showList: Bool
+        let aiVisible: Bool
+        let aiWidth: CGFloat
+    }
+
+    private func layout(for contentWidth: CGFloat) -> Layout {
+        let wide = contentWidth >= WFMetrics.splitMinimum
+        let maximum = max(WFMetrics.listMinimum,
+                          min(WFMetrics.listMaximum,
+                              contentWidth - WFMetrics.inspectorMinimum - WFMetrics.divider))
+        let paneWidth = min(max(tasks.taskListPaneWidth, WFMetrics.listMinimum), maximum)
+        let noteExists = visibleNote != nil
+        let aiVisible = showAIPane && noteExists && !trash && (wide || detailOnly)
+        let desired = min(max(CGFloat(aiPaneWidth), NoteAIPaneMetrics.minimumWidth),
+                          NoteAIPaneMetrics.maximumWidth)
+        let editorMinimum = wide ? NoteAIPaneMetrics.editorMinimumWidth
+                                 : NoteAIPaneMetrics.compactEditorMinimumWidth
+        let withList = contentWidth - paneWidth - desired - WFMetrics.divider * 2
+        let showList = !aiVisible || withList >= editorMinimum
+        let available = contentWidth - (showList ? paneWidth + WFMetrics.divider : 0)
+            - editorMinimum - WFMetrics.divider
+        let width = aiVisible ? min(desired, max(NoteAIPaneMetrics.minimumWidth, available)) : desired
+        return Layout(wide: wide, paneWidth: paneWidth, maximumPaneWidth: maximum,
+                      showList: showList, aiVisible: aiVisible, aiWidth: width)
+    }
+
+    @ViewBuilder
+    private func workspace(layout: Layout, note: Note?) -> some View {
+        HStack(spacing: 0) {
+            if (layout.wide || !detailOnly || note == nil) && layout.showList {
+                list.frame(width: layout.wide ? layout.paneWidth : nil)
+                    .frame(maxWidth: layout.wide ? nil : .infinity)
+                if layout.wide { listDivider(width: layout.paneWidth, maximum: layout.maximumPaneWidth) }
+            }
+            if layout.wide || (detailOnly && note != nil) {
+                inspector(compact: !layout.wide)
+                if layout.aiVisible, let note {
+                    aiDivider(width: layout.aiWidth)
+                    aiPane(note: note, width: layout.aiWidth)
+                        .frame(width: layout.aiWidth)
+                }
+            }
+        }
+    }
+
+    private func listDivider(width: CGFloat, maximum: CGFloat) -> some View {
+        Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
+            .overlay {
+                Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                    }
+                    .gesture(DragGesture(minimumDistance: 1).onChanged { value in
+                        if dragOrigin == nil { dragOrigin = width }
+                        let origin = dragOrigin ?? width
+                        tasks.setTaskListPaneWidth(min(max(origin + value.translation.width,
+                            WFMetrics.listMinimum), maximum))
+                    }.onEnded { _ in dragOrigin = nil })
+            }
+    }
+
+    private func aiDivider(width: CGFloat) -> some View {
+        Rectangle().fill(WFColors.border).frame(width: WFMetrics.divider)
+            .overlay {
+                Color.clear.frame(width: WFSpace.sm).contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+                    }
+                    .gesture(DragGesture(minimumDistance: 1).onChanged { value in
+                        if aiDragOrigin == nil { aiDragOrigin = width }
+                        let origin = aiDragOrigin ?? width
+                        let proposed = origin - value.translation.width
+                        let clamped = min(max(proposed, NoteAIPaneMetrics.minimumWidth),
+                                          NoteAIPaneMetrics.maximumWidth)
+                        aiPaneWidth = Double(clamped)
+                    }.onEnded { _ in aiDragOrigin = nil })
+            }
+    }
+
+    @ViewBuilder
+    private func aiDraftEditorOverlay(note: Note?) -> some View {
+        if let target = aiDraftEdit, let note,
+           let exchange = aiConversations.model(for: note.id).exchange(id: target.exchangeID),
+           let session = exchange.taskSession,
+           let request = exchange.taskRequest {
+            PlanningOverlayLayer(anchor: target.anchor,
+                                 placement: WFOverlayPlacement(preferredSide: .left, alignment: .center),
+                                 size: NoteAIPaneMetrics.draftEditorSize,
+                                 onDismiss: { aiDraftEdit = nil }) {
+                NoteAITaskDraftEditorHost(session: session, draftID: target.draftID,
+                                          request: request, destination: aiDestination,
+                                          tasks: tasks, onClose: { aiDraftEdit = nil })
+                    .environmentObject(environment)
+            }
         }
     }
 
@@ -233,7 +312,7 @@ struct NotesWorkspaceView: View {
                         Button { notes.restore(note.id); detailOnly = false } label: { Image(systemName: "arrow.uturn.backward") }.hoverTip("恢复笔记")
                         Button(role: .destructive) { purgeID = note.id } label: { Image(systemName: "trash.slash") }.hoverTip("永久删除笔记")
                     } else {
-                        noteAIMenu(note)
+                        noteAIButton
                         FloatingEditorButton { openFloatingNote(note) }
                     }
                 }.buttonStyle(.borderless).padding(.horizontal, 20).frame(height: 44)
@@ -418,34 +497,82 @@ struct NotesWorkspaceView: View {
         .hoverTip("更多操作")
     }
 
-    private func noteAIMenu(_ note: Note) -> some View {
-        BusinessMenu(title: "笔记 AI") {
-            Button("整理要点…") { rewrite(note, action: .organize) }.disabled(note.document.isEmpty)
-                .workflowActionAnchor("note.ai.organize")
-            Button("润色笔记…") { rewrite(note, action: .polish) }.disabled(note.document.isEmpty)
-                .workflowActionAnchor("note.ai.polish")
-            Button("提取待办…") {
-                editorHandle.prepareForDocumentChange()
-                do {
-                    let current = notes.notes.first { $0.id == note.id } ?? note
-                    aiTaskRequest = try environment.aiTaskRequest(for: current)
-                } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
-            }.disabled(note.document.isEmpty && note.title.isEmpty)
-                .workflowActionAnchor("note.ai.tasks")
-        } label: { Label("AI", systemImage: "sparkles").accessibilityLabel("笔记 AI") }
+    private var noteAIButton: some View {
+        Button {
+            showAIPane.toggle()
+            if !showAIPane { aiDraftEdit = nil }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "sparkles")
+                Text("AI 助手")
+            }
+            .font(WFType.supporting)
+            .foregroundStyle(showAIPane ? WFColors.accent : WFColors.secondaryText)
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(showAIPane ? WFColors.selection : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(showAIPane ? "关闭 AI 助手" : "打开 AI 助手")
+        .hoverTip(showAIPane ? "关闭 AI 助手" : "AI 助手")
         .accessibilityIdentifier("note.ai")
         .workflowActionAnchor("note.ai")
     }
 
-    private func rewrite(_ note: Note, action: NoteRewriteRequest.Action) {
+    private func aiPane(note: Note, width: CGFloat) -> some View {
+        NoteAIPaneView(model: aiConversations.model(for: note.id), tasks: tasks,
+                       noteID: note.id,
+                       noteTitle: note.title.isEmpty ? "未命名笔记" : note.title,
+                       noteContentIsEmpty: note.document.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                       canReplaceBody: !floatingNotes.isOpen(note.id) && !note.hasPreservedRichContent,
+                       destination: $aiDestination, sectionID: $aiSectionID,
+                       makeContext: { noteAIContext(noteID: note.id) },
+                       onPrepareDocument: { editorHandle.prepareForDocumentChange() },
+                       onReplaceBody: { replaceNoteBody($0, noteID: note.id) },
+                       onEditDraft: { exchangeID, draftID, rect in
+                           let anchor = PlanningAnchorRef()
+                           anchor.rect = rect
+                           aiDraftEdit = NoteAIDraftEditTarget(exchangeID: exchangeID,
+                                                               draftID: draftID, anchor: anchor)
+                       },
+                       onRevealTasks: revealTasks,
+                       onOpenNote: openNote,
+                       onClose: { showAIPane = false; aiDraftEdit = nil })
+            .frame(width: width)
+    }
+
+    private func noteAIContext(noteID: UUID) -> NoteAIContext {
+        guard let note = notes.notes.first(where: { $0.id == noteID && $0.deletedAt == nil }) else {
+            return NoteAIContext(noteID: noteID, title: "", content: "",
+                                 referenceDate: Date(), existingTitles: [])
+        }
+        return NoteAIContext(noteID: note.id,
+                             title: note.title.isEmpty ? "未命名笔记" : note.title,
+                             content: note.document.plainText,
+                             referenceDate: note.updatedAt,
+                             existingTitles: tasks.allTasks.filter {
+                                 $0.deletedAt == nil
+                                     && ($0.sourceNoteID == note.id || note.linkedTaskIDs.contains($0.id))
+                             }.map(\.title))
+    }
+
+    private func replaceNoteBody(_ text: String, noteID: UUID) {
+        guard notes.notes.contains(where: { $0.id == noteID && $0.deletedAt == nil }) else { return }
         editorHandle.prepareForDocumentChange()
-        do {
-            let current = notes.notes.first { $0.id == note.id } ?? note
-            let body = try current.document.materialized().plainText
-            guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            aiRewriteRequest = NoteRewriteRequest(noteID: current.id,
-                title: current.title.isEmpty ? "未命名笔记" : current.title, content: body, action: action)
-        } catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
+        let body = DocumentExternalClipboardCodec.fragment(fromMarkdown: text)?.document
+            ?? NativeDocument(plainText: text)
+        notes.edit(noteID) { $0.document = body }
+    }
+
+    private func revealTasks(_ ids: [UUID]) {
+        guard let id = ids.first else { return }
+        _ = NativeResourceLinkRouter.open(.task(id), tasks: tasks, notes: notes, navigation: navigation)
+    }
+
+    private func openNote(_ id: UUID) {
+        _ = NativeResourceLinkRouter.open(.note(id), tasks: tasks, notes: notes, navigation: navigation)
     }
 
     private func copyPlainText(_ note: Note) {

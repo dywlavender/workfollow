@@ -33,6 +33,11 @@ final class EditorWhitespaceHitTargetTests: XCTestCase {
         return view.subviews.lazy.compactMap { self.editor(in: $0, id: id) }.first
     }
 
+    private func whitespaceTarget(in view: NSView) -> EditorWhitespaceHitTarget.TargetView? {
+        if let target = view as? EditorWhitespaceHitTarget.TargetView { return target }
+        return view.subviews.lazy.compactMap { self.whitespaceTarget(in: $0) }.first
+    }
+
     private func click(_ point: NSPoint, in editor: NativeTextView, window: NSWindow) throws {
         try InspectorPanelTestSupport.click(NSRect(x: point.x - 0.5, y: point.y - 0.5, width: 1, height: 1),
                                            in: editor, window: window)
@@ -143,6 +148,16 @@ final class EditorWhitespaceHitTargetTests: XCTestCase {
         XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: NSMaxRange(range)))
         hit.mouseUp(with: try event(.leftMouseUp, at: start))
         XCTAssertEqual(editor.string, text)
+    }
+
+    func testCursorStaysInsideEditorSoLinkedSectionsKeepTheArrow() throws {
+        let fixture = try fixture(NativeDocument(plainText: "第一行\n第二行文字"))
+        defer { fixture.window.close() }
+        let target = try XCTUnwrap(whitespaceTarget(in: fixture.host))
+        let editorFrame = target.convert(fixture.editor.bounds, from: fixture.editor)
+        let spaces = target.cursorSpaces(for: fixture.editor)
+        XCTAssertFalse(spaces.isEmpty)
+        XCTAssertTrue(spaces.allSatisfy { $0.maxY <= editorFrame.maxY + 0.5 })
     }
 
     func testTaskWhitespaceReceivesClicksWithoutClaimingTitleSubtasksOrSidebar() throws {

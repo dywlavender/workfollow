@@ -328,7 +328,7 @@ final class NotesWorkspaceModel: ObservableObject {
         return copyID
     }
 
-    func createAIRewrite(_ text: String, request: NoteRewriteRequest) throws -> UUID {
+    func createAIRewrite(_ text: String, request: NoteRewriteRequest, select: Bool = true) throws -> UUID {
         guard let source = notes.first(where: { $0.id == request.noteID && $0.deletedAt == nil }) else {
             throw AITaskError.sourceMissing
         }
@@ -339,7 +339,8 @@ final class NotesWorkspaceModel: ObservableObject {
             document: NativeDocument(blocks: [link] + body.blocks), folder: source.folder, folderID: source.folderID) else {
             throw AITaskError.sourceMissing
         }
-        selectedID = id; revision += 1
+        if select { selectedID = id }
+        revision += 1
         return id
     }
 }

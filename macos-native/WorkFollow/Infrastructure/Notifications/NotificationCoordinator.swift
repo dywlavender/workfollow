@@ -55,7 +55,7 @@ final class NotificationCoordinator: NSObject, UNUserNotificationCenterDelegate 
 struct ScheduledTaskNotification: Equatable {
     var delivery: ReminderDelivery
     var sound: Bool
-    var bell: String = "Glass"
+    var bell: String = "Jingle"
 }
 
 @MainActor

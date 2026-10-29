@@ -30,6 +30,7 @@ struct RootShellView: View {
                                                           context: environment.weeklyPlanning))
         case .countdown: return AnyView(CountdownWorkspaceView(store: environment.countdownStore))
         case .meetings: return AnyView(MeetingWorkspaceView(store: environment.meetingStore))
+        case .aiChat: return AnyView(AIChatWorkspaceView(store: environment.aiChat))
         case .notes, .notesTrash:
             return AnyView(NotesWorkspaceView(notes: environment.notesWorkspace, navigation: pageCache.navigation(for: "notes", appNavigation: navigation, belongsToPage: { $0.isNotes }),
                                              tasks: workspace, navigationVisible: navigationVisible))
@@ -72,7 +73,7 @@ struct RootShellView: View {
                 if navigationVisible, environment.sidebarVisible,
                    navigation.destination != .calendar, navigation.destination != .matrix,
                    navigation.destination != .countdown, navigation.destination != .meetings,
-                   navigation.destination != .focus {
+                   navigation.destination != .focus, navigation.destination != .aiChat {
                     NavigationColumnView(workspace: workspace, navigation: navigation,
                                          filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)

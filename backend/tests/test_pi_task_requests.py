@@ -19,9 +19,11 @@ def test_full_original_uses_one_agent_prompt_without_application_chunks_or_token
             kwargs["on_event"]({"kind": "text", "text": '{"tasks":[{"title":"核对合同"' if method == "text.tasks" else "正在生成正文", "force": True})
             return '{"tasks":[]}' if method == "text.tasks" else "完整正文"
         monkeypatch.setattr(runtime.pi, "generate", generate)
-        await runtime.dispatch(method, {**extra, "title": "虚构笔记", "content": source, "progressChannel": "preview"})
+        await runtime.dispatch(method, {**extra, "title": "虚构笔记", "content": source,
+                                        "instruction": "只保留合同相关", "progressChannel": "preview"})
         assert len(calls) == 1
         assert "textBudget" not in calls[0][0] and source in json.loads(calls[0][1].split("输入 JSON：", 1)[1])["content"]
+        assert "只保留合同相关" in calls[0][1]
         assert events[0]["event"]["text"] in ("核对合同", "正在生成正文")
         await runtime.close()
     asyncio.run(run())

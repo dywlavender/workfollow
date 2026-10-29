@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import Field
 
+from app.ai_runtime.workflows import NoteRewriteRequest
 from app.core.config import Settings
 from app.schemas.ai import AIChatRequest, AIGenerateRequest
 from app.services.ai_service import AIServiceError, TextAIService
@@ -58,6 +59,19 @@ def test_long_note_extraction_keeps_tail_evidence_and_deduplicates():
     assert result.usage.model_calls == len(model.seen)
     assert all(task.quote in content for task in result.tasks)
     assert "2026-10-28" in model.seen[0][-1].content
+
+
+def test_instruction_reaches_task_and_rewrite_prompts():
+    model = ExtractingModel()
+    service = TextAIService(ai_settings(), model=model)
+    asyncio.run(service.generate(AIGenerateRequest(
+        action="extract_tasks", content="明天提交方案。", instruction="只保留提交类",
+    )))
+    assert json.loads(model.seen[-1][-1].content)["instruction"] == "只保留提交类"
+    asyncio.run(service.rewrite_note(NoteRewriteRequest(
+        action="polish", content="原文。", instruction="保持简短",
+    )))
+    assert json.loads(model.seen[-1][-1].content)["instruction"] == "保持简短"
 
 
 def test_extract_requires_quote_but_breakdown_can_suggest_steps():

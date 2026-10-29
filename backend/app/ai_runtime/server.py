@@ -16,6 +16,7 @@ import time
 from pydantic import ValidationError
 
 from app.ai_runtime.pi_engine import PiEngine
+from app.ai_runtime.conversation import converse
 from app.ai_runtime.failures import EngineError, model_failure
 from app.ai_runtime.prompts import minutes_prompt, summary_prompt, task_prompt
 from app.ai_runtime.settings import AISettings
@@ -44,7 +45,7 @@ class Runtime:
         self.cooldowns = {}
 
     async def dispatch(self, method: str, data: dict):
-        text_methods = {"knowledge.ask", "note.rewrite", "text.tasks", "text.summary", "text.generate", "chat", "meeting.minutes", "model.test"}
+        text_methods = {"knowledge.ask", "note.rewrite", "text.tasks", "text.summary", "text.generate", "chat", "conversation.send", "meeting.minutes", "model.test"}
         if method not in text_methods or (method == "knowledge.ask" and not data.get("sources")):
             return await self._dispatch(method, data)
         key = self.model_key(data)
@@ -83,9 +84,11 @@ class Runtime:
     async def _dispatch(self, method: str, data: dict):
         if method == "health":
             return {"protocol": PROTOCOL_VERSION, "engines": ["pi", "langchain"],
-                    "capabilities": ["tasks", "summary", "minutes", "transcription", "stream", "chat", "knowledge", "note_rewrite", "streaming_text"]}
+                    "capabilities": ["tasks", "summary", "minutes", "transcription", "stream", "chat", "conversation", "knowledge", "note_rewrite", "streaming_text"]}
         if method == "models":
             return {"models": await self.pi.models(data)}
+        if method == "conversation.send":
+            return await converse(self.pi, data, self.text_stream(method, data))
         if method == "model.test":
             return await self.langchain(method, data)
         if method in ("knowledge.ask", "note.rewrite"):
@@ -97,6 +100,8 @@ class Runtime:
             if data.get("engine") == "langchain":
                 return await self.langchain(method, data)
             if isinstance(request, NoteRewriteRequest):
+                if data.get("conversationID"):
+                    return await converse(self.pi, data, self.text_stream(method, data), prompt=note_prompt(request), scene="note")
                 return {"text": await self.pi.generate(data, note_prompt(request), on_event=self.text_stream(method, data))}
             text = await self.pi.generate(data, knowledge_prompt(request), on_event=self.text_stream(method, data))
             return knowledge_result(text, request)

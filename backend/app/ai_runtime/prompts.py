@@ -14,7 +14,8 @@ MINUTES_RULES = "\n".join([
 def task_prompt(data: dict) -> str:
     breakdown = data.get("action") == "breakdown_task"
     payload = {key: data.get(key, default) for key, default in (
-        ("title", ""), ("content", ""), ("referenceDate", ""), ("timeZone", "Asia/Shanghai"))}
+        ("title", ""), ("content", ""), ("referenceDate", ""), ("timeZone", "Asia/Shanghai"),
+        ("instruction", ""))}
     payload["existingTasks"] = data.get("existingTitles", [])
     return "\n".join([
         "将任务拆成少量具体、可执行的下一步子任务。" if breakdown else "从给定笔记或纪要提取明确承诺、待办和后续行动。",
@@ -26,6 +27,7 @@ def task_prompt(data: dict) -> str:
         "只提取有原文依据的事项；quote 必须是输入中的连续原文。排除已完成、已否决和待定提议，没有明确待办返回空数组。",
         "不重复 existingTasks。不要输出 Markdown 或解释。",
         "任务标题简短具体；quote 只摘取能说明该行动及日期的最短连续原文，不重复整篇笔记。",
+        "若 instruction 非空，按这条补充要求筛选或调整结果，但 quote 仍必须来自给定标题或正文。",
         "输入 JSON：" + json.dumps(payload, ensure_ascii=False),
     ])
 

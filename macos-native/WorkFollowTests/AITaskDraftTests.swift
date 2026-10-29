@@ -29,6 +29,23 @@ final class AITaskDraftTests: XCTestCase {
         })
     }
 
+    func testDraftBodyStartsFromQuoteAndEditedBodyReachesCreatedTask() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false, initialTasks: [])
+        let notes = NotesWorkspaceModel(taskWorkspace: workspace)
+        let noteID = notes.create()
+        let input = request(.note(noteID))
+        var draft = AITaskDraft(title: "核对成本", quote: "周五前核对成本。")
+        XCTAssertEqual(draft.document.blocks.map(\.kind), [.quote])
+        draft.document = NativeDocument(plainText: "补充：先核对明细。")
+        let id = try XCTUnwrap(workspace.createAITasks([draft], request: input).first)
+        let saved = try XCTUnwrap(workspace.task(for: id))
+        XCTAssertTrue(saved.document.plainText.contains("补充：先核对明细。"))
+        XCTAssertFalse(saved.document.plainText.contains("周五前核对成本。"))
+        XCTAssertTrue(saved.document.blocks.flatMap(\.runs).contains {
+            $0.marks.contains(.link(input.sourceURL.absoluteString))
+        })
+    }
+
     func testBreakdownAllowsSuggestedStepsAndHandlesEmptyAndInvalidResults() throws {
         let input = request(.task(UUID()), existing: ["收集客户需求"])
         let rows = try AITaskDraft.decode("""
