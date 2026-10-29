@@ -16,7 +16,7 @@ struct FeedbackHostView: View {
                     .padding(.bottom, WFSpace.lg)
             }
         }
-        // 只占胶囊大小：透明的横向空间不能拦截底栏按钮的点击。
+        // 只占卡片大小：透明的横向空间不能拦截底栏按钮的点击。
         .animation(.easeOut(duration: 0.16), value: center.presentation?.id)
     }
 }
@@ -45,7 +45,7 @@ private extension View {
 }
 #endif
 
-/// 深色胶囊卡片：`任务已完成    ↶`。
+/// 深色圆角卡片：`任务已完成    ↶`。
 /// 不持有计时器也不持有状态——何时出现、何时离开由宿主决定。
 private struct FeedbackToastView: View {
     let event: FeedbackEvent
@@ -55,31 +55,32 @@ private struct FeedbackToastView: View {
     /// 文案上限：超过即截断，短文案不被撑出一条死面。
     private static let messageWidthCap: CGFloat = 360
     private static let dangerColor = Color(nsColor: .systemRed)
+    /// 尾部撤销箭头：深色底上用琥珀橙拉开对比，和正文白色区分动作与结果。
+    private static let undoColor = Color(red: 1, green: 0.631, blue: 0)
+    private static let cornerRadius: CGFloat = 9
+    private static let minHeight: CGFloat = 40
 
     var body: some View {
         // 第一选：按文案自然收缩；放不下时退到定宽截断。
         ViewThatFits(in: .horizontal) {
-            capsule(messageWidthCap: nil).fixedSize(horizontal: true, vertical: false)
-            capsule(messageWidthCap: Self.messageWidthCap)
+            card(messageWidthCap: nil).fixedSize(horizontal: true, vertical: false)
+            card(messageWidthCap: Self.messageWidthCap)
         }
-        .shadow(color: .black.opacity(0.16), radius: 9, y: 3)
+        .shadow(color: .black.opacity(0.24), radius: 14, y: 5)
         .accessibilityElement(children: .combine)
     }
 
-    private func capsule(messageWidthCap: CGFloat?) -> some View {
+    private func card(messageWidthCap: CGFloat?) -> some View {
         HStack(spacing: WFSpace.sm) {
-            // 失败不可与成功混为一谈；完成条目带强调色对勾。
+            // 失败不可与成功混为一谈：只有失败带图标。
             if event.kind.isFailure {
                 Image(systemName: "exclamationmark.circle.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(Self.dangerColor)
-            } else if event.kind == .completion {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(WFColors.accent)
             }
             Text(event.message)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(WFColors.tooltipText)
                 .lineLimit(1)
                 .allowsTightening(true)
                 .truncationMode(.tail)
@@ -95,15 +96,14 @@ private struct FeedbackToastView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(WFColors.secondaryText)
+                .foregroundStyle(Self.undoColor)
                 .hoverTip(event.actionTitle ?? "撤销")
                 .accessibilityLabel(event.actionTitle ?? "撤销")
             }
         }
         .padding(.horizontal, WFSpace.lg)
         .padding(.vertical, WFSpace.sm)
-        .frame(minHeight: 36)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(WFColors.border))
+        .frame(minHeight: Self.minHeight)
+        .background(WFColors.tooltipSurface, in: RoundedRectangle(cornerRadius: Self.cornerRadius))
     }
 }

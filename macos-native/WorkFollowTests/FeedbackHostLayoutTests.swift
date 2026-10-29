@@ -48,9 +48,9 @@ final class FeedbackHostLayoutTests: XCTestCase {
 
         // HUD 必须真的浮在窗口内、底部居中，而不是挤在布局流里。
         let hud = try XCTUnwrap(hudFrames.last, "HUD did not render while feedback was presented")
-        XCTAssertLessThan(hud.width, 600, "HUD 只应占胶囊宽度，不能是整窗宽的空带")
+        XCTAssertLessThan(hud.width, 600, "HUD 只应占卡片宽度，不能是整窗宽的空带")
         XCTAssertEqual(hud.midX, 640, accuracy: 4, "HUD 应在窗口水平居中")
-        XCTAssertEqual(hud.height, 36, accuracy: 2, "HUD 高度应是胶囊高度")
+        XCTAssertEqual(hud.height, 40, accuracy: 2, "HUD 高度应是卡片高度")
         XCTAssertEqual(hud.maxY, 800 - WFSpace.lg, accuracy: 2,
                        "HUD 应浮在窗口底部之上，而不是把内容顶上去")
 
