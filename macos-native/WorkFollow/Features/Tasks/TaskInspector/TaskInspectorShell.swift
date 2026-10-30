@@ -100,7 +100,7 @@ struct TaskInspectorShell: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .workfollowPageSurface(0.93)
+        .workfollowEditorPageSurface(0.93)
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
         .onReceive(workspace.selectionWillChange) { nextID in
             guard editorHandle.textView?.documentIdentity != nextID else { return }

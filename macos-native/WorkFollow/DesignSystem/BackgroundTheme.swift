@@ -253,8 +253,37 @@ struct WorkfollowPageCanvas: View {
     }
 }
 
+/// 正文阅读面：压在主题背景之上的内容色薄纱，把文字后面的底图和动效洗淡。
+/// 页面、侧栏和操作栏仍保留原浓度，只有承载正文的编辑区使用。
+struct WorkfollowReadingSurface: View {
+    var opacity: Double = 0.58
+
+    @Environment(\.workfollowBackgroundTheme) private var theme
+
+    var body: some View {
+        if theme.isThemed {
+            WFColors.content.opacity(opacity)
+        } else {
+            Color.clear
+        }
+    }
+}
+
+extension View {
+    /// 编辑面板的页面底：主题底纱之上再铺一层正文阅读面。
+    func workfollowEditorPageSurface(_ opacity: Double = 0.90) -> some View {
+        background {
+            ZStack {
+                ThemedPageSurface(opacity: opacity)
+                WorkfollowReadingSurface()
+            }
+        }
+    }
+}
+
 /// 独立窗口（笔记/任务悬浮编辑窗）的整窗主题底：和主窗口的页面同源——
 /// 底图在下、底纱在中、动效在上——但没有图标栏/导航列的横向渐变。
+/// 最上面再压一层正文阅读面：悬浮窗整块都是正文，图案不能和文字抢对比。
 /// 主题关闭时退回原来的不透明内容色。
 struct WorkfollowStandalonePageBackground: View {
     @Environment(\.workfollowBackgroundTheme) private var theme
@@ -272,6 +301,7 @@ struct WorkfollowStandalonePageBackground: View {
                 WorkFollowBackgroundView(theme: theme, intensity: intensity,
                                          animated: animated, layer: .motion)
                     .opacity(NativeBackgroundMotion.opacity(for: colorScheme, intensity: intensity))
+                WorkfollowReadingSurface()
             }
         } else {
             WFColors.content

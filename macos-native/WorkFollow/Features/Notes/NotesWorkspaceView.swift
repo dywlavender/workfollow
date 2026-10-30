@@ -572,7 +572,9 @@ struct NotesWorkspaceView: View {
                 }
                 }
                 if !trash { Divider(); footer(note) }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background { WorkfollowReadingSurface() }
         } else {
             Text(trash ? "没有可预览的笔记" : "选择一篇笔记").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
