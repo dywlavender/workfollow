@@ -83,10 +83,11 @@ extension NativeTextView {
             onHover: { [weak self] index in self?.hoverSlash(index) })
         // 只换 rootView，不重建 hosting view：指针每移到一行都会走这里（悬停即选中），
         // 重建整棵树会让高亮闪一下。
-        if let hosting = panel.contentView as? NSHostingView<SlashCommandList> {
-            hosting.rootView = list
+        let themed = AnyView(list.workfollowNativeTheme())
+        if let hosting = panel.contentView as? NSHostingView<AnyView> {
+            hosting.rootView = themed
         } else {
-            panel.contentView = NSHostingView(rootView: list)
+            panel.contentView = NSHostingView(rootView: themed)
         }
         let caret = firstRect(forCharacterRange: selectedRange(), actualRange: nil)
         let desiredHeight = compact
@@ -186,6 +187,8 @@ struct SlashCommandList: View {
     let compact: Bool
     let onSelect: (Int) -> Void
     let onHover: (Int) -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -208,7 +211,8 @@ struct SlashCommandList: View {
         .transaction { $0.animation = nil }
         .foregroundStyle(WFColors.text)
         // Task compact cards have no hard outline; the panel owns their shadow.
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: SlashMenuMetrics.radius))
+        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme),
+                    in: RoundedRectangle(cornerRadius: SlashMenuMetrics.radius))
         .overlay {
             if !compact {
                 RoundedRectangle(cornerRadius: SlashMenuMetrics.radius)

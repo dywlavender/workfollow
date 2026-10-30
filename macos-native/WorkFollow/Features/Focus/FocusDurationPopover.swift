@@ -46,6 +46,7 @@ struct FocusDurationPopover: View {
     @ObservedObject var session: FocusDurationEditorSession
     let onConfirm: (Int) -> Bool
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @FocusState private var minutesFieldFocused: Bool
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
@@ -87,7 +88,7 @@ struct FocusDurationPopover: View {
         }
         .padding(12)
         .frame(width: 232, height: 104)
-        .background(theme.canvas, in: RoundedRectangle(cornerRadius: 12))
+        .background(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme), in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.hairline, lineWidth: 1))
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.14),
                 radius: 14, x: 0, y: 5)

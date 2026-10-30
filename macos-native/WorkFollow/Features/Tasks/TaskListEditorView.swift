@@ -132,7 +132,7 @@ struct TaskListEditorView: View {
             }
         }
         .padding(24).frame(width: 464)
-        .background(WFColors.content)
+        .workfollowPopupSurface()
         .coordinateSpace(name: "list-management")
         .onAppear { nameFocused = true }
         .onChange(of: draft.name) { _, _ in error = nil }
@@ -204,7 +204,8 @@ struct TaskListCopyView: View {
                 }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                     .listManagementAnchor(.save)
             }
-        }.padding(24).frame(width: 420).background(WFColors.content)
+        }.padding(24).frame(width: 420)
+            .workfollowPopupSurface()
             .coordinateSpace(name: "list-management")
     }
 }
@@ -310,7 +311,8 @@ struct TaskFolderEditorView: View {
                     .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-        }.padding(24).frame(width: 420).background(WFColors.content)
+        }.padding(24).frame(width: 420)
+            .workfollowPopupSurface()
             .onAppear { nameFocused = true }
     }
     private func save() {

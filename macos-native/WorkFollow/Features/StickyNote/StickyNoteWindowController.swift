@@ -54,6 +54,8 @@ final class StickyNoteWindowController: ObservableObject {
             FloatingTaskView(taskID: taskID, workspace: workspace, environment: environment,
                 editorHandle: handle, onClose: { [weak self] in self?.close(taskID: taskID) },
                 onOpenInMain: { [weak self] in self?.openInMain(taskID) })
+                .environment(\.workfollowBackgroundTheme, environment?.backgroundTheme ?? .none)
+                .environment(\.workfollowBackgroundIntensity, environment?.backgroundIntensity ?? .medium)
         }
     }
 

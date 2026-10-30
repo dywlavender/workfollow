@@ -117,6 +117,7 @@ struct MatrixRuleEditor: View {
         }
         .padding(20)
         .frame(width: 520, height: 660)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
         .onChange(of: value.rule.date.kind) { _, kind in
             if kind == .dateRange {
                 if value.rule.date.rangeStart == nil { value.rule.date.rangeStart = calendar.startOfDay(for: now) }

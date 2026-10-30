@@ -257,4 +257,26 @@ final class NativeTextViewTests: XCTestCase {
         XCTAssertFalse(editor.hasMarkedText())
         XCTAssertEqual(changes.last?.plainText, "中文")
     }
+
+    /// 正文按 Tab 每次都走两个汉字宽（14pt 正文 = 28pt），第一格也不例外。
+    func testTabIndentsBodyByTwoHanCharacters() throws {
+        let editor = NativeTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 200), textContainer: nil)
+        editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "示例正文")))
+        func glyphX(at index: Int) throws -> CGFloat {
+            let manager = try XCTUnwrap(editor.layoutManager)
+            let container = try XCTUnwrap(editor.textContainer)
+            manager.ensureLayout(for: container)
+            let glyphs = manager.glyphRange(forCharacterRange: NSRange(location: index, length: 1),
+                                           actualCharacterRange: nil)
+            return manager.boundingRect(forGlyphRange: glyphs, in: container).minX
+        }
+        let base = try glyphX(at: 0)
+        editor.setSelectedRange(NSRange(location: 0, length: 0))
+        editor.doCommand(by: #selector(NSResponder.insertTab(_:)))
+        XCTAssertEqual(editor.string, "\t示例正文")
+        XCTAssertEqual(try glyphX(at: 1) - base, 28, accuracy: 0.5, "第一格就是两个汉字宽")
+        editor.doCommand(by: #selector(NSResponder.insertTab(_:)))
+        XCTAssertEqual(editor.string, "\t\t示例正文")
+        XCTAssertEqual(try glyphX(at: 2) - base, 56, accuracy: 0.5, "第二格再走两个汉字宽")
+    }
 }

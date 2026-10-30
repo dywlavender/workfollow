@@ -235,6 +235,25 @@ final class FeedbackCenterTests: XCTestCase {
         }
     }
 
+    func testWorkspaceNoteDeletionReportsUndoableAndUndoRestores() async {
+        await MainActor.run {
+            let (workspace, center) = makeWorkspace()
+            let notes = NotesWorkspaceModel(taskWorkspace: workspace)
+            notes.create()
+            let id = notes.selectedID!
+            notes.edit(id) { $0.title = "周会记录" }
+            center.dismiss()
+
+            notes.delete(id)
+            XCTAssertEqual(center.presentation?.event.kind, .undoable)
+            XCTAssertEqual(center.presentation?.event.message, "已删除笔记「周会记录」")
+            XCTAssertNotNil(workspace.task(for: id)?.deletedAt)
+
+            center.undo()
+            XCTAssertNil(workspace.task(for: id)?.deletedAt)
+        }
+    }
+
     func testWorkspaceSequentialCompletionsFoldIntoCountedMessage() async {
         await MainActor.run {
             let (workspace, center) = makeWorkspace()

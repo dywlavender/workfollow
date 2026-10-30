@@ -69,7 +69,7 @@ struct FocusRecordEditor: View {
             }) { Text(error ?? "").foregroundStyle(theme.warn) }
         }
         .frame(width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)
-        .background(theme.canvas).focusRenderAnchor(.recordEditor)
+        .workfollowPopupSurface(fallback: theme.canvas).focusRenderAnchor(.recordEditor)
         .environment(\.calendar, store.presentationCalendar)
         .environment(\.timeZone, store.presentationCalendar.timeZone)
     }
@@ -134,7 +134,8 @@ struct FocusRecordDetail: View {
                 }
             } else { Text("记录已删除"); Button("关闭") { dismiss() } }
         }
-        .padding(24).frame(width: PopupMetrics.focusRecordWidth).background(theme.canvas)
+        .padding(24).frame(width: PopupMetrics.focusRecordWidth)
+        .workfollowPopupSurface(fallback: theme.canvas)
         .focusRenderAnchor(.recordDetail)
         .sheet(item: $draft) { value in FocusRecordEditor(store: store, workspace: workspace, draft: value) }
     }

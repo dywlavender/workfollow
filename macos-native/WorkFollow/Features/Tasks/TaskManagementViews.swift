@@ -4,17 +4,7 @@ import AppKit
 @MainActor
 enum TaskNamePrompt {
     static func ask(_ title: String, value: String = "", confirm: String = "确定") -> String? {
-        let alert = NSAlert()
-        alert.messageText = title
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-        field.stringValue = value
-        alert.accessoryView = field
-        let primary = alert.addButton(withTitle: confirm)
-        let cancel = alert.addButton(withTitle: "取消")
-        NativeDialogActions.configure(alert, primary: primary, cancel: cancel)
-        alert.window.initialFirstResponder = field
-        guard NativeDialogActions.runModal(alert, cancel: cancel) == .alertFirstButtonReturn else { return nil }
-        return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        WorkfollowDialog.prompt(title, value: value, confirm: confirm)
     }
     /// 二次确认。`action` 是**确认按钮的文案**。
     ///
@@ -24,14 +14,10 @@ enum TaskNamePrompt {
     /// 之所以不给默认值：默认值会让下一个新增的破坏性调用点悄悄拿到「确定」，
     /// 缺陷重新长出来。没有默认值，漏写就编译不过。
     static func confirm(_ title: String, message: String, action: String) -> Bool {
-        let alert = NSAlert(); alert.messageText = title; alert.informativeText = message
-        let primary = alert.addButton(withTitle: action)
-        let cancel = alert.addButton(withTitle: "取消")
-        NativeDialogActions.configure(alert, primary: primary, cancel: cancel, destructive: true)
-        return NativeDialogActions.runModal(alert, cancel: cancel) == .alertFirstButtonReturn
+        WorkfollowDialog.confirm(title, message: message, action: action)
     }
     static func invalidName() {
-        let alert = NSAlert(); alert.messageText = "名称为空或已存在"; alert.runModal()
+        WorkfollowDialog.notice("名称为空或已存在")
     }
 }
 
@@ -492,6 +478,7 @@ struct TaskComposer: View {
                 }.keyboardShortcut(.defaultAction).disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }.padding(24).frame(width: 360)
+            .workfollowPopupSurface(fallback: WFColors.canvas)
             // 日程唯一编辑器：与列表行 / 四象限 / 快速组合器同一个面板、同一份 plan。
             .schedulePopover(isPresented: $showSchedulePanel) {
                 TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: .main,

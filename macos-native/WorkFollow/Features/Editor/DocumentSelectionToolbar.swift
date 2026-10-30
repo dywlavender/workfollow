@@ -87,6 +87,10 @@ struct DocumentSelectionToolbarView: View {
         }
         .font(.system(size: 13))
         .padding(.horizontal, 8).padding(.vertical, 4)
+        // 内容保持理想宽度，窄浮条才能横向滚到末尾的格式。
+        .fixedSize(horizontal: true, vertical: false)
+        // 浮条压到窗口边缘时右侧格式会被藏住，滚轮同样要能横向滚过去。
+        .horizontalWheelScroll()
         }
         .frame(idealWidth: preferredWidth)
         .frame(height: 34)
@@ -210,6 +214,8 @@ struct DocumentFormatToolbarView: View {
     /// Summary embeds this row inside its document card; task/note popovers
     /// retain the existing floating surface.
     var embedded = false
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     /// Tooltip coordinates stay outside the horizontal scroller. Picker sizes
     /// use those same real button frames before their existing child host opens.
@@ -303,130 +309,179 @@ struct DocumentFormatToolbarView: View {
         showInsert = false
     }
 
+    // 单行滚动按功能分组。组尾带分隔线，顺序与实机滴答工具条一致。
+    private var historyGroup: some View {
+        HStack(spacing: 0) {
+            ToolbarButton(title: "撤销", active: false, state: overlay,
+                          enabled: handle.canUndo, action: { handle.undo() }) {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .editorCommandFrame("format.undo", space: DocumentToolbarTooltip.space)
+            ToolbarButton(title: "重做", active: false, state: overlay,
+                          enabled: handle.canRedo, action: { handle.redo() }) {
+                Image(systemName: "arrow.uturn.forward")
+            }
+            .editorCommandFrame("format.redo", space: DocumentToolbarTooltip.space)
+            toolbarDivider
+        }
+    }
+
+    private var painterGroup: some View {
+        HStack(spacing: 0) {
+            ToolbarButton(title: "格式刷", active: handle.formatPainterActive, state: overlay,
+                          action: { handle.toggleFormatPainter() }) {
+                Image(systemName: "paintbrush")
+            }
+            .editorCommandFrame("format.formatPainter", space: DocumentToolbarTooltip.space)
+            ToolbarButton(title: "清除格式", active: false, state: overlay,
+                          action: { handle.clearFormatting() }) {
+                Image(systemName: "eraser")
+            }
+            .editorCommandFrame("format.clearFormatting", space: DocumentToolbarTooltip.space)
+            toolbarDivider
+        }
+    }
+
+    private var headingGroup: some View {
+        HStack(spacing: 0) {
+            // 「H」不是图标：原版这个按钮就是字母 H（`label: 'H'`），16pt。
+            ToolbarButton(title: "标题", active: headingActive, state: overlay,
+                          action: { togglePicker(.heading) }) {
+                Text("H").font(.system(size: 16))
+            }
+            .background { pickerPresenter(.heading) }
+            .editorPopupTriggerFrame("heading")
+            formatButton("format.bold")
+            // 「A」底下永远垫一块高亮色（原版 `label: 'A', highlight: true`）。
+            // 整块 A 就是色板入口：点一下直接弹出颜色面板，面板首行「无颜色」
+            // 负责清除高亮——不再保留只能点右下角小箭头的第二入口。
+            ToolbarButton(title: "高亮颜色", active: handle.style.marks.hasAnyHighlight, state: overlay,
+                          action: { togglePicker(.highlightColor) }) {
+                ZStack(alignment: .bottomTrailing) {
+                    Text("A")
+                        .font(.system(size: 16))
+                        .foregroundStyle(WFColors.text)
+                        .padding(.horizontal, WFSpace.tight)
+                        .padding(.trailing, 3)
+                        .background(DocumentFormatToolbarMetrics.highlightFill,
+                                    in: RoundedRectangle(cornerRadius: 4))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .padding(.trailing, 1)
+                        .allowsHitTesting(false)
+                }
+            }
+            .background { pickerPresenter(.highlightColor) }
+            .editorPopupTriggerFrame("highlightColor")
+            .editorCommandFrame("format.highlight", space: DocumentToolbarTooltip.space)
+            ToolbarButton(title: "文字颜色", active: handle.style.marks.textColorHex != nil, state: overlay,
+                          action: { togglePicker(.textColor) }) {
+                VStack(spacing: 1) {
+                    Text("A").font(.system(size: 14, weight: .medium))
+                    Capsule()
+                        .fill(handle.style.marks.textColorHex
+                            .flatMap { NSColor(documentHex: $0) }.map { Color(nsColor: $0) } ?? WFColors.text)
+                        .frame(width: 14, height: 3)
+                }
+            }
+            .background { pickerPresenter(.textColor) }
+            .editorPopupTriggerFrame("textColor")
+            .editorCommandFrame("format.textColor", space: DocumentToolbarTooltip.space)
+            toolbarDivider
+        }
+    }
+
+    private var alignmentGroup: some View {
+        HStack(spacing: 0) {
+            ToolbarButton(title: "对齐方式", active: handle.style.align != nil && handle.style.align != .left,
+                          state: overlay, action: { togglePicker(.alignment) }) {
+                Image(systemName: (handle.style.align ?? .left).symbol)
+            }
+            .background { pickerPresenter(.alignment) }
+            .editorPopupTriggerFrame("alignment")
+            .editorCommandFrame("format.alignment", space: DocumentToolbarTooltip.space)
+            ToolbarButton(title: "减少缩进", active: false, state: overlay,
+                          action: { handle.adjustIndent(by: -1) }) {
+                Image(systemName: "decrease.indent")
+            }
+            .editorCommandFrame("format.indentDecrease", space: DocumentToolbarTooltip.space)
+            ToolbarButton(title: "增加缩进", active: false, state: overlay,
+                          action: { handle.adjustIndent(by: 1) }) {
+                Image(systemName: "increase.indent")
+            }
+            .editorCommandFrame("format.indentIncrease", space: DocumentToolbarTooltip.space)
+            toolbarDivider
+        }
+    }
+
+    private var listGroup: some View {
+        HStack(spacing: 0) {
+            formatButton("format.checklist")
+            formatButton("format.bullet")
+            formatButton("format.ordered")
+            toolbarDivider
+        }
+    }
+
+    private var inlineGroup: some View {
+        HStack(spacing: 0) {
+            formatButton("format.italic")
+            formatButton("format.underline")
+            formatButton("format.strikethrough")
+            toolbarDivider
+        }
+    }
+
+    private var timeGroup: some View {
+        HStack(spacing: 0) {
+            ToolbarButton(title: "插入当前时间", active: openPicker == .time, state: overlay,
+                          action: { togglePicker(.time) }) {
+                Image(systemName: "clock.arrow.circlepath")
+            }
+            .background { pickerPresenter(.time) }
+            .editorPopupTriggerFrame("time")
+            formatButton("format.inlineCode")
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-        ScrollView(.horizontal, showsIndicators: false) {
-            // 格式类留在这条横向滚动行：H · B · A/色板 文字色 ｜ 对齐 缩进 ｜
-            // 清单 无序 有序 ｜ 斜体 下划线 删除线 ｜ 时间 行内代码。
-            // 插入类（图片/链接/代码块/分割线/引用/附件/drawio）收进右侧固定的「插入」。
-            HStack(spacing: 0) {
-                ToolbarButton(title: "撤销", active: false, state: overlay,
-                              enabled: handle.canUndo, action: { handle.undo() }) {
-                    Image(systemName: "arrow.uturn.backward")
+            ScrollView(.horizontal, showsIndicators: false) {
+                // 格式类留在这条横向滚动行：H · B · A/色板 文字色 ｜ 对齐 缩进 ｜
+                // 清单 无序 有序 ｜ 斜体 下划线 删除线 ｜ 时间 行内代码。
+                // 插入类（图片/链接/代码块/分割线/引用/附件/drawio）收进右侧固定的「插入」。
+                HStack(spacing: 0) {
+                    historyGroup
+                    painterGroup
+                    headingGroup
+                    alignmentGroup
+                    listGroup
+                    inlineGroup
+                    timeGroup
                 }
-                .editorCommandFrame("format.undo", space: DocumentToolbarTooltip.space)
-                ToolbarButton(title: "重做", active: false, state: overlay,
-                              enabled: handle.canRedo, action: { handle.redo() }) {
-                    Image(systemName: "arrow.uturn.forward")
-                }
-                .editorCommandFrame("format.redo", space: DocumentToolbarTooltip.space)
-                toolbarDivider
-                ToolbarButton(title: "格式刷", active: handle.formatPainterActive, state: overlay,
-                              action: { handle.toggleFormatPainter() }) {
-                    Image(systemName: "paintbrush")
-                }
-                .editorCommandFrame("format.formatPainter", space: DocumentToolbarTooltip.space)
-                ToolbarButton(title: "清除格式", active: false, state: overlay,
-                              action: { handle.clearFormatting() }) {
-                    Image(systemName: "eraser")
-                }
-                .editorCommandFrame("format.clearFormatting", space: DocumentToolbarTooltip.space)
-                toolbarDivider
-                // 「H」不是图标：原版这个按钮就是字母 H（`label: 'H'`），16pt。
-                ToolbarButton(title: "标题", active: headingActive, state: overlay,
-                              action: { togglePicker(.heading) }) {
-                    Text("H").font(.system(size: 16))
-                }
-                .background { pickerPresenter(.heading) }
-                .editorPopupTriggerFrame("heading")
-                formatButton("format.bold")
-                // 「A」底下永远垫一块高亮色（原版 `label: 'A', highlight: true`）。
-                // 整块 A 就是色板入口：点一下直接弹出颜色面板，面板首行「无颜色」
-                // 负责清除高亮——不再保留只能点右下角小箭头的第二入口。
-                ToolbarButton(title: "高亮颜色", active: handle.style.marks.hasAnyHighlight, state: overlay,
-                              action: { togglePicker(.highlightColor) }) {
-                    ZStack(alignment: .bottomTrailing) {
-                        Text("A")
-                            .font(.system(size: 16))
-                            .foregroundStyle(WFColors.text)
-                            .padding(.horizontal, WFSpace.tight)
-                            .padding(.trailing, 3)
-                            .background(DocumentFormatToolbarMetrics.highlightFill,
-                                        in: RoundedRectangle(cornerRadius: 4))
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
-                            .foregroundStyle(WFColors.secondaryText)
-                            .padding(.trailing, 1)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .background { pickerPresenter(.highlightColor) }
-                .editorPopupTriggerFrame("highlightColor")
-                .editorCommandFrame("format.highlight", space: DocumentToolbarTooltip.space)
-                ToolbarButton(title: "文字颜色", active: handle.style.marks.textColorHex != nil, state: overlay,
-                              action: { togglePicker(.textColor) }) {
-                    VStack(spacing: 1) {
-                        Text("A").font(.system(size: 14, weight: .medium))
-                        Capsule()
-                            .fill(handle.style.marks.textColorHex
-                                .flatMap { NSColor(documentHex: $0) }.map { Color(nsColor: $0) } ?? WFColors.text)
-                            .frame(width: 14, height: 3)
-                    }
-                }
-                .background { pickerPresenter(.textColor) }
-                .editorPopupTriggerFrame("textColor")
-                .editorCommandFrame("format.textColor", space: DocumentToolbarTooltip.space)
-                toolbarDivider
-                ToolbarButton(title: "对齐方式", active: handle.style.align != nil && handle.style.align != .left,
-                              state: overlay, action: { togglePicker(.alignment) }) {
-                    Image(systemName: (handle.style.align ?? .left).symbol)
-                }
-                .background { pickerPresenter(.alignment) }
-                .editorPopupTriggerFrame("alignment")
-                .editorCommandFrame("format.alignment", space: DocumentToolbarTooltip.space)
-                ToolbarButton(title: "减少缩进", active: false, state: overlay,
-                              action: { handle.adjustIndent(by: -1) }) {
-                    Image(systemName: "decrease.indent")
-                }
-                .editorCommandFrame("format.indentDecrease", space: DocumentToolbarTooltip.space)
-                ToolbarButton(title: "增加缩进", active: false, state: overlay,
-                              action: { handle.adjustIndent(by: 1) }) {
-                    Image(systemName: "increase.indent")
-                }
-                .editorCommandFrame("format.indentIncrease", space: DocumentToolbarTooltip.space)
-                toolbarDivider
-                formatButton("format.checklist")
-                formatButton("format.bullet")
-                formatButton("format.ordered")
-                toolbarDivider
-                formatButton("format.italic")
-                formatButton("format.underline")
-                formatButton("format.strikethrough")
-                toolbarDivider
-                ToolbarButton(title: "插入当前时间", active: openPicker == .time, state: overlay,
-                              action: { togglePicker(.time) }) {
-                    Image(systemName: "clock.arrow.circlepath")
-                }
-                .background { pickerPresenter(.time) }
-                .editorPopupTriggerFrame("time")
-                formatButton("format.inlineCode")
+                .buttonStyle(.plain)
+                // Optical glyph size is separate from the unchanged hit target.
+                .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
+                .padding(.horizontal, DocumentFormatToolbarMetrics.horizontalInset)
+                // 横向 ScrollView 需要内容的理想宽度；否则末尾一组会被
+                // 当成“可压缩溢出”截在视口外，滚到最右也点不到。
+                .fixedSize(horizontal: true, vertical: false)
+                // 单行横排：窄宿主里藏住的按钮靠滚轮或触控板横扫过去。
+                .horizontalWheelScroll()
             }
-            .buttonStyle(.plain)
-            // Optical glyph size is separate from the unchanged hit target.
-            .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
-            .padding(.horizontal, DocumentFormatToolbarMetrics.horizontalInset)
-        }
-        // 插入固定在工具条最右：放在横向 ScrollView 之外，窄宽度下也总能点到。
-        toolbarDivider
-        insertButton
-        .buttonStyle(.plain)
-        .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
+            // 插入固定在工具条最右：放在横向 ScrollView 之外，窄宽度下也总能点到。
+            toolbarDivider
+            insertButton
+                .buttonStyle(.plain)
+                .font(.system(size: DocumentFormatToolbarMetrics.iconSize, weight: .regular))
         }
         .frame(maxWidth: maxWidth)
         .frame(height: DocumentFormatToolbarMetrics.height)
         // 工具条本身在原版里就是一个浮层（`showTaskEditorPopover` 的卡面），所以取浮层
-        // 底色/描边/阴影，而不是画布色。
-        .background(embedded ? WFColors.content : WFColors.overlay,
+        // 底色/描边/阴影，而不是画布色。嵌入正文时改用主题淡染，和侧栏呼应。
+        .background(embedded ? backgroundTheme.editorBarFill(for: colorScheme)
+                        : backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme),
                     in: RoundedRectangle(cornerRadius: embedded ? 0 : DocumentFormatToolbarMetrics.cornerRadius))
         .overlay {
             if !embedded {

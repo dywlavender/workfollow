@@ -32,6 +32,9 @@ struct MeetingWorkspaceView: View {
     @State private var aiTaskRequest: AITaskRequest?
     @State private var transcriptQuery = ""
     @State private var minutesEditorIsEmpty = true
+    @StateObject private var audioPlayer = MeetingAudioPlayer()
+    @State private var correction: MeetingCorrectionTarget?
+    @State private var retranscriptionTarget: UUID?
 
     /// 窄窗口下只显示一栏时的「当前在哪一栏」。宽窗口下恒为 false（两栏都在）。
     @State private var detailOnly = false
@@ -93,13 +96,31 @@ struct MeetingWorkspaceView: View {
             }
         }
         .coordinateSpace(name: "meeting-minutes-workspace")
-        .background(WFColors.content)
+        .workfollowPageSurface(0.90)
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
+        .sheet(item: $correction) { target in
+            MeetingTranscriptEditor(line: target.line) { text, speaker, all in
+                store.correctTranscript(meetingID: target.meetingID, lineID: target.line.id, text: text, speaker: speaker, renameAll: all)
+            }
+        }
+        .workfollowAlert(
+            "重新转写录音？",
+            message: "使用当前语音模型重新识别本地录音；成功后替换对话文字，支持撤销。",
+            isPresented: Binding(get: { retranscriptionTarget != nil }, set: { if !$0 { retranscriptionTarget = nil } }),
+            actions: [
+                .cancel(),
+                .primary("开始重新转写") {
+                    if let id = retranscriptionTarget { store.retranscribe(id) }
+                    retranscriptionTarget = nil
+                }
+            ])
         .onChange(of: store.selectedID) { _, _ in
+            audioPlayer.stop()
             transcriptQuery = ""
             if store.transcriptRevealRequest?.meetingID == store.selectedID { detailOnly = true }
         }
         .onAppear { if store.transcriptRevealRequest?.meetingID == store.selectedID { detailOnly = true } }
+        .onDisappear { audioPlayer.stop() }
     }
 
     /// 列表列与详情栏之间那条线。与任务页/笔记页同一条可拖分隔条（原来是系统
@@ -308,6 +329,19 @@ struct MeetingWorkspaceView: View {
             // 工具行与标题块横跨两栏：录音控制与会议身份属于整场会议，不属于某一栏。
             toolbar(meeting)
             Divider()
+            if audioPlayer.duration > 0 {
+                HStack(spacing: 10) {
+                    Button { audioPlayer.toggle() } label: { Image(systemName: audioPlayer.playing ? "pause.fill" : "play.fill") }
+                    Slider(value: Binding(get: { audioPlayer.position }, set: { audioPlayer.seek($0) }), in: 0...max(1, audioPlayer.duration))
+                    Text(timestamp(audioPlayer.position) + " / " + timestamp(audioPlayer.duration)).font(WFType.caption).monospacedDigit()
+                    Button { audioPlayer.stop() } label: { Image(systemName: "xmark") }
+                }.buttonStyle(.plain).padding(.horizontal, WFSpace.xl).padding(.vertical, 8)
+            }
+            if store.retranscribingID == meeting.id {
+                HStack { ProgressView().controlSize(.small); Text(store.retranscriptionProgress); Spacer(); Button("取消") { store.cancelRetranscription() } }
+                    .font(WFType.supporting).padding(.horizontal, WFSpace.xl).padding(.vertical, 8)
+            }
+            if let error = audioPlayer.error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger).padding(.horizontal, WFSpace.xl) }
             titleBlock(meeting)
                 .padding(.horizontal, WFSpace.xl)
                 .padding(.vertical, WFSpace.md)
@@ -369,7 +403,7 @@ struct MeetingWorkspaceView: View {
                     _Concurrency.Task { await store.startRecording() }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(store.recordingID != nil || store.requestingPermission || store.transcribing || !store.savingRecordingIDs.isEmpty)
+                .disabled(store.recordingID != nil || store.requestingPermission || store.transcribing || store.retranscribingID != nil || !store.savingRecordingIDs.isEmpty)
             }
             if store.requestingPermission {
                 ProgressView().controlSize(.small)
@@ -383,10 +417,15 @@ struct MeetingWorkspaceView: View {
             }
             Spacer(minLength: WFSpace.sm)
             if !store.recordingFiles(for: meeting).isEmpty {
-                Button("录音文件") { NSWorkspace.shared.activateFileViewerSelecting(store.recordingFiles(for: meeting)) }
+                Menu("录音") {
+                    Button("从头播放") { playRecording(at: 0) }
+                    Button("重新转写…") { retranscriptionTarget = meeting.id }
+                    if meeting.previousTranscript != nil { Button("撤销转写修改") { store.restoreTranscript(meeting.id) } }
+                    Divider()
+                    Button("在 Finder 中查看录音") { NSWorkspace.shared.activateFileViewerSelecting(store.recordingFiles(for: meeting)) }
+                }
                     .controlSize(.small)
-                    .disabled(store.recordingID == meeting.id || store.savingRecordingIDs.contains(meeting.id))
-                    .help("在 Finder 中查看麦克风原始录音和转写输入 WAV")
+                    .disabled(store.recordingID != nil || store.retranscribingID != nil || store.savingRecordingIDs.contains(meeting.id))
             }
             if store.savingRecordingIDs.contains(meeting.id) {
                 ProgressView().controlSize(.small)
@@ -604,7 +643,8 @@ struct MeetingWorkspaceView: View {
     private func transcriptRow(_ line: MeetingTranscriptLine,
                                inMinutes: Bool = false) -> some View {
         HStack(alignment: .top, spacing: WFSpace.sm) {
-            Text(timestamp(line.offset))
+            Button { playRecording(at: line.offset) } label: { Text(timestamp(line.offset)) }
+                .buttonStyle(.plain).help("播放此处录音")
                 .font(WFType.caption).foregroundStyle(WFColors.tertiaryText)
                 .monospacedDigit()
                 .frame(width: MeetingMetrics.timeColumn, alignment: .trailing)
@@ -622,11 +662,26 @@ struct MeetingWorkspaceView: View {
         }
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, WFSpace.xs)
+        .contextMenu {
+            Button("播放此处录音") { playRecording(at: line.offset) }
+            Button("校正文字和讲话人…") {
+                if let meeting = store.selected { correction = .init(meetingID: meeting.id, line: line) }
+            }.disabled(store.recordingID != nil || store.retranscribingID != nil)
+        }
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(inMinutes ? WFColors.accent : Color.clear)
                 .frame(width: MeetingMetrics.inMinutesBar)
         }
+    }
+
+    private func playRecording(at offset: TimeInterval) {
+        guard let meeting = store.selected else { return }
+        let tracks = store.recordingPlaylist(for: meeting, offset: offset)
+        guard !tracks.isEmpty else {
+            store.error = "找不到这段发言对应的本地录音。"; return
+        }
+        audioPlayer.play(tracks: tracks, from: offset)
     }
 
     /// 「以下 N 段尚未进入纪要」的分界线。

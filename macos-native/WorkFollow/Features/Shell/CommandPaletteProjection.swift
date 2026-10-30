@@ -151,9 +151,10 @@ enum CommandPaletteProjection {
     @MainActor
     @discardableResult
     static func openTask(_ id: UUID, workspace: TaskWorkspaceModel,
-                         navigation: AppNavigation) -> Bool {
+                         navigation: AppNavigation, query: String = "") -> Bool {
         guard let task = workspace.task(for: id), task.deletedAt == nil,
               task.skippedAt == nil, !task.isAbandoned, !task.isConverted else { return false }
+        workspace.clearBulkSelection()
         workspace.activeList = nil
         workspace.activeTag = nil
         workspace.openFilter(nil)
@@ -168,6 +169,7 @@ enum CommandPaletteProjection {
         navigation.taskSelectionToPreserveOnNextNavigation = navigation.destination == destination ? nil : id
         navigation.destination = destination
         workspace.select(id)
+        workspace.requestSearchReveal(taskID: id, query: query)
         return true
     }
 
@@ -175,13 +177,15 @@ enum CommandPaletteProjection {
     @discardableResult
     static func openNote(_ id: UUID, workspace: NotesWorkspaceModel,
                          taskWorkspace: TaskWorkspaceModel,
-                         navigation: AppNavigation) -> Bool {
+                         navigation: AppNavigation, query: String = "") -> Bool {
         guard workspace.notes.contains(where: { $0.id == id && $0.deletedAt == nil }) else { return false }
+        taskWorkspace.clearBulkSelection()
         navigation.destination = .notes
         taskWorkspace.activeList = nil
         taskWorkspace.activeTag = nil
         taskWorkspace.select(nil)
         workspace.selectedID = id
+        workspace.requestSearchReveal(noteID: id, query: query)
         return true
     }
 

@@ -61,6 +61,7 @@ struct MeetingRecord: Codable, Equatable, Identifiable {
     var capturedDuration: TimeInterval?
     var duration: TimeInterval { capturedDuration ?? audio.reduce(0) { $0 + $1.duration } }
     var transcript: [MeetingTranscriptLine] = []
+    var previousTranscript: [MeetingTranscriptLine]?
     var minutes = ""
     var summarizedLineIDs: [UUID] = []
     var summarizedLineCount: Int { summarizedLineIDs.count }

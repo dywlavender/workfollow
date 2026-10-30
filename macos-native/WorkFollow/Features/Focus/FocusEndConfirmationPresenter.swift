@@ -26,27 +26,20 @@ final class FocusEndConfirmationPresenter {
         guard let request, let store, presentedRequestID == nil,
               store.pendingEndConfirmation?.id == request.id else { return }
         presentedRequestID = request.id
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = "提前结束番茄？"
-        alert.informativeText = "当前番茄尚未结束，确定要提前结束并保存专注记录吗？"
-        let save = alert.addButton(withTitle: "结束并保存")
-        save.setAccessibilityIdentifier("focus-end-confirm-save")
-        let discard = alert.addButton(withTitle: "放弃本次专注")
-        discard.hasDestructiveAction = true
-        discard.setAccessibilityIdentifier("focus-end-confirm-discard")
-        let cancel = alert.addButton(withTitle: "取消")
-        cancel.keyEquivalent = "\u{1b}"
-        cancel.setAccessibilityIdentifier("focus-end-confirm-cancel")
-        alert.window.appearance = NSApp.keyWindow?.effectiveAppearance
-        NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
+        let response = WorkfollowDialog.runModal(
+            title: "提前结束番茄？",
+            message: "当前番茄尚未结束，确定要提前结束并保存专注记录吗？",
+            actions: [
+                .cancel("取消", id: "focus-end-confirm-cancel"),
+                .destructive("放弃本次专注", id: "focus-end-confirm-discard"),
+                .primary("结束并保存", id: "focus-end-confirm-save")
+            ])
         presentedRequestID = nil
         guard store.pendingEndConfirmation?.id == request.id else { return }
         let choice: FocusEndConfirmationChoice
         switch response {
-        case .alertFirstButtonReturn: choice = .save
-        case .alertSecondButtonReturn: choice = .discard
+        case 2: choice = .save
+        case 1: choice = .discard
         default: choice = .cancel
         }
         _ = store.resolveEndConfirmation(choice)

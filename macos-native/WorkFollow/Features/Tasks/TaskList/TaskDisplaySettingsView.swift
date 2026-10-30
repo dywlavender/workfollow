@@ -66,7 +66,7 @@ struct TaskDisplaySettingsView: View {
             Spacer(minLength: 0)
         }
         .frame(width: 500, height: 410)
-        .background(WFColors.canvas)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
         .coordinateSpace(name: "display-settings")
         .onPreferenceChange(TaskDisplaySettingsFrames.self) { onFrames?($0) }
         .onExitCommand { dismiss() }

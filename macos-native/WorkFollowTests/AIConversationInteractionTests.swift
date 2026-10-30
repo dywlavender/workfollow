@@ -90,21 +90,27 @@ final class AIConversationInteractionTests: XCTestCase {
         let deleteID = "ai.chat.delete.\(model.record.id)"
         let delete = try XCTUnwrap(anchors[deleteID])
         try InspectorPanelTestSupport.click(delete.bounds, in: delete, window: window)
-        try await wait("delete confirmation") { window.attachedSheet != nil }
-        let cancelSheet = try XCTUnwrap(window.attachedSheet)
-        let cancel = try XCTUnwrap(cancelSheet.contentView.flatMap {
-            descendants($0).compactMap { $0 as? NSButton }.first { $0.title == "取消" }
-        })
-        cancel.performClick(nil)
-        try await wait("cancel deletion") { window.attachedSheet == nil }
+        func dialog(_ title: String) -> NSPanel? {
+            (window.childWindows ?? []).compactMap { $0 as? NSPanel }
+                .first { $0.title == title && $0.isVisible }
+        }
+        try await wait("delete confirmation") { dialog("删除这段对话？") != nil }
+        let cancelDialog = try XCTUnwrap(dialog("删除这段对话？"))
+        try await wait("cancel button") { anchors["dialog.button.取消"]?.window === cancelDialog }
+        let cancelButton = try XCTUnwrap(anchors["dialog.button.取消"])
+        try InspectorPanelTestSupport.click(cancelButton.bounds, in: cancelButton, window: cancelDialog)
+        try await wait("cancel deletion") { !cancelDialog.isVisible }
         XCTAssertEqual(environment.aiChat.records.count, 2)
         try InspectorPanelTestSupport.click(delete.bounds, in: delete, window: window)
-        try await wait("delete confirmation again") { window.attachedSheet != nil }
-        let confirmSheet = try XCTUnwrap(window.attachedSheet)
-        let confirm = try XCTUnwrap(confirmSheet.contentView.flatMap {
-            descendants($0).compactMap { $0 as? NSButton }.first { $0.title == "删除" }
-        })
-        confirm.performClick(nil)
+        try await wait("delete confirmation again") { dialog("删除这段对话？") != nil }
+        let confirmDialog = try XCTUnwrap(dialog("删除这段对话？"))
+        try await wait("confirm button") {
+            guard let anchor = anchors["dialog.button.删除"] else { return false }
+            return anchor.window === confirmDialog && !anchor.bounds.isEmpty
+        }
+        let confirmButton = try XCTUnwrap(anchors["dialog.button.删除"])
+        try InspectorPanelTestSupport.click(confirmButton.bounds, in: confirmButton, window: confirmDialog)
+        try await wait("confirm dismissed") { !confirmDialog.isVisible }
         try await wait("deleted conversation") { environment.aiChat.records.count == 1 }
         XCTAssertEqual(environment.aiChat.current.record.id, secondID)
         XCTAssertEqual(environment.aiChat.current.latestResult, "第1轮回复：清楚的虚构文字")
@@ -137,7 +143,7 @@ final class AIConversationInteractionTests: XCTestCase {
         menu.performActionForItem(at: index)
         let panel = try XCTUnwrap(AISelectionWindowController.shared.panel)
         XCTAssertEqual(panel.level, .floating)
-        XCTAssertEqual(AISelectionWindowController.shared.model?.context, "原句")
+        XCTAssertEqual(AISelectionWindowController.shared.model?.submittedSource?.content, "原句")
         try await wait { anchors["ai.selection.replace"] != nil }
         let replace = try XCTUnwrap(anchors["ai.selection.replace"])
         try InspectorPanelTestSupport.click(replace.bounds, in: replace, window: panel)

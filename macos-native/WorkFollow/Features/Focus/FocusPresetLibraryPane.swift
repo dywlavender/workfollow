@@ -32,7 +32,7 @@ struct FocusPresetLibraryPane: View {
             }
             compactTimerBar
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.canvas)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusRenderAnchor(.presetLibrary)
         .sheet(item: $editingPreset) { FocusPresetEditor(store: store, workspace: workspace, preset: $0) }
         .sheet(item: $recordDraft) { FocusRecordEditor(store: store, workspace: workspace, draft: $0) }

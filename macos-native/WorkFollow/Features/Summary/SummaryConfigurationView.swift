@@ -67,7 +67,7 @@ struct SummaryConfigurationView: View {
             }
             .padding(24).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(WFColors.content).tint(WFColors.summaryAction)
+        .tint(WFColors.summaryAction)
     }
 
     private func control(_ title: String, value: String, kind: Control) -> some View {

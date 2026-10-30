@@ -142,9 +142,8 @@ struct CommandPaletteView: View {
             }
             .padding(.horizontal, WFSpace.lg)
             .padding(.vertical, WFSpace.sm)
-            .background(WFColors.canvas)
         }
-        .background(WFColors.content)
+        .workfollowPopupSurface()
         .frame(width: session.showAll || session.askingAI ? 700 : 620, height: session.askingAI ? 620 : session.showAll ? 580 : 420)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in selectedIndex = 0 }

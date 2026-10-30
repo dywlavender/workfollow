@@ -20,7 +20,8 @@ struct RootShellView: View {
         return navigation.destination.rawValue
     }
 
-    private func pageContent(destination: NativeDestination, navigationVisible: Bool) -> AnyView {
+    private func pageContent(destination: NativeDestination, navigationVisible: Bool,
+                             windowWidth: CGFloat) -> AnyView {
         switch destination {
         case .focus:
             return AnyView(FocusWorkspaceView(store: environment.focusStore, workspace: workspace,
@@ -33,7 +34,8 @@ struct RootShellView: View {
         case .aiChat: return AnyView(AIChatWorkspaceView(store: environment.aiChat))
         case .notes, .notesTrash:
             return AnyView(NotesWorkspaceView(notes: environment.notesWorkspace, navigation: pageCache.navigation(for: "notes", appNavigation: navigation, belongsToPage: { $0.isNotes }),
-                                             tasks: workspace, navigationVisible: navigationVisible))
+                                             tasks: workspace, navigationVisible: navigationVisible,
+                                             windowWidth: windowWidth))
         case .calendar: return AnyView(CalendarWorkspaceView(workspace: workspace, systemCalendar: environment.systemCalendar))
         case .matrix: return AnyView(MatrixWorkspaceView(workspace: workspace))
         default:
@@ -42,8 +44,10 @@ struct RootShellView: View {
         }
     }
 
-    private func hostedPage(destination: NativeDestination, navigationVisible: Bool) -> AnyView {
-        let content = pageContent(destination: destination, navigationVisible: navigationVisible)
+    private func hostedPage(destination: NativeDestination, navigationVisible: Bool,
+                            windowWidth: CGFloat) -> AnyView {
+        let content = pageContent(destination: destination, navigationVisible: navigationVisible,
+                                  windowWidth: windowWidth)
             .environmentObject(environment)
             .environment(\.taskFocusStore, environment.focusStore)
             .environment(\.mainWindowRailInset, railInset)
@@ -59,8 +63,17 @@ struct RootShellView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let navigationVisible = geometry.size.width >= WFMetrics.navigationBreakpoint
+            // 笔记页 AI 右扩时，壳层宽度按扩展前计算，导航列不会因为窗口变宽而突然出现。
+            let shellWidth = environment.notesAIFrozenWindowWidth ?? geometry.size.width
+            let navigationVisible = shellWidth >= WFMetrics.navigationBreakpoint
             let destination = navigation.destination
+            let notesFolderSuppressed = destination.isNotes
+                && (environment.notesFolderPaneHidden || environment.notesFolderPaneAutoHidden)
+            let showsNavigationColumn = navigationVisible && environment.sidebarVisible
+                && !notesFolderSuppressed
+                && destination != .calendar && destination != .matrix
+                && destination != .countdown && destination != .meetings
+                && destination != .focus && destination != .aiChat
             HStack(spacing: 0) {
                 IconRailView(workspace: workspace, navigation: navigation,
                              onNavigate: environment.navigate,
@@ -70,10 +83,7 @@ struct RootShellView: View {
                              onOpenSyncSettings: { environment.settingsSection = .appleSync })
                     .overlay(alignment: .trailing) { ShellColumnSeparator() }
                 // 这些模块自己带页面内导航（或只有一个入口），不再给二级导航列。
-                if navigationVisible, environment.sidebarVisible,
-                   navigation.destination != .calendar, navigation.destination != .matrix,
-                   navigation.destination != .countdown, navigation.destination != .meetings,
-                   navigation.destination != .focus, navigation.destination != .aiChat {
+                if showsNavigationColumn {
                     NavigationColumnView(workspace: workspace, navigation: navigation,
                                          filterStore: environment.filterStore)
                         .frame(width: WFMetrics.navigationWidth)
@@ -81,9 +91,40 @@ struct RootShellView: View {
                 }
                 WorkspacePageHost(cache: pageCache, pageKey: pageKey,
                                   content: hostedPage(destination: destination,
-                                                      navigationVisible: navigationVisible))
+                                                      navigationVisible: navigationVisible,
+                                                      windowWidth: geometry.size.width))
             }
-            .background(WFColors.content)
+            // 小伙伴蹲在图标栏的空白下半段：那里只有底部三个按钮，竖排留白最多，
+            // 不压中栏/正文，也不为它改列表或导航列的布局。矮窗口直接不出现。
+            .overlay(alignment: .bottomLeading) {
+                if environment.companionEnabled, geometry.size.height >= 600 {
+                    CompanionPerchView(director: environment.companion,
+                                       character: environment.companionCharacter)
+                        .padding(.leading, (WFMetrics.railWidth - CompanionLayout.perchMascotSize) / 2)
+                        .padding(.bottom, CompanionLayout.railBottomReserve)
+                        .transition(.opacity)
+                }
+            }
+            .background {
+                ZStack {
+                    if environment.backgroundTheme.isThemed {
+                        WorkFollowBackgroundView(theme: environment.backgroundTheme,
+                                                 intensity: environment.backgroundIntensity,
+                                                 animated: environment.backgroundAnimated)
+                    } else {
+                        WFColors.content
+                    }
+                    // 整窗一层连续画布：页面与各栏在主题开启时都不再各自铺底，
+                    // 多栏页面的列边界因此没有深浅台阶。
+                    WorkfollowPageCanvas(theme: environment.backgroundTheme,
+                                         intensity: environment.backgroundIntensity,
+                                         leadingWidth: WFMetrics.railWidth
+                                            + (showsNavigationColumn ? WFMetrics.navigationWidth : 0))
+                }
+            }
+            .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)
+            .environment(\.workfollowBackgroundIntensity, environment.backgroundIntensity)
+            .environment(\.workfollowPageCanvasActive, environment.backgroundTheme.isThemed)
             .disabled(environment.storageNeedsReload)
             .onAppear {
                 selectionMemory.connect(workspace: workspace, notes: environment.notesWorkspace, navigation: navigation)
@@ -130,6 +171,9 @@ struct RootShellView: View {
             }
         }
         .hidesSystemFocusEffect()
+        // 放在最外层：根级 sheet（命令面板、欢迎页）也要继承主题，弹层才有底色。
+        .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)
+        .environment(\.workfollowBackgroundIntensity, environment.backgroundIntensity)
     }
 }
 
@@ -177,6 +221,7 @@ private struct TaskWorkspaceView: View {
     @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.colorScheme) private var colorScheme
     @State private var dragOrigin: CGFloat?
     @AppStorage(TaskDetailLayout.defaultsKey) private var detailLayoutRaw =
         TaskDetailLayout.sidePeek.rawValue
@@ -253,7 +298,8 @@ private struct TaskWorkspaceView: View {
                                            commentStore: environment.taskCommentStore)
                             .frame(width: min(420, max(320, geometry.size.width - 64)),
                                    height: max(280, geometry.size.height - 32))
-                            .background(WFColors.content,
+                            .background(environment.backgroundTheme.popupFillOrFallback(
+                                WFColors.content, for: colorScheme),
                                         in: RoundedRectangle(cornerRadius: 12))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 12)
@@ -274,7 +320,10 @@ private struct TaskWorkspaceView: View {
                                            commentStore: environment.taskCommentStore)
                             .frame(width: min(440, max(320, geometry.size.width * 0.72)),
                                    height: geometry.size.height)
-                            .background(WFColors.content)
+                            // 详情盖在列表上：必须自己带不透明底色，整窗画布生效后
+                            // 页面铺底已经让出，没有这层会透出后面的列表。
+                            .background(environment.backgroundTheme.popupFillOrFallback(
+                                WFColors.content, for: colorScheme))
                             .overlay(alignment: .leading) {
                                 Rectangle().fill(WFColors.border).frame(width: 1)
                             }
@@ -324,6 +373,6 @@ private struct ModuleShellView: View {
         }
         .padding(WFSpace.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WFColors.content)
+        .workfollowPageSurface(0.90)
     }
 }

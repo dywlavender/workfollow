@@ -75,6 +75,7 @@ struct ListActivitySheet: View {
         }
         .task(id: queryKey) { await history.reset(store: activity, taskIDs: taskIDs) }
         .frame(width: PopupMetrics.activitySheetWidth, height: 420)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
         .onExitCommand(perform: onClose)
         .environment(\.calendar, workspace.calendar)
         .environment(\.timeZone, workspace.calendar.timeZone)

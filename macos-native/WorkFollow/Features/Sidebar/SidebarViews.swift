@@ -10,6 +10,9 @@ struct IconRailView: View {
     var onOpenSyncSettings: () -> Void = {}
     @Environment(\.openSettings) private var openSettings
     @Environment(\.mainWindowRailInset) private var mainWindowRailInset
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
+    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedDestination: NativeDestination?
     @State private var focusRequest = UUID()
     @StateObject var tooltips = RailTooltipState()
@@ -77,7 +80,8 @@ struct IconRailView: View {
         .padding(.top, max(RailMetrics.topPadding, mainWindowRailInset))
         .padding(.bottom, RailMetrics.topPadding)
         .frame(width: RailMetrics.width)
-        .background(WFColors.canvas)
+        // 整窗画布已经把图标栏的底色画进去了，这里再铺一层就会在列边界留台阶。
+        .background(pageCanvasActive ? Color.clear : backgroundTheme.railFill(for: colorScheme))
         .coordinateSpace(name: RailTooltipOverlay.space)
         .overlay(alignment: .topLeading) { RailTooltipOverlay(state: tooltips) }
         // Draw across the rail boundary above the adjacent navigation column.
@@ -259,6 +263,9 @@ struct NavigationColumnView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
+    @Environment(\.colorScheme) private var colorScheme
     /// Seam for the saved-filter group (Wave 1 F5): the shell passes the
     /// module's FilterStore here; when nil the section stays hidden.
     var filterStore: FilterStore? = nil
@@ -295,7 +302,8 @@ struct NavigationColumnView: View {
         .padding(.horizontal, WFSpace.sm)
         .padding(.vertical, WFSpace.md)
         .frame(maxHeight: .infinity)
-        .background(WFColors.content)
+        // 同上：整窗画布已经包含导航列的底色，渐变过渡到正文。
+        .background(pageCanvasActive ? Color.clear : backgroundTheme.navigationFill(for: colorScheme))
     }
 
     /// 滴答口径的单滚动列表：智能清单 → 32pt 间隔 → 清单/过滤器/标签 →

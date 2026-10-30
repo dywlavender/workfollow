@@ -57,6 +57,7 @@ final class FloatingNoteWindowController: ObservableObject {
                     tasks: environment.taskWorkspace, editorHandle: handle,
                     focusAtEnd: createdNoteIDs.contains(noteID),
                     onClose: { [weak self] in self?.close(noteID: noteID) })
+                    .environmentObject(environment)
             }
     }
 

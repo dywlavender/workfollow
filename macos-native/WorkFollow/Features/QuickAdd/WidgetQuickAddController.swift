@@ -47,6 +47,7 @@ final class WidgetQuickAddController {
             .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
             .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).strokeBorder(WFColors.overlayBorder))
             .background(PopupEscapeRouter { [weak self] in self?.dismiss() })
+            .workfollowNativeTheme()
             .preferredColorScheme(style.colorScheme)
             .hidesSystemFocusEffect()
         let host = NSHostingView(rootView: card)

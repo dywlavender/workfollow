@@ -75,6 +75,7 @@ struct FocusTaskPickerPopover: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @FocusState private var searchFocused: Bool
     @State private var isScopeHovered = false
 
@@ -150,7 +151,7 @@ struct FocusTaskPickerPopover: View {
         .frame(width: FocusTaskPickerMetrics.width, height: FocusTaskPickerMetrics.height,
                alignment: .topLeading)
         .coordinateSpace(name: "focus-task-picker")
-        .background(theme.canvas, in: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius))
+        .background(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme), in: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius)
             .stroke(theme.hairline, lineWidth: 1))
         .onAppear { DispatchQueue.main.async { searchFocused = true } }

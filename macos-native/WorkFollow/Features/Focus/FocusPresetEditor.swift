@@ -30,6 +30,7 @@ struct FocusPresetEditor: View {
             }) {
                 Text(error ?? "").foregroundStyle(WFColors.danger)
             }
-        }.frame(width: 400, height: 380).background(WFColors.content)
+        }.frame(width: 400, height: 380)
+            .workfollowPopupSurface()
     }
 }

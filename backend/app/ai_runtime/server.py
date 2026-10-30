@@ -10,6 +10,7 @@ import asyncio
 import json
 from pathlib import Path
 import signal
+import shutil
 import sys
 import time
 
@@ -17,6 +18,7 @@ from pydantic import ValidationError
 
 from app.ai_runtime.pi_engine import PiEngine
 from app.ai_runtime.conversation import converse, conversation_file
+from app.ai_runtime.diagnostics import configuration_check
 from app.ai_runtime.failures import EngineError, model_failure
 from app.ai_runtime.prompts import minutes_prompt, summary_prompt, task_prompt
 from app.ai_runtime.settings import AISettings
@@ -88,6 +90,8 @@ class Runtime:
                     "capabilities": ["tasks", "summary", "minutes", "transcription", "stream", "chat", "conversation", "knowledge", "note_rewrite", "streaming_text"]}
         if method == "models":
             return {"models": await self.pi.models(data)}
+        if method == "configuration.check":
+            return await configuration_check(self.pi, data)
         if method == "conversation.send":
             file = conversation_file(data)
             self.conversation_tasks[file] = asyncio.current_task()
@@ -104,12 +108,17 @@ class Runtime:
                 await asyncio.gather(task, return_exceptions=True)
             try:
                 file.unlink(missing_ok=True)
+                attachments = file.parent.parent / "attachments" / "chat" / file.stem
+                if attachments.exists():
+                    shutil.rmtree(attachments)
             except OSError as exc:
                 raise EngineError("无法删除本地会话，请检查数据目录权限。", "storage_failed") from exc
             return {"deleted": True}
         if method == "model.test":
             return await self.langchain(method, data)
         if method in ("knowledge.ask", "note.rewrite"):
+            if method == "note.rewrite" and data.get("attachments") and not data.get("content", "").strip():
+                data = {**data, "content": "（附件资料）"}
             if data.get("engine", "pi") not in ("pi", "langchain"):
                 raise EngineError("不支持的 AI 引擎。", "invalid_request")
             request = KnowledgeRequest.model_validate(data) if method == "knowledge.ask" else NoteRewriteRequest.model_validate(data)
@@ -125,7 +134,7 @@ class Runtime:
             return knowledge_result(text, request)
         if method in ("text.tasks", "text.summary", "text.generate", "chat"):
             if method == "text.tasks" and not data.get("content", "").strip():
-                data = {**data, "content": data.get("title", "")}
+                data = {**data, "content": data.get("title", "") or ("（附件资料）" if data.get("attachments") else "")}
             if data.get("engine", "pi") not in ("pi", "langchain"):
                 raise EngineError("不支持的 AI 引擎。", "invalid_request")
             if data.get("engine", "pi") == "langchain":
@@ -184,6 +193,8 @@ class Runtime:
         from app.services.ai_service import AIServiceError, TextAIService
         settings = AISettings.model_validate(data.get("configuration", {}))
         service = TextAIService(settings)
+        from app.ai_runtime.attachments import attachment_content
+        service.input_images, service.attachment_context = attachment_content(data)
         service.on_text = self.text_stream(method, data).text if data.get("progressChannel") else None
         try:
             async with asyncio.timeout(600):

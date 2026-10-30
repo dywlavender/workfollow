@@ -484,4 +484,22 @@ final class DocumentFormatStyleTests: XCTestCase {
         XCTAssertEqual(style.paragraphSpacing, 0)
         XCTAssertGreaterThan(style.lineSpacing, 0, "13pt 等宽字要有舒展的行盒")
     }
+
+    /// 中文排版一个 Tab = 两个汉字宽（Word 默认制表位同款），且第一格必须
+    /// 从文字起点起算，不能先吸到系统 28pt 网格的 8pt 处。
+    func testTabStopsAdvanceTwoHanCharactersFromTextOrigin() throws {
+        for kind in [DocumentBlockKind.paragraph, .heading(1), .quote, .bullet] {
+            let attributes = DocumentTextCodec.attributes(kind: kind, marks: [])
+            let font = try XCTUnwrap(attributes[.font] as? NSFont)
+            let style = try XCTUnwrap(attributes[.paragraphStyle] as? NSParagraphStyle)
+            let step = font.pointSize * 2
+            let origin = style.firstLineHeadIndent
+            XCTAssertGreaterThan(style.tabStops.count, 10, "\(kind)")
+            for (index, stop) in style.tabStops.enumerated() {
+                XCTAssertEqual(stop.location, origin + step * CGFloat(index + 1), accuracy: 0.01, "\(kind)")
+                XCTAssertEqual(stop.alignment, .left)
+            }
+            XCTAssertGreaterThanOrEqual(style.tabStops.last?.location ?? 0, 1000, "\(kind) 要覆盖正文栏宽")
+        }
+    }
 }

@@ -42,6 +42,8 @@ final class WorkspaceStore {
     private var undoRedoCompensations: [(() -> Void)?] = []
     private var transactionDepth = 0
     private var undoSnapshots: [[Task]] = []
+    private var undoIDs: [UUID] = []
+    var latestUndoID: UUID? { undoIDs.last }
     private struct TextRebase {
         var title: String
         var document: NativeDocument
@@ -163,7 +165,7 @@ final class WorkspaceStore {
         guard snapshot != tasks || listsChanged || metasChanged || foldersChanged || sectionsChanged || tagsChanged else { return }
         if undoPolicy == .record && transactionDepth == 0 {
             redoFrames.removeAll()
-            undoSnapshots.append(tasks)
+            undoSnapshots.append(tasks); undoIDs.append(UUID())
             undoTextRebases.append([:])
             undoLists.append(self.lists)
             undoListMetas.append(self.listMetas)
@@ -173,7 +175,7 @@ final class WorkspaceStore {
             undoCompensations.append(undoCompensation)
             undoRedoCompensations.append(redoCompensation)
             if undoSnapshots.count > 50 {
-                undoSnapshots.removeFirst()
+                undoSnapshots.removeFirst(); undoIDs.removeFirst()
                 undoTextRebases.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()
@@ -290,6 +292,7 @@ final class WorkspaceStore {
 
     func undo() {
         guard let previous = undoSnapshots.popLast() else { return }
+        undoIDs.removeLast()
         let textRebases = undoTextRebases.removeLast()
         let before = tasks
         let beforeMetas = listMetas
@@ -323,7 +326,7 @@ final class WorkspaceStore {
         let before = tasks
         let beforeMetas = listMetas
         let beforeTags = tags
-        undoSnapshots.append(tasks)
+        undoSnapshots.append(tasks); undoIDs.append(UUID())
         undoTextRebases.append(next.textRebases)
         undoLists.append(lists)
         undoListMetas.append(listMetas)
@@ -345,7 +348,7 @@ final class WorkspaceStore {
 
     func clearUndo() {
         redoFrames.removeAll()
-        undoSnapshots.removeAll()
+        undoSnapshots.removeAll(); undoIDs.removeAll()
         undoTextRebases.removeAll()
         undoLists.removeAll()
         undoListMetas.removeAll()
@@ -370,7 +373,7 @@ final class WorkspaceStore {
                                      || beforeFolders != listFolders
                                      || beforeSections != listSections || beforeTags != tags) {
             redoFrames.removeAll()
-            undoSnapshots.append(before); undoLists.append(beforeLists); undoListMetas.append(beforeMetas)
+            undoSnapshots.append(before); undoIDs.append(UUID()); undoLists.append(beforeLists); undoListMetas.append(beforeMetas)
             undoTextRebases.append([:])
             undoListFolders.append(beforeFolders)
             undoListSections.append(beforeSections)
@@ -378,7 +381,7 @@ final class WorkspaceStore {
             undoCompensations.append(nil)
             undoRedoCompensations.append(nil)
             if undoSnapshots.count > 50 {
-                undoSnapshots.removeFirst()
+                undoSnapshots.removeFirst(); undoIDs.removeFirst()
                 undoTextRebases.removeFirst()
                 undoLists.removeFirst()
                 undoListMetas.removeFirst()

@@ -75,10 +75,11 @@ extension NativeTextView {
             onCopy: { [weak self] in self?.copyLink(in: range); self?.hideLinkHoverMenu() },
             onEdit: { [weak self] in self?.hideLinkHoverMenu(); self?.editLink(in: range) },
             onRemove: { [weak self] in self?.hideLinkHoverMenu(); self?.removeLink(in: range) })
-        if let hosting = panel.contentView as? NSHostingView<LinkHoverMenuView> {
-            hosting.rootView = content
+            .workfollowNativeTheme()
+        if let hosting = panel.contentView as? NSHostingView<AnyView> {
+            hosting.rootView = AnyView(content)
         } else {
-            panel.contentView = NSHostingView(rootView: content)
+            panel.contentView = NSHostingView(rootView: AnyView(content))
         }
         let size = NSSize(width: PopupMetrics.linkHoverMenuWidth, height: 30)
         let screenLine = window.convertToScreen(convert(line, to: nil))
@@ -103,6 +104,8 @@ private struct LinkHoverMenuView: View {
     let onCopy: () -> Void
     let onEdit: () -> Void
     let onRemove: () -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 2) {
@@ -112,7 +115,7 @@ private struct LinkHoverMenuView: View {
         }
         .padding(3)
         .frame(idealWidth: PopupMetrics.linkHoverMenuWidth, maxWidth: .infinity)
-        .background(WFColors.overlay)
+        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder))
         .hidesSystemFocusEffect()

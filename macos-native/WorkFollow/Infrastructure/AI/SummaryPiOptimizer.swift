@@ -77,7 +77,7 @@ struct SummaryPiOptimizer {
                      updates: @escaping @Sendable (AITextUpdate) -> Void = { _ in }) async throws -> String {
         var params: [String: Any] = ["action": request.action.rawValue,
             "title": request.title, "content": request.content,
-            "instruction": request.instruction]
+            "instruction": request.instruction, "attachments": request.attachments.map(\.parameters)]
         if let id = request.conversationID, let conversationDirectory, textModel == nil {
             params["conversationID"] = id.uuidString
             params["sessionDirectory"] = conversationDirectory.path

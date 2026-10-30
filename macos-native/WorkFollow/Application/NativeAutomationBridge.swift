@@ -6,12 +6,15 @@ final class NativeAutomationBridge {
     private let service: NativeAutomationService
     private let canProcess: () -> Bool
     private let flush: (@escaping (Error?) -> Void) -> Void
+    private let onSuccess: ((AutomationRequest, AutomationValue) -> Void)?
     private var observer: NSObjectProtocol?
     private var processing = false
 
     init(channel: AutomationChannel, service: NativeAutomationService, canProcess: @escaping () -> Bool,
-         flush: @escaping (@escaping (Error?) -> Void) -> Void) {
+         flush: @escaping (@escaping (Error?) -> Void) -> Void,
+         onSuccess: ((AutomationRequest, AutomationValue) -> Void)? = nil) {
         self.channel = channel; self.service = service; self.canProcess = canProcess; self.flush = flush
+        self.onSuccess = onSuccess
         observer = DistributedNotificationCenter.default().addObserver(forName: AutomationChannel.notification,
             object: channel.directory.path, queue: .main) { [weak self] _ in
                 _Concurrency.Task { @MainActor in await self?.processPending() }
@@ -39,6 +42,7 @@ final class NativeAutomationBridge {
                             if let failure { throw AutomationFailure(code: "save_failed", message: "保存失败：" + failure.localizedDescription) }
                         }
                         response = .success(request, data)
+                        onSuccess?(request, data)
                     } catch {
                         response = .failure(request, error as? AutomationFailure
                             ?? AutomationFailure(code: "operation_failed", message: error.localizedDescription))

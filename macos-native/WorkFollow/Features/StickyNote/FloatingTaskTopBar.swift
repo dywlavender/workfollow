@@ -5,6 +5,8 @@ import SwiftUI
 struct FloatingTaskTopBar: View {
     let taskID: UUID
     @ObservedObject var workspace: TaskWorkspaceModel
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     private enum SchedulePanel: Equatable { case due, deadline, recurrence }
     @State private var activeSchedule: SchedulePanel?
@@ -43,18 +45,19 @@ struct FloatingTaskTopBar: View {
                 }
             }
             .onChange(of: task.id) { _, _ in closePanels() }
-            .alert("切换模式后，当前排版格式将失效，是否继续？",
-                   isPresented: Binding(get: { pendingChecklistTaskID != nil },
-                                        set: { if !$0 { pendingChecklistTaskID = nil } })) {
-                Button("取消", role: .cancel) { pendingChecklistTaskID = nil }
-                Button("继续") {
-                    guard let id = pendingChecklistTaskID else { return }
-                    pendingChecklistTaskID = nil
-                    workspace.setKind(id, .checklist)
-                }
-            } message: {
-                Text("标题、引用、代码与分割线会保留，但不会变成检查事项，也不计入清单进度。")
-            }
+            .workfollowAlert(
+                "切换模式后，当前排版格式将失效，是否继续？",
+                message: "标题、引用、代码与分割线会保留，但不会变成检查事项，也不计入清单进度。",
+                isPresented: Binding(get: { pendingChecklistTaskID != nil },
+                                     set: { if !$0 { pendingChecklistTaskID = nil } }),
+                actions: [
+                    .cancel(),
+                    .primary("继续") {
+                        guard let id = pendingChecklistTaskID else { return }
+                        pendingChecklistTaskID = nil
+                        workspace.setKind(id, .checklist)
+                    }
+                ])
         }
     }
 
@@ -161,7 +164,7 @@ struct FloatingTaskTopBar: View {
         }
         .padding(8)
         .frame(width: PopupMetrics.priorityMenuWidth)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showPriority = false })
     }
@@ -190,7 +193,7 @@ struct FloatingTaskTopBar: View {
         }
         .padding(8)
         .frame(width: PopupMetrics.taskMenuWidth)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showKind = false })
     }

@@ -784,6 +784,25 @@ final class NativeTextView: NSTextView {
         }
     }
 
+    /// 命令面板打开对象后定位光标：选中首个命中、滚动到可见并闪查找指示。
+    @discardableResult
+    func revealSearchMatch(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let storage = textStorage else { return false }
+        let source = storage.string as NSString
+        let range = source.range(of: trimmed,
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive])
+        guard range.location != NSNotFound else { return false }
+        window?.makeFirstResponder(self)
+        setSelectedRange(range)
+        scrollRangeToVisible(range)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window?.firstResponder === self else { return }
+            self.showFindIndicator(for: range)
+        }
+        return true
+    }
+
     func presentChecklistReminderPanel(lineIndex: Int, centerY: CGFloat) {
         guard let window else { return }
         dismissChecklistReminderPanel()
@@ -1176,9 +1195,9 @@ final class NativeTextView: NSTextView {
             window.addChildWindow(panel, ordered: .above)
             selectionPanel = panel
         }
-        let root = selectionToolbarRoot(for: range)
+        let root = AnyView(selectionToolbarRoot(for: range).workfollowNativeTheme())
         // 换颜色后只换 rootView：保住浮条宿主与子面板锚点，不闪一下重建整条。
-        if let host = panel.contentView as? NSHostingView<DocumentSelectionToolbarView> {
+        if let host = panel.contentView as? NSHostingView<AnyView> {
             host.rootView = root
         } else {
             panel.contentView = NSHostingView(rootView: root)

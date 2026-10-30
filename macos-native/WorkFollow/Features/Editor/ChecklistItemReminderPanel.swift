@@ -41,6 +41,7 @@ final class ChecklistItemReminderPanel: NSPanel {
             onResize: { [weak self] in self?.resizeToFit() },
             onSelect: { [weak self] date in self?.finish(date) },
             onClose: { [weak self] in self?.dismiss() })
+            .workfollowNativeTheme()
         let host = NSHostingView(rootView: card)
         host.sizingOptions = [.intrinsicContentSize]
         contentView = host
@@ -176,6 +177,8 @@ private struct ChecklistItemReminderCard: View {
     let onResize: () -> Void
     let onSelect: (Date?) -> Void
     let onClose: () -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selected: Date?
     @State private var page: Page = .presets
     @State private var calendarDay: Date
@@ -208,7 +211,8 @@ private struct ChecklistItemReminderCard: View {
         }
         .padding(.vertical, 4)
         .frame(width: 252)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background(backgroundTheme.popupFill(for: colorScheme),
+                    in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .background(PopupEscapeRouter(depth: 2, onEscape: onClose))
         .onChange(of: page) { _, _ in

@@ -81,6 +81,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var escapeDepth = 3
         var presentingWindow: PopupPresentingWindow?
         var title: String?
+        var popupFill: Color = WFColors.content
         private var lastContentSize: CGSize = .zero
         private var contentResizeQueued = false
 
@@ -97,7 +98,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 .onPreferenceChange(PropertyPanelContentSizeKey.self) { [weak self] size in
                     self?.contentSizeChanged(size)
                 }
-                .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+                .background(popupFill, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
                 .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
                 .background(PopupEscapeRouter(depth: escapeDepth) { [weak self] in self?.dismiss() })
                 .environment(\.popupPresentingWindow, presentingWindow)
@@ -312,6 +313,8 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.focusPolicy = focusPolicy
         coordinator.title = title
         coordinator.presentingWindow = context.environment.popupPresentingWindow
+        coordinator.popupFill = context.environment.workfollowBackgroundTheme
+            .popupFill(for: context.environment.colorScheme)
         // Closed anchors do not need to construct or retain panel content.
         if isPresented {
             coordinator.root = AnyView(content().environment(\.self, context.environment))

@@ -115,7 +115,7 @@ def test_delete_running_chat_waits_for_pi_exit_before_removing_session(tmp_path)
     asyncio.run(run())
 
 
-def test_app_skill_and_cli_are_enabled_only_for_standalone_chat(tmp_path, monkeypatch):
+def test_same_skill_and_cli_are_enabled_for_all_conversation_surfaces(tmp_path, monkeypatch):
     async def run():
         runtime = Runtime(tmp_path, lambda _: None)
         app = tmp_path / "WorkFollow Example.app"
@@ -140,12 +140,16 @@ def test_app_skill_and_cli_are_enabled_only_for_standalone_chat(tmp_path, monkey
         command, env, _ = calls[-1]
         assert command[command.index("--tools") + 1] == "read,bash" and "--no-tools" not in command
         assert command[command.index("--skill") + 1] == str(skill)
+        assert "--no-skills" not in command
         assert env["WORKFOLLOW_CLI"] == str(cli) and env["WORKFOLLOW_APP"] == str(app)
         assert env["PATH"].split(":")[0] == str(cli.parent)
         for scene in ("selection", "note"):
             await runtime.dispatch("conversation.send", {**options, "scene": scene, "context": "选中的正文"})
             command, env, _ = calls[-1]
-            assert "--no-tools" in command and "--skill" not in command
+            assert command[command.index("--tools") + 1] == "read,bash"
+            assert command[command.index("--skill") + 1] == str(skill)
+            assert "--no-skills" not in command and "--no-tools" not in command
+            assert env["WORKFOLLOW_CONVERSATION_ID"] == options["conversationID"]
         await runtime.close()
     asyncio.run(run())
 
@@ -170,4 +174,32 @@ def test_tool_events_keep_waiting_for_final_answer_and_hide_raw_tool_output():
         assert await session.pending == "已创建测试待办"
         assert any(update["kind"] == "status" for update in updates)
         assert "raw-note-body" not in json.dumps(updates) and "raw-command" not in json.dumps(updates)
+    asyncio.run(run())
+
+
+def test_presets_are_per_turn_and_note_chat_keeps_same_pi_session(tmp_path, monkeypatch):
+    async def run():
+        runtime = Runtime(tmp_path, lambda _: None)
+        calls = []
+        class Session:
+            async def request(self, payload, *_):
+                calls.append(payload)
+                return "自然回复"
+            async def close(self): pass
+        sessions = []
+        async def session(options, **kwargs):
+            sessions.append(options)
+            return Session()
+        monkeypatch.setattr(runtime.pi, "session", session)
+        options = {"conversationID": str(uuid4()), "sessionDirectory": str(tmp_path / "sessions"),
+                   "scene": "note", "source": {"id": str(uuid4()), "kind": "note", "title": "虚构方案", "content": "周五提交报价。"}}
+        await runtime.dispatch("conversation.send", {**options, "preset": "extract", "message": "提取待办"})
+        await runtime.dispatch("conversation.send", {**options, "message": "你觉得这个方案有什么问题？"})
+        assert "本轮快捷提问" in calls[0]["message"] and "周五提交报价。" in calls[0]["message"]
+        assert "本轮快捷提问" not in calls[1]["message"] and "周五提交报价。" not in calls[1]["message"]
+        assert "你觉得这个方案有什么问题" in calls[1]["message"]
+        assert sessions[0]["sessionFile"] == sessions[1]["sessionFile"]
+        assert "对话始终开放" in sessions[1]["systemPrompt"]
+        assert "workfollow-tasks" in sessions[1]["systemPrompt"]
+        await runtime.close()
     asyncio.run(run())

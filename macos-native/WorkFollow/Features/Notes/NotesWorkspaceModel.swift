@@ -7,38 +7,67 @@ import Foundation
 @MainActor
 final class NotesWorkspaceModel: ObservableObject {
     @Published private(set) var revealRequest: UUID?
+    /// 搜索面板打开笔记后的一次性定位请求；消费后清空。
+    @Published private(set) var searchRevealRequest: SearchRevealRequest?
 
     func reveal(_ id: UUID) {
         folderFilter = nil; favoritesOnly = false; selectedID = id
         revealRequest = UUID()
     }
+
+    func requestSearchReveal(noteID: UUID, query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        searchRevealRequest = SearchRevealRequest(targetID: noteID, query: trimmed)
+    }
+
+    func consumeSearchReveal(for noteID: UUID) -> SearchRevealRequest? {
+        guard let request = searchRevealRequest, request.targetID == noteID else { return nil }
+        searchRevealRequest = nil
+        return request
+    }
     private let taskWorkspace: TaskWorkspaceModel
     private let clock: () -> Date
+    private let layoutDefaults: UserDefaults?
+    private static let aiPaneVisibleDefaultsKey = "notes.ai.paneVisible"
     private var savedFolders: [String]
     private var folderRecords: [NoteFolderMeta]
     private var taskSubscription: AnyCancellable?
 
+    /// 笔记页右侧 AI 栏的展开状态：纯界面状态，随布局偏好一起保存。
+    @Published var aiPaneVisible = false {
+        didSet {
+            layoutDefaults?.set(aiPaneVisible, forKey: Self.aiPaneVisibleDefaultsKey)
+        }
+    }
+
     /// Standalone initializer used by notes-only tests and previews. The app
     /// injects its shared `TaskWorkspaceModel` through the initializer below.
     init(initialNotes: [Note] = [], folders: [String] = [],
-         folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init) {
+         folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init,
+         layoutDefaults: UserDefaults? = nil) {
         self.clock = clock
+        self.layoutDefaults = layoutDefaults
         taskWorkspace = TaskWorkspaceModel(clock: clock, seedDemoData: false,
                                           initialTasks: initialNotes.map { $0.migratedTask() })
         savedFolders = folders
         folderRecords = folderMetadata
         bootstrapFolders(initialNotes: initialNotes)
         bindTaskWorkspace()
+        aiPaneVisible = layoutDefaults?.object(forKey: Self.aiPaneVisibleDefaultsKey) as? Bool ?? false
     }
 
     init(taskWorkspace: TaskWorkspaceModel, folders: [String] = [],
-         folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init) {
+         folderMetadata: [NoteFolderMeta] = [], clock: @escaping () -> Date = Date.init,
+         layoutDefaults: UserDefaults? = nil) {
         self.clock = clock
         self.taskWorkspace = taskWorkspace
+        self.layoutDefaults = layoutDefaults
         savedFolders = folders
         folderRecords = folderMetadata
         bootstrapFolders(initialNotes: taskWorkspace.noteTasks.map(Note.init(task:)))
         bindTaskWorkspace()
+        aiPaneVisible = layoutDefaults?.object(forKey: Self.aiPaneVisibleDefaultsKey) as? Bool ?? false
     }
 
     private func bootstrapFolders(initialNotes: [Note]) {

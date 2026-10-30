@@ -112,15 +112,18 @@ struct SettingsDirectAIModelView: View {
                 if let profile = models.profiles.first(where: { $0.id == models.selectedID }) { load(profile, activate: false) }
             }
             .onDisappear { testTask?.cancel() }
-            .confirmationDialog("删除此模型配置及保存的 API Key？", isPresented: $deleting) {
-                Button("删除模型", role: .destructive) {
-                    do {
-                        try models.delete(draft.id)
-                        if let profile = models.profiles.first { load(profile, activate: false) } else { newModel() }
-                    } catch { self.error = error.localizedDescription }
-                }
-                Button("取消", role: .cancel) {}
-            }
+            .workfollowAlert(
+                "删除此模型配置及保存的 API Key？",
+                isPresented: $deleting,
+                actions: [
+                    .cancel(),
+                    .destructive("删除模型") {
+                        do {
+                            try models.delete(draft.id)
+                            if let profile = models.profiles.first { load(profile, activate: false) } else { newModel() }
+                        } catch { self.error = error.localizedDescription }
+                    }
+                ])
     }
 
     private var keyBinding: Binding<String> {

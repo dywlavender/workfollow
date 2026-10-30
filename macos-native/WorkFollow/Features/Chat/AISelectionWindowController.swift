@@ -35,6 +35,8 @@ final class AISelectionTarget {
 final class AISelectionWindowController: NSObject, NSWindowDelegate {
     static let shared = AISelectionWindowController()
     var makeClient: (() -> AIConversationClient?)?
+    var undoAction: ((AIActionReceipt) -> Void)?
+    var canUndoAction: ((AIActionReceipt) -> Bool)?
     var isAvailable: Bool { makeClient != nil }
     private(set) var panel: NSPanel?
     private(set) var model: AIConversationModel?
@@ -45,7 +47,7 @@ final class AISelectionWindowController: NSObject, NSWindowDelegate {
     func present(editor: NativeTextView) {
         guard let client = makeClient?(), let target = AISelectionTarget(editor: editor) else { return }
         close()
-        let model = AIConversationModel(scene: .selection, context: target.text)
+        let model = AIConversationModel(scene: .selection, directory: client.directory)
         self.model = model
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
             styleMask: [.titled, .closable, .resizable, .utilityWindow], backing: .buffered, defer: false)
@@ -53,26 +55,25 @@ final class AISelectionWindowController: NSObject, NSWindowDelegate {
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false; panel.isMovableByWindowBackground = true
         panel.minSize = NSSize(width: 440, height: 360); panel.delegate = self
-        let generate: AIConversationModel.Generate = { id, scene, context, message, updates in
-            try await client.send(id: id, scene: scene, context: context, message: message, updates: updates)
-        }
+        let generate = client.generator(for: model)
         let content = AISelectionConversationView(model: model, generate: generate,
-            target: target, onAdopt: { [weak self] in self?.close() })
+            target: target, onAdopt: { [weak self] in self?.close() },
+            undoAction: undoAction, canUndoAction: canUndoAction)
+            .workfollowNativeTheme()
         #if DEBUG
-        panel.contentView = NSHostingView(rootView: content.environment(\.workflowActionObservation, actionObservation))
+        panel.contentView = NSHostingView(rootView: AnyView(content.environment(\.workflowActionObservation, actionObservation)))
         #else
-        panel.contentView = NSHostingView(rootView: content)
+        panel.contentView = NSHostingView(rootView: AnyView(content))
         #endif
         if let owner = editor.window {
             panel.setFrameOrigin(NSPoint(x: owner.frame.midX - 320, y: owner.frame.midY - 280))
         } else { panel.center() }
         self.panel = panel; panel.makeKeyAndOrderFront(nil)
-        model.input = "请润色选中的文字，保留原意，只输出修改后的正文。"
-        model.send(using: generate)
+        model.ask(.polish, source: .init(kind: "selection", title: "选中文字", content: target.text), using: generate)
     }
 
-    func close() { model?.stop(); panel?.close(); panel = nil; model = nil }
-    func windowWillClose(_ notification: Notification) { model?.stop(); model = nil; panel = nil }
+    func close() { model?.stop(); model?.attachments.discard(); panel?.close(); panel = nil; model = nil }
+    func windowWillClose(_ notification: Notification) { model?.stop(); model?.attachments.discard(); model = nil; panel = nil }
 }
 
 private struct AISelectionConversationView: View {
@@ -80,6 +81,10 @@ private struct AISelectionConversationView: View {
     let generate: AIConversationModel.Generate
     let target: AISelectionTarget
     let onAdopt: () -> Void
+    let undoAction: ((AIActionReceipt) -> Void)?
+    let canUndoAction: ((AIActionReceipt) -> Bool)?
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
     @State private var error: String?
 
     var body: some View {
@@ -87,9 +92,9 @@ private struct AISelectionConversationView: View {
             AIConversationView(model: model, generate: generate, adopt: { text, inserting in
                 if target.apply(text, inserting: inserting) { onAdopt() }
                 else { error = "原文已改变或已切换笔记，请重新选择文字后生成。" }
-            })
+            }, undoAction: undoAction, canUndoAction: canUndoAction)
             if let error { Text(error).font(WFType.caption).foregroundStyle(WFColors.danger).padding(12) }
         }
-        .background(WFColors.content).hidesSystemFocusEffect()
+        .background(backgroundTheme.popupFill(for: colorScheme)).hidesSystemFocusEffect()
     }
 }

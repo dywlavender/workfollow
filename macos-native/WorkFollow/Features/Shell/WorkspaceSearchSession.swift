@@ -54,10 +54,10 @@ final class WorkspaceSearchSession: ObservableObject {
                 navigation: navigation).taskID != nil else { return false }
         case .openTask(let id):
             guard CommandPaletteProjection.openTask(id, workspace: environment.taskWorkspace,
-                navigation: navigation) else { return false }
+                navigation: navigation, query: query) else { return false }
         case .openNote(let id):
             guard CommandPaletteProjection.openNote(id, workspace: environment.notesWorkspace,
-                taskWorkspace: environment.taskWorkspace, navigation: navigation) else { return false }
+                taskWorkspace: environment.taskWorkspace, navigation: navigation, query: query) else { return false }
         case .navigate(let destination): environment.navigate(to: destination)
         case .toggleAppearance: environment.appearance = CommandPaletteProjection.nextAppearance(after: environment.appearance)
         }

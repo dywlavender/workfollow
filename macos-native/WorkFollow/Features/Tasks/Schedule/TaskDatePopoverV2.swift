@@ -243,18 +243,18 @@ struct TaskDatePopoverV2: View {
         mainPage
             .environment(\.calendar, workspace.calendar)
             .environment(\.timeZone, workspace.calendar.timeZone)
-            .confirmationDialog("修改重复任务", isPresented: $showRecurrenceScope, titleVisibility: .visible) {
-                ForEach(RecurrenceEditScope.allCases) { scope in
-                    Button(scope.title) {
+            .workfollowAlert(
+                "修改重复任务",
+                isPresented: $showRecurrenceScope,
+                actions: RecurrenceEditScope.allCases.map { scope in
+                    .secondary(scope.title) {
                         guard let plan = pendingRecurrencePlan,
                               let current = workspace.task(for: taskID) else { onClose(); return }
                         _ = workspace.saveOccurrenceSchedule(plan, occurrence: workspace.occurrence(for: current), scope: scope)
                         pendingRecurrencePlan = nil
                         onClose()
                     }
-                }
-                Button("取消", role: .cancel) { pendingRecurrencePlan = nil }
-            }
+                } + [.cancel { pendingRecurrencePlan = nil }])
     }
 
     // MARK: Main page

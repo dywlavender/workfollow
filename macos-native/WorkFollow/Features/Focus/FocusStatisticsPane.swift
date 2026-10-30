@@ -83,7 +83,7 @@ struct FocusStatisticsPane: View {
                 }.buttonStyle(.plain).foregroundStyle(theme.accent)
             }.padding(FocusLayoutMetrics.overviewHorizontalPadding)
         }
-        .background(theme.canvas).focusRenderAnchor(.statistics)
+        .focusRenderAnchor(.statistics)
         .onAppear { reload() }
         .onChange(of: period) { _, _ in reload() }
         .onChange(of: store.historyRevision) { _, _ in reload() }

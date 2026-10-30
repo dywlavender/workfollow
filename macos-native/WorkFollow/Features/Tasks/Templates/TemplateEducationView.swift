@@ -35,7 +35,10 @@ struct TemplateEducationView: View {
         .padding(24)
         .frame(width: PopupMetrics.templateNoteWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
-        .background(WFColors.content)
+        .background {
+            ThemedPopupSurface()
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        }
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 28, style: .continuous)

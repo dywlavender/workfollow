@@ -9,6 +9,7 @@ enum NoteAIAction: String, CaseIterable, Identifiable {
     case extract
 
     var id: String { rawValue }
+    var preset: AIConversationPreset { AIConversationPreset(rawValue: rawValue)! }
 
     var title: String {
         switch self {
@@ -60,190 +61,126 @@ struct NoteAIContext {
     let referenceDate: Date
     let existingTitles: [String]
 
+    var source: AIConversationSource { .init(id: noteID, kind: "note", title: title, content: content) }
+
     var isEmpty: Bool {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
-/// 面板只负责把 AppEnvironment 的文字模型变成两个生成闭包；模型本身不依赖环境，
-/// 单测可以直接塞假闭包。
-struct NoteAIGenerators {
-    let tasks: (AITaskRequest, @escaping @Sendable (AITextUpdate) -> Void) async throws -> String
-    let rewrite: (NoteRewriteRequest, @escaping @Sendable (AITextUpdate) -> Void) async throws -> String
-}
-
+/// A native adapter for an adoptable result. It never starts another model request.
 @MainActor
 final class NoteAIExchange: ObservableObject, Identifiable {
-    let id = UUID()
+    let id: UUID
+    let messageID: UUID
     let action: NoteAIAction
-    let instruction: String
     let context: NoteAIContext
     let taskRequest: AITaskRequest?
     let rewriteRequest: NoteRewriteRequest?
     let taskSession: AITaskDraftSession?
     let rewriteSession: NoteRewriteSession?
-
-    /// 创建结果：成功后侧栏留在原地，既显示「已创建」也提供撤销/查看。
     @Published private(set) var appliedIDs: [UUID] = []
     @Published var applyError: String?
-    /// 另存结果（不把当前笔记切走）。
     @Published private(set) var savedNoteID: UUID?
     @Published private(set) var didReplaceBody = false
     @Published var saveError: String?
+    private let onAdoption: (String) -> Void
 
-    private let generators: NoteAIGenerators
-    private var onFinish: (() -> Void)?
-    private var started = false
-
-    init(action: NoteAIAction, instruction: String, context: NoteAIContext, conversationID: UUID? = nil,
-         generators: NoteAIGenerators) {
-        self.action = action
-        self.instruction = instruction
-        self.context = context
-        self.generators = generators
-        switch action {
-        case .extract:
-            taskRequest = AITaskRequest(source: .note(context.noteID), title: context.title,
-                                        content: context.content, referenceDate: context.referenceDate,
-                                        existingTitles: context.existingTitles,
-                                        instruction: instruction)
-            rewriteRequest = nil
-            taskSession = AITaskDraftSession()
-            rewriteSession = nil
-        case .organize, .polish:
-            taskRequest = nil
-            rewriteRequest = NoteRewriteRequest(noteID: context.noteID,
-                                                title: context.title.isEmpty ? "未命名笔记" : context.title,
-                                                content: context.content,
-                                                action: action.rewriteAction ?? .organize,
-                                                instruction: instruction,
-                                                conversationID: conversationID)
-            taskSession = nil
-            rewriteSession = NoteRewriteSession()
+    init(artifact: AIConversationArtifact, message: AIConversationMessage, question: AIConversationMessage, context: NoteAIContext,
+         onAdoption: @escaping (String) -> Void) {
+        id = artifact.id; messageID = message.id; self.context = context
+        self.onAdoption = onAdoption
+        action = artifact.kind == .tasks ? .extract : (question.preset == .organize ? .organize : .polish)
+        if artifact.kind == .tasks {
+            let request = AITaskRequest(source: .note(context.noteID), title: context.title, content: context.content,
+                referenceDate: context.referenceDate, existingTitles: context.existingTitles,
+                instruction: question.text, attachments: question.attachments ?? [], requiresSourceQuote: question.preset == .extract)
+            taskRequest = request; rewriteRequest = nil; rewriteSession = nil
+            let session = AITaskDraftSession(); session.load(artifact.content, request: request); taskSession = session
+        } else {
+            taskRequest = nil; taskSession = nil
+            rewriteRequest = NoteRewriteRequest(noteID: context.noteID, title: context.title.isEmpty ? "未命名笔记" : context.title,
+                content: context.content, action: action.rewriteAction ?? .polish, instruction: question.text)
+            let session = NoteRewriteSession(); session.load(artifact.content); rewriteSession = session
         }
     }
-
     var isApplied: Bool { !appliedIDs.isEmpty }
     var selectedCount: Int { taskSession?.selectedCount ?? 0 }
-
-    func start(onFinish: @escaping () -> Void) {
-        guard !started else { return }
-        started = true
-        self.onFinish = onFinish
-        runGeneration()
-    }
-
-    func retry(onFinish: @escaping () -> Void) {
-        self.onFinish = onFinish
-        runGeneration()
-    }
-
-    private func runGeneration() {
-        _Concurrency.Task { [weak self] in
-            guard let self else { return }
-            switch action {
-            case .extract:
-                guard let taskRequest, let taskSession else { return }
-                await taskSession.generate(request: taskRequest, using: generators.tasks)
-            case .organize, .polish:
-                guard let rewriteRequest, let rewriteSession else { return }
-                await rewriteSession.generate(request: rewriteRequest, using: generators.rewrite)
-            }
-            onFinish?()
-        }
-    }
-
     func markApplied(_ ids: [UUID]) {
-        appliedIDs = ids
-        applyError = nil
+        appliedIDs = ids; applyError = nil
+        onAdoption("候选已创建为待办：" + ids.map { NativeResourceLink.task($0).url.absoluteString }.joined(separator: "、"))
     }
-
-    func markUnapplied() {
-        appliedIDs = []
-    }
-
+    func markUnapplied() { appliedIDs = []; onAdoption("本轮候选创建的待办已撤销。") }
     func markSaved(noteID: UUID) {
-        savedNoteID = noteID
-        saveError = nil
+        savedNoteID = noteID; saveError = nil
+        onAdoption("文稿已另存为笔记：" + NativeResourceLink.note(noteID).url.absoluteString)
     }
-
     func markReplaced() {
-        didReplaceBody = true
-        saveError = nil
+        didReplaceBody = true; saveError = nil
+        onAdoption("文稿已替换到当前笔记：" + NativeResourceLink.note(context.noteID).url.absoluteString)
     }
 }
 
-/// 同一篇笔记的会话在切换笔记后仍保留：每个 noteID 各自一份消息列表。
 @MainActor
 final class NoteAIConversationStore: ObservableObject {
+    static let shared = NoteAIConversationStore()
     private var models: [UUID: NoteAIConversationModel] = [:]
-
     func model(for noteID: UUID) -> NoteAIConversationModel {
         if let model = models[noteID] { return model }
-        let model = NoteAIConversationModel()
-        models[noteID] = model
-        return model
+        let model = NoteAIConversationModel(); models[noteID] = model; return model
     }
 }
 
+/// The note surface supplies context and projects result cards; conversation behavior belongs to AIConversationModel.
 @MainActor
 final class NoteAIConversationModel: ObservableObject {
+    @Published private(set) var conversation: AIConversationModel
     @Published private(set) var exchanges: [NoteAIExchange] = []
-    @Published private(set) var runningExchangeID: UUID?
-    @Published var input = ""
-    private var conversationID = UUID()
+    private let directory: URL
+    private var observation: AnyCancellable?
 
-    var isRunning: Bool { runningExchangeID != nil }
-    var lastAction: NoteAIAction? { exchanges.last?.action }
-    var canSendInstruction: Bool {
-        !isRunning && lastAction != nil
-            && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    init(directory: URL? = nil) {
+        self.directory = directory ?? NativePreviewRepository.directory.appendingPathComponent("modules/ai-conversations", isDirectory: true)
+        conversation = AIConversationModel(scene: .note, directory: self.directory)
+        connect()
     }
+    var input: String { get { conversation.input } set { conversation.input = newValue } }
+    var attachments: AIAttachmentDraft { conversation.attachments }
+    var isRunning: Bool { conversation.isRunning }
+    var canSend: Bool { conversation.canSend }
 
-    @discardableResult
-    func run(action: NoteAIAction, context: NoteAIContext, instruction: String,
-             generators: NoteAIGenerators) -> NoteAIExchange? {
-        guard runningExchangeID == nil else { return nil }
-        let exchange = NoteAIExchange(action: action, instruction: instruction,
-                                      context: context, conversationID: conversationID, generators: generators)
-        exchanges.append(exchange)
-        input = ""
-        runningExchangeID = exchange.id
-        exchange.start { [weak self, weak exchange] in
-            guard let self, let exchange, self.runningExchangeID == exchange.id else { return }
-            self.runningExchangeID = nil
-        }
-        return exchange
+    func ask(_ action: NoteAIAction, context: NoteAIContext, using generate: @escaping AIConversationModel.Generate) {
+        conversation.ask(action.preset, source: context.source, using: generate)
     }
-
-    /// v1 的输入框只做「补充要求」：沿用最近一次动作，带 instruction 重新生成一条消息。
-    @discardableResult
-    func rerunLast(context: NoteAIContext, generators: NoteAIGenerators) -> NoteAIExchange? {
-        guard let action = lastAction else { return nil }
-        let instruction = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !instruction.isEmpty else { return nil }
-        return run(action: action, context: context, instruction: instruction,
-                   generators: generators)
+    func send(context: NoteAIContext, using generate: @escaping AIConversationModel.Generate) {
+        conversation.send(source: context.source, using: generate)
     }
-
-    func retry(_ exchange: NoteAIExchange) {
-        guard runningExchangeID == nil else { return }
-        runningExchangeID = exchange.id
-        exchange.retry { [weak self, weak exchange] in
-            guard let self, let exchange, self.runningExchangeID == exchange.id else { return }
-            self.runningExchangeID = nil
-        }
+    func retry(messageID: UUID, using generate: @escaping AIConversationModel.Generate) {
+        conversation.retry(messageID, using: generate)
     }
-
+    func stop() { conversation.stop() }
     func reset() {
-        guard runningExchangeID == nil else { return }
-        exchanges = []
-        input = ""
-        conversationID = UUID()
+        guard !isRunning else { return }
+        conversation.attachments.discard()
+        AIConversationAttachmentFiles.remove(conversation.record.messages.flatMap { $0.attachments ?? [] })
+        conversation = AIConversationModel(scene: .note, directory: directory)
+        exchanges = []; connect()
     }
-
-    func exchange(id: UUID) -> NoteAIExchange? {
-        exchanges.first { $0.id == id }
+    func exchange(id: UUID) -> NoteAIExchange? { exchanges.first { $0.id == id } }
+    func results(for message: AIConversationMessage) -> [NoteAIExchange] { exchanges.filter { $0.messageID == message.id } }
+    private func connect() {
+        observation = conversation.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        conversation.onChange = { [weak self] record in self?.project(record) }
+    }
+    private func project(_ record: AIConversationRecord) {
+        for (index, message) in record.messages.enumerated() where message.role == .assistant && message.state == .complete {
+            guard let question = record.messages[..<index].last(where: { $0.role == .user }), let source = question.source, let id = source.id else { continue }
+            let context = NoteAIContext(noteID: id, title: source.title, content: source.content, referenceDate: Date(), existingTitles: [])
+            for artifact in message.artifacts ?? [] where !exchanges.contains(where: { $0.id == artifact.id }) {
+                exchanges.append(NoteAIExchange(artifact: artifact, message: message, question: question, context: context,
+                    onAdoption: { [weak conversation] value in conversation?.recordAdoption(artifactID: artifact.id, result: value) }))
+            }
+        }
     }
 }

@@ -38,7 +38,7 @@ struct AITaskComposerView: View {
             }.padding(16)
         }
         .frame(width: 560, height: 500)
-        .background(WFColors.content)
+        .workfollowPopupSurface()
         .task(id: attempt) {
             await session.generate(request: request) { source, updates in
                 try await environment.textAIClient().generateTasks(source, updates: updates)

@@ -86,7 +86,7 @@ struct CountdownWorkspaceView: View {
             .padding(.horizontal, WFSpace.lg)
             .padding(.top, WFSpace.lg)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(WFColors.canvas)
+            .workfollowPageSurface(0.86)
         }
         .onAppear {
             today = Date()

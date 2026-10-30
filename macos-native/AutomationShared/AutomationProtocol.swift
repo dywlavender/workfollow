@@ -38,6 +38,7 @@ struct AutomationRequest: Codable, Sendable {
     var id = UUID()
     let operation: String
     let arguments: [String: String]
+    var conversationID: UUID? = nil
     var requestedAt = Date()
     var expiresAt = Date().addingTimeInterval(20)
 }

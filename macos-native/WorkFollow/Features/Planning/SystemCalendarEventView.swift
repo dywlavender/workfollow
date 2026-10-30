@@ -34,5 +34,6 @@ struct SystemCalendarEventDetails: View {
             Text("这是系统日历中的日程，可在 Apple 日历中编辑。").font(.caption).foregroundStyle(.secondary)
             HStack { Spacer(); Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction) }
         }.padding(24).frame(width: 380)
+            .workfollowPopupSurface(fallback: WFColors.canvas)
     }
 }

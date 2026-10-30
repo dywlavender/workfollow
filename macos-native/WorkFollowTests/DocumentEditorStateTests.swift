@@ -34,6 +34,23 @@ final class DocumentEditorStateTests: XCTestCase {
         XCTAssertTrue(handle.style.isBlock(.paragraph))
     }
 
+    @MainActor
+    func testRevealSearchMatchSelectsFirstCaseInsensitiveHitAndGatesOnDocument() {
+        let handle = DocumentEditorHandle()
+        let textView = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200),
+                                      textContainer: nil)
+        textView.string = "第一段\n会议记录：预算 REVIEW\n结尾"
+        let documentID = UUID()
+        textView.documentIdentity = documentID
+        handle.textView = textView
+
+        XCTAssertNil(handle.revealSearchMatch("预算", documentID: UUID()),
+                     "目标文档还没换上时不能把光标落进旧正文")
+        XCTAssertEqual(handle.revealSearchMatch("review", documentID: documentID), true)
+        XCTAssertEqual((textView.string as NSString).substring(with: textView.selectedRange()), "REVIEW")
+        XCTAssertEqual(handle.revealSearchMatch("不存在的词", documentID: documentID), false)
+    }
+
     func testEscapeRoutesFromInputMethodThroughEditorLayersToHost() {
         XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: true, slash: false, selectionToolbar: false, findBar: false), .inputMethod)
         XCTAssertEqual(DocumentEditorEscapeRoute.resolve(composing: false, slash: true, selectionToolbar: false, findBar: true), .slash)

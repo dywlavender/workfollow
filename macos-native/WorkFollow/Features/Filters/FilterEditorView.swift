@@ -133,7 +133,7 @@ struct FilterEditorView: View {
             }
         }
         .frame(width: 520, height: 600)
-        .background(WFColors.content)
+        .workfollowPopupSurface()
     }
 
     private func save() {

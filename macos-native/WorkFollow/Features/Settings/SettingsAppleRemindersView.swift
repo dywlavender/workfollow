@@ -98,12 +98,14 @@ struct SettingsAppleRemindersView: View {
             .font(WFType.body).padding(.horizontal, WFSpace.md)
         }
         .onAppear { integration.refreshAccess(); calendarIntegration.refreshAccess() }
-        .confirmationDialog("清理旧版任务日历副本？", isPresented: $showLegacyCleanup, titleVisibility: .visible) {
-            Button("清理副本", role: .destructive) { _Concurrency.Task { await calendarIntegration.cleanupLegacyCopies() } }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("仅移除旧版创建且未单独修改的任务日历副本，任务和提醒事项保留。清理后可以撤销。")
-        }
+        .workfollowAlert(
+            "清理旧版任务日历副本？",
+            message: "仅移除旧版创建且未单独修改的任务日历副本，任务和提醒事项保留。清理后可以撤销。",
+            isPresented: $showLegacyCleanup,
+            actions: [
+                .cancel(),
+                .destructive("清理副本") { _Concurrency.Task { await calendarIntegration.cleanupLegacyCopies() } }
+            ])
     }
 
     private var syncStatus: some View {

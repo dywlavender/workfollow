@@ -499,7 +499,6 @@ private struct CalendarTimelineDay: View {
             }
             path.move(to: .zero); path.addLine(to: CGPoint(x: 0, y: hourHeight * 24))
         }.stroke(WFColors.border.opacity(0.6), lineWidth: 0.5)
-            .background(WFColors.content)
     }
 }
 

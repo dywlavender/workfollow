@@ -2,6 +2,11 @@ import AVFoundation
 import Combine
 import Foundation
 
+@MainActor private final class MeetingReplayResult {
+    var lines: [String: MeetingTranscriptLine] = [:]
+    var failure: String?
+}
+
 @MainActor
 final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private struct Snapshot: Codable {
@@ -18,6 +23,9 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var minutesPreviewID: UUID?
     @Published private(set) var minutesStatus = "正在生成…"
     @Published private(set) var savingRecordingIDs: Set<UUID> = []
+    @Published private(set) var retranscribingID: UUID?
+    @Published private(set) var retranscriptionProgress = ""
+    private var retranscriptionTask: _Concurrency.Task<Void, Never>?
     @Published private(set) var streamDrafts: [UUID: [String: MeetingTranscriptLine]] = [:]
     @Published private(set) var transcriptRevealRequest: MeetingTranscriptReveal?
     @Published var error: String?
@@ -100,7 +108,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
 
     func canDelete(_ id: UUID) -> Bool {
-        meetings.contains { $0.id == id } && !requestingPermission && recordingID != id && !savingRecordingIDs.contains(id) &&
+        meetings.contains { $0.id == id } && !requestingPermission && recordingID != id && retranscribingID != id && !savingRecordingIDs.contains(id) &&
             inputStream?.meetingID != id && !(transportMeetingID == id && transport?.isBusy == true)
     }
 
@@ -123,8 +131,111 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         change(id) { $0.title = title }
     }
 
+    func correctTranscript(meetingID: UUID, lineID: UUID, text: String, speaker: String, renameAll: Bool) {
+        guard recordingID != meetingID, retranscribingID != meetingID,
+              let meeting = meetings.first(where: { $0.id == meetingID }),
+              let previous = meeting.transcript.first(where: { $0.id == lineID }),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        minutesEditRevisions[meetingID, default: 0] += 1
+        let replacement = speaker == previous.speakerDisplayName ? previous.speaker : speaker
+        change(meetingID) { value in
+            value.previousTranscript = value.transcript
+            for index in value.transcript.indices {
+                if value.transcript[index].id == lineID { value.transcript[index].text = text }
+                if value.transcript[index].id == lineID || (renameAll && value.transcript[index].speaker == previous.speaker) {
+                    value.transcript[index].speaker = replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未区分" : replacement
+                }
+            }
+            value.summarizedLineIDs = []
+        }
+    }
+    func restoreTranscript(_ id: UUID) {
+        guard recordingID != id, retranscribingID != id else { return }
+        minutesEditRevisions[id, default: 0] += 1
+        change(id) { value in
+            guard let previous = value.previousTranscript else { return }
+            value.transcript = previous; value.previousTranscript = nil; value.summarizedLineIDs = []
+        }
+    }
+    func recordingPlayback(for meeting: MeetingRecord, offset: TimeInterval) -> (URL, TimeInterval)? {
+        guard let chunk = meeting.audio.sorted(by: { $0.offset < $1.offset }).last(where: { $0.offset <= offset }) else { return nil }
+        let source = storageDirectory.appendingPathComponent(chunk.filename).standardizedFileURL
+        guard source.path.hasPrefix(storageDirectory.standardizedFileURL.path + "/"), FileManager.default.fileExists(atPath: source.path) else { return nil }
+        return (source, max(0, offset - chunk.offset))
+    }
+    /// 回放清单：从 offset 所在分段起，后续分段按时间轴自动接续播放。
+    func recordingPlaylist(for meeting: MeetingRecord, offset: TimeInterval) -> [MeetingAudioPlayer.Track] {
+        let chunks = meeting.audio.sorted { $0.offset < $1.offset }
+        guard !chunks.isEmpty else { return [] }
+        let start = chunks.lastIndex(where: { $0.offset <= offset }) ?? chunks.startIndex
+        return chunks[start...].compactMap { chunk in
+            let source = storageDirectory.appendingPathComponent(chunk.filename).standardizedFileURL
+            guard source.path.hasPrefix(storageDirectory.standardizedFileURL.path + "/"),
+                  FileManager.default.fileExists(atPath: source.path) else { return nil }
+            return MeetingAudioPlayer.Track(url: source, start: chunk.offset, duration: chunk.duration)
+        }
+    }
+    func cancelRetranscription() { retranscriptionTask?.cancel() }
+    func retranscribe(_ id: UUID) {
+        guard recordingID == nil, !transcribing, retranscribingID == nil, savingRecordingIDs.isEmpty,
+              let meeting = meetings.first(where: { $0.id == id }), !meeting.audio.isEmpty else { return }
+        let configuration = configuration
+        let revision = minutesEditRevisions[id, default: 0]
+        retranscribingID = id; retranscriptionProgress = "准备重新转写…"; error = nil
+        retranscriptionTask = _Concurrency.Task { [weak self] in
+            guard let self else { return }
+            defer { self.retranscribingID = nil; self.retranscriptionProgress = ""; self.retranscriptionTask = nil }
+            do {
+                var lines: [MeetingTranscriptLine] = []
+                for chunk in meeting.audio.sorted(by: { $0.offset < $1.offset }) {
+                    try _Concurrency.Task.checkCancellation()
+                    let url = self.storageDirectory.appendingPathComponent(chunk.transcriptionFilename ?? chunk.filename).standardizedFileURL
+                    guard url.path.hasPrefix(self.storageDirectory.standardizedFileURL.path + "/") else { throw MeetingPiError.invalidResult }
+                    let streaming = !configuration.usesHTTPTranscription && configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    let reader = try MeetingRecordingReader(url: url, offset: chunk.offset, streaming: streaming)
+                    if streaming, let client = self.ai as? any MeetingStreamingAIClient {
+                        let finalized = MeetingReplayResult()
+                        let stream = try await client.openStream(configuration: configuration, offset: chunk.offset) { event in
+                            if event.kind == "final", let item = event.itemID, let text = event.text, !text.isEmpty {
+                                finalized.lines[item] = MeetingTranscriptLine(speaker: "未区分", text: text, offset: event.offset ?? chunk.offset)
+                            }
+                            if event.kind == "error" { finalized.failure = event.message ?? "语音转写失败。" }
+                        }
+                        do {
+                            while let packet = try await _Concurrency.Task.detached(operation: { try reader.next() }).value {
+                                try _Concurrency.Task.checkCancellation()
+                                try await stream.append(packet)
+                                self.retranscriptionProgress = "已处理 \(Int(packet.endOffset)) / \(Int(meeting.duration)) 秒"
+                                try await _Concurrency.Task.sleep(for: .seconds(packet.duration))
+                            }
+                            try await stream.finish()
+                            if let failure = finalized.failure { throw MeetingPiError.extensionFailure(failure) }
+                        } catch { stream.cancel(); throw error }
+                        lines += finalized.lines.values.sorted { $0.offset < $1.offset }
+                    } else {
+                        let seconds: TimeInterval = configuration.usesHTTPTranscription ? 30 : 3
+                        while let packet = try await _Concurrency.Task.detached(operation: { try reader.nextBatch(seconds: seconds) }).value {
+                            try _Concurrency.Task.checkCancellation()
+                            lines += try await self.ai.transcribe(configuration: configuration, packet: packet, speakers: Array(Set(lines.map(\.speaker))))
+                            self.retranscriptionProgress = "已处理 \(Int(packet.endOffset)) / \(Int(meeting.duration)) 秒"
+                        }
+                    }
+                }
+                try _Concurrency.Task.checkCancellation()
+                guard !lines.isEmpty else { throw MeetingPiError.invalidResult }
+                guard self.minutesEditRevisions[id, default: 0] == revision else { return }
+                self.minutesEditRevisions[id, default: 0] += 1
+                self.change(id) { value in
+                    value.previousTranscript = value.transcript; value.transcript = lines.sorted { $0.offset < $1.offset }
+                    value.summarizedLineIDs = []
+                }
+            } catch is CancellationError { }
+            catch { self.error = "重新转写未完成，原对话已保留。" + error.localizedDescription }
+        }
+    }
+
     func startRecording() async {
-        guard recordingID == nil, !requestingPermission, let id = selectedID else { return }
+        guard recordingID == nil, !requestingPermission, retranscribingID == nil, let id = selectedID else { return }
         guard savingRecordingIDs.isEmpty else { error = "正在保存本地录音，请稍后继续。"; return }
         guard transport?.isBusy != true, inputStream == nil else { error = "正在处理最后一段音频，请稍后继续。"; return }
         permissionGeneration += 1
@@ -539,6 +650,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     }
     private func save() { persistence.schedule(Snapshot(meetings: meetings, configuration: configuration)) }
     func flush(_ completion: @escaping (Error?) -> Void) {
+        cancelRetranscription()
         if recordingID != nil { stopRecording() }
         _Concurrency.Task { [self] in
             while transport?.isBusy == true || inputStream != nil || !savingRecordingIDs.isEmpty {

@@ -85,6 +85,9 @@ final class TaskWorkspaceModel: ObservableObject {
 
     private let store: WorkspaceStore
     private let actions: TaskActions
+    /// 列表宽度等纯界面状态；nil 时不落盘（测试/预览保持隔离）。
+    private let layoutDefaults: UserDefaults?
+    private static let listPaneWidthDefaultsKey = "workspace.taskListPaneWidth"
     /// 反馈出口（A3 HUD 反馈迁移），由 AppEnvironment 注入；为 nil 时动作照常执行、只是不弹 HUD。
     weak var feedbackSink: FeedbackCenter?
     var placementFeedback: ((Task?, Task, Int) -> Bool)?
@@ -94,6 +97,8 @@ final class TaskWorkspaceModel: ObservableObject {
     @Published private(set) var pendingTitleEditorID: UUID?
     /// 项提醒通知点开后，等详情栏就绪再滚动到块的高亮请求。
     @Published private(set) var pendingChecklistReveal: ChecklistRevealRequest?
+    /// 搜索面板打开任务后的一次性定位请求；消费后清空。
+    @Published private(set) var searchRevealRequest: SearchRevealRequest?
     @Published private(set) var recentlyCreatedTaskIDs: Set<UUID> = []
     private var creationHighlight: _Concurrency.Task<Void, Never>?
 
@@ -125,9 +130,11 @@ final class TaskWorkspaceModel: ObservableObject {
          initialListMeta: [TaskListMeta]? = nil,
          initialListFolders: [TaskListFolder]? = nil,
          initialListSections: [TaskListSection]? = nil,
-         initialTags: [TaskTag]? = nil) {
+         initialTags: [TaskTag]? = nil,
+         layoutDefaults: UserDefaults? = nil) {
         self.clock = clock
         self.calendar = calendar
+        self.layoutDefaults = layoutDefaults
         let store = WorkspaceStore()
         self.store = store
         self.actions = TaskActions(store: store, clock: clock, calendar: calendar)
@@ -163,6 +170,10 @@ final class TaskWorkspaceModel: ObservableObject {
             self.filterStore?.renameReference(change)
             NotificationCenter.default.post(name: .workspaceOrganizationRenamed, object: nil,
                 userInfo: ["kind": change.kind.rawValue, "old": change.oldName, "new": change.newName])
+        }
+        if let stored = layoutDefaults?.object(forKey: Self.listPaneWidthDefaultsKey) as? Double,
+           stored.isFinite {
+            taskListPaneWidth = min(max(CGFloat(stored), WFMetrics.listMinimum), WFMetrics.listMaximum)
         }
     }
 
@@ -678,6 +689,7 @@ final class TaskWorkspaceModel: ObservableObject {
     func setTaskListPaneWidth(_ width: CGFloat) {
         guard width.isFinite, taskListPaneWidth != width else { return }
         taskListPaneWidth = min(max(width, WFMetrics.listMinimum), WFMetrics.listMaximum)
+        layoutDefaults?.set(Double(taskListPaneWidth), forKey: Self.listPaneWidthDefaultsKey)
     }
 
     func selectFromKeyboard(_ id: UUID) {
@@ -1011,14 +1023,32 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     /// One external edit shares the existing domain mutation, undo and persistence path.
+    var automationUndoID: UUID? { store.latestUndoID }
+    func automationTransaction<T>(_ body: () throws -> T) throws -> T {
+        let before = store.latestUndoID
+        var result: Result<T, Error>!
+        store.transaction { result = Result { try body() } }
+        do { return try result.get() }
+        catch {
+            if store.latestUndoID != before { undo() }
+            throw error
+        }
+    }
+    @discardableResult
+    func undoAutomation(_ token: UUID) -> Bool {
+        guard store.latestUndoID == token else { return false }
+        undo(); return true
+    }
     func applyAutomationEdit(_ id: UUID, title: String?, list: TaskList?, priority: TaskPriority?,
                              schedule: TaskSchedule, document: NativeDocument?,
-                             sectionID: String? = nil, clearsSection: Bool = false) -> TaskActionResult {
+                             sectionID: String? = nil, clearsSection: Bool = false,
+                             timing: SchedulePlan? = nil) -> TaskActionResult {
         let result = withMaterializedTask(id) { id in
             var result = TaskActionResult.success(id)
             store.transaction {
                 result = actions.updateAttributes(id, priority: priority, schedule: schedule, list: list)
                 guard result.taskID != nil else { return }
+                if let timing { result = actions.saveSchedule(timing, to: .task(id)) }
                 if sectionID != nil || clearsSection { result = actions.setTaskSection(id, sectionID: sectionID) }
                 guard result.taskID != nil else { return }
                 if let title { result = actions.setTitle(id, title) }
@@ -1478,6 +1508,18 @@ final class TaskWorkspaceModel: ObservableObject {
         return pendingChecklistReveal?.blockID
     }
 
+    func requestSearchReveal(taskID: UUID, query: String) {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        searchRevealRequest = SearchRevealRequest(targetID: taskID, query: trimmed)
+    }
+
+    func consumeSearchReveal(for taskID: UUID) -> SearchRevealRequest? {
+        guard let request = searchRevealRequest, request.targetID == taskID else { return nil }
+        searchRevealRequest = nil
+        return request
+    }
+
     @discardableResult
     func complete(_ id: UUID, in scope: TaskListScope? = nil) -> TaskActionResult {
         let result = withMaterializedTask(id) { actions.complete($0) }
@@ -1692,7 +1734,11 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func deleteNote(_ id: UUID) -> TaskActionResult {
-        editNote(id) { $0.deletedAt = clock() }
+        let result = editNote(id) { $0.deletedAt = clock() }
+        guard result.taskID != nil else { return result }
+        report(FeedbackEvent(kind: .undoable, message: "已删除笔记\(quotedNoteTitle(id))",
+                             actionTitle: "撤销", action: undoStep()))
+        return result
     }
 
     @discardableResult
@@ -1944,6 +1990,11 @@ final class TaskWorkspaceModel: ObservableObject {
 
     private func quotedTitle(_ id: UUID) -> String {
         guard let title = task(for: id)?.title, !title.isEmpty else { return "任务" }
+        return "「\(title)」"
+    }
+
+    private func quotedNoteTitle(_ id: UUID) -> String {
+        guard let title = task(for: id)?.title, !title.isEmpty else { return "「未命名笔记」" }
         return "「\(title)」"
     }
 

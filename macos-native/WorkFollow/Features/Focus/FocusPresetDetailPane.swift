@@ -33,7 +33,7 @@ struct FocusPresetDetailPane: View {
                 .padding(.top, 20).padding(.bottom, 28)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.canvas)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusRenderAnchor(.presetDetail)
         .onAppear { reload() }
         .onChange(of: presetID) { _, _ in periodAnchor = nil; reload() }

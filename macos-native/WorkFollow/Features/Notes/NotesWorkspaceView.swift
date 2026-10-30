@@ -1,12 +1,6 @@
 import AppKit
 import SwiftUI
 
-private struct NoteAIDraftEditTarget {
-    let exchangeID: UUID
-    let draftID: UUID
-    let anchor: PlanningAnchorRef
-}
-
 private enum NotesWorkspaceMetrics {
     static let contentInset: CGFloat = 28
     static let contentMaxWidth: CGFloat = 820
@@ -21,6 +15,9 @@ struct NotesWorkspaceView: View {
     @ObservedObject var navigation: AppNavigation
     @ObservedObject var tasks: TaskWorkspaceModel
     var navigationVisible = true
+    /// 整个窗口的宽度（含图标栏与文件夹列），用于判断文件夹列能否内联展开。
+    /// 直接挂在测试宿主里时为 0，此时不做自动收起。
+    var windowWidth: CGFloat = 0
     @EnvironmentObject private var environment: AppEnvironment
     @FocusState private var focusedTitle: UUID?
     @State private var showNavigation = false
@@ -31,10 +28,9 @@ struct NotesWorkspaceView: View {
     @State private var detailOnly = false
     @State private var confirmClear = false
     @State private var purgeID: UUID?
-    @State private var showAIPane = false
     @AppStorage("notes.ai.paneWidth") private var aiPaneWidth = Double(NoteAIPaneMetrics.defaultWidth)
     @State private var aiDragOrigin: CGFloat?
-    @StateObject private var aiConversations = NoteAIConversationStore()
+    @StateObject private var aiExpansion = AIPaneWindowExpansion()
     @State private var aiDraftEdit: NoteAIDraftEditTarget?
     @State private var aiDestination = TaskList.inbox.name
     @State private var aiSectionID: String?
@@ -52,65 +48,207 @@ struct NotesWorkspaceView: View {
         detailOnly = true
     }
 
+    /// 命令面板打开笔记后，等编辑器换好文档再把光标落到命中词。
+    private func revealPendingSearchMatch() {
+        guard !trash, let note = visibleNote,
+              let request = notes.searchRevealRequest,
+              request.targetID == note.id else { return }
+        scheduleSearchReveal(noteID: note.id, query: request.query, attempts: 15)
+    }
+
+    private func scheduleSearchReveal(noteID: UUID, query: String, attempts: Int) {
+        DispatchQueue.main.async {
+            guard !trash, visibleNote?.id == noteID,
+                  notes.searchRevealRequest?.targetID == noteID else { return }
+            switch editorHandle.revealSearchMatch(query, documentID: noteID) {
+            case .some:
+                _ = notes.consumeSearchReveal(for: noteID)
+            case .none:
+                guard attempts > 0 else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    scheduleSearchReveal(noteID: noteID, query: query, attempts: attempts - 1)
+                }
+            }
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
-            let layout = layout(for: geometry.size.width)
+            let layout = columnLayout(contentWidth: geometry.size.width)
             ZStack(alignment: .topLeading) {
                 workspace(layout: layout, note: visibleNote)
                 aiDraftEditorOverlay(note: visibleNote)
             }
             .coordinateSpace(name: PlanningCoordinateSpace.name)
         }
-        .onChange(of: navigation.destination) { _, _ in detailOnly = false; query = ""; aiDraftEdit = nil }
+        .onChange(of: navigation.destination) { _, _ in
+            detailOnly = false; query = ""; aiDraftEdit = nil
+            syncAIExpansion()
+            syncFolderAutoHidden()
+        }
         .onChange(of: notes.folderFilter) { _, _ in detailOnly = false; query = "" }
         .onChange(of: notes.favoritesOnly) { _, _ in detailOnly = false; query = "" }
-        .onChange(of: notes.selectedID) { _, _ in aiDraftEdit = nil }
+        .onChange(of: visibleNote?.id) { _, _ in
+            aiDraftEdit = nil
+            syncAIExpansion()
+            syncFolderAutoHidden()
+        }
+        .onChange(of: notes.aiPaneVisible) { _, visible in
+            if !visible { aiDraftEdit = nil }
+            syncAIExpansion()
+            syncFolderAutoHidden()
+        }
+        .onChange(of: aiExpansion.expandedWidth) { _, width in
+            if width == 0 { environment.notesAIFrozenWindowWidth = nil }
+            syncFolderAutoHidden()
+        }
+        .onChange(of: windowWidth) { _, _ in
+            syncFolderAutoHidden()
+            if folderColumnInline { showNavigation = false }
+        }
+        .onChange(of: tasks.taskListPaneWidth) { _, _ in syncFolderAutoHidden() }
+        .onChange(of: aiPaneWidth) { _, _ in syncFolderAutoHidden() }
+        .onChange(of: environment.sidebarVisible) { _, _ in syncFolderAutoHidden() }
         .onChange(of: notes.revealRequest) { _, _ in query = ""; detailOnly = true }
-        .onAppear { if notes.revealRequest != nil { query = ""; detailOnly = true } }
-        .alert("清空笔记垃圾桶", isPresented: $confirmClear) {
-            Button("取消", role: .cancel) {}
-            Button("全部删除", role: .destructive) { notes.emptyTrash() }
-        } message: { Text("垃圾桶中的笔记将被永久删除，无法恢复。任务不受影响。") }
-        .alert("永久删除笔记？", isPresented: Binding(get: { purgeID != nil }, set: { if !$0 { purgeID = nil } })) {
-            Button("取消", role: .cancel) { purgeID = nil }
-            Button("删除", role: .destructive) { if let id = purgeID { notes.purge(id) }; purgeID = nil }
+        .onChange(of: notes.searchRevealRequest) { _, _ in
+            query = ""
+            detailOnly = true
+            revealPendingSearchMatch()
+        }
+        .onAppear {
+            if notes.revealRequest != nil { query = ""; detailOnly = true }
+            if notes.searchRevealRequest != nil { query = ""; detailOnly = true; revealPendingSearchMatch() }
+            syncFolderAutoHidden()
+        }
+        .onDisappear {
+            aiExpansion.collapse()
+            environment.notesAIFrozenWindowWidth = nil
+        }
+        .workfollowAlert(
+            "清空笔记垃圾桶",
+            message: "垃圾桶中的笔记将被永久删除，无法恢复。任务不受影响。",
+            isPresented: $confirmClear,
+            actions: [
+                .cancel(),
+                .destructive("全部删除") { notes.emptyTrash() }
+            ])
+        .workfollowAlert(
+            "永久删除笔记？",
+            isPresented: Binding(get: { purgeID != nil }, set: { if !$0 { purgeID = nil } }),
+            actions: [
+                .cancel(),
+                .destructive("删除") { if let id = purgeID { notes.purge(id) }; purgeID = nil }
+            ])
+    }
+
+    private var aiConversations: NoteAIConversationStore { .shared }
+
+    /// 右扩给 AI 的那一栏正好是 AI 所需宽度，所以列分配直接按实际宽度算：
+    /// 放得下时原有列宽不变，放不下才退回“列表让位、正文保底”的规则。
+    /// 按扩展前宽度算会让窄窗（原先单栏看列表）扩宽后仍不渲染 AI。
+    private func columnLayout(contentWidth: CGFloat) -> NotesColumnLayout {
+        NotesColumnLayoutEngine.layout(
+            contentWidth: contentWidth,
+            storedPaneWidth: tasks.taskListPaneWidth,
+            storedAIWidth: CGFloat(aiPaneWidth),
+            aiOpen: notes.aiPaneVisible,
+            detailOnly: detailOnly,
+            noteExists: visibleNote != nil,
+            trash: trash)
+    }
+
+    private var hostWindow: NSWindow? {
+        NSApp.windows.first { $0.identifier?.rawValue == "WorkFollowNativeMain" }
+    }
+
+    private func setAIOpen(_ open: Bool) {
+        guard open != notes.aiPaneVisible else { return }
+        if open {
+            if let window = hostWindow, visibleNote != nil, !trash {
+                // 先冻结扩展前的壳层宽度，窗口变宽的同一帧里导航列不会跳出来。
+                environment.notesAIFrozenWindowWidth = window.frame.width
+                if !aiExpansion.expand(window, by: CGFloat(aiPaneWidth)) {
+                    environment.notesAIFrozenWindowWidth = nil
+                }
+            }
+            notes.aiPaneVisible = true
+        } else {
+            notes.aiPaneVisible = false
+            aiDraftEdit = nil
+            aiExpansion.collapse()
+            environment.notesAIFrozenWindowWidth = nil
         }
     }
 
-    private struct Layout {
-        let wide: Bool
-        let paneWidth: CGFloat
-        let maximumPaneWidth: CGFloat
-        let showList: Bool
-        let aiVisible: Bool
-        let aiWidth: CGFloat
+    /// AI 被别处关掉、当前笔记消失或进入垃圾桶时，不再保留右扩的窗口宽度。
+    private func syncAIExpansion() {
+        guard aiExpansion.isExpanded else { return }
+        if !notes.aiPaneVisible || visibleNote == nil || trash {
+            aiExpansion.collapse()
+        }
     }
 
-    private func layout(for contentWidth: CGFloat) -> Layout {
-        let wide = contentWidth >= WFMetrics.splitMinimum
-        let maximum = max(WFMetrics.listMinimum,
-                          min(WFMetrics.listMaximum,
-                              contentWidth - WFMetrics.inspectorMinimum - WFMetrics.divider))
-        let paneWidth = min(max(tasks.taskListPaneWidth, WFMetrics.listMinimum), maximum)
-        let noteExists = visibleNote != nil
-        let aiVisible = showAIPane && noteExists && !trash && (wide || detailOnly)
-        let desired = min(max(CGFloat(aiPaneWidth), NoteAIPaneMetrics.minimumWidth),
-                          NoteAIPaneMetrics.maximumWidth)
-        let editorMinimum = wide ? NoteAIPaneMetrics.editorMinimumWidth
-                                 : NoteAIPaneMetrics.compactEditorMinimumWidth
-        let withList = contentWidth - paneWidth - desired - WFMetrics.divider * 2
-        let showList = !aiVisible || withList >= editorMinimum
-        let available = contentWidth - (showList ? paneWidth + WFMetrics.divider : 0)
-            - editorMinimum - WFMetrics.divider
-        let width = aiVisible ? min(desired, max(NoteAIPaneMetrics.minimumWidth, available)) : desired
-        return Layout(wide: wide, paneWidth: paneWidth, maximumPaneWidth: maximum,
-                      showList: showList, aiVisible: aiVisible, aiWidth: width)
+    // MARK: - 文件夹列显隐
+
+    /// 文件夹列当前是否内联显示：壳层可见、二级导航可见、没有被手动收起或自动收起。
+    private var folderColumnInline: Bool {
+        navigationVisible && environment.sidebarVisible
+            && !environment.notesFolderPaneHidden
+            && !environment.notesFolderPaneAutoHidden
+    }
+
+    /// 五栏（图标栏 + 文件夹 + 列表 + 正文 + AI）并排所需的窗口宽度。
+    private var requiredFiveColumnWidth: CGFloat {
+        NotesFolderColumnMetrics.requiredWindowWidth(listWidth: tasks.taskListPaneWidth,
+                                                     aiWidth: CGFloat(aiPaneWidth))
+    }
+
+    /// AI 打开后，窗口放不下五栏就让文件夹列自动收起；但只在“收起文件夹能保住列表”时
+    /// 才收，否则列表本来就要让位，收起文件夹只会丢掉导航入口。
+    /// 只在有真实窗口宽度（挂进壳层）时生效，单独渲染的测试宿主不受影响。
+    private func syncFolderAutoHidden() {
+        // 右扩模式下窗口宽度是 AI 加出来的，原有列的让位关系保持不变。
+        guard !aiExpansion.isExpanded else { return }
+        let shouldHide: Bool = {
+            guard windowWidth > 0, navigationVisible, environment.sidebarVisible,
+                  !environment.notesFolderPaneHidden,
+                  notes.aiPaneVisible, visibleNote != nil, !trash else { return false }
+            guard windowWidth < requiredFiveColumnWidth else { return false }
+            return windowWidth >= NotesFolderColumnMetrics.requiredWindowWidthForList(
+                listWidth: tasks.taskListPaneWidth)
+        }()
+        if environment.notesFolderPaneAutoHidden != shouldHide {
+            environment.notesFolderPaneAutoHidden = shouldHide
+        }
+        if !shouldHide, folderColumnInline { showNavigation = false }
+    }
+
+    private func toggleFolderColumn() {
+        if folderColumnInline {
+            environment.notesFolderPaneHidden = true
+            showNavigation = false
+            return
+        }
+        guard navigationVisible, environment.sidebarVisible else {
+            // 壳层没给二级导航列位置，用浮层临时展开。
+            showNavigation.toggle()
+            return
+        }
+        if notes.aiPaneVisible, visibleNote != nil, !trash,
+           windowWidth > 0, windowWidth < requiredFiveColumnWidth {
+            // 内联展开会立刻被自动收起，改为浮层，避免按钮点了没反应。
+            showNavigation.toggle()
+            return
+        }
+        environment.notesFolderPaneHidden = false
+        environment.notesFolderPaneAutoHidden = false
+        showNavigation = false
     }
 
     @ViewBuilder
-    private func workspace(layout: Layout, note: Note?) -> some View {
+    private func workspace(layout: NotesColumnLayout, note: Note?) -> some View {
         HStack(spacing: 0) {
-            if (layout.wide || !detailOnly || note == nil) && layout.showList {
+            if layout.showList {
                 list.frame(width: layout.wide ? layout.paneWidth : nil)
                     .frame(maxWidth: layout.wide ? nil : .infinity)
                 if layout.wide { listDivider(width: layout.paneWidth, maximum: layout.maximumPaneWidth) }
@@ -124,6 +262,7 @@ struct NotesWorkspaceView: View {
                 }
             }
         }
+        .workfollowPageSurface(0.90)
     }
 
     private func listDivider(width: CGFloat, maximum: CGFloat) -> some View {
@@ -150,6 +289,8 @@ struct NotesWorkspaceView: View {
                         if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
                     }
                     .gesture(DragGesture(minimumDistance: 1).onChanged { value in
+                        // 手动改 AI 宽度就不再维持“窗口右扩、原列宽不变”的模式。
+                        if aiExpansion.isExpanded { aiExpansion.invalidate() }
                         if aiDragOrigin == nil { aiDragOrigin = width }
                         let origin = aiDragOrigin ?? width
                         let proposed = origin - value.translation.width
@@ -178,19 +319,40 @@ struct NotesWorkspaceView: View {
         }
     }
 
+    /// 列表栏上方的文件夹列开关：内联可见时点击收起；窗口放不下五栏时改用浮层。
+    private var folderColumnButton: some View {
+        Button(action: toggleFolderColumn) {
+            Image(systemName: "sidebar.left")
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(folderColumnInline ? WFColors.secondaryText : WFColors.accent)
+        .hoverTip(folderButtonTitle)
+        .accessibilityLabel(folderButtonTitle)
+        .accessibilityIdentifier("note.folder")
+        .background(AnchoredPropertyPanel(isPresented: $showNavigation,
+                                          width: WFMetrics.navigationWidth) {
+            NavigationColumnView(workspace: tasks, navigation: navigation,
+                                 filterStore: environment.filterStore,
+                                 onNavigate: { showNavigation = false })
+                .frame(width: WFMetrics.navigationWidth, height: 480)
+        })
+    }
+
+    private var folderButtonTitle: String {
+        if folderColumnInline { return "隐藏文件夹栏" }
+        if navigationVisible, environment.sidebarVisible,
+           !(notes.aiPaneVisible && windowWidth > 0 && windowWidth < requiredFiveColumnWidth) {
+            return "显示文件夹栏"
+        }
+        return "文件夹导航"
+    }
+
     private var list: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                if !navigationVisible || !environment.sidebarVisible {
-                    Button { showNavigation.toggle() } label: { Image(systemName: "sidebar.left") }
-                        .buttonStyle(.plain).hoverTip("笔记导航")
-                        .background(AnchoredPropertyPanel(isPresented: $showNavigation,
-                                                          width: WFMetrics.navigationWidth) {
-                            NavigationColumnView(workspace: tasks, navigation: navigation,
-                                filterStore: environment.filterStore, onNavigate: { showNavigation = false })
-                                .frame(width: WFMetrics.navigationWidth, height: 480)
-                        })
-                }
+                folderColumnButton
                 Text(trash ? "垃圾桶" : favorites ? "收藏笔记" : "笔记").font(WFType.pageTitle)
                 Spacer()
                 if trash {
@@ -503,24 +665,23 @@ struct NotesWorkspaceView: View {
 
     private var noteAIButton: some View {
         Button {
-            showAIPane.toggle()
-            if !showAIPane { aiDraftEdit = nil }
+            setAIOpen(!notes.aiPaneVisible)
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: "sparkles")
                 Text("AI 助手")
             }
             .font(WFType.supporting)
-            .foregroundStyle(showAIPane ? WFColors.accent : WFColors.secondaryText)
+            .foregroundStyle(notes.aiPaneVisible ? WFColors.accent : WFColors.secondaryText)
             .padding(.horizontal, 8)
             .frame(height: 28)
-            .background(showAIPane ? WFColors.selection : Color.clear,
+            .background(notes.aiPaneVisible ? WFColors.selection : Color.clear,
                         in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(showAIPane ? "关闭 AI 助手" : "打开 AI 助手")
-        .hoverTip(showAIPane ? "关闭 AI 助手" : "AI 助手")
+        .accessibilityLabel(notes.aiPaneVisible ? "关闭 AI 助手" : "打开 AI 助手")
+        .hoverTip(notes.aiPaneVisible ? "关闭 AI 助手" : "AI 助手")
         .accessibilityIdentifier("note.ai")
         .workflowActionAnchor("note.ai")
     }
@@ -543,7 +704,7 @@ struct NotesWorkspaceView: View {
                        },
                        onRevealTasks: revealTasks,
                        onOpenNote: openNote,
-                       onClose: { showAIPane = false; aiDraftEdit = nil })
+                       onClose: { setAIOpen(false) })
             .frame(width: width)
     }
 

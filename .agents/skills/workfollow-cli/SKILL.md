@@ -1,6 +1,6 @@
 ---
 name: workfollow-cli
-description: 在本机 WorkFollow 原生 App 中查询、新建和修改待办与笔记，管理清单及分组；用户要求把内容保存进打勾、安排待办、维护笔记或整理清单和分组时使用。
+description: 在本机 WorkFollow 原生 App 中查询和维护待办、提醒、重复任务与笔记，查找会议、定稿发言及跨资料来源，管理清单和分组；安排任务、记录笔记、查询工作进展或会议决定时使用。
 ---
 
 # WorkFollow 原生 CLI
@@ -15,7 +15,8 @@ App 内对话会提供 `WORKFOLLOW_CLI` 和 `WORKFOLLOW_APP` 环境变量，优�
 
 - 用户问“有哪些待办”“之前记了什么”“根据笔记分析”时，先查询实际记录；聊天里的旧内容不能代替当前 App 数据。查询或分析请求只读取，用户明确要求记录、安排或修改时再写入；已经明确的操作直接执行。
 - 用 `task list --query 关键词` / `note list --query 关键词` 查找；搜索不到时换用较短关键词。返回 `total` 大于已读条目时，按 `--limit`、`--offset` 翻页；需要原文再按 ID `get`，不要一次读取整个笔记库。
-- 查今天、明天或某段时间的任务时，用 `task list --completed false` 获取元数据，按返回的安排日期、截止日期和 App 提供的本地时间核对；CLI 没有 `task list --date` 过滤参数。
+- 查今天、明天或某段时间的任务时，用 `task list --from YYYY-MM-DD --to YYYY-MM-DD --completed false`；`--to` 包含结束当天。查询完成统计时用 `--completed true`，范围按完成时间过滤。准确数量使用 `task count`，不要把分页条数或检索片段数当成总数。
+- 查会议先用 `meeting list --query 关键词`，再 `meeting get --id UUID` 读取纪要与定稿发言；可用 `--query` 缩小发言范围。`knowledge search --query 问题` 复用 App 的跨待办、笔记、会议检索，返回相关片段与实际链接；它是相关资料检索，不是全库统计。回答会议问题时优先依据定稿发言，用返回的时间定位链接引用来源。
 - 只使用用户给出的或已查到的事实。新建前查询同名或相关记录，避免重复；负责人、日期或目标记录不明确时再追问。
 - 时间按对话提供的日期、时区解释；“明天下午三点开会”是安排时间，使用 `--date`；“周五前提交”是截止时间，使用 `--due`。不要丢掉用户明确给出的时刻。
 - 用户明确让你保存后，执行写入并读取结果；不要只给一段指令让用户自行运行。回复简洁说明实际保存的标题、日期，并用 `[标题](workfollow://task/ID)` 或 `[标题](workfollow://note/ID)` 提供可点击链接。命令、`ok` 字段和版本号用于内部核对，除非用户排查问题，否则不展示。写入失败时如实说明，不声称已经完成。
@@ -28,6 +29,9 @@ App 内对话会提供 `WORKFOLLOW_CLI` 和 `WORKFOLLOW_APP` 环境变量，优�
 - 使用 `--json`，读取返回的 `ok`；只有 `ok=true` 才表示写入已保存。向用户提供实际返回的记录链接。
 - 长正文写入 UTF-8 临时文件，再用 `--content-file`；`--content-file -` 接收标准输入。正文按纯文本保存，Markdown 标记会保持字面形式。追加保留已有段落格式。
 - `--date` 是安排日期，`--due` 是独立的截止日期；支持 YYYY-MM-DD 和带时区 ISO8601。优先级为 none、low、medium、high。
+- 安排时间不等于提醒。用户明确要求提醒时，同时设置安排日期和 `--reminder ISO8601`，或使用 `--reminder-offsets 0`（准时）、`-10,0`（提前十分钟及准时）。不要仅保存日期后声称提醒已经设置。更新时 `--clear-reminder` 清除提醒。
+- 重复任务使用 `--repeat daily|weekly|monthly|yearly|weekdays|weekends`，可带 `--repeat-interval N`、`--repeat-weekdays 2,4`（1=周日，2=周一）、`--repeat-until DATE`、`--repeat-count N`；需要明确的 `--date` 起点。重复提醒优先使用相对偏移。更新时 `--clear-repeat` 取消重复。成功后从返回值核对 reminder、reminderOffsets 和 repeat，不猜测是否生效。
+- 写入返回 `undoID` 时，可以通过 `operation undo --id UNDO_ID` 撤销；只能按最近的操作倒序撤销，无法撤销时如实说明。App 会显示实际操作回执，不必在普通回复里展示这个内部 ID。重试前先核对已有成功结果，避免再次创建。
 - 先通过 `list list` / `note folders` 查询已有分类。`list list` 包含归档清单，可用 `--archived false` 缩小范围；`task lists` 只返回可用清单名称。待办、笔记新建默认进入“收集箱”或“未归档”。
 - 层级为 `group`（侧边栏清单分组）→ `list`（清单）→ `section`（清单内任务分组）→ 待办。`note --folder` 是笔记文件夹，与 `group` 不同。
 - `group list` / `group get --name` 查询清单分组；用 `group create`、`rename`、`dissolve` 管理。`list create`、`rename`、`move`、`archive`、`unarchive`、`delete` 管理清单。改名使用 `--name OLD --to NEW`；移动清单使用 `--group NAME` 或 `--clear-group`。

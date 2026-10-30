@@ -53,6 +53,29 @@ final class TaskInspectorSelectionTests: XCTestCase {
         XCTAssertEqual(workspace.task(for: second)?.title, seed.task(for: second)?.title)
     }
 
+    func testSearchRevealSelectsTheMatchingRangeInTheInspector() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let id = try XCTUnwrap(workspace.createTask(title: "周报", in: .inbox).taskID)
+        _ = workspace.setDocument(id, NativeDocument(plainText: "第一段\n预算复核：本周交周报\n结尾"))
+        workspace.select(id)
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, width: 500)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 500)
+        defer { window.close() }
+        InspectorPanelTestSupport.settle(window)
+        func editor(_ view: NSView) -> NativeTextView? {
+            if let value = view as? NativeTextView { return value }
+            return view.subviews.lazy.compactMap { editor($0) }.first
+        }
+        let editorView = try XCTUnwrap(editor(host))
+
+        workspace.requestSearchReveal(taskID: id, query: "预算复核")
+        InspectorPanelTestSupport.settle(window, duration: 0.5)
+
+        XCTAssertEqual((editorView.string as NSString).substring(with: editorView.selectedRange()),
+                       "预算复核")
+        XCTAssertNil(workspace.searchRevealRequest, "定位成功后一次性请求应被消费")
+    }
+
     func testSwitchingTasksReusesTheInspectorWithoutChangingTitlesOrDocuments() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let first = try XCTUnwrap(workspace.createTask(title: "短任务", in: .inbox).taskID)

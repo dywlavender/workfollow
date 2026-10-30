@@ -160,10 +160,11 @@ extension NativeTextView {
                                     viewportSize: frame.size,
                                     onSelect: { [weak self] index in self?.commitTagCompletion(at: index) },
                                     onHover: { [weak self] index in self?.hoverTagCompletion(index) })
-        if let hosting = panel.contentView as? NSHostingView<TagCandidateList> {
-            hosting.rootView = list
+        let themed = AnyView(list.workfollowNativeTheme())
+        if let hosting = panel.contentView as? NSHostingView<AnyView> {
+            hosting.rootView = themed
         } else {
-            panel.contentView = NSHostingView(rootView: list)
+            panel.contentView = NSHostingView(rootView: themed)
         }
         panel.setFrame(frame, display: true)
         (panel as? EditorCompletionPanel)?.followGeometry(of: self) { [weak self] in
@@ -181,6 +182,8 @@ private struct TagCandidateList: View {
     let viewportSize: CGSize
     let onSelect: (Int) -> Void
     let onHover: (Int) -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -218,7 +221,7 @@ private struct TagCandidateList: View {
         .frame(height: max(0, viewportSize.height - 8))
         .padding(4)
         .frame(width: viewportSize.width)
-        .background(WFColors.overlay)
+        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .transaction { $0.animation = nil }

@@ -90,7 +90,7 @@ struct TaskBatchPanelView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(WFColors.content)
+        .workfollowPageSurface(0.93)
         .coordinateSpace(name: "task-batch-panel")
         // Esc 阶梯最外层：批量态下 Esc = 退出批量（面板持有焦点时由此接）。
         .onExitCommand { workspace.clearBulkSelection() }

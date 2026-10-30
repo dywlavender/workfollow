@@ -21,7 +21,7 @@ struct ArchivedTaskInspectorView: View {
             Divider()
             ArchivedTaskDocument(task: task)
                 .compactScrollbars()
-        }.background(WFColors.content)
+        }
     }
 }
 

@@ -285,6 +285,14 @@ final class DocumentEditorHandle: ObservableObject {
         refreshStyle()
     }
 
+    /// `nil` 表示编辑器还没换上目标文档（调用方可稍后重试）；`false` 表示正文
+    /// 里没有该词（例如只命中标题），无需继续等待。
+    func revealSearchMatch(_ query: String, documentID: UUID) -> Bool? {
+        guard let textView, textView.documentIdentity == documentID else { return nil }
+        refreshStyle()
+        return textView.revealSearchMatch(query)
+    }
+
     /// 窗口失去 key（例如用户去滚 PDF）时，中文输入法可能还停在组合串；
     /// 先把未上屏内容提交给模型，避免切回来时丢字。
     func flushPendingComposition() {

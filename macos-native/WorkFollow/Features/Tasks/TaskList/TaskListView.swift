@@ -235,7 +235,7 @@ struct TaskListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(WFColors.content)
+        .workfollowPageSurface(0.90)
         .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
             quickAddTagsOverride = QuickAddPropertiesOverrides.renamedTags(quickAddTagsOverride, notification: notification)
         }

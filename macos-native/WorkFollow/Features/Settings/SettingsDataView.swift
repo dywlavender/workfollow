@@ -334,20 +334,24 @@ struct SettingsDataView: View {
         .sheet(isPresented: $showingRestoreSheet) {
             restoreSheet
         }
-        .confirmationDialog("清空本机后导入？", isPresented: $confirmReplaceImport, titleVisibility: .visible) {
-            Button("清空并导入", role: .destructive) { performImport(mode: .replace) }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("以文件内容为准，本机当前任务和笔记会被清空。执行前会先自动备份，导入后需重启应用。")
-        }
-        .confirmationDialog("恢复这份备份？", isPresented: Binding(
-            get: { restoreCandidate != nil },
-            set: { if !$0 { restoreCandidate = nil } }), titleVisibility: .visible) {
-            Button("恢复") { if let candidate = restoreCandidate { performRestore(candidate) } }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("任务和笔记将恢复到备份时的状态。恢复前会先备份当前内容，完成后需重启应用。")
-        }
+        .workfollowAlert(
+            "清空本机后导入？",
+            message: "以文件内容为准，本机当前任务和笔记会被清空。执行前会先自动备份，导入后需重启应用。",
+            isPresented: $confirmReplaceImport,
+            actions: [
+                .cancel(),
+                .destructive("清空并导入") { performImport(mode: .replace) }
+            ])
+        .workfollowAlert(
+            "恢复这份备份？",
+            message: "任务和笔记将恢复到备份时的状态。恢复前会先备份当前内容，完成后需重启应用。",
+            isPresented: Binding(
+                get: { restoreCandidate != nil },
+                set: { if !$0 { restoreCandidate = nil } }),
+            actions: [
+                .cancel(),
+                .primary("恢复") { if let candidate = restoreCandidate { performRestore(candidate) } }
+            ])
         .onAppear(perform: refresh)
     }
 
@@ -413,6 +417,8 @@ struct SettingsDataView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background { ThemedPopupSurface() }
             .navigationTitle("选择要恢复的备份")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

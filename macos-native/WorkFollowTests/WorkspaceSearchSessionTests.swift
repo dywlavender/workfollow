@@ -50,6 +50,38 @@ final class WorkspaceSearchSessionTests: XCTestCase {
         XCTAssertEqual(session.content, .tasks)
     }
 
+    func testOpeningResultRequestsRevealAtTheMatchingQuery() throws {
+        let environment = AppEnvironment()
+        let taskID = try XCTUnwrap(environment.taskWorkspace.createTask(title: "搜索定位", in: .today).taskID)
+        _ = environment.taskWorkspace.setDocument(taskID, NativeDocument(plainText: "会议纪要：季度预算复核"))
+        let notes = environment.notesWorkspace
+        notes.create()
+        let noteID = try XCTUnwrap(notes.selectedID)
+        notes.edit(noteID) { note in
+            note.title = "预算笔记"
+            note.document = NativeDocument(plainText: "正文里的预算结论")
+        }
+
+        let session = environment.searchSession
+        session.query = "预算"; session.showAll = true; session.content = .all
+        let entries = session.entries(workspace: environment.taskWorkspace, notes: notes,
+                                      destination: .today)
+        let taskEntry = try XCTUnwrap(entries.first { $0.action == .openTask(taskID) })
+        let noteEntry = try XCTUnwrap(entries.first { $0.action == .openNote(noteID) })
+
+        XCTAssertTrue(session.open(taskEntry, environment: environment,
+                                   navigation: environment.navigation))
+        XCTAssertEqual(environment.taskWorkspace.searchRevealRequest?.targetID, taskID)
+        XCTAssertEqual(environment.taskWorkspace.consumeSearchReveal(for: taskID)?.query, "预算")
+        XCTAssertNil(environment.taskWorkspace.searchRevealRequest)
+
+        XCTAssertTrue(session.open(noteEntry, environment: environment,
+                                   navigation: environment.navigation))
+        XCTAssertEqual(notes.searchRevealRequest?.targetID, noteID)
+        XCTAssertEqual(notes.consumeSearchReveal(for: noteID)?.query, "预算")
+        XCTAssertNil(notes.searchRevealRequest)
+    }
+
     func testSelectionReusesResultsAndActualEditsRefreshThem() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let notes = NotesWorkspaceModel()

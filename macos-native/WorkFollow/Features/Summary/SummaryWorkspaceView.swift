@@ -125,7 +125,7 @@ struct SummaryWorkspaceView: View {
                 }
             }
         }
-        .background(WFColors.content)
+        .workfollowPageSurface(0.90)
         .onAppear { reloadDocument(); loadJournal() }
         .onDisappear {
             cancelAI()
@@ -186,6 +186,7 @@ struct SummaryWorkspaceView: View {
                 sources(report: report)
                 DialogCloseFooter { showsSources = false }
             }.frame(width: 380, height: 560)
+                .workfollowPopupSurface(fallback: WFColors.canvas)
         }
         .sheet(isPresented: $showsConfiguration, onDismiss: {
             let action = configurationDismissAction
@@ -198,16 +199,19 @@ struct SummaryWorkspaceView: View {
                 configuration
                 DialogCloseFooter { showsConfiguration = false }
             }.frame(width: 400, height: 690)
+                .workfollowPopupSurface(fallback: WFColors.canvas)
         }
-        .alert("存为摘要模板", isPresented: $showsSaveTemplate) {
-            TextField("模板名称", text: $templateName)
-            Button("取消", role: .cancel) {}
-            Button(templateStore.contains(name: templateName) ? "替换同名模板" : "保存") {
-                templateStore.saveSummaryTemplate(name: templateName, options: options, forceReplace: true)
-            }.disabled(templateName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("保存当前筛选与显示配置；再次套用时按当时任务重新生成正文。")
-        }
+        .workfollowAlert(
+            "存为摘要模板",
+            message: "保存当前筛选与显示配置；再次套用时按当时任务重新生成正文。",
+            isPresented: $showsSaveTemplate,
+            textField: WorkfollowDialogTextField(placeholder: "模板名称", text: $templateName),
+            actions: [
+                .cancel(),
+                .primary(templateStore.contains(name: templateName) ? "替换同名模板" : "保存") {
+                    templateStore.saveSummaryTemplate(name: templateName, options: options, forceReplace: true)
+                }
+            ])
     }
 
     private var configuration: some View {
@@ -586,7 +590,7 @@ struct SummaryWorkspaceView: View {
                         DispatchQueue.main.async { editorHandle.focusEditor() }
                     }
                 }) { Text("\(selectedDraftSections.count) 处改动") }
-        }.background(WFColors.content).frame(width: 700, height: 590)
+        }.workfollowPopupSurface().frame(width: 700, height: 590)
             .onAppear { selectedDraftSections = review.changedIDs }
     }
 

@@ -1,0 +1,50 @@
+{
+  "data": "fictional only",
+  "seconds": 20.04,
+  "model": "ali-Pi/deepseek-v4.1-flash-1017",
+  "answer": "已完成保存和核对。\n\n**新建待办**\n- [核对松竹报价](workfollow://task/B118DFED-DBC6-42AF-8587-35B55D1EC95E)：已放入“AI产品验收”清单；首次安排为 2026-11-02（周一）9:00，重要性高；已设置为每周一重复，并准时提醒（提醒偏移 0 分钟）。\n\n**首次当天数量**\n- 2026-11-02 该清单未完成任务：**1 个**（即为上面新建的“核对松竹报价”）；同日已完成任务 0 个。\n\n**会议交付日期**\n- “松竹验收会议”的定稿发言记录显示：交付日期为 **2026年11月6日**，负责人是小林。\n- 来源：[松竹验收会议 定稿发言](workfollow://meeting/D41F4F86-BFFF-41E8-B580-E68DE02C581A?line=4A12525E-38AD-4BF1-9792-F5AD782F3479)",
+  "task": {
+    "completed": false,
+    "date": "2026-11-02T01:00:00Z",
+    "due": null,
+    "group": null,
+    "id": "B118DFED-DBC6-42AF-8587-35B55D1EC95E",
+    "list": "AI产品验收",
+    "parentID": null,
+    "priority": "high",
+    "reminder": null,
+    "reminderOffsets": [
+      0
+    ],
+    "repeat": "weekly",
+    "repeatCount": null,
+    "repeatInterval": 1,
+    "repeatUntil": null,
+    "repeatWeekdays": [
+      2
+    ],
+    "sectionID": null,
+    "sectionTitle": null,
+    "sourceMeetingID": null,
+    "sourceNoteID": null,
+    "title": "核对松竹报价",
+    "url": "workfollow://task/B118DFED-DBC6-42AF-8587-35B55D1EC95E",
+    "version": "815035916.469068"
+  },
+  "count": {
+    "active": 1,
+    "completed": 0,
+    "total": 1
+  },
+  "receipt": {
+    "id": "3D2FEC9E-6525-4286-8782-8F2944D1C2B6",
+    "title": "核对松竹报价",
+    "undone": false,
+    "url": "workfollow://task/B118DFED-DBC6-42AF-8587-35B55D1EC95E",
+    "details": "安排 Nov 2 at 09:00 · AI产品验收 · 高重要性 · 每周 · 准时提醒 · 周一",
+    "undoID": "7F49E01A-278D-4BF7-B22D-B5D0E2F58B93"
+  },
+  "undo_removed_task": true,
+  "stream_updates": 42,
+  "scope": "Temporary Pi wrapper disables unrelated skills for this fictional-data model test; normal skill discovery was separately verified."
+}

@@ -38,6 +38,10 @@ extension AppEnvironment {
         }
         if !NativeResourceLinkRouter.open(link, tasks: taskWorkspace, notes: notesWorkspace, navigation: navigation, meetings: meetingStore) {
             feedback.show(FeedbackEvent(kind: .error, message: "链接目标不存在或已不可用"))
+        } else if case let .meeting(id) = link,
+                  let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "line" })?.value,
+                  let line = UUID(uuidString: raw) {
+            meetingStore.revealTranscript(meetingID: id, lineID: line)
         }
         return true
     }

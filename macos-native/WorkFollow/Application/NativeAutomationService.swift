@@ -5,10 +5,21 @@ final class NativeAutomationService {
     let tasks: TaskWorkspaceModel
     let notes: NotesWorkspaceModel
     let directory: URL
-    init(tasks: TaskWorkspaceModel, notes: NotesWorkspaceModel, directory: URL) {
-        self.tasks = tasks; self.notes = notes; self.directory = directory
+    let meetings: MeetingStore?
+    init(tasks: TaskWorkspaceModel, notes: NotesWorkspaceModel, directory: URL, meetings: MeetingStore? = nil) {
+        self.tasks = tasks; self.notes = notes; self.directory = directory; self.meetings = meetings
     }
     func execute(_ request: AutomationRequest) throws -> AutomationValue {
+        guard Self.writes(request.operation), request.operation != "operation.undo" else { return try executeBody(request) }
+        let before = tasks.automationUndoID
+        let value = try tasks.automationTransaction { try executeBody(request) }
+        if case var .object(fields) = value, let token = tasks.automationUndoID, token != before {
+            fields["undoID"] = .string(token.uuidString)
+            return .object(fields)
+        }
+        return value
+    }
+    private func executeBody(_ request: AutomationRequest) throws -> AutomationValue {
         guard request.version == 1, let allowed = AutomationInvocation.options[request.operation],
               Set(request.arguments.keys).isSubset(of: allowed) else {
             throw AutomationFailure.argument("不支持的操作或协议版本，请更新 CLI 与 App。")
@@ -16,6 +27,11 @@ final class NativeAutomationService {
         let args = request.arguments
         if let result = try executeOrganization(request) { return result }
         switch request.operation {
+        case "operation.undo":
+            let token = try id(args)
+            guard tasks.undoAutomation(token) else { throw AutomationFailure.argument("请先撤销更新的操作；这项操作当前不能单独撤销。") }
+            return .object(["undoneID": .string(token.uuidString)])
+        case "meeting.list", "meeting.get", "knowledge.search": return try queryMaterials(request)
         case "status":
             return .object(["protocolVersion": .number(1), "storageDirectory": .string(directory.path),
                             "appVersion": .string(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development"),
@@ -23,25 +39,23 @@ final class NativeAutomationService {
         case "task.lists": return .array(tasks.availableListNames.map { .string($0) })
         case "note.folders": return .array((["未归档"] + notes.folders).map { .string($0) })
         case "task.list":
-            let completed = try boolean(args["completed"])
-            let section = try args["section"].map { try automationSection($0, inList: args["list"]) }
-            let items = tasks.allTasks.filter {
-                $0.kind != .note && $0.deletedAt == nil && $0.skippedAt == nil && !$0.isConverted &&
-                (completed == nil || ($0.status == .completed) == completed) &&
-                (args["list"] == nil || $0.list.name == args["list"]) &&
-                (section == nil || $0.sectionID == section?.id) &&
-                (args["query"] == nil || $0.document.matches(args["query"]!, prefix: $0.title))
-            }
+            let items = try filteredTasks(args)
             return try page(items, args: args) { try taskValue($0, body: false) }
+        case "task.count":
+            let items = try filteredTasks(args)
+            return .object(["total": .number(Double(items.count)),
+                            "completed": .number(Double(items.filter { $0.status == .completed }.count)),
+                            "active": .number(Double(items.filter { $0.status != .completed }.count))])
         case "task.get": return try taskValue(task(args), body: true)
         case "task.add":
             let title = try nonempty(args["title"], name: "title")
             let list = try taskList(args["list"] ?? "收集箱")
-            let schedule = try schedule(args, base: TaskSchedule())
+            let timing = try automationTiming(args)
             let priority = try priority(args["priority"] ?? "none")
             let section = try args["section"].map { try automationSection($0, inList: list.name, requiresActiveList: true) }
-            let result = tasks.createDraft(title: title, list: list.name, schedule: schedule, priority: priority,
-                tags: [], reminder: nil, repeatFrequency: .never,
+            let result = tasks.createDraft(title: title, list: list.name, schedule: timing.schedule, priority: priority,
+                tags: [], reminder: timing.reminder, reminderOffsets: timing.reminderOffsets,
+                repeatFrequency: timing.frequency, recurrenceRule: timing.recurrenceRule,
                 document: NativeDocument(plainText: args["content"] ?? ""), selectCreatedTask: false, sectionID: section?.id)
             let id = try accepted(result)
             return try taskValue(try requiredTask(id), body: true)
@@ -59,11 +73,12 @@ final class NativeAutomationService {
             }
             let priority = try args["priority"].map(priority)
             let schedule = try schedule(args, base: current.schedule)
+            let timing = try automationTiming(args, task: current)
             let document = args["content"].map { NativeDocument(plainText: $0) }
             _ = try current.document.materialized()
             _ = try accepted(tasks.applyAutomationEdit(current.id, title: title, list: list,
                 priority: priority, schedule: schedule, document: document,
-                sectionID: section?.id, clearsSection: args["clear-section"] == "true"))
+                sectionID: section?.id, clearsSection: args["clear-section"] == "true", timing: timing))
             return try taskValue(try requiredTask(current.id), body: true)
         case "task.complete", "task.reopen":
             let current = try task(args)
@@ -112,7 +127,7 @@ final class NativeAutomationService {
         }
     }
     static func writes(_ operation: String) -> Bool {
-        ["task.add", "task.update", "task.complete", "task.reopen", "note.create", "note.update", "note.append"].contains(operation)
+        ["task.add", "task.update", "task.complete", "task.reopen", "note.create", "note.update", "note.append", "operation.undo"].contains(operation)
             || organizationWrites.contains(operation)
     }
     private func id(_ args: [String: String]) throws -> UUID {
@@ -152,7 +167,7 @@ final class NativeAutomationService {
         guard name == "未归档" || notes.folders.contains(name) else { throw AutomationFailure.argument("笔记文件夹不存在；请先运行 note folders。") }
         return name
     }
-    private func priority(_ raw: String) throws -> TaskPriority {
+    func priority(_ raw: String) throws -> TaskPriority {
         switch raw.lowercased() {
         case "none": return .none
         case "low": return .low
@@ -165,7 +180,7 @@ final class NativeAutomationService {
         guard let raw else { return nil }
         switch raw { case "true": return true; case "false": return false; default: throw AutomationFailure.argument("completed 须为 true 或 false。") }
     }
-    private func schedule(_ args: [String: String], base: TaskSchedule) throws -> TaskSchedule {
+    func schedule(_ args: [String: String], base: TaskSchedule) throws -> TaskSchedule {
         var result = base
         if let raw = args["date"] { result.dueAt = try date(raw); result.hasTime = raw.contains("T"); result.dueEndAt = nil }
         if let raw = args["due"] { result.deadlineAt = try date(raw) }
@@ -173,7 +188,7 @@ final class NativeAutomationService {
         if args["clear-due"] == "true" { result.deadlineAt = nil }
         return result
     }
-    private func date(_ raw: String) throws -> Date {
+    func date(_ raw: String) throws -> Date {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let value = iso.date(from: raw) { return value }
@@ -211,6 +226,13 @@ final class NativeAutomationService {
             "sourceNoteID": task.sourceNoteID.map { .string($0.uuidString) } ?? .null,
             "sourceMeetingID": task.sourceMeetingID.map { .string($0.uuidString) } ?? .null,
             "completed": .bool(task.status == .completed), "date": optionalDate(task.schedule.dueAt), "due": optionalDate(task.schedule.deadlineAt),
+            "reminder": optionalDate(task.reminderAt),
+            "reminderOffsets": .array((task.reminderOffsets ?? []).map { .number(Double($0)) }),
+            "repeat": .string(task.recurrence.rawValue),
+            "repeatInterval": .number(Double(task.recurrenceRule?.interval ?? 1)),
+            "repeatWeekdays": .array((task.recurrenceRule?.weekdays ?? []).map { .number(Double($0)) }),
+            "repeatUntil": optionalDate(task.recurrenceRule?.endDate),
+            "repeatCount": task.recurrenceRule?.remainingCount.map { .number(Double($0)) } ?? .null,
             "version": .string(String(task.updatedAt.timeIntervalSinceReferenceDate)), "url": .string(NativeResourceLink.task(task.id).url.absoluteString)]
         if body { value["content"] = .string(try task.document.materialized().plainText) }
         return .object(value)

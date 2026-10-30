@@ -5,29 +5,21 @@ extension NativeTextView {
     @objc func editDocumentLink(_ sender: Any?) {
         guard isEditable else { return }
         var range = selectedRange()
-        let alert = NSAlert()
-        alert.messageText = "编辑链接"
-        alert.informativeText = "输入 https://、http:// 或 mailto: 地址。未选中文字时插入地址本身。"
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 26))
-        input.placeholderString = "https://example.com"
+        var current = ""
         var linkRange = NSRange(location: 0, length: 0)
         if range.location < attributedString().length,
            let link = attributedString().attribute(.link, at: range.location, effectiveRange: &linkRange) {
-            input.stringValue = String(describing: link)
+            current = String(describing: link)
             if range.length == 0 { range = linkRange }
         }
-        alert.accessoryView = input
-        let save = alert.addButton(withTitle: "保存链接")
-        let cancel = alert.addButton(withTitle: "取消")
-        NativeDialogActions.configure(alert, primary: save, cancel: cancel)
-        alert.window.initialFirstResponder = input
-        guard NativeDialogActions.runModal(alert, cancel: cancel) == .alertFirstButtonReturn else { return }
-        let value = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = WorkfollowDialog.prompt(
+            "编辑链接",
+            message: "输入 https://、http:// 或 mailto: 地址。未选中文字时插入地址本身。",
+            placeholder: "https://example.com", value: current, confirm: "保存链接"
+        ) else { return }
         guard let url = URL(string: value), ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "") else {
-            let warning = NSAlert()
-            warning.messageText = "链接地址无效"
-            warning.informativeText = "请使用包含 https://、http:// 或 mailto: 的完整地址。"
-            warning.runModal()
+            WorkfollowDialog.notice("链接地址无效",
+                                    message: "请使用包含 https://、http:// 或 mailto: 的完整地址。")
             return
         }
         setDocumentLink(url.absoluteString, range: range)
@@ -98,8 +90,7 @@ extension NativeTextView {
             switch result {
             case .success(let files): self.insertAttachments(files, replacing: insertionRange)
             case .failure(let error):
-                let alert = NSAlert(error: error)
-                alert.runModal()
+                WorkfollowDialog.notice("插入附件失败", message: error.localizedDescription)
             }
         }
     }

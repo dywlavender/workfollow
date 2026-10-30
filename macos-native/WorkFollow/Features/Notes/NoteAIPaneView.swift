@@ -30,38 +30,28 @@ struct NoteAIPaneView: View {
     let onClose: () -> Void
 
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        greeting
-                        actionCards
-                        ForEach(model.exchanges) { exchange in
-                            exchangeCard(exchange)
-                                .id(exchange.id)
-                        }
-                        Color.clear.frame(height: 1).id("ai-pane-bottom")
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 14)
-                    .padding(.bottom, 16)
-                }
-                .compactScrollbars()
-                .onChange(of: model.exchanges.count) { _, _ in
-                    withAnimation(.easeOut(duration: 0.18)) {
-                        proxy.scrollTo("ai-pane-bottom", anchor: .bottom)
-                    }
-                }
-            }
-            Divider()
-            inputBar
+            AIConversationView(model: model.conversation, generate: generate,
+                undoAction: { environment.undoAIAction($0) },
+                canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
+                compact: true, identifierPrefix: "note.ai",
+                leadingContent: AnyView(VStack(alignment: .leading, spacing: 14) { greeting; actionCards }),
+                artifactContent: { message in AnyView(resultCards(message)) },
+                submit: sendMessage)
+                .id(model.conversation.record.id)
+                .environment(\.openURL, OpenURLAction { url in
+                    environment.openResourceLink(url) ? .handled : .systemAction
+                })
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(WFColors.panelFill)
+        // 它是笔记页的一栏，不是浮层：整窗画布生效时让出灰底，
+        // 编辑区和 AI 栏才会落在同一层连续底色上。
+        .background(pageCanvasActive ? Color.clear : WFColors.panelFill)
         .hidesSystemFocusEffect()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("AI 助手")
@@ -86,8 +76,8 @@ struct NoteAIPaneView: View {
             }
             .buttonStyle(.plain)
             .hoverTip("新对话")
-            .disabled(model.isRunning || model.exchanges.isEmpty)
-            .opacity(model.isRunning || model.exchanges.isEmpty ? 0.35 : 1)
+            .disabled(model.isRunning || model.conversation.record.messages.isEmpty)
+            .opacity(model.isRunning || model.conversation.record.messages.isEmpty ? 0.35 : 1)
             Button(action: onClose) {
                 Image(systemName: "xmark").frame(width: 24, height: 24)
             }
@@ -95,7 +85,8 @@ struct NoteAIPaneView: View {
             .hoverTip("关闭 AI 助手")
         }
         .padding(.horizontal, 16)
-        .frame(height: 56)
+        // 与编辑栏顶栏同高，两栏的分割线才能连成一条。
+        .frame(height: 44)
     }
 
     private var greeting: some View {
@@ -107,7 +98,7 @@ struct NoteAIPaneView: View {
                     .foregroundStyle(WFColors.accent)
             }
             .frame(width: 24, height: 24)
-            Text("我是 AI 助手，可以帮你整理要点、润色文字或提取待办。")
+            Text("可以直接与我交流，也可以一键整理、润色或提取待办。")
                 .font(.system(size: 12))
                 .foregroundStyle(WFColors.text)
                 .lineSpacing(2)
@@ -118,14 +109,13 @@ struct NoteAIPaneView: View {
     private var actionCards: some View {
         VStack(spacing: 6) {
             ForEach(NoteAIAction.allCases) { action in
-                let active = model.exchanges.last?.action == action
                 Button { start(action) } label: {
                     HStack(spacing: 10) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 7).fill(WFColors.secondarySurface)
                             Image(systemName: action.symbol)
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(active ? WFColors.accent : WFColors.secondaryText)
+                                .foregroundStyle(WFColors.secondaryText)
                         }
                         .frame(width: 24, height: 24)
                         VStack(alignment: .leading, spacing: 1) {
@@ -138,16 +128,16 @@ struct NoteAIPaneView: View {
                     }
                     .padding(.horizontal, 10)
                     .frame(height: 48)
-                    .background(active ? WFColors.selection : WFColors.content,
+                    .background(WFColors.content,
                                 in: RoundedRectangle(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(active ? WFColors.accent : WFColors.overlayBorder, lineWidth: 1)
+                            .stroke(WFColors.overlayBorder, lineWidth: 1)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(!isAllowed(action) || model.isRunning)
+                .disabled(!isAllowed(action) || model.isRunning || model.attachments.isImporting)
                 .opacity(isAllowed(action) ? 1 : 0.45)
                 .hoverTip(isAllowed(action) ? action.title : disabledTip(action))
                 .workflowActionAnchor(action.workflowAnchor)
@@ -156,7 +146,8 @@ struct NoteAIPaneView: View {
     }
 
     private func isAllowed(_ action: NoteAIAction) -> Bool {
-        switch action {
+        if !model.attachments.items.isEmpty { return true }
+        return switch action {
         case .extract: !noteContentIsEmpty || !noteTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .organize, .polish: !noteContentIsEmpty
         }
@@ -167,111 +158,38 @@ struct NoteAIPaneView: View {
     }
 
     @ViewBuilder
-    private func exchangeCard(_ exchange: NoteAIExchange) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Spacer(minLength: 24)
-                VStack(alignment: .trailing, spacing: 2) {
-                    if !exchange.instruction.isEmpty {
-                        Text(exchange.action.title)
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(WFColors.secondaryText)
-                    }
-                    Text(exchange.instruction.isEmpty ? exchange.action.title : exchange.instruction)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(WFColors.accent)
-                        .multilineTextAlignment(.trailing)
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 6)
-                        .background(WFColors.selection, in: RoundedRectangle(cornerRadius: 12))
-                }
-            }
-            if let taskSession = exchange.taskSession {
-                NoteAITaskExchangeView(exchange: exchange, session: taskSession,
-                                       destination: $destination, sectionID: $sectionID,
-                                       tasks: tasks,
-                                       onEditDraft: { draftID, rect in
-                                           onEditDraft(exchange.id, draftID, rect)
-                                       },
-                                       onReveal: onRevealTasks,
-                                       onRetry: { model.retry(exchange) })
-            } else if let rewriteSession = exchange.rewriteSession {
-                NoteAIRewriteExchangeView(exchange: exchange, session: rewriteSession,
-                                          canReplaceBody: canReplaceBody,
-                                          onReplaceBody: onReplaceBody,
-                                          onOpenNote: onOpenNote,
-                                          onRetry: { model.retry(exchange) })
+    private func resultCards(_ message: AIConversationMessage) -> some View {
+        ForEach(model.results(for: message)) { exchange in
+            if let session = exchange.taskSession {
+                NoteAITaskExchangeView(exchange: exchange, session: session,
+                    destination: $destination, sectionID: $sectionID, tasks: tasks,
+                    onEditDraft: { draftID, rect in onEditDraft(exchange.id, draftID, rect) },
+                    onReveal: onRevealTasks,
+                    onRetry: { model.retry(messageID: message.id, using: generate) })
+            } else if let session = exchange.rewriteSession {
+                NoteAIRewriteExchangeView(exchange: exchange, session: session,
+                    canReplaceBody: canReplaceBody, onReplaceBody: onReplaceBody, onOpenNote: onOpenNote,
+                    onRetry: { model.retry(messageID: message.id, using: generate) })
             }
         }
-    }
-
-    private var inputBar: some View {
-        VStack(spacing: 7) {
-            HStack(spacing: 8) {
-                TextField(inputPlaceholder, text: $model.input, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .lineLimit(1...3)
-                    .onSubmit(sendInstruction)
-                    .disabled(!model.canSendInstruction && !model.input.isEmpty)
-                Button(action: sendInstruction) {
-                    Image(systemName: "arrow.up")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 20, height: 20)
-                        .background(WFColors.accent, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!model.canSendInstruction)
-                .opacity(model.canSendInstruction ? 1 : 0.4)
-                .hoverTip("发送补充要求")
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 10))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10).stroke(WFColors.overlayBorder, lineWidth: 1)
-            }
-            Text("内容由 AI 生成，仅供参考")
-                .font(.system(size: 9))
-                .foregroundStyle(WFColors.tertiaryText)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-    }
-
-    private var inputPlaceholder: String {
-        if model.isRunning { return "正在生成…" }
-        if model.exchanges.isEmpty { return "先选择一个 AI 操作…" }
-        return "补充要求，例如“只保留工作相关”"
     }
 
     private func start(_ action: NoteAIAction) {
         guard !model.isRunning, isAllowed(action) else { return }
         onPrepareDocument()
-        let context = makeContext()
-        guard !context.isEmpty else { return }
-        model.run(action: action, context: context, instruction: "", generators: generators)
+        model.ask(action, context: makeContext(), using: generate)
     }
 
-    private func sendInstruction() {
-        guard model.canSendInstruction else { return }
+    private func sendMessage() {
+        guard model.canSend else { return }
         onPrepareDocument()
-        let context = makeContext()
-        guard !context.isEmpty else { return }
-        model.rerunLast(context: context, generators: generators)
+        model.send(context: makeContext(), using: generate)
     }
 
-    private var generators: NoteAIGenerators {
-        NoteAIGenerators(
-            tasks: { request, updates in
-                try await environment.textAIClient().generateTasks(request, updates: updates)
-            },
-            rewrite: { request, updates in
-                try await environment.textAIClient().rewriteNote(request, updates: updates)
-            })
+    private var generate: AIConversationModel.Generate {
+        environment.conversationClient().generator(for: model.conversation)
     }
+
 }
 
 // MARK: - 提取待办结果
@@ -698,12 +616,14 @@ private struct NoteAIRewriteExchangeView: View {
                 .font(.system(size: 9))
                 .foregroundStyle(WFColors.tertiaryText)
         }
-        .alert("替换当前笔记正文？", isPresented: $confirmReplace) {
-            Button("取消", role: .cancel) {}
-            Button("替换", role: .destructive) { replace() }
-        } message: {
-            Text("原文将被 AI 结果覆盖，标题保持不变。")
-        }
+        .workfollowAlert(
+            "替换当前笔记正文？",
+            message: "原文将被 AI 结果覆盖，标题保持不变。",
+            isPresented: $confirmReplace,
+            actions: [
+                .cancel(),
+                .destructive("替换") { replace() }
+            ])
     }
 
     private func save() {

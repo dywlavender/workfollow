@@ -186,6 +186,18 @@ enum DocumentTextCodec {
             style.paragraphSpacing = paragraphSpacing ?? 10
             style.lineSpacing = 3
         }
+        // 中文排版一个 Tab = 两个汉字宽（Word 默认制表位同款）。制表位必须从
+        // 文字起点（行首沟槽 + 缩进级）起算：系统的 28pt 网格锚在容器原点，
+        // 文字起点在 20pt 时第一格只走 8pt，看起来像"只缩进一个字"。
+        let tabStep = size * 2
+        let tabOrigin = style.firstLineHeadIndent
+        let tabSpan: CGFloat = 1400
+        if tabStep > 0, tabSpan > tabOrigin {
+            let count = Int(((tabSpan - tabOrigin) / tabStep).rounded(.up))
+            style.tabStops = (1...count).map {
+                NSTextTab(textAlignment: .left, location: tabOrigin + CGFloat($0) * tabStep)
+            }
+        }
         if let align { style.alignment = align.nsAlignment }
         let baseForeground: NSColor = kind == .quote ? NSColor.secondaryLabelColor
             : checklistCompleted ? NSColor(WFColors.taskCompletedTitle)

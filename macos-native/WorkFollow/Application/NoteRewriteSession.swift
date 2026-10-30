@@ -14,6 +14,7 @@ struct NoteRewriteRequest: Identifiable {
     /// 对话栏里对本次结果的补充要求；空字符串表示沿用原提示词。
     var instruction: String = ""
     var conversationID: UUID?
+    var attachments: [AIConversationAttachment] = []
 }
 
 @MainActor
@@ -26,6 +27,8 @@ final class NoteRewriteSession: ObservableObject {
     @Published private(set) var retryAt: Date?
     private var generation = UUID()
     private var running = false
+
+    func load(_ text: String) { draft = text; phase = .ready }
 
     func generate(request: NoteRewriteRequest, using generate: (NoteRewriteRequest, @escaping @Sendable (AITextUpdate) -> Void) async throws -> String) async {
         guard !running, retryAt.map({ $0 <= Date() }) ?? true else { return }

@@ -72,7 +72,6 @@ struct FocusOverviewPane: View {
         .padding(.vertical, FocusLayoutMetrics.overviewVerticalPadding)
         .frame(minWidth: FocusLayoutMetrics.overviewPaneMinWidth, maxWidth: .infinity,
                maxHeight: .infinity, alignment: .topLeading)
-        .background(theme.canvas)
         .task(id: store.historyRevision) { await store.resetHistory() }
         .sheet(item: $recordDraft) { draft in FocusRecordEditor(store: store, workspace: workspace, draft: draft) }
         .sheet(item: $selectedRecord) { record in

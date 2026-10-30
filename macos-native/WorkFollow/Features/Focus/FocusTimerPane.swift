@@ -288,14 +288,14 @@ struct FocusTimerPane: View {
                 }
             }
         }
-        .confirmationDialog("确定要放弃本次专注吗？",
-                            isPresented: $showGiveUpConfirmation,
-                            titleVisibility: .visible) {
-            Button("放弃专注", role: .destructive) { _ = store.giveUp() }
-            Button("继续专注", role: .cancel) {}
-        } message: {
-            Text("已专注满 5 分钟的记录将保留为未完成。")
-        }
+        .workfollowAlert(
+            "确定要放弃本次专注吗？",
+            message: "已专注满 5 分钟的记录将保留为未完成。",
+            isPresented: $showGiveUpConfirmation,
+            actions: [
+                .cancel("继续专注"),
+                .destructive("放弃专注") { _ = store.giveUp() }
+            ])
     }
 
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {

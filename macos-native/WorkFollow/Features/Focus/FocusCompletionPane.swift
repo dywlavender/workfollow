@@ -49,7 +49,7 @@ struct FocusCompletionPane: View {
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
-        .background(theme.canvas).focusRenderAnchor(.completionSummary)
+        .focusRenderAnchor(.completionSummary)
         .sheet(item: $recordDraft) { value in
             FocusRecordEditor(store: store, workspace: workspace, draft: value)
         }

@@ -72,6 +72,7 @@ struct TaskTagEditorView: View {
             }
         }
         .padding(WFSpace.xxl).frame(width: PopupMetrics.settingsSheetWidth)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
         .coordinateSpace(name: TaskTagEditorFrames.coordinateSpace)
         .onAppear { DispatchQueue.main.async { nameFocused = true } }
         .onChange(of: name) { _, _ in invalid = false }

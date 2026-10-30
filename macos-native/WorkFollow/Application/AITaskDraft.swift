@@ -10,6 +10,8 @@ struct AITaskRequest: Identifiable {
     var existingTitles: [String] = []
     /// 对话栏里对本次提取的补充要求（如「只提取工作相关」）。
     var instruction: String = ""
+    var attachments: [AIConversationAttachment] = []
+    var requiresSourceQuote = true
     var isBreakdown: Bool { if case .task = source { true } else { false } }
     var actionTitle: String { isBreakdown ? "拆分子任务" : "提取待办" }
     var sourceURL: URL {
@@ -24,6 +26,7 @@ struct AITaskRequest: Identifiable {
         day.calendar = Calendar(identifier: .gregorian)
         return ["action": isBreakdown ? "breakdown_task" : "extract_tasks", "title": title,
                 "content": content, "existingTitles": existingTitles, "instruction": instruction,
+                "attachments": attachments.map(\.parameters),
                 "referenceDate": day.string(from: referenceDate), "timeZone": TimeZone.current.identifier]
     }
 
@@ -83,12 +86,12 @@ struct AITaskDraft: Identifiable {
         }
         let payload = try JSONDecoder().decode(Payload.self, from: Data(raw.utf8))
         var known = Set(request.existingTitles.map(normalizedTitle))
-        let source = request.title + "\n" + request.content
+        let source = request.title + "\n" + request.content + "\n" + request.attachments.map(\.extractedText).joined(separator: "\n")
         return try payload.tasks.compactMap { row in
             let title = row.title.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !title.isEmpty, known.insert(normalizedTitle(title)).inserted else { return nil }
             let quote = row.quote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard request.isBreakdown || (!quote.isEmpty && source.contains(quote)) else { return nil }
+            guard request.isBreakdown || !request.requiresSourceQuote || (!quote.isEmpty && (source.contains(quote) || request.attachments.contains(where: \.isImage))) else { return nil }
             let date = try row.date.map(parseDate), due = try row.due.map(parseDate)
             let priority: TaskPriority
             switch row.priority ?? "none" {

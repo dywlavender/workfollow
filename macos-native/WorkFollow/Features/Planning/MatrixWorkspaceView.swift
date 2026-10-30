@@ -70,7 +70,7 @@ struct MatrixWorkspaceView: View {
                 anchorSink: anchorSink)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(WFColors.matrixBackdrop)
+        .workfollowPageSurface(0.82)
         // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
         .coordinateSpace(name: PlanningCoordinateSpace.name)
         .sheet(item: $editingRule) { value in
@@ -367,8 +367,13 @@ struct MatrixQuadrantCard: View {
         .padding(.bottom, WFMatrixMetrics.quadrantPadding.bottom)
         .padding(.trailing, WFMatrixMetrics.quadrantPadding.trailing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(dropping ? color.opacity(0.07) : WFColors.content,
-                    in: RoundedRectangle(cornerRadius: WFMatrixMetrics.quadrantRadius))
+        .background {
+            if dropping {
+                color.opacity(0.07)
+            } else {
+                ThemedPageSurface(opacity: 0.94)
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: WFMatrixMetrics.quadrantRadius)
                 .stroke(dropping ? color.opacity(0.60) : WFColors.border.opacity(0.35), lineWidth: 1)

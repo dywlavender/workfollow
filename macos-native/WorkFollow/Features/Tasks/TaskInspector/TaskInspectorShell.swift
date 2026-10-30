@@ -7,6 +7,8 @@ struct TaskInspectorShell: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.taskFocusStore) private var taskFocusStore
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
     let showBack: Bool
     var allowsClosing = false
     /// 评论条数角标的观察源。由宿主显式传入（测试/预览可以不传）——
@@ -98,7 +100,7 @@ struct TaskInspectorShell: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(WFColors.content)
+        .workfollowPageSurface(0.93)
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
         .onReceive(workspace.selectionWillChange) { nextID in
             guard editorHandle.textView?.documentIdentity != nextID else { return }
@@ -117,6 +119,7 @@ struct TaskInspectorShell: View {
             titleEditing = false
             presentation.editingTarget = .none
             revealPendingChecklistItem()
+            revealPendingSearchMatch()
             dismissTransientPanels()
             showComments = false
             pendingChecklistTaskID = nil
@@ -133,22 +136,25 @@ struct TaskInspectorShell: View {
             }
         }
         .onChange(of: workspace.pendingChecklistReveal) { _, _ in revealPendingChecklistItem() }
+        .onChange(of: workspace.searchRevealRequest) { _, _ in revealPendingSearchMatch() }
         .onAppear {
             focusPendingTitleIfNeeded()
             revealPendingChecklistItem()
+            revealPendingSearchMatch()
         }
-        .alert("切换模式后，当前排版格式将失效，是否继续？",
-               isPresented: Binding(get: { pendingChecklistTaskID != nil },
-                                    set: { if !$0 { pendingChecklistTaskID = nil } })) {
-            Button("取消", role: .cancel) { pendingChecklistTaskID = nil }
-            Button("继续") {
-                guard let id = pendingChecklistTaskID else { return }
-                pendingChecklistTaskID = nil
-                workspace.setKind(id, .checklist)
-            }
-        } message: {
-            Text("标题、引用、代码与分割线会保留，但不会变成检查事项，也不计入清单进度。")
-        }
+        .workfollowAlert(
+            "切换模式后，当前排版格式将失效，是否继续？",
+            message: "标题、引用、代码与分割线会保留，但不会变成检查事项，也不计入清单进度。",
+            isPresented: Binding(get: { pendingChecklistTaskID != nil },
+                                 set: { if !$0 { pendingChecklistTaskID = nil } }),
+            actions: [
+                .cancel(),
+                .primary("继续") {
+                    guard let id = pendingChecklistTaskID else { return }
+                    pendingChecklistTaskID = nil
+                    workspace.setKind(id, .checklist)
+                }
+            ])
         .onExitCommand {
             _ = handleEscape()
         }
@@ -157,21 +163,24 @@ struct TaskInspectorShell: View {
                                           title: workspace.selectedTask?.title ?? "")
             beginPendingChildEditing()
         }
-        .alert("移动到新清单", isPresented: $showNewList) {
-            TextField("清单名称", text: $newListName)
-            Button("取消", role: .cancel) {}
-            Button("移动") {
-                if let id = workspace.selectedTaskID {
-                    if workspace.saveList(newListName) { _ = workspace.moveToList(id, TaskList(name: newListName)) }
-                    else { TaskNamePrompt.invalidName() }
+        .workfollowAlert(
+            "移动到新清单",
+            isPresented: $showNewList,
+            textField: WorkfollowDialogTextField(placeholder: "清单名称", text: $newListName),
+            actions: [
+                .cancel(),
+                .primary("移动") {
+                    if let id = workspace.selectedTaskID {
+                        if workspace.saveList(newListName) { _ = workspace.moveToList(id, TaskList(name: newListName)) }
+                        else { TaskNamePrompt.invalidName() }
+                    }
                 }
-            }.disabled(newListName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .alert("无法开始专注", isPresented: $focusStartFailed) {
-            Button("确定", role: .cancel) {}
-        } message: {
-            Text("请先结束当前专注会话，再尝试开始新的专注。")
-        }
+            ])
+        .workfollowAlert(
+            "无法开始专注",
+            message: "请先结束当前专注会话，再尝试开始新的专注。",
+            isPresented: $focusStartFailed,
+            actions: [.cancel("确定")])
     }
 
     // MARK: - 顶部：状态框 + 日期 + 优先级
@@ -290,7 +299,7 @@ struct TaskInspectorShell: View {
                 .inspectorRenderAnchor(.parentPicker)
             }
         }
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) {
             if !actionPresentation.handleEscape() { dismissFooterPopover() }
@@ -877,6 +886,30 @@ struct TaskInspectorShell: View {
         }
     }
 
+    /// 搜索一次性请求要等编辑器换好文档才落点，所以保留请求并轮询重试。
+    private func revealPendingSearchMatch() {
+        guard let taskID = workspace.selectedTaskID,
+              let request = workspace.searchRevealRequest,
+              request.targetID == taskID else { return }
+        scheduleSearchReveal(taskID: taskID, query: request.query, attempts: 15)
+    }
+
+    private func scheduleSearchReveal(taskID: UUID, query: String, attempts: Int) {
+        DispatchQueue.main.async {
+            guard workspace.selectedTaskID == taskID,
+                  workspace.searchRevealRequest?.targetID == taskID else { return }
+            switch editorHandle.revealSearchMatch(query, documentID: taskID) {
+            case .some:
+                _ = workspace.consumeSearchReveal(for: taskID)
+            case .none:
+                guard attempts > 0 else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    scheduleSearchReveal(taskID: taskID, query: query, attempts: attempts - 1)
+                }
+            }
+        }
+    }
+
     private func beginPendingChildEditing() {
         guard let childID = workspace.consumePendingChildTitleEditor() else { return }
         inlineChildEditorID = childID
@@ -1104,7 +1137,7 @@ struct TaskInspectorShell: View {
         }
         .padding(8)
         .frame(width: PopupMetrics.taskMenuWidth)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showKindMenu = false })
     }
@@ -1130,7 +1163,7 @@ struct TaskInspectorShell: View {
         }
         .padding(8)
         .frame(width: PopupMetrics.priorityMenuWidth)
-        .background(WFColors.content, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showPriorityMenu = false })
     }

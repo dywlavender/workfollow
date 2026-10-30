@@ -49,7 +49,7 @@ final class FloatingEditorWindowController: NSObject, ObservableObject, NSWindow
         panel.delegate = self
         installFrame(for: panel)
         panel.appearance = resolve(appearance)
-        let hosting = NSHostingView(rootView: AnyView(content(handle)))
+        let hosting = NSHostingView(rootView: AnyView(content(handle).workfollowNativeTheme()))
         hosting.sizingOptions = []
         panel.contentView = hosting
         panels[id] = panel
@@ -86,6 +86,10 @@ final class FloatingEditorWindowController: NSObject, ObservableObject, NSWindow
         let id = panel.editorID
         panel.editorHandle.flushPendingComposition()
         panel.makeFirstResponder(nil)
+        // 适配层在这里收回临时撑开的宽度（如笔记浮窗的 AI 右扩），
+        // 否则 Cmd+W 关窗会把撑宽后的尺寸写进窗口位置记忆。
+        panel.onWillClose?()
+        panel.onWillClose = nil
         panel.saveFrame(usingName: id.frameAutosaveName)
         panels[id] = nil
         let onClose = closeActions.removeValue(forKey: id)
@@ -132,12 +136,17 @@ final class FloatingEditorWindowController: NSObject, ObservableObject, NSWindow
         frame.origin.x = min(max(frame.minX, visible.minX), visible.maxX - frame.width)
         frame.origin.y = min(max(frame.minY, visible.minY), visible.maxY - frame.height)
         panel.setFrame(frame, display: false)
+        // 位置在关闭时手动保存；关掉 AppKit 的自动保存，AI 右扩这类临时尺寸
+        // 才不会在下次打开时被当成用户设置的窗口大小。
+        panel.setFrameAutosaveName("")
     }
 }
 
 final class FloatingEditorPanel: NSPanel {
     let editorID: FloatingEditorID
     let editorHandle: DocumentEditorHandle
+    /// 关闭前由适配层收回临时窗口尺寸。
+    var onWillClose: (() -> Void)?
 
     init(id: FloatingEditorID, title: String, editorHandle: DocumentEditorHandle) {
         self.editorID = id

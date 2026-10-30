@@ -39,6 +39,8 @@ struct TaskQuickComposer: View {
     @State private var recurrenceRule: RecurrenceRule?
     @State private var datePage: TaskDatePopoverV2.Page?
     @FocusState private var titleFocused: Bool
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     init(workspace: TaskWorkspaceModel,
          fallbackSchedule: TaskSchedule,
@@ -69,7 +71,7 @@ struct TaskQuickComposer: View {
             divider
             listRow
         }
-        .background(WFColors.overlay)
+        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
         .schedulePopover(isPresented: datePopoverBinding) {
             if let page = datePage {
                 TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: page,

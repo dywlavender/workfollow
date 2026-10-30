@@ -219,7 +219,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
                     guard let self, let panel, self.panel === panel else { return }
                     self.resizePanel(toHeight: height)
                 }
-            }))
+            }).workfollowNativeTheme())
         panel.contentView = hosting
         panel.initialFirstResponder = hosting
         return panel
@@ -253,6 +253,8 @@ private struct GlobalQuickAddPanelView: View {
     let submit: (QuickCaptureSession, [NativeAttachment]) -> Void
     let close: () -> Void
     let onHeightChange: (CGFloat) -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     private var text: String {
         get { draft.text }
@@ -386,7 +388,7 @@ private struct GlobalQuickAddPanelView: View {
         })
         .background(
             RoundedRectangle(cornerRadius: WFMetrics.corner + 2, style: .continuous)
-                .fill(WFColors.content)
+                .fill(backgroundTheme.popupFill(for: colorScheme))
                 .overlay(
                     RoundedRectangle(cornerRadius: WFMetrics.corner + 2, style: .continuous)
                         .strokeBorder(WFColors.border)

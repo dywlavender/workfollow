@@ -29,7 +29,8 @@ final class TaskReminderPresenter {
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: TaskReminderPanel(delivery: delivery,
-            defaultMinutes: preferences.snoozeMinutes, onSnooze: onSnooze, onStop: onStop, onOpen: onOpen))
+            defaultMinutes: preferences.snoozeMinutes, onSnooze: onSnooze, onStop: onStop, onOpen: onOpen)
+            .workfollowNativeTheme())
         panel.center()
         if NSApp.isActive { panel.makeKeyAndOrderFront(nil) }
         else { panel.orderFrontRegardless() }
@@ -55,6 +56,8 @@ private struct TaskReminderPanel: View {
     let onSnooze: (Int) -> Void
     let onStop: () -> Void
     let onOpen: () -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Label(delivery.title, systemImage: "bell.badge").font(.headline).lineLimit(2)
@@ -71,6 +74,7 @@ private struct TaskReminderPanel: View {
                 Button("停止", action: onStop).keyboardShortcut(.cancelAction)
             }
         }.padding(20).frame(width: 350, height: 160, alignment: .topLeading)
+            .background(backgroundTheme.popupFill(for: colorScheme))
             .hidesSystemFocusEffect()
     }
 }

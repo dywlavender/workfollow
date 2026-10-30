@@ -51,6 +51,7 @@ struct CalendarDisplayOptions: View {
             }
             HStack { Spacer(); Button("完成") { dismiss() }.keyboardShortcut(.defaultAction) }
         }.padding(20).frame(width: 440, height: 600)
+            .workfollowPopupSurface(fallback: WFColors.canvas)
     }
     private func value<T>(_ path: WritableKeyPath<CalendarPreferences, T>) -> Binding<T> {
         Binding(get: { settings.calendar[keyPath: path] }, set: { value in settings.updateCalendar { $0[keyPath: path] = value } })
@@ -73,6 +74,8 @@ struct CalendarDayAgenda: View {
     let onCreate: () -> Void
     var externalEvents: [SystemCalendarEvent] = []
     var onOpenEvent: (SystemCalendarEvent) -> Void = { _ in }
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -106,7 +109,7 @@ struct CalendarDayAgenda: View {
                 .compactScrollbars()
             }
             if tasks.isEmpty && externalEvents.isEmpty { Text("当天没有安排").foregroundStyle(WFColors.secondaryText) }
-        }.padding(14).background(WFColors.content)
+        }.padding(14).background(backgroundTheme.popupFill(for: colorScheme))
     }
 }
 
@@ -115,6 +118,7 @@ struct CalendarArrangePane: View {
     let onOpen: (UUID) -> Void
     let onArrange: (UUID) -> Void
     let anchorSink: PlanningAnchorRef
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
     @State private var anchor = PlanningAnchorRef()
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -153,7 +157,10 @@ struct CalendarArrangePane: View {
             }
             if tasks.isEmpty { Text("所有任务均已安排").font(WFType.caption).foregroundStyle(WFColors.secondaryText) }
         }.frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(14).background(WFColors.calendarCanvas)
+            // 它是日历页的一栏，不是浮层：整窗画布生效时跟随页面底色，
+            // 否则冷灰面板会在暖色页面上切出一条竖直硬边。
+            .padding(14)
+            .background(pageCanvasActive ? Color.clear : WFColors.calendarCanvas)
             .background(PlanningAnchorProbe(ref: anchor))
     }
 }

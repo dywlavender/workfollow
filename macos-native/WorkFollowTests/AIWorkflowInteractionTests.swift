@@ -18,7 +18,8 @@ final class AIWorkflowInteractionTests: XCTestCase {
             if request.get("type") != "prompt": continue
             prompt = request["message"]
             pathlib.Path(__file__).with_suffix(".prompt").write_text(prompt)
-            data = json.loads(prompt.split("输入 JSON：", 1)[1])
+            data = json.loads(prompt.split("输入 JSON：", 1)[1]) if '输入 JSON：' in prompt else {}
+            if '本轮快捷提问：从当前资料' in prompt: data['existingTasks']=[]
             if "existingTasks" in data:
                 text = json.dumps({"tasks":[
                     {"title":"核对成本","date":"2026-10-30","due":None,"priority":"high","quote":"核对成本。"},
@@ -206,12 +207,15 @@ final class AIWorkflowInteractionTests: XCTestCase {
         try await wait("save button") { anchors["note.ai.save"]?.window === window }
         let replace = try XCTUnwrap(anchors["note.ai.replace"])
         try InspectorPanelTestSupport.click(replace.bounds, in: replace, window: window)
-        try await wait("replace alert") { window.attachedSheet != nil }
-        let sheet = try XCTUnwrap(window.attachedSheet)
-        let alertText = sheet.contentView.map { self.descendants($0) } ?? []
-        let confirm = alertText.compactMap { $0 as? NSButton }.first { $0.title == "替换" }
-        XCTAssertNotNil(confirm)
-        confirm?.performClick(nil)
+        try await wait("replace alert") {
+            (window.childWindows ?? []).compactMap { $0 as? NSPanel }
+                .contains { $0.title == "替换当前笔记正文？" && $0.isVisible }
+        }
+        let dialog = try XCTUnwrap((window.childWindows ?? []).compactMap { $0 as? NSPanel }
+            .first { $0.title == "替换当前笔记正文？" && $0.isVisible })
+        try await wait("replace button") { anchors["dialog.button.替换"]?.window === dialog }
+        let replaceButton = try XCTUnwrap(anchors["dialog.button.替换"])
+        try InspectorPanelTestSupport.click(replaceButton.bounds, in: replaceButton, window: dialog)
         InspectorPanelTestSupport.settle(window)
         try await wait("body replaced") {
             environment.notesWorkspace.notes.first { $0.id == id }?.document.plainText.contains("要点") == true

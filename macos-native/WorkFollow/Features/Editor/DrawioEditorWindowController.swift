@@ -265,13 +265,10 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard pendingSave == nil, !capturingSave else { return false }
         guard isModified else { return true }
-        let alert = NSAlert()
-        alert.messageText = "放弃未保存的图表修改？"
-        alert.informativeText = "已保存到正文的版本会保留。"
-        let discard = alert.addButton(withTitle: "放弃修改")
-        let keep = alert.addButton(withTitle: "继续编辑")
-        NativeDialogActions.configure(alert, primary: discard, cancel: keep, destructive: true)
-        return NativeDialogActions.runModal(alert, cancel: keep) == .alertFirstButtonReturn
+        return WorkfollowDialog.runModal(
+            title: "放弃未保存的图表修改？",
+            message: "已保存到正文的版本会保留。",
+            actions: [.cancel("继续编辑"), .destructive("放弃修改")]) == 1
     }
 
     override func close() {

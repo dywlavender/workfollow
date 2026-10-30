@@ -40,7 +40,11 @@ struct SettingsAIModelsView: View {
                         HStack { Text(textEngine == .langchain ? "直接调用" : "Pi"); Image(systemName: "chevron.down").font(.system(size: 10)) }
                     }.accessibilityLabel("文字处理调用方式")
                 }
-                if textEngine == .langchain { SettingsDirectAIModelView(models: models) }
+                if textEngine == .langchain {
+                    SettingsDirectAIModelView(models: models)
+                    modelRow(speech: false, chatOnly: true)
+                    WFFormNote("独立对话和选区浮窗使用 Pi；其他文字处理使用上方的直接调用配置。")
+                }
                 else { modelRow(speech: false) }
                 if let configurationError { WFFormNote(configurationError) }
             }
@@ -76,6 +80,7 @@ struct SettingsAIModelsView: View {
                         .foregroundStyle(WFColors.secondaryText)
                 }.padding(.top, 10).disabled(speechBusy)
             }.font(WFType.body).padding(.horizontal, WFSpace.md)
+            AIConfigurationCheckView()
         }
         .coordinateSpace(name: "ai-model-settings")
         .accessibilityElement(children: .contain)
@@ -84,8 +89,8 @@ struct SettingsAIModelsView: View {
         .onChange(of: models.engine) { _, value in textEngine = value }
     }
 
-    private func modelRow(speech: Bool) -> some View {
-        let title = speech ? "语音转写" : "文字模型"
+    private func modelRow(speech: Bool, chatOnly: Bool = false) -> some View {
+        let title = speech ? "语音转写" : chatOnly ? "Pi 对话模型" : "Pi 文字模型"
         let modelTitle = speech ? "语音转写模型" : "Pi 文字模型"
         let saved = speech ? store.configuration.resolvedTranscriptionModel : store.configuration.resolvedMinutesModel
         let current = catalog.model(for: saved)

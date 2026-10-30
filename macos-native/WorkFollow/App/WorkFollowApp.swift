@@ -12,7 +12,7 @@ struct WorkFollowApp: App {
     @State private var mainWindowRailInset: CGFloat = 0
 
     init() {
-        let environment = AppEnvironment()
+        let environment = AppEnvironment(layoutPreferences: .standard)
         environment.ensureWelcomeGuideIfNeeded()
         let windowLaunch = WidgetMainWindowLaunchPolicy()
         // 先把全部存储属性初始化完，才能碰 `self.`（属性包装器的 wrapped 访问
@@ -124,11 +124,8 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
         FloatingEditorWindowController.shared.closeAll()
         environment.flush { error in
             if let error {
-                let alert = NSAlert()
-                alert.messageText = "预览数据尚未保存"
-                alert.informativeText = error.localizedDescription
-                alert.addButton(withTitle: "返回应用")
-                alert.runModal()
+                WorkfollowDialog.notice("预览数据尚未保存", message: error.localizedDescription,
+                                        button: "返回应用")
             }
             sender.reply(toApplicationShouldTerminate: error == nil)
         }

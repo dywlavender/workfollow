@@ -47,7 +47,7 @@ struct WelcomeGuideWelcomeView: View {
             .padding(.bottom, 28)
         }
         .frame(width: 520, height: 420)
-        .background(WFColors.content)
+        .workfollowPopupSurface()
     }
 
     private func feature(icon: String, title: String, detail: String) -> some View {

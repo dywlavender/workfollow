@@ -7,7 +7,7 @@ struct TemplateManagementView: View {
     var body: some View {
         managementList
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(WFColors.content)
+            .workfollowPopupSurface()
     }
 
     private var managementList: some View {

@@ -71,7 +71,11 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
                     DocumentEditor(documentID: documentID, document: document,
                         onDocumentChange: onDocumentChange, onEscape: { .endEditing },
                         onEditingChanged: { _ in }, profile: profile,
-                        contentSized: true, handle: editorHandle)
+                        contentSized: true, handle: editorHandle,
+                        // 与任务详情同口径：装饰槽比宿主内容原点宽，六点手柄/H 角标
+                        // 要按"宿主内可见的槽宽"再向内让，否则会贴在浮窗左边框上。
+                        decorationVisibleMinX: max(0, DocumentEditorGeometry.decorationLane
+                            - FloatingEditorMetrics.documentLeadingPadding))
                         .overlay(alignment: .topLeading) {
                             if DocumentEditorPlaceholder.isVisible(for: document, handle: editorHandle) {
                                 DocumentEditorPlaceholder(title: "随手记下…")

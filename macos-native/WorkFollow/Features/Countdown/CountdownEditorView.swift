@@ -210,7 +210,7 @@ struct CountdownEditorView: View {
             footer
         }
         .frame(width: Self.panelWidth)
-        .background(WFColors.canvas)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
         // 下拉浮层：浮在对应行的旁边、盖在面板内容之上，**不参与布局**。
         // 锚点挂在字段上（见 `FieldAnchorKey`），所以浮层与字段左右对齐。
         .overlayPreferenceValue(FieldAnchorKey.self) { anchors in
@@ -1254,7 +1254,7 @@ struct CountdownStyleView: View {
         // 350 = 左右内边距各 20 + 预览卡 310（**与真卡片同宽**，1:1）。
         // 顺带让 12 格色板在 4pt 间距下正好排得下（12×22 + 11×4 = 308 ≤ 310）。
         .frame(width: PopupMetrics.countdownPreviewWidth)
-        .background(WFColors.canvas)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
     }
 
     private func apply() {
@@ -1307,7 +1307,7 @@ struct CountdownNoteView: View {
             .padding(WFSpace.lg)
         }
         .frame(width: PopupMetrics.countdownStyleWidth)
-        .background(WFColors.canvas)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
     }
 }
 
@@ -1351,7 +1351,7 @@ struct ArchivedCountdownsView: View {
             .padding(WFSpace.lg)
         }
         .frame(width: PopupMetrics.countdownDisplayWidth)
-        .background(WFColors.canvas)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
         .onAppear { today = Date() }
     }
 

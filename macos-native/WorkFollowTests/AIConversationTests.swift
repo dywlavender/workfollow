@@ -70,15 +70,13 @@ final class AIConversationTests: XCTestCase {
         let context = NoteAIContext(noteID: UUID(), title: "虚构笔记", content: "等待核对。",
                                     referenceDate: Date(), existingTitles: [])
         var ids: [UUID?] = []
-        let generators = NoteAIGenerators(tasks: { _, _ in "{\"tasks\":[]}" }, rewrite: { request, _ in
-            ids.append(request.conversationID); return "笔记结果"
-        })
-        model.run(action: .polish, context: context, instruction: "", generators: generators)
+        let generate: AIConversationModel.Generate = { id, _, _, _, _ in ids.append(id); return "笔记结果" }
+        model.ask(.polish, context: context, using: generate)
         try await wait { !model.isRunning }
-        model.input = "再简洁一点"; model.rerunLast(context: context, generators: generators)
+        model.input = "再简洁一点"; model.send(context: context, using: generate)
         try await wait { !model.isRunning }
         XCTAssertNotNil(ids[0]); XCTAssertEqual(ids[0], ids[1])
-        model.reset(); model.run(action: .organize, context: context, instruction: "", generators: generators)
+        model.reset(); model.ask(.organize, context: context, using: generate)
         try await wait { !model.isRunning }
         XCTAssertNotEqual(ids[1], ids[2])
     }

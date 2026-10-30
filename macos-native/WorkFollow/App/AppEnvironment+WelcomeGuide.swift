@@ -63,13 +63,12 @@ extension AppEnvironment {
 
     func resetWelcomeGuide() {
         NativeMainWindowPresenter.activate()
-        let alert = NSAlert()
-        alert.messageText = "重新生成「\(WelcomeGuide.listName)」新手引导？"
-        alert.informativeText = "会删除引导任务和勾选进度（含其子任务），并重新种入 "
-            + "\(WelcomeGuide.items.count) 条引导；你在该清单里自己添加的任务会保留。"
-        alert.addButton(withTitle: "重新生成")
-        alert.addButton(withTitle: "取消")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard WorkfollowDialog.confirm(
+            "重新生成「\(WelcomeGuide.listName)」新手引导？",
+            message: "会删除引导任务和勾选进度（含其子任务），并重新种入 "
+                + "\(WelcomeGuide.items.count) 条引导；你在该清单里自己添加的任务会保留。",
+            action: "重新生成", destructive: false
+        ) else { return }
 
         if taskWorkspace.resetWelcomeGuide() {
             UserDefaults.standard.set(WelcomeGuide.version, forKey: welcomeGuideDefaultsKey)

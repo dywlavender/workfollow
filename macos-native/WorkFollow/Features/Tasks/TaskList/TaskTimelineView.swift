@@ -54,22 +54,20 @@ struct TaskTimelineView: View {
             }
         }
         .frame(minHeight: 220)
-        .background(WFColors.content)
         .coordinateSpace(name: TaskTimelineRenderFramesKey.coordinateSpace)
         .onChange(of: viewport.scale) { _, _ in scrollRevision += 1 }
-        .confirmationDialog("修改重复任务", isPresented: Binding(
-            get: { pendingSchedule != nil }, set: { if !$0 { pendingSchedule = nil } }
-        ), titleVisibility: .visible) {
-            if let request = pendingSchedule {
-                ForEach(RecurrenceEditScope.allCases) { scope in
-                    Button(scope.title) {
-                        _ = interaction.confirm(request, scope: scope)
-                        pendingSchedule = nil
-                    }
+        .workfollowAlert(
+            "修改重复任务",
+            isPresented: Binding(
+                get: { pendingSchedule != nil }, set: { if !$0 { pendingSchedule = nil } }
+            ),
+            actions: RecurrenceEditScope.allCases.map { scope in
+                .secondary(scope.title) {
+                    guard let request = pendingSchedule else { return }
+                    _ = interaction.confirm(request, scope: scope)
+                    pendingSchedule = nil
                 }
-                Button("取消", role: .cancel) { pendingSchedule = nil }
-            }
-        }
+            } + [.cancel { pendingSchedule = nil }])
         .accessibilityIdentifier("tasks.timeline")
     }
 
@@ -87,7 +85,6 @@ struct TaskTimelineView: View {
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 9)
-        .background(WFColors.content)
     }
 
     private func navigationControls(gridWidth: CGFloat) -> some View {
@@ -168,7 +165,7 @@ struct TaskTimelineView: View {
                     }
                     .frame(height: contentHeight, alignment: .top)
                 }
-                .frame(width: labelWidth).background(WFColors.content)
+                .frame(width: labelWidth)
                 .taskTimelineFrame(.labels)
                 Rectangle().fill(WFColors.border).frame(width: 1)
                 ScrollView(.horizontal, showsIndicators: true) {

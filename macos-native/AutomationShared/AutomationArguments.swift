@@ -8,10 +8,13 @@ struct AutomationInvocation {
 
     static let options: [String: Set<String>] = [
         "status": [],
-        "task.add": ["title", "list", "section", "priority", "date", "due", "content"],
-        "task.list": ["query", "list", "section", "completed", "limit", "offset"],
+        "task.add": ["title", "list", "section", "priority", "date", "due", "content", "reminder", "reminder-offsets", "repeat", "repeat-interval", "repeat-weekdays", "repeat-until", "repeat-count"],
+        "task.list": ["query", "list", "section", "completed", "from", "to", "priority", "limit", "offset"],
+        "task.count": ["query", "list", "completed", "from", "to", "priority"],
+        "meeting.list": ["query", "limit", "offset"], "meeting.get": ["id", "query"],
+        "knowledge.search": ["query"], "operation.undo": ["id"],
         "task.lists": [], "task.get": ["id"],
-        "task.update": ["id", "version", "title", "list", "section", "clear-section", "priority", "date", "due", "clear-date", "clear-due", "content"],
+        "task.update": ["id", "version", "title", "list", "section", "clear-section", "priority", "date", "due", "clear-date", "clear-due", "content", "reminder", "reminder-offsets", "clear-reminder", "repeat", "repeat-interval", "repeat-weekdays", "repeat-until", "repeat-count", "clear-repeat"],
         "task.complete": ["id", "version"], "task.reopen": ["id", "version"],
         "note.create": ["title", "folder", "content"],
         "note.list": ["query", "folder", "limit", "offset"], "note.folders": [], "note.get": ["id"],
@@ -34,11 +37,16 @@ struct AutomationInvocation {
       task add --title TEXT [--list NAME] [--section ID] [--priority none|low|medium|high]
                [--date YYYY-MM-DD|ISO8601] [--due YYYY-MM-DD|ISO8601] [--content TEXT]
       task list [--query TEXT] [--list NAME] [--section ID] [--completed true|false] [--limit N] [--offset N]
+      task count [--from DATE] [--to DATE] [--completed true|false] [--list NAME] [--priority VALUE]
       task lists
       task get --id UUID
       task update --id UUID --version VERSION [--title TEXT] [--list NAME] [--priority VALUE]
                   [--section ID|--clear-section] [--date DATE|--clear-date] [--due DATE|--clear-due] [--content TEXT]
       task complete|reopen --id UUID --version VERSION
+      meeting list [--query TEXT] [--limit N] [--offset N]
+      meeting get --id UUID [--query TEXT]
+      knowledge search --query TEXT
+      operation undo --id UNDO_ID
       note create [--title TEXT] [--folder NAME] [--content TEXT]
       note list [--query TEXT] [--folder NAME] [--limit N] [--offset N]
       note folders
@@ -64,6 +72,9 @@ struct AutomationInvocation {
       section move --id ID --list NAME
       section delete --id ID
 
+    task add/update 还支持：--reminder ISO8601（绝对提醒时间）或 --reminder-offsets 0,-10（准时/提前分钟）。
+    --repeat never|daily|weekly|monthly|yearly|weekdays|weekends；--repeat-interval N、--repeat-weekdays 2,4、--repeat-until DATE、--repeat-count N。
+    task update 使用 --clear-reminder / --clear-repeat 清除；task list 支持 --from / --to（含结束当天）。
     --content-file PATH 可替代 --content，UTF-8 纯文本；PATH 为 - 时读取标准输入。
     --date 是安排日期，--due 是截止日期。待办和笔记的版本从各自 get 返回值取得。
     group 是侧边栏清单分组；section 是清单内任务分组，--section 使用 section list 返回的 ID。
@@ -81,7 +92,7 @@ struct AutomationInvocation {
             if !token.hasPrefix("--") { words.append(token); index += 1; continue }
             let key = String(token.dropFirst(2))
             guard values[key] == nil else { throw AutomationFailure.argument("选项重复：\(token)") }
-            if ["json", "clear-date", "clear-due", "clear-section", "clear-group"].contains(key) { values[key] = "true"; index += 1; continue }
+            if ["json", "clear-date", "clear-due", "clear-section", "clear-group", "clear-reminder", "clear-repeat"].contains(key) { values[key] = "true"; index += 1; continue }
             guard index + 1 < tokens.count, !tokens[index + 1].hasPrefix("--") else {
                 throw AutomationFailure.argument("\(token) 缺少值。")
             }
@@ -118,7 +129,7 @@ struct AutomationInvocation {
         for key in required where values[key]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
             throw AutomationFailure.argument("请提供非空 --\(key)。")
         }
-        if ["task.get", "task.update", "task.complete", "task.reopen", "note.get", "note.update", "note.append"].contains(operation) {
+        if ["task.get", "task.update", "task.complete", "task.reopen", "note.get", "note.update", "note.append", "meeting.get", "operation.undo"].contains(operation) {
             guard let id = values["id"], UUID(uuidString: id) != nil else { throw AutomationFailure.argument("请提供有效的 --id UUID。") }
         }
         if ["task.update", "task.complete", "task.reopen", "note.update", "note.append"].contains(operation), values["version"] == nil {
@@ -128,7 +139,7 @@ struct AutomationInvocation {
             throw AutomationFailure.argument("请至少提供一个要修改的字段。")
         }
         if operation == "note.append", values["content"]?.isEmpty != false { throw AutomationFailure.argument("追加内容不能为空。") }
-        for (field, clear) in [("date", "clear-date"), ("due", "clear-due"), ("section", "clear-section"), ("group", "clear-group")] where values[field] != nil && values[clear] != nil {
+        for (field, clear) in [("date", "clear-date"), ("due", "clear-due"), ("section", "clear-section"), ("group", "clear-group"), ("reminder", "clear-reminder"), ("repeat", "clear-repeat")] where values[field] != nil && values[clear] != nil {
             throw AutomationFailure.argument("--\(field) 与 --\(clear) 不能同时使用。")
         }
         if operation == "list.move", values["group"] == nil && values["clear-group"] == nil {

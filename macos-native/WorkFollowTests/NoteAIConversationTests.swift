@@ -3,102 +3,131 @@ import XCTest
 
 @MainActor
 final class NoteAIConversationTests: XCTestCase {
-    private func context(instruction: String = "") -> NoteAIContext {
-        NoteAIContext(noteID: UUID(), title: "海鸥方案",
-                      content: "周五发送报价。核对成本。",
-                      referenceDate: Date(timeIntervalSince1970: 1_793_000_000),
-                      existingTitles: [])
+    private func context() -> NoteAIContext {
+        .init(noteID: UUID(), title: "海鸥方案", content: "周五发送报价。核对成本。", referenceDate: Date(), existingTitles: [])
     }
-
-    private func generators(tasks: @escaping (AITaskRequest) -> String = { _ in
-        #"{"tasks":[{"title":"发送报价","date":"2026-10-30","due":null,"priority":"high","quote":"周五发送报价。"}]}"#
-    }, rewrite: @escaping (NoteRewriteRequest) -> String = { _ in "整理后的正文" },
-       recorded: Instructions = Instructions()) -> NoteAIGenerators {
-        NoteAIGenerators(
-            tasks: { request, _ in
-                recorded.append(request.instruction)
-                return tasks(request)
-            },
-            rewrite: { request, _ in
-                recorded.append(request.instruction)
-                return rewrite(request)
-            })
-    }
-
-    private final class Instructions {
-        private(set) var values: [String] = []
-        func append(_ value: String) { values.append(value) }
-    }
-
-    private func waitFor(_ condition: @escaping () -> Bool) async throws {
+    private func wait(_ condition: () -> Bool) async throws {
         for _ in 0..<400 {
             if condition() { return }
-            try await _Concurrency.Task.sleep(nanoseconds: 5_000_000)
+            try await _Concurrency.Task.sleep(for: .milliseconds(10))
         }
-        XCTFail("conversation did not settle")
+        XCTFail("Open note conversation did not settle")
     }
-
-    private func tasksReady(_ session: AITaskDraftSession?) -> Bool {
-        guard let session else { return false }
-        if case .ready = session.phase { return true }
-        return false
+    func testCanChatBeforeSelectingAnAction() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        model.input = "你觉得这个方案怎么样？"
+        XCTAssertTrue(model.canSend)
+        model.send(context: source) { _, scene, _, question, _ in
+            XCTAssertEqual(scene, .note)
+            XCTAssertNil(model.conversation.submittedPreset)
+            XCTAssertEqual(model.conversation.submittedSource?.id, source.noteID)
+            XCTAssertEqual(question, "你觉得这个方案怎么样？")
+            return "可以先核对成本，再决定报价。"
+        }
+        try await wait { !model.isRunning }
+        XCTAssertEqual(model.conversation.latestResult, "可以先核对成本，再决定报价。")
+        XCTAssertTrue(model.exchanges.isEmpty)
     }
-
-    private func rewriteReady(_ session: NoteRewriteSession?) -> Bool {
-        guard let session else { return false }
-        if case .ready = session.phase { return true }
-        return false
-    }
-
-    func testExtractKeepsInstructionAndReRunsLastAction() async throws {
-        let model = NoteAIConversationModel()
-        let recorded = Instructions()
-        let input = context()
-        let output = generators(recorded: recorded)
-
-        let first = try XCTUnwrap(model.run(action: .extract, context: input,
-                                            instruction: "只提取工作", generators: output))
-        try await waitFor { self.tasksReady(first.taskSession) }
-        XCTAssertEqual(recorded.values, ["只提取工作"])
-        XCTAssertEqual(first.taskSession?.drafts.count, 1)
-        XCTAssertEqual(first.taskSession?.drafts.first?.title, "发送报价")
-        XCTAssertEqual(first.taskSession?.drafts.first?.priority, .high)
-        XCTAssertNotNil(first.taskSession?.drafts.first?.plan.schedule.dueAt)
-
-        model.input = "更短"
-        let second = try XCTUnwrap(model.rerunLast(context: input, generators: output))
-        try await waitFor { self.tasksReady(second.taskSession) }
-        XCTAssertEqual(model.exchanges.count, 2)
-        XCTAssertEqual(second.action, .extract)
-        XCTAssertEqual(second.instruction, "更短")
-        XCTAssertEqual(recorded.values, ["只提取工作", "更短"])
-    }
-
-    func testRewriteCarriesInstructionAndKeepsDraftEditable() async throws {
-        let model = NoteAIConversationModel()
-        let recorded = Instructions()
-        let exchange = try XCTUnwrap(model.run(action: .polish, context: context(),
-                                               instruction: "保留专有名词",
-                                               generators: generators(recorded: recorded)))
-        try await waitFor { self.rewriteReady(exchange.rewriteSession) }
-        XCTAssertEqual(recorded.values, ["保留专有名词"])
-        XCTAssertEqual(exchange.rewriteRequest?.instruction, "保留专有名词")
-        XCTAssertEqual(exchange.rewriteSession?.draft, "整理后的正文")
-    }
-
-    func testConcurrentActionIsIgnoredWhileGenerating() async throws {
-        let model = NoteAIConversationModel()
-        let output = NoteAIGenerators(
-            tasks: { _, _ in
-                try await _Concurrency.Task.sleep(nanoseconds: 40_000_000)
-                return #"{"tasks":[]}"#
-            },
-            rewrite: { _, _ in "正文" })
-        let first = try XCTUnwrap(model.run(action: .extract, context: context(),
-                                            instruction: "", generators: output))
-        XCTAssertNil(model.run(action: .polish, context: context(), instruction: "",
-                               generators: output))
+    func testExtractionIsOneQuestionAndFollowingDiscussionStaysOpen() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        var presets: [AIConversationPreset?] = [], sessions: [UUID] = []
+        let generate: AIConversationModel.Generate = { id, _, _, _, _ in
+            sessions.append(id); presets.append(model.conversation.submittedPreset)
+            if model.conversation.submittedPreset == .extract {
+                return #"{"tasks":[{"title":"发送报价","date":"2026-10-30","priority":"high","quote":"周五发送报价。"}]}"#
+            }
+            return "需要先确认报价范围。"
+        }
+        model.ask(.extract, context: source, using: generate)
+        try await wait { !model.isRunning }
+        XCTAssertEqual(model.exchanges.first?.taskSession?.drafts.first?.title, "发送报价")
+        XCTAssertEqual(model.exchanges.first?.taskSession?.drafts.first?.priority, .high)
+        model.input = "为什么你认为这件事需要确认？"
+        model.send(context: source, using: generate)
+        try await wait { !model.isRunning }
+        XCTAssertEqual(presets, [.extract, nil])
+        XCTAssertEqual(sessions.first, sessions.last)
         XCTAssertEqual(model.exchanges.count, 1)
-        try await waitFor { self.tasksReady(first.taskSession) }
+        XCTAssertEqual(model.conversation.latestResult, "需要先确认报价范围。")
+    }
+    func testFollowupCanUpdateCandidateWithoutSelectingAnAction() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        model.ask(.extract, context: source) { _, _, _, _, _ in
+            #"{"tasks":[{"title":"发送报价","quote":"周五发送报价。"}]}"#
+        }
+        try await wait { !model.isRunning }
+        model.input = "把日期改到下周三"
+        model.send(context: source) { _, _, _, _, _ in
+            "已调整候选日期。\n```workfollow-tasks\n{\"tasks\":[{\"title\":\"发送报价\",\"date\":\"2026-11-04\",\"quote\":\"周五发送报价。\"}]}\n```"
+        }
+        try await wait { !model.isRunning }
+        XCTAssertEqual(model.exchanges.count, 2)
+        XCTAssertNotNil(model.exchanges.last?.taskSession?.drafts.first?.schedule.dueAt)
+        XCTAssertEqual(model.conversation.latestResult, "已调整候选日期。")
+    }
+    func testWritingResultRemainsEditableAndNextQuestionIsOrdinaryChat() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        model.ask(.polish, context: source) { _, _, _, _, _ in "润色后的正文" }
+        try await wait { !model.isRunning }
+        XCTAssertEqual(model.exchanges.first?.rewriteSession?.draft, "润色后的正文")
+        model.exchanges.first?.rewriteSession?.draft = "手动修改后的正文"
+        model.input = "为什么用这个表达？"
+        model.send(context: source) { _, _, _, _, _ in "这个表达更简洁。" }
+        try await wait { !model.isRunning }
+        XCTAssertEqual(model.exchanges.count, 1)
+        XCTAssertEqual(model.exchanges.first?.rewriteSession?.draft, "手动修改后的正文")
+        XCTAssertEqual(model.conversation.latestResult, "这个表达更简洁。")
+    }
+    func testStopAndRetryUseSharedConversationWithOriginalPreset() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        var calls = 0
+        let generate: AIConversationModel.Generate = { _, _, _, _, updates in
+            calls += 1
+            XCTAssertEqual(model.conversation.submittedPreset, .organize)
+            if calls == 1 {
+                updates(.init(kind: "text", text: "已写出的部分", message: nil))
+                try await _Concurrency.Task.sleep(for: .seconds(30))
+            }
+            return "完整正文"
+        }
+        model.ask(.organize, context: source, using: generate)
+        try await wait { model.conversation.record.messages.last?.text == "已写出的部分" }
+        model.stop()
+        XCTAssertFalse(model.isRunning)
+        XCTAssertEqual(model.conversation.record.messages.last?.state, .stopped)
+        XCTAssertEqual(model.conversation.record.messages.last?.text, "已写出的部分")
+        XCTAssertTrue(model.exchanges.isEmpty)
+        let messageID = try XCTUnwrap(model.conversation.record.messages.last?.id)
+        model.retry(messageID: messageID, using: generate)
+        try await wait { !model.isRunning }
+        XCTAssertEqual(model.exchanges.first?.rewriteSession?.draft, "完整正文")
+        XCTAssertEqual(calls, 2)
+    }
+    func testNewConversationClearsResultsAndHasAnotherIdentity() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        model.ask(.organize, context: source) { _, _, _, _, _ in "要点" }
+        try await wait { !model.isRunning }
+        let id = model.conversation.record.id
+        model.reset()
+        XCTAssertNotEqual(model.conversation.record.id, id)
+        XCTAssertTrue(model.exchanges.isEmpty)
+        model.input = "普通提问"
+        XCTAssertTrue(model.canSend)
+    }
+    func testNativeAdoptionFeedsActualSavedIDsIntoNextQuestion() async throws {
+        let model = NoteAIConversationModel(), source = context()
+        model.ask(.extract, context: source) { _, _, _, _, _ in
+            #"{"tasks":[{"title":"发送报价","quote":"周五发送报价。"}]}"#
+        }
+        try await wait { !model.isRunning }
+        let saved = UUID()
+        model.exchanges.first?.markApplied([saved])
+        model.input = "把刚创建的待办改到明天"
+        model.send(context: source) { _, _, context, _, _ in
+            XCTAssertTrue(context.contains(NativeResourceLink.task(saved).url.absoluteString))
+            XCTAssertTrue(context.contains("已创建为待办"))
+            return "已读取保存的记录。"
+        }
+        try await wait { !model.isRunning }
     }
 }

@@ -42,7 +42,6 @@ struct TaskTrashView: View {
                 list
             }
         }
-        .background(WFColors.content)
         .onAppear {
             if workspace.selectedTask?.deletedAt == nil { workspace.select(nil) }
         }
@@ -110,7 +109,7 @@ struct TaskTrashView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(WFColors.content)
+        .workfollowPageSurface(0.90)
     }
 
     @ViewBuilder
@@ -139,6 +138,7 @@ struct TaskTrashView: View {
             }
             .foregroundStyle(WFColors.secondaryText)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .workfollowPageSurface(0.90)
         }
     }
 }
@@ -236,7 +236,10 @@ private struct TaskTrashConfirmationOverlay: View {
             }
             .padding(WFSpace.xl)
             .frame(width: width, alignment: .leading)
-            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 14))
+            .background {
+                ThemedPopupSurface()
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
             .shadow(color: .black.opacity(0.18), radius: 22, y: 9)
             .onTapGesture {}
         }

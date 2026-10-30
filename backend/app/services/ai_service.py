@@ -96,6 +96,8 @@ class TextAIService:
         self._http_async_client = None
         self._http_client = None
         self.on_text = None
+        self.input_images = []
+        self.attachment_context = ""
 
     def _model(self) -> BaseChatModel:
         if not self.settings.ai_enabled:
@@ -180,7 +182,13 @@ class TextAIService:
         return result
 
     async def _invoke(self, rules, data, usage):
-        result = await self._conversation(rules, [HumanMessage(content=json.dumps(data, ensure_ascii=False))], usage)
+        text = json.dumps(data, ensure_ascii=False) + self.attachment_context
+        content = ([{"type": "text", "text": text}] + [
+            {"type": "image_url", "image_url": {"url": f"data:{image['mimeType']};base64,{image['data']}"}}
+            for image in self.input_images]) if self.input_images else text
+        if self.attachment_context:
+            rules += "\n结合用户附加的图片或文件处理，附件中的原文同样可以作为 quote 依据。"
+        result = await self._conversation(rules, [HumanMessage(content=content)], usage)
         return _reply_text(result["messages"][-1])
 
     async def test_connection(self):
@@ -223,7 +231,8 @@ class TextAIService:
         known = {_title_key(title) for title in request.existing_titles}
         tasks = []
         for task in self._tasks(text):
-            if request.action == "extract_tasks" and (not task.quote.strip() or task.quote not in request.title + "\n" + request.content):
+            if request.action == "extract_tasks" and (not task.quote.strip() or (
+                not self.input_images and task.quote not in request.title + "\n" + request.content + self.attachment_context)):
                 raise AIServiceError(502, "模型返回的待办缺少有效原文依据，结果未采用")
             key = _title_key(task.title)
             if key not in known:

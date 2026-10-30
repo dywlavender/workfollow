@@ -30,6 +30,7 @@ final class AppEnvironment: ObservableObject {
     let systemCalendar: CalendarSyncCoordinator
     let systemReminders: RemindersSyncCoordinator
     let focusStore: FocusStore
+    let companion: CompanionSceneDirector
     let taskActivityStore: TaskActivityStore
     let taskCommentStore: TaskCommentStore
     let summaryStore: SummaryStore
@@ -46,7 +47,22 @@ final class AppEnvironment: ObservableObject {
     let searchSession = WorkspaceSearchSession()
     private let moduleStores: [ModuleStoreFlushable]
     @Published private(set) var storageError: String?
-    @Published var sidebarVisible = true
+    /// 侧栏显隐与列表宽度等纯界面状态；测试/预览传 nil 时不落盘。
+    private let layoutPreferences: UserDefaults?
+    private static let sidebarVisibleDefaultsKey = "workspace.sidebarVisible"
+    private static let notesFolderPaneHiddenDefaultsKey = "notes.folderPaneHidden"
+    @Published var sidebarVisible: Bool {
+        didSet { layoutPreferences?.set(sidebarVisible, forKey: Self.sidebarVisibleDefaultsKey) }
+    }
+    /// 笔记页文件夹列的“手动收起”偏好；只影响 notes destination 的二级导航列。
+    @Published var notesFolderPaneHidden: Bool {
+        didSet { layoutPreferences?.set(notesFolderPaneHidden, forKey: Self.notesFolderPaneHiddenDefaultsKey) }
+    }
+    /// AI 打开且窗口宽不够五栏时，笔记页自动收起文件夹列；不落盘。
+    @Published var notesFolderPaneAutoHidden = false
+    /// 笔记页把窗口向右加宽给 AI 时冻结的壳层宽度：导航列仍按扩展前的宽度判断，
+    /// 避免窗口变宽后突然出现原本没有的文件夹列。不落盘。
+    @Published var notesAIFrozenWindowWidth: CGFloat?
     private let repository: NativePreviewRepository
     private let persistence: PersistenceCoordinator
     private var taskWidget: TaskWidgetBridge?
@@ -71,12 +87,37 @@ final class AppEnvironment: ObservableObject {
     @Published var appearance: NativeAppearance {
         didSet { preferences.set(appearance.rawValue, forKey: "appearance") }
     }
+    @Published var backgroundTheme: NativeBackgroundTheme {
+        didSet {
+            preferences.set(backgroundTheme.rawValue, forKey: "backgroundTheme")
+            NativeThemeBridge.theme = backgroundTheme
+        }
+    }
+    @Published var backgroundIntensity: NativeBackgroundIntensity {
+        didSet {
+            preferences.set(backgroundIntensity.rawValue, forKey: "backgroundIntensity")
+            NativeThemeBridge.intensity = backgroundIntensity
+        }
+    }
+    @Published var backgroundAnimated: Bool {
+        didSet { preferences.set(backgroundAnimated, forKey: "backgroundAnimated") }
+    }
+    @Published var companionEnabled: Bool {
+        didSet {
+            preferences.set(companionEnabled, forKey: "companionEnabled")
+            companion.setEnabled(companionEnabled)
+        }
+    }
+    @Published var companionCharacter: CompanionCharacter {
+        didSet { preferences.set(companionCharacter.rawValue, forKey: "companionCharacter") }
+    }
     // Preferences and window restoration use the Native bundle's own domain.
     // Only the separate WorkFollowNativePreview directory is opened.
     private let preferences: UserDefaults
 
     init(clock: @escaping () -> Date = NativeAcceptanceConfiguration.makeClock(), calendar: Calendar = .current,
-         directory: URL = NativePreviewRepository.directory) {
+         directory: URL = NativePreviewRepository.directory,
+         layoutPreferences: UserDefaults? = nil) {
         repository = NativePreviewRepository(directory: directory)
         persistence = PersistenceCoordinator(repository: repository)
         reminders = NativeReminderService(clock: clock, calendar: calendar, directory: directory.appendingPathComponent("modules"))
@@ -84,8 +125,20 @@ final class AppEnvironment: ObservableObject {
         systemReminders = RemindersSyncCoordinator(directory: directory.appendingPathComponent("modules"), clock: clock, calendar: calendar)
         let preferences = UserDefaults.standard
         self.preferences = preferences
+        self.layoutPreferences = layoutPreferences
+        sidebarVisible = layoutPreferences?.object(forKey: Self.sidebarVisibleDefaultsKey) as? Bool ?? true
+        notesFolderPaneHidden = layoutPreferences?.object(forKey: Self.notesFolderPaneHiddenDefaultsKey) as? Bool ?? false
         appearance = NativeAcceptanceConfiguration.appearance ?? NativeAppearance(rawValue:
             preferences.string(forKey: "appearance") ?? "system") ?? .system
+        backgroundTheme = NativeBackgroundTheme(rawValue:
+            preferences.string(forKey: "backgroundTheme") ?? "none") ?? .none
+        backgroundIntensity = NativeBackgroundIntensity(rawValue:
+            preferences.string(forKey: "backgroundIntensity") ?? "medium") ?? .medium
+        backgroundAnimated = preferences.object(forKey: "backgroundAnimated") as? Bool ?? true
+        companion = CompanionSceneDirector(now: clock, calendar: calendar)
+        companionEnabled = preferences.object(forKey: "companionEnabled") as? Bool ?? false
+        companionCharacter = CompanionCharacter(rawValue:
+            preferences.string(forKey: "companionCharacter") ?? "cat") ?? .cat
         var snapshot: NativeWorkspaceSnapshot?
         var failure: Error?
         do { snapshot = try repository.loadDeferred() } catch { failure = error }
@@ -108,12 +161,14 @@ final class AppEnvironment: ObservableObject {
             initialListMeta: snapshot?.taskListMeta,
             initialListFolders: snapshot?.taskListFolders,
             initialListSections: snapshot?.taskListSections,
-            initialTags: snapshot?.taskTags)
+            initialTags: snapshot?.taskTags,
+            layoutDefaults: layoutPreferences)
         StickyNoteWindowController.shared.attach(workspace: taskWorkspace)
         notesWorkspace = NotesWorkspaceModel(taskWorkspace: taskWorkspace,
                                              folders: snapshot?.noteFolders ?? [],
                                              folderMetadata: snapshot?.noteFolderMetadata ?? [],
-                                             clock: clock)
+                                             clock: clock,
+                                             layoutDefaults: layoutPreferences)
         if !legacyNoteTasks.isEmpty {
             do { try repository.mergeNotesAsTasks(legacyNoteTasks) }
             catch { failure = error }
@@ -144,7 +199,11 @@ final class AppEnvironment: ObservableObject {
         // 锚在当天 09:00），由服务按来源分别映射；这里只把记录来源接上。
         reminders.countdownStore = countdownStore
         moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences, reminders, systemCalendar, systemReminders, aiChat]
+        NativeThemeBridge.theme = backgroundTheme
+        NativeThemeBridge.intensity = backgroundIntensity
         AISelectionWindowController.shared.makeClient = { [weak self] in self?.conversationClient() }
+        AISelectionWindowController.shared.undoAction = { [weak self] in self?.undoAIAction($0) }
+        AISelectionWindowController.shared.canUndoAction = { [weak self] in self?.taskWorkspace.automationUndoID == $0.undoID }
         taskWorkspace.placementFeedback = { [weak self] before, after, count in
             guard let self else { return false }
             return TaskPlacementFeedback.present(before: before, after: after, count: count,
@@ -324,14 +383,14 @@ final class AppEnvironment: ObservableObject {
             }.store(in: &subscriptions)
         }
         automation = NativeAutomationBridge(channel: AutomationChannel(workspaceDirectory: directory),
-            service: NativeAutomationService(tasks: taskWorkspace, notes: notesWorkspace, directory: directory),
+            service: NativeAutomationService(tasks: taskWorkspace, notes: notesWorkspace, directory: directory, meetings: meetingStore),
             canProcess: { [weak self] in
                 guard let self else { return false }
                 return !self.loadFailed && !self.storageNeedsReload && !self.storageReplacementPending
             }, flush: { [weak self] completion in
                 guard let self else { completion(AutomationFailure(code: "unavailable", message: "App 已关闭。")); return }
                 self.persistence.flush(completion: completion)
-            })
+            }, onSuccess: { [weak self] request, data in self?.recordAIAction(request, data: data) })
         if !loadFailed {
             // Acceptance and unit-test workspaces never publish real data to
             // the system widget's shared container.
@@ -349,6 +408,100 @@ final class AppEnvironment: ObservableObject {
                         self.persistence.flush(completion: completion)
                     })
             }
+        }
+        configureCompanion(clock: clock, calendar: calendar)
+    }
+
+    /// 真正的事件入口：任务快照 diff、专注阶段、会议录制、AI 流式状态、
+    /// Apple 同步、日切和夜间都只推给同一个场景导演。
+    private func configureCompanion(clock: @escaping () -> Date, calendar: Calendar) {
+        companion.overdueProvider = { [weak self] in
+            guard let self else { return nil }
+            let moment = clock()
+            let candidates = self.taskWorkspace.allTasks.compactMap { task -> (Task, Date)? in
+                guard !task.isNoteTask, !task.isClosed, !task.isConverted,
+                      task.deletedAt == nil, task.skippedAt == nil else { return nil }
+                guard ScheduleOverdue.isOverdue(schedule: task.schedule, now: moment, calendar: calendar),
+                      let reference = ScheduleOverdue.reference(task.schedule) else { return nil }
+                return (task, reference)
+            }
+            guard let (task, _) = candidates.min(by: { $0.1 < $1.1 }) else { return nil }
+            return CompanionOverdueTask(
+                id: task.id,
+                title: task.title,
+                delayText: ScheduleOverdue.durationText(schedule: task.schedule, now: moment, calendar: calendar)
+            )
+        }
+        companion.onPostponeOverdue = { [weak self] id in
+            guard let self, let task = self.taskWorkspace.task(for: id) else { return false }
+            let target = CompanionOverduePlanner.tomorrow(for: task.schedule, now: clock(), calendar: calendar)
+            return self.taskWorkspace.moveDueDate(id, to: target).taskID != nil
+        }
+
+        companion.updateTaskSnapshot(companionTaskStates())
+        taskWorkspace.$revision
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.companion.updateTaskSnapshot(self.companionTaskStates())
+            }
+            .store(in: &subscriptions)
+
+        companion.setFocusPhase(focusStore.phase)
+        focusStore.$phase
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] phase in
+                guard let self else { return }
+                self.companion.setFocusPhase(phase)
+                if phase == .idle, self.focusStore.completionContext != nil {
+                    self.companion.handleFocusCompleted()
+                }
+            }
+            .store(in: &subscriptions)
+
+        meetingStore.$recordingID
+            .removeDuplicates()
+            .sink { [weak self] id in self?.companion.setMeetingActive(id != nil) }
+            .store(in: &subscriptions)
+
+        aiChat.$current
+            .map { $0.$isRunning }
+            .switchToLatest()
+            .removeDuplicates()
+            .sink { [weak self] running in self?.companion.setAIThinking(running) }
+            .store(in: &subscriptions)
+
+        Publishers.CombineLatest3(systemReminders.$syncing, systemReminders.$connecting,
+                                  systemCalendar.$connecting)
+            .map { $0.0 || $0.1 || $0.2 }
+            .removeDuplicates()
+            .sink { [weak self] active in self?.companion.setSyncActive(active) }
+            .store(in: &subscriptions)
+
+        Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.companion.tick() }
+            .store(in: &subscriptions)
+
+        NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+            .sink { [weak self] _ in self?.companion.checkOverdue(force: true) }
+            .store(in: &subscriptions)
+
+        companion.setEnabled(companionEnabled)
+    }
+
+    private func companionTaskStates() -> [CompanionTaskState] {
+        taskWorkspace.allTasks.map { task in
+            CompanionTaskState(
+                id: task.id,
+                title: task.title,
+                status: task.status,
+                priority: task.priority,
+                isNote: task.isNoteTask,
+                isDeleted: task.deletedAt != nil,
+                isConverted: task.isConverted
+            )
         }
     }
 

@@ -67,7 +67,7 @@ struct TaskTemplateGalleryView: View {
             }
         }
         .frame(width: contentSize.width, height: contentSize.height)
-        .background(WFColors.content)
+        .workfollowPopupSurface()
         .overlay(alignment: .topTrailing) {
             GalleryWindowScreenReader { size in
                 guard visibleScreenSize != size else { return }
@@ -150,7 +150,7 @@ struct TaskTemplateGalleryView: View {
         .padding(.horizontal, 24)
         .padding(.top, 18)
         .padding(.bottom, 20)
-        .background(WFColors.content)
+        .workfollowPopupSurface()
     }
 
     private var header: some View {

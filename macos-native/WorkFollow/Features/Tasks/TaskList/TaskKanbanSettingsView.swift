@@ -32,7 +32,8 @@ struct TaskKanbanSettingsView: View {
                         TaskDateDisplayMode.menuOrder.map { BusinessChoice($0.rawValue, $0.title) }).labelsHidden()
                 }
             }
-        }.padding(24).frame(width: 420).background(WFColors.content)
+        }.padding(24).frame(width: 420)
+            .workfollowPopupSurface()
             .onExitCommand { dismiss() }
     }
 }

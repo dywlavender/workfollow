@@ -8,6 +8,7 @@ struct FocusWorkspaceView: View {
     let workspace: TaskWorkspaceModel?
     let onSelectRecordTask: ((UUID) -> Void)?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
 
     /// 专注页主题：底色与整体一致，前后景随系统外观切换。
     private var theme: FocusTheme { FocusTheme(colorScheme) }
@@ -91,7 +92,7 @@ struct FocusWorkspaceView: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(theme.canvas)
+        .workfollowPageSurface(0.86)
         .background {
             if store.phase != .idle {
                 Group {
@@ -253,7 +254,7 @@ struct FocusWorkspaceView: View {
             }
             .padding(28 * s)
             .frame(width: 560 * s)
-            .background(RoundedRectangle(cornerRadius: 16 * s).fill(theme.canvas)
+            .background(RoundedRectangle(cornerRadius: 16 * s).fill(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
                 .shadow(color: .black.opacity(0.16), radius: 30 * s))
             .overlay(RoundedRectangle(cornerRadius: 16 * s).stroke(theme.hairline, lineWidth: 1))
             .background(FocusOutsideClickObserver { showAddTimer = false })

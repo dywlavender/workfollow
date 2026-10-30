@@ -18,6 +18,7 @@ struct WorkFollowCLI {
             }
             guard let input = invocation.request else { print(AutomationInvocation.help); return }
             request = input; json = invocation.json
+            request.conversationID = ProcessInfo.processInfo.environment["WORKFOLLOW_CONVERSATION_ID"].flatMap(UUID.init(uuidString:))
             let app = try applicationURL(invocation.appPath)
             let workspace = workspaceDirectory(app)
             let channel = AutomationChannel(workspaceDirectory: workspace)

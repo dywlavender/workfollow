@@ -68,7 +68,6 @@ struct FocusActiveSessionPane: View {
         .padding(.bottom, FocusLayoutMetrics.timelineHorizontalPadding)
         .frame(minWidth: FocusLayoutMetrics.overviewPaneMinWidth, maxWidth: .infinity,
                maxHeight: .infinity, alignment: .topLeading)
-        .background(theme.canvas)
         .onAppear { if isCompleted { store.prepareCompletedSessionNote() } }
         .onChange(of: store.completionContext?.recordID) { _, _ in store.prepareCompletedSessionNote() }
         .sheet(item: $recordDraft) { value in

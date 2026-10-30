@@ -61,6 +61,16 @@ struct CalendarWorkspaceView: View {
         occurrenceCache.visibleTasks(tasks: workspace.tasksInActiveLists, preferences: settings.calendar, in: occurrenceWindow,
             revision: workspace.revision, dateRevision: workspace.dateRevision, calendar: calendar)
     }
+    private var recurrenceScopeActions: [WorkfollowDialogAction] {
+        RecurrenceEditScope.allCases.map { scope in
+            .secondary(scope.title) {
+                guard let request = pendingOccurrenceSchedule else { return }
+                _ = workspace.saveOccurrenceSchedule(request.plan, occurrence: request.occurrence, scope: scope)
+                pendingOccurrenceSchedule = nil
+            }
+        } + [.cancel { pendingOccurrenceSchedule = nil }]
+    }
+
     /// 摘要「在日历中查看」与小组件「本周」共用的一次性定位：切到周视图并选中该日期。
     private func consumeCalendarRevealRequest() {
         guard let day = environment.navigation.calendarRevealRequest else { return }
@@ -93,7 +103,7 @@ struct CalendarWorkspaceView: View {
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(WFColors.content)
+        .workfollowPageSurface(0.90)
         .modifier(CalendarSwipeGestureModifier { direction in step(direction) })
         .coordinateSpace(name: PlanningCoordinateSpace.name)
         .sheet(isPresented: $showDisplayOptions) {
@@ -103,18 +113,11 @@ struct CalendarWorkspaceView: View {
         .onAppear { integration.showEvents(in: occurrenceWindow); consumeCalendarRevealRequest() }
         .onChange(of: occurrenceWindow) { _, range in integration.showEvents(in: range) }
         .onChange(of: environment.navigation.calendarRevealRequest) { _, _ in consumeCalendarRevealRequest() }
-        .confirmationDialog("修改重复任务", isPresented: Binding(get: { pendingOccurrenceSchedule != nil },
-            set: { if !$0 { pendingOccurrenceSchedule = nil } }), titleVisibility: .visible) {
-            if let request = pendingOccurrenceSchedule {
-                ForEach(RecurrenceEditScope.allCases) { scope in
-                    Button(scope.title) {
-                        _ = workspace.saveOccurrenceSchedule(request.plan, occurrence: request.occurrence, scope: scope)
-                        pendingOccurrenceSchedule = nil
-                    }
-                }
-                Button("取消", role: .cancel) { pendingOccurrenceSchedule = nil }
-            }
-        }
+        .workfollowAlert(
+            "修改重复任务",
+            isPresented: Binding(get: { pendingOccurrenceSchedule != nil },
+                                 set: { if !$0 { pendingOccurrenceSchedule = nil } }),
+            actions: recurrenceScopeActions)
         .overlayPreferenceValue(PlanningTaskAnchorsKey.self) { taskAnchors in
             GeometryReader { geometry in
             if let agendaDay {
@@ -1248,7 +1251,6 @@ struct CalendarWeekStripView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(WFColors.content)
     }
 }
 
@@ -1303,8 +1305,14 @@ struct CalendarWeekDayColumn: View {
         .padding(.trailing, WFSpace.compactInset)
         .padding(.bottom, WFSpace.sm)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(dropping ? WFColors.accentSoft : WFColors.content,
-                    in: RoundedRectangle(cornerRadius: 12))
+        .background {
+            if dropping {
+                WFColors.accentSoft
+            } else {
+                ThemedPageSurface(opacity: 0.94)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(dropping ? WFColors.accent.opacity(0.6) : WFColors.border, lineWidth: 1)
