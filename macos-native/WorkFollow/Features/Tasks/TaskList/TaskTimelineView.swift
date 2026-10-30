@@ -176,12 +176,14 @@ struct TaskTimelineView: View {
                     .frame(width: range.contentWidth)
                     .frame(maxHeight: .infinity, alignment: .top)
                 }
+                .compactScrollbars()
                 .id(TaskTimelineScrollIdentity(start: range.start, scale: viewport.scale, revision: scrollRevision))
                 .frame(height: scrollHeight)
                 .accessibilityIdentifier("tasks.timeline.date-scroll")
             }
             .frame(height: scrollHeight)
         }
+        .compactScrollbars()
     }
 
     private func taskLabel(_ task: Task) -> some View {
@@ -307,6 +309,7 @@ struct TaskTimelineView: View {
                 }
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             }
+            .compactScrollbars()
         }
         .frame(maxHeight: .infinity).background(WFColors.secondarySurface)
         .accessibilityIdentifier("tasks.timeline.pool")

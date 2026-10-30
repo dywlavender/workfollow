@@ -55,6 +55,7 @@ struct AIConfigurationGuideView: View {
             Text(value).font(.system(size: 11, design: .monospaced))
                 .textSelection(.enabled).fixedSize(horizontal: true, vertical: false).padding(10)
         }.background(WFColors.canvas, in: RoundedRectangle(cornerRadius: 6))
+        .compactScrollbars()
     }
 
     private func copy(_ value: String, kind: String) {

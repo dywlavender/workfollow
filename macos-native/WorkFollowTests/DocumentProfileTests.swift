@@ -201,8 +201,8 @@ final class DocumentProfileTests: XCTestCase {
         editor.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(plainText: "正文")))
         editor.setSelectedRange(NSRange(location: 0, length: 2))
         handle.textView = editor
-        // 高亮色板不再单占一个命令格：入口是 A 右下角的小箭头，随高亮控件一起
-        // 命中，所以这里只校验 A 本身的 26×28。
+        // 高亮色板不再单占一个命令格：高亮按钮整块（荧光笔 + 色条）就是色板入口，
+        // 所以这里只校验它本身的 26×28。
         let formatIDs = ["format.undo", "format.redo", "format.formatPainter", "format.clearFormatting",
                          "format.bold", "format.highlight", "format.textColor",
                          "format.alignment", "format.indentDecrease", "format.indentIncrease",
@@ -240,8 +240,8 @@ final class DocumentProfileTests: XCTestCase {
             .onPreferenceChange(EditorToolbarCommandFramesKey.self) { selectionFrames = $0 }
         let selectionWindow = renderToolbar(selectionRoot, size: NSSize(width: 240, height: 34))
         defer { selectionWindow.orderOut(nil); selectionWindow.contentView = nil; selectionWindow.close() }
-        // 选中文浮条：B I U S ｜ 背景色 A ｜ 文字颜色 A ｜ 行内代码。高亮不再单独
-        // 占格（整块 A 即色板入口），文字颜色是本次补进浮条的第 7 个快捷键。
+        // 选中文浮条：B I U S ｜ 高亮（荧光笔）｜ 文字颜色 A ｜ 行内代码。高亮不再
+        // 单独占格（整块按钮即色板入口），文字颜色是补进浮条的第 7 个快捷键。
         let selectionIDs = ["format.bold", "format.italic", "format.underline", "format.strikethrough",
                             "format.highlight", "format.textColor", "format.inlineCode"]
         settleToolbar(selectionWindow) { selectionFrames.count == selectionIDs.count }

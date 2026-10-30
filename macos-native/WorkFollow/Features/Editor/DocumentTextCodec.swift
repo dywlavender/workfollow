@@ -121,8 +121,10 @@ enum DocumentTextCodec {
         // 字阶按滴答实测（2026-10-16，截图 1px = 1pt）：标题三级 18 / 16 / 14，正文 14。
         // 滴答的标题 3 到 6 是**同一个字号**（实测三级到六级墨水质量完全相同），
         // 只靠字重与段间距和正文区分，所以这里不再按级别继续收窄。
-        // 正文 1/2/3 是用户显式选择的字号档位（12 / 16 / 18）。
-        var size: CGFloat = DocumentEditorPresentationMetrics.bodyFontSize
+        // 正文 1/2/3 是用户显式选择的字号档位（12 / 16 / 18）。默认正文跟随
+        // 设置页的全局字号；列表/引用/清单的标记几何按 14pt 画，保持原字阶。
+        var size: CGFloat = kind == .paragraph
+            ? EditorPreferences.bodyFontSize : DocumentEditorPresentationMetrics.bodyFontSize
         if marks.contains(.caption) { size = 12 }
         if case .heading(let level) = kind { size = level == 1 ? 18 : level == 2 ? 16 : 14 }
         if kind == .paragraph, let bodySize { size = bodySize.pointSize }

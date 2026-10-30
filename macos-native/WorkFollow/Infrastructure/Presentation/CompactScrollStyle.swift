@@ -60,7 +60,8 @@ final class CompactOverlayScroller: NSScroller {
 }
 
 extension View {
-    /// Apply inside ScrollView's content, so the probe finds that viewport only.
+    /// 放在 ScrollView 内容里，或直接加在 ScrollView 后面：
+    /// 探针优先找包住自己的滚动视图，找不到时按几何位置找同层的那个。
     func compactScrollbars() -> some View {
         background(CompactScrollProbe().frame(width: 0, height: 0))
     }
@@ -68,6 +69,12 @@ extension View {
     /// 固定滚条：放在 ScrollView 内容里调用，滚条占布局宽度、常显轨道。
     func fixedScrollbars() -> some View {
         background(FixedScrollProbe().frame(width: 0, height: 0))
+    }
+
+    /// `TextEditor` 专用：它自己的滚动视图包不住修饰器，而外层常还有宿主
+    /// ScrollView，所以只按几何位置找 NSTextView 的滚动视图。
+    func compactTextEditorScrollbars() -> some View {
+        background(CompactTextEditorScrollProbe().frame(width: 0, height: 0))
     }
 }
 
@@ -102,6 +109,7 @@ private struct CompactScrollProbe: NSViewRepresentable {
 
     final class Probe: NSView {
         private weak var observedScrollView: NSScrollView?
+        private weak var targetScrollView: NSScrollView?
         private var styleObservation: NSKeyValueObservation?
         override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); applyAfterAttachment() }
         override func viewDidMoveToSuperview() { super.viewDidMoveToSuperview(); applyAfterAttachment() }
@@ -114,7 +122,8 @@ private struct CompactScrollProbe: NSViewRepresentable {
         }
 
         func apply() {
-            guard let scroll = enclosingScrollView else { return }
+            let cached = targetScrollView.flatMap { $0.window === window ? $0 : nil }
+            guard let scroll = cached ?? resolveScrollView() else { return }
             if observedScrollView !== scroll {
                 observedScrollView = scroll
                 styleObservation = scroll.observe(\.scrollerStyle, options: [.new]) { [weak self] _, change in
@@ -123,6 +132,107 @@ private struct CompactScrollProbe: NSViewRepresentable {
                 }
             }
             CompactScrollStyle.apply(to: scroll)
+        }
+
+        /// 探针可能落在滚动视图内部（内容里），也可能落在滚动视图外层。
+        /// 外层还有嵌套滚动时，包住探针的那个是外层，真正要改的是与探针
+        /// 范围最贴合的那一个，所以两者都作为候选按几何范围挑。
+        /// 有几何证据的结果才缓存；布局前的兜底结果下一轮继续找。
+        private func resolveScrollView() -> NSScrollView? {
+            guard let owner = superview?.convert(superview?.bounds ?? .zero, to: nil) else {
+                return enclosingScrollView
+            }
+            var best: (scroll: NSScrollView, overlap: CGFloat, area: CGFloat)?
+            func consider(_ scroll: NSScrollView) {
+                let frame = scroll.convert(scroll.bounds, to: nil)
+                guard frame.width > 0, frame.height > 0, frame.intersects(owner) else { return }
+                let overlap = frame.intersection(owner).size.width * frame.intersection(owner).size.height
+                let area = frame.width * frame.height
+                if best == nil || overlap > best!.overlap
+                    || (overlap == best!.overlap && area < best!.area) {
+                    best = (scroll, overlap, area)
+                }
+            }
+            if let enclosing = enclosingScrollView {
+                let area = enclosing.frame.width * enclosing.frame.height
+                // 布局前的探针还没有几何范围：包住它的滚动视图就是答案。
+                best = (enclosing, -1, area)
+            }
+            var ancestor = superview
+            for _ in 0..<4 {
+                guard let container = ancestor else { break }
+                Self.scrollViews(in: container).forEach(consider)
+                ancestor = container.superview
+            }
+            guard let best else { return nil }
+            if best.overlap >= 0 {
+                targetScrollView = best.scroll
+            }
+            return best.scroll
+        }
+
+        fileprivate static func scrollViews(in root: NSView) -> [NSScrollView] {
+            var result: [NSScrollView] = []
+            func walk(_ view: NSView) {
+                if let scroll = view as? NSScrollView { result.append(scroll) }
+                view.subviews.forEach(walk)
+            }
+            walk(root)
+            return result
+        }
+    }
+}
+
+private struct CompactTextEditorScrollProbe: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ view: Probe, context: Context) { view.applyAfterAttachment() }
+
+    final class Probe: NSView {
+        private weak var observedScrollView: NSScrollView?
+        private weak var targetScrollView: NSScrollView?
+        private var styleObservation: NSKeyValueObservation?
+        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); applyAfterAttachment() }
+        override func viewDidMoveToSuperview() { super.viewDidMoveToSuperview(); applyAfterAttachment() }
+
+        func applyAfterAttachment() {
+            apply()
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            let cached = targetScrollView.flatMap { $0.window === window ? $0 : nil }
+            guard let scroll = cached ?? resolveScrollView() else { return }
+            if observedScrollView !== scroll {
+                observedScrollView = scroll
+                styleObservation = scroll.observe(\.scrollerStyle, options: [.new]) { [weak self] _, change in
+                    guard change.newValue != .overlay else { return }
+                    DispatchQueue.main.async { self?.apply() }
+                }
+            }
+            CompactScrollStyle.apply(to: scroll)
+        }
+
+        private func resolveScrollView() -> NSScrollView? {
+            guard let owner = superview?.convert(superview?.bounds ?? .zero, to: nil) else { return nil }
+            var best: (scroll: NSScrollView, overlap: CGFloat, area: CGFloat)?
+            var ancestor = superview
+            for _ in 0..<4 {
+                guard let container = ancestor else { break }
+                for scroll in CompactScrollProbe.Probe.scrollViews(in: container)
+                where scroll.documentView is NSTextView {
+                    let frame = scroll.convert(scroll.bounds, to: nil)
+                    guard frame.width > 0, frame.height > 0, frame.intersects(owner) else { continue }
+                    let overlap = frame.intersection(owner).size.width * frame.intersection(owner).size.height
+                    let area = frame.width * frame.height
+                    if best == nil || overlap > best!.overlap
+                        || (overlap == best!.overlap && area < best!.area) {
+                        best = (scroll, overlap, area)
+                    }
+                }
+                ancestor = container.superview
+            }
+            if let best { targetScrollView = best.scroll }
+            return best?.scroll
         }
     }
 }

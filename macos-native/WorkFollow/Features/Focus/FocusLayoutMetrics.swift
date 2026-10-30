@@ -79,9 +79,9 @@ enum FocusLayoutMetrics {
     static let overviewGoalContentGap: CGFloat = 13
     static let overviewGoalProgressHeight: CGFloat = 3
 
-    // Records: 补记面板为同版本运行时观察尺寸。
+    // Records: 补记面板宽度沿用参考尺寸；高度按 WFForm 行高容纳完整笔记区。
     static let recordEditorWidth: CGFloat = 440
-    static let recordEditorHeight: CGFloat = 446
+    static let recordEditorHeight: CGFloat = 490
     static let recordHeaderTop: CGFloat = 26
     static let recordHeaderFontSize: CGFloat = 18
     static let recordHeaderButtonSize: CGFloat = 28

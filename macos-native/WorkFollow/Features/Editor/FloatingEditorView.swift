@@ -103,7 +103,8 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
             .frame(height: DocumentEditorPresentationMetrics.footerHeight)
         }
         .ignoresSafeArea(.container, edges: .top)
-        .background(WFColors.content)
+        // 悬浮编辑窗也铺主页面同一套主题背景；主题关闭时仍是 WFColors.content。
+        .background { WorkfollowStandalonePageBackground().ignoresSafeArea() }
         .hidesSystemFocusEffect()
         .task {
             for _ in 0..<10 {

@@ -53,6 +53,7 @@ struct TaskActivityPanel: View {
                     }
                     .padding(16)
                 }
+                .compactScrollbars()
                 .frame(height: 340)
             }
         }

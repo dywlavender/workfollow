@@ -49,6 +49,9 @@ enum WFColors {
             ? NSColor(red: 0.165, green: 0.165, blue: 0.173, alpha: 1)
             : NSColor(red: 0.969, green: 0.973, blue: 0.980, alpha: 1)
     })
+    /// 看板页底板（四象限）：滴答参考图是灰底白卡，白卡才立得起来；
+    /// 暗色比卡片再深一档。
+    static let boardBackground = themed(rgb(0xF2F3F5), rgb(0x151619))
     /// Summary's primary action follows the blue action in the reference UI.
     static let summaryAction = themed(rgb(0x476CFF), rgb(0x6B8CFF))
 

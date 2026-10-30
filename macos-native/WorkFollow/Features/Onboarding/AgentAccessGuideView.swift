@@ -44,6 +44,7 @@ struct AgentAccessGuideView: View {
                     .fixedSize(horizontal: true, vertical: true)
                     .padding(12)
             }
+            .compactScrollbars()
             .background(WFColors.canvas, in: RoundedRectangle(cornerRadius: 8))
             .frame(height: 104)
 

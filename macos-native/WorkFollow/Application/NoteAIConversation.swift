@@ -125,10 +125,25 @@ final class NoteAIExchange: ObservableObject, Identifiable {
 @MainActor
 final class NoteAIConversationStore: ObservableObject {
     static let shared = NoteAIConversationStore()
+    /// 任意一条笔记的 AI 正在生成：小伙伴据此显示“一起想”的常驻状态。
+    @Published private(set) var isAnyRunning = false
     private var models: [UUID: NoteAIConversationModel] = [:]
+    private var observations: [UUID: AnyCancellable] = [:]
+
     func model(for noteID: UUID) -> NoteAIConversationModel {
         if let model = models[noteID] { return model }
-        let model = NoteAIConversationModel(); models[noteID] = model; return model
+        let model = NoteAIConversationModel(); models[noteID] = model
+        // 模型会转发内部会话的 objectWillChange；它先于值更新发出，
+        // 推到下一轮主线程再读 isRunning，顺带覆盖 reset 更换会话的情况。
+        observations[noteID] = model.objectWillChange.sink { [weak self] in
+            DispatchQueue.main.async { self?.refreshRunning() }
+        }
+        return model
+    }
+
+    private func refreshRunning() {
+        let running = models.values.contains { $0.isRunning }
+        if running != isAnyRunning { isAnyRunning = running }
     }
 }
 

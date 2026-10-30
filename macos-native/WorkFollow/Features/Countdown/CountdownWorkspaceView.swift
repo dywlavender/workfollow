@@ -222,6 +222,7 @@ struct CountdownWorkspaceView: View {
                 }
                 .padding(.bottom, WFSpace.xl)
             }
+            .compactScrollbars()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }

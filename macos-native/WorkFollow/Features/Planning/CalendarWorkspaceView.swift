@@ -582,6 +582,7 @@ struct CalendarMonthGridView: View {
             }
             .scrollTargetLayout()
         }
+        .compactScrollbars()
     }
 
     private func solidColumn(rowHeight: CGFloat) -> some View {
@@ -593,6 +594,7 @@ struct CalendarMonthGridView: View {
             }
             .scrollTargetLayout()
         }
+        .compactScrollbars()
     }
 
     /// 14- 回退分支的 scrollPosition 回写绑定（非 lazy 内容上可靠）。
@@ -1298,6 +1300,7 @@ struct CalendarWeekDayColumn: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .compactScrollbars()
             }
         }
         .padding(.leading, WFSpace.compactInset)

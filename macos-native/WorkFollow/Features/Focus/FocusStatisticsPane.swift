@@ -83,6 +83,7 @@ struct FocusStatisticsPane: View {
                 }.buttonStyle(.plain).foregroundStyle(theme.accent)
             }.padding(FocusLayoutMetrics.overviewHorizontalPadding)
         }
+        .compactScrollbars()
         .focusRenderAnchor(.statistics)
         .onAppear { reload() }
         .onChange(of: period) { _, _ in reload() }

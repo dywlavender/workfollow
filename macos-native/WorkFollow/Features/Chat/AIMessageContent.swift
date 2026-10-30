@@ -19,6 +19,7 @@ struct AIMessageContent: View {
                     ScrollView(.horizontal) {
                         Text(value).font(.system(size: 12, design: .monospaced)).textSelection(.enabled).padding(12)
                     }.background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
+                    .compactScrollbars()
                 case let .table(rows):
                     ScrollView(.horizontal) {
                         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 8) {
@@ -33,6 +34,7 @@ struct AIMessageContent: View {
                             }
                         }.padding(12)
                     }.background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
+                    .compactScrollbars()
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)

@@ -33,6 +33,7 @@ struct FocusPresetDetailPane: View {
                 .padding(.top, 20).padding(.bottom, 28)
             }
         }
+        .compactScrollbars()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusRenderAnchor(.presetDetail)
         .onAppear { reload() }

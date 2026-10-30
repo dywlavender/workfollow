@@ -572,6 +572,7 @@ private struct NoteAIRewriteExchangeView: View {
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(height: 200)
+                .compactTextEditorScrollbars()
                 .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder, lineWidth: 1)

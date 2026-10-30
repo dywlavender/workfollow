@@ -112,6 +112,77 @@ final class EditorScrollRoutingTests: XCTestCase {
         XCTAssertNotNil(scroller.action)
     }
 
+    /// 修饰器直接加在 ScrollView 外层（不再放进内容里）也要生效：
+    /// 设置页、筛选弹窗等大量深层页面都是这种写法。
+    func testScrollViewLevelModifierStylesTheHost() throws {
+        let host = NSHostingView(rootView: ScrollView {
+            Text(String(repeating: "深层页面正文\n", count: 100))
+                .frame(maxWidth: .infinity)
+        }
+        .frame(width: 420, height: 260)
+        .compactScrollbars())
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 420, height: 260)
+        defer { window.close() }
+        let scroll = try XCTUnwrap(findScroll(in: host))
+        XCTAssertEqual(scroll.scrollerStyle, .overlay)
+        XCTAssertTrue(scroll.verticalScroller is CompactOverlayScroller)
+        XCTAssertTrue(scroll.autohidesScrollers)
+    }
+
+    /// TextEditor 的滚动视图在宿主 ScrollView 内部，不能先被外层截走。
+    func testTextEditorModifierStylesItsOwnScrollView() throws {
+        let text = (1...40).map { "第 \($0) 行：长文本用来撑出滚动。" }.joined(separator: "\n")
+        let host = NSHostingView(rootView: ScrollView {
+            TextEditor(text: .constant(text))
+                .frame(height: 120)
+                .compactTextEditorScrollbars()
+        }
+        .frame(width: 420, height: 300)
+        .compactScrollbars())
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 420, height: 300)
+        defer { window.close() }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let textScroll = try XCTUnwrap(findScroll(in: host, where: { $0.documentView is NSTextView }))
+        XCTAssertEqual(textScroll.scrollerStyle, .overlay)
+        let scroller = try XCTUnwrap(textScroll.verticalScroller as? CompactOverlayScroller)
+        XCTAssertEqual(scroller.controlSize, .small)
+        XCTAssertTrue(textScroll.autohidesScrollers)
+        XCTAssertNotNil(scroller.target, "Keep the scroll view's native knob target")
+        XCTAssertNotNil(scroller.action)
+    }
+
+    /// 外层横向滚动 + 每列纵向滚动：修饰器加在列外层时不能被外层截走。
+    func testNestedScrollViewModifierStylesInnerScrolls() throws {
+        let host = NSHostingView(rootView: ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(0..<2, id: \.self) { column in
+                    ScrollView {
+                        VStack {
+                            ForEach(0..<30, id: \.self) { row in
+                                Text("任务 \(column)-\(row)").frame(width: 160)
+                            }
+                        }
+                    }
+                    .frame(width: 180, height: 180)
+                    .compactScrollbars()
+                }
+            }
+        }
+        .frame(width: 420, height: 240)
+        .compactScrollbars())
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 420, height: 240)
+        defer { window.close() }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let scrolls = allScrolls(in: host)
+        let columns = scrolls.filter { $0.hasVerticalScroller }
+        XCTAssertEqual(columns.count, 2)
+        for column in columns {
+            XCTAssertTrue(column.verticalScroller is CompactOverlayScroller)
+        }
+        let board = try XCTUnwrap(scrolls.first { $0.hasHorizontalScroller })
+        XCTAssertTrue(board.horizontalScroller is CompactOverlayScroller)
+    }
+
     /// `/` 菜单（行尾标着「文字格式」的那张选项框）此前没挂紧凑样式。
     func testSlashMenuScrollerIsSlimOverlay() throws {
         let host = NSHostingView(rootView: SlashCommandList(
@@ -129,8 +200,22 @@ final class EditorScrollRoutingTests: XCTestCase {
     }
 
     private func findScroll(in view: NSView) -> NSScrollView? {
-        if let scroll = view as? NSScrollView { return scroll }
-        return view.subviews.lazy.compactMap { self.findScroll(in: $0) }.first
+        findScroll(in: view, where: { _ in true })
+    }
+
+    private func allScrolls(in view: NSView) -> [NSScrollView] {
+        var result: [NSScrollView] = []
+        if let scroll = view as? NSScrollView { result.append(scroll) }
+        for subview in view.subviews { result.append(contentsOf: allScrolls(in: subview)) }
+        return result
+    }
+
+    private func findScroll(in view: NSView, where matches: (NSScrollView) -> Bool) -> NSScrollView? {
+        if let scroll = view as? NSScrollView, matches(scroll) { return scroll }
+        for subview in view.subviews {
+            if let found = findScroll(in: subview, where: matches) { return found }
+        }
+        return nil
     }
 
     private func wheel(in window: NSWindow, point: NSPoint, dx: CGFloat = 0, dy: CGFloat) throws -> NSEvent {

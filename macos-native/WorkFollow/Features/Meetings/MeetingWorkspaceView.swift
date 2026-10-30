@@ -210,6 +210,7 @@ struct MeetingWorkspaceView: View {
                     }
                 }
             }
+            .compactScrollbars()
 
             Divider().padding(.horizontal, WFSpace.md)
 
@@ -507,6 +508,7 @@ struct MeetingWorkspaceView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .overlay(alignment: .bottom) { bottomSentinel }
                 }
+                .compactScrollbars()
                 .coordinateSpace(name: Self.transcriptSpace)
                 .background(viewportProbe)
                 .onPreferenceChange(TranscriptBottomKey.self) {

@@ -519,6 +519,7 @@ struct SummaryWorkspaceView: View {
             }
             .buttonStyle(.borderless).frame(maxWidth: .infinity, alignment: .leading).padding(20)
         }
+        .compactScrollbars()
     }
 
     private func sourceRow(_ task: Task) -> some View {
@@ -535,6 +536,7 @@ struct SummaryWorkspaceView: View {
         VStack(alignment: .leading, spacing: 16) {
             DatePicker("日期", selection: $journalDay, displayedComponents: .date).datePickerStyle(.field)
             TextEditor(text: $journalText).font(WFType.body)
+                .compactTextEditorScrollbars()
         }.padding(24)
     }
 
@@ -570,6 +572,7 @@ struct SummaryWorkspaceView: View {
                         }
                     }
                 }
+                .compactScrollbars()
             }.padding(PopupMetrics.formInset)
             DialogFooter(primaryTitle: "采用所选",
                 canSubmit: draft.selection == selection && !selectedDraftSections.isEmpty,

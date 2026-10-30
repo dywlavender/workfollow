@@ -69,9 +69,9 @@ struct LiveTextEditor: NSViewRepresentable {
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = false
         scroll.borderType = .noBorder
         scroll.focusRingType = .none
+        CompactScrollStyle.apply(to: scroll)
 
         let textView = makeTextView()
         textView.string = text

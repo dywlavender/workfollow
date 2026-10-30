@@ -39,6 +39,7 @@ struct TemplateManagementView: View {
                 .padding(.horizontal, 32)
                 .padding(.top, 18)
             }
+            .compactScrollbars()
         }
     }
 

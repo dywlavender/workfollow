@@ -21,6 +21,7 @@ struct MeetingTranscriptEditor: View {
             TextField("讲话人", text: $speaker).textFieldStyle(.roundedBorder)
             Toggle("同时修改该讲话人的其他片段", isOn: $renameAll).font(WFType.supporting)
             TextEditor(text: $text).font(WFType.body).frame(minHeight: 150)
+                .compactTextEditorScrollbars()
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(WFColors.border))
             HStack {
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)

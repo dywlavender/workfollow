@@ -68,7 +68,7 @@ struct DocumentEditorPlaceholder: View {
 
     private var label: some View {
         Text(title)
-            .font(.system(size: DocumentEditorPresentationMetrics.bodyFontSize))
+            .font(.system(size: EditorPreferences.bodyFontSize))
             .foregroundStyle(WFColors.tertiaryText)
             .padding(.top, 4)
             .padding(.leading, 5)

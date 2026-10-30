@@ -25,12 +25,15 @@ enum CompanionPhase: Equatable {
 
 /// 小伙伴的场景只做轻反馈，不接管真实流程。
 /// 真实事件映射：任务 revision → 新建/完成/高优先级/连续完成；
+/// 笔记 revision → 写下第一笔、笔记与任务互相转换；
 /// 启动与日切 → 逾期；FocusStore.phase → 专注/休息；MeetingStore.recordingID → 会议；
 /// AIConversationModel.isRunning → AI 思考；Apple 同步状态 → 同步；本地时间 → 夜间。
 enum CompanionScene: String, CaseIterable, Equatable {
     case taskCreated
     case taskCompleted
     case priorityRaised
+    case noteWritten
+    case noteConverted
     case overdue
     case aiThinking
     case meeting
@@ -56,9 +59,11 @@ enum CompanionScene: String, CaseIterable, Equatable {
         case .streak: return 60
         case .priorityRaised: return 50
         case .meetingFinished: return 48
+        case .noteConverted: return 47
         case .taskCreated: return 45
         case .aiFinished: return 44
         case .taskCompleted: return 43
+        case .noteWritten: return 42
         case .pet: return 42
         case .postponed: return 41
         case .syncFinished: return 40
@@ -77,7 +82,7 @@ enum CompanionScene: String, CaseIterable, Equatable {
     var duration: TimeInterval? {
         switch self {
         case .meeting, .focus, .breakTime, .aiThinking, .sync: return nil
-        case .taskCreated, .priorityRaised: return 3.0
+        case .taskCreated, .priorityRaised, .noteWritten, .noteConverted: return 3.0
         case .taskCompleted, .postponed: return 2.4
         case .overdue: return 12.0
         case .meetingFinished: return 2.6
@@ -93,6 +98,7 @@ enum CompanionScene: String, CaseIterable, Equatable {
         case .taskCreated: return 20
         case .taskCompleted: return 1.2
         case .priorityRaised: return 30
+        case .noteWritten, .noteConverted: return 20
         case .overdue: return 600
         case .meetingFinished, .syncFinished, .aiFinished: return 5
         case .focusCompleted: return 30
@@ -118,6 +124,8 @@ enum CompanionScene: String, CaseIterable, Equatable {
         case .taskCreated: return "✏️"
         case .taskCompleted: return "💛"
         case .priorityRaised: return "🚩"
+        case .noteWritten: return "📝"
+        case .noteConverted: return "📌"
         case .overdue: return "⏰"
         case .meeting: return "🎙️"
         case .meetingFinished: return "📝"
@@ -145,10 +153,13 @@ struct CompanionTaskState: Equatable {
     let isNote: Bool
     let isDeleted: Bool
     let isConverted: Bool
+    /// 笔记的“写下第一笔”：空浮窗草稿不算，标题或正文有内容才算真记下。
+    let hasContent: Bool
 
     init(id: UUID = UUID(), title: String, status: TaskStatus = .active,
          priority: TaskPriority = .none, isNote: Bool = false,
-         isDeleted: Bool = false, isConverted: Bool = false) {
+         isDeleted: Bool = false, isConverted: Bool = false,
+         hasContent: Bool = true) {
         self.id = id
         self.title = title
         self.status = status
@@ -156,6 +167,7 @@ struct CompanionTaskState: Equatable {
         self.isNote = isNote
         self.isDeleted = isDeleted
         self.isConverted = isConverted
+        self.hasContent = hasContent
     }
 }
 
@@ -216,6 +228,7 @@ final class CompanionSceneDirector: ObservableObject {
     private var handledOverdueIDs: Set<UUID> = []
     private var lastNightKey: Date?
     private var lastOverdueCheckAt: Date?
+    private var bubbleHovered = false
 
     init(now: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
         self.now = now
@@ -235,6 +248,7 @@ final class CompanionSceneDirector: ObservableObject {
         } else {
             presentation = nil
             currentOverdue = nil
+            bubbleHovered = false
             completionTimes.removeAll()
         }
     }
@@ -275,9 +289,39 @@ final class CompanionSceneDirector: ObservableObject {
             guard let old = baseline[task.id], !task.isNote, !task.isDeleted, !task.isConverted else { return false }
             return task.status == .active && old.priority != .high && task.priority == .high
         }
+        // 浮窗会先建一条空笔记、关闭时再丢弃，所以“点新建”不吭声；
+        // 标题或正文第一次有内容时才当作用户真的写下了东西。
+        let writtenNotes = next.values.filter { task in
+            guard task.isNote, !task.isDeleted, !task.isConverted, task.hasContent else { return false }
+            guard let old = baseline[task.id] else { return true }
+            return old.isNote && !old.hasContent
+        }
+        let notesFromTasks = next.values.filter { task in
+            guard let old = baseline[task.id], !old.isNote, task.isNote,
+                  !task.isDeleted, !task.isConverted else { return false }
+            return true
+        }
+        let notesToTasks = next.values.filter { task in
+            guard let old = baseline[task.id], old.isNote, !task.isNote,
+                  !task.isDeleted, !task.isConverted else { return false }
+            return task.status == .active
+        }
 
         if !completed.isEmpty {
             handleCompletions(completed, now: moment)
+        }
+        if !writtenNotes.isEmpty || !notesFromTasks.isEmpty {
+            presentNoteWritten(notes: writtenNotes + notesFromTasks,
+                               converted: Set(notesFromTasks.map(\.id)), now: moment)
+        }
+        if !notesToTasks.isEmpty {
+            let message: String
+            if notesToTasks.count == 1, let task = notesToTasks.first {
+                message = "「\(shortTitle(task.title, limit: 8))」变成待办了，我帮你盯住"
+            } else {
+                message = "\(notesToTasks.count) 条笔记变成待办了，我帮你盯住"
+            }
+            presentTransient(.noteConverted, message: message, now: moment)
         }
         if !created.isEmpty, created.count <= 2 {
             let message: String
@@ -357,7 +401,8 @@ final class CompanionSceneDirector: ObservableObject {
     func tick() {
         guard isEnabled else { return }
         let moment = now()
-        if let current = presentation, !current.isSticky, let endsAt = current.endsAt, moment >= endsAt {
+        if let current = presentation, !current.isSticky, let endsAt = current.endsAt, moment >= endsAt,
+           !hoverHoldsBubble(past: endsAt, now: moment) {
             presentation = nil
             currentOverdue = nil
             refreshSticky(now: moment)
@@ -366,14 +411,27 @@ final class CompanionSceneDirector: ObservableObject {
         checkNight(now: moment)
     }
 
+    /// 鼠标停在气泡上时先不收回，否则短气泡的 × 还没点到就消失了。
+    /// 最多多留 20 秒，免得指针一直压着，气泡把后来的短事件全挡住。
+    private func hoverHoldsBubble(past endsAt: Date, now moment: Date) -> Bool {
+        bubbleHovered && moment.timeIntervalSince(endsAt) < 20
+    }
+
+    func setBubbleHovered(_ hovered: Bool) {
+        bubbleHovered = hovered
+    }
+
     func checkOverdue(force: Bool) {
         guard isEnabled, let provider = overdueProvider else { return }
         let moment = now()
         if !force, let last = lastOverdueCheckAt, moment.timeIntervalSince(last) < 120 { return }
         lastOverdueCheckAt = moment
         guard let task = provider(), !handledOverdueIDs.contains(task.id) else { return }
-        let delay = task.delayText.isEmpty ? "已经逾期" : "延迟\(task.delayText)"
-        let message = "「\(shortTitle(task.displayTitle))」\(delay)，要顺延到明天吗？"
+        // 带操作按钮的气泡固定一行：标题压到 6 个字，延迟只取最大单位
+        // （2天3小时 → 2天），完整信息仍可在任务列表里看到。
+        let title = shortTitle(task.displayTitle, limit: 6)
+        let delay = compactDelay(task.delayText)
+        let message = delay.isEmpty ? "「\(title)」逾期了" : "「\(title)」逾期\(delay)"
         guard presentTransient(.overdue, message: message, actionTitle: "顺延到明天", now: moment) else { return }
         currentOverdue = task
         handledOverdueIDs.insert(task.id)
@@ -386,6 +444,24 @@ final class CompanionSceneDirector: ObservableObject {
         presentation = nil
         refreshSticky(now: now())
         presentTransient(.postponed, message: "挪到明天了，今天轻一点", now: now())
+    }
+
+    /// 点气泡上的 ×：只收起当前这条，不改变场景状态。
+    /// 冷却从收起时重新计时，过一段时间同一件事还能再提醒；
+    /// 逾期提醒要放回待处理集合，否则收起后它就再也不会出现了。
+    func dismissPresentation() {
+        guard isEnabled, let current = presentation, !current.isSticky else { return }
+        let moment = now()
+        presentation = nil
+        bubbleHovered = false
+        if current.scene == .overdue {
+            if let overdue = currentOverdue {
+                handledOverdueIDs.remove(overdue.id)
+            }
+            currentOverdue = nil
+        }
+        lastPresentedAt[current.scene] = moment
+        refreshSticky(now: moment)
     }
 
     /// 摸一下是用户主动发起的，专注/会议里也该有回应：允许暂时盖住
@@ -524,9 +600,46 @@ final class CompanionSceneDirector: ObservableObject {
         }
     }
 
-    private func shortTitle(_ title: String) -> String {
+    private func shortTitle(_ title: String, limit: Int = 18) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "未命名任务" }
-        return trimmed.count <= 18 ? trimmed : String(trimmed.prefix(18)) + "…"
+        return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit)) + "…"
+    }
+
+    /// 笔记允许无标题：没有标题时文案不引用标题，不硬造“未命名”。
+    private func shortNoteTitle(_ title: String, limit: Int = 8) -> String? {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.count <= limit ? trimmed : String(trimmed.prefix(limit)) + "…"
+    }
+
+    private func presentNoteWritten(notes: [CompanionTaskState], converted: Set<UUID>,
+                                    now moment: Date) {
+        let message: String
+        if notes.count == 1, let note = notes.first {
+            let fromTask = converted.contains(note.id)
+            if let title = shortNoteTitle(note.title) {
+                message = fromTask ? "「\(title)」整理成笔记了" : "「\(title)」记下了，慢慢写"
+            } else {
+                message = fromTask ? "整理成笔记了" : "新笔记记下了，慢慢写"
+            }
+        } else if notes.count > 1 {
+            message = notes.allSatisfy { converted.contains($0.id) }
+                ? "\(notes.count) 个任务整理成了笔记"
+                : "记下 \(notes.count) 条笔记，脑子清爽了"
+        } else {
+            return
+        }
+        presentTransient(.noteWritten, message: message, now: moment)
+    }
+
+    /// 只保留延迟的最大单位，气泡一行放得下；任务列表仍有完整时长。
+    private func compactDelay(_ text: String) -> String {
+        for unit in ["天", "小时", "分钟"] {
+            if let range = text.range(of: unit) {
+                return String(text[..<range.upperBound])
+            }
+        }
+        return text
     }
 }

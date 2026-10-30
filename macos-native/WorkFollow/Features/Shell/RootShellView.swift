@@ -110,7 +110,7 @@ struct RootShellView: View {
                     if environment.backgroundTheme.isThemed {
                         WorkFollowBackgroundView(theme: environment.backgroundTheme,
                                                  intensity: environment.backgroundIntensity,
-                                                 animated: environment.backgroundAnimated)
+                                                 animated: false, layer: .base)
                     } else {
                         WFColors.content
                     }
@@ -120,6 +120,16 @@ struct RootShellView: View {
                                          intensity: environment.backgroundIntensity,
                                          leadingWidth: WFMetrics.railWidth
                                             + (showsNavigationColumn ? WFMetrics.navigationWidth : 0))
+                    // 动效单独叠在底纱之上：底纱只压底图，气泡/云朵/极光带
+                    // 不再一起被洗成近白。
+                    if environment.backgroundTheme.isThemed {
+                        WorkFollowBackgroundView(theme: environment.backgroundTheme,
+                                                 intensity: environment.backgroundIntensity,
+                                                 animated: environment.backgroundAnimated,
+                                                 layer: .motion)
+                            .opacity(NativeBackgroundMotion.opacity(
+                                for: colorScheme, intensity: environment.backgroundIntensity))
+                    }
                 }
             }
             .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)

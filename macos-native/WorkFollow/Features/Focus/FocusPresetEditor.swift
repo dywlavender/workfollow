@@ -23,6 +23,7 @@ struct FocusPresetEditor: View {
                         }, width: PopupMetrics.relationPickerWidth)
                 }.padding(PopupMetrics.formInset)
             }
+            .compactScrollbars()
             DialogFooter(canSubmit: !preset.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                          onCancel: { dismiss() }, onSubmit: {
                 if store.updateTimer(preset) { dismiss() }

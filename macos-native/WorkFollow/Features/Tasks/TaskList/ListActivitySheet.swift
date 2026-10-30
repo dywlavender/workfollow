@@ -71,6 +71,7 @@ struct ListActivitySheet: View {
                     }
                     .padding(16)
                 }
+                .compactScrollbars()
             }
         }
         .task(id: queryKey) { await history.reset(store: activity, taskIDs: taskIDs) }

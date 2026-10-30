@@ -21,6 +21,66 @@ final class CompanionSceneDirectorTests: XCTestCase {
         CompanionTaskState(id: id, title: title, status: status, priority: priority)
     }
 
+    private func note(_ id: UUID, _ title: String, hasContent: Bool = true) -> CompanionTaskState {
+        CompanionTaskState(id: id, title: title, isNote: true, hasContent: hasContent)
+    }
+
+    @MainActor
+    func testNoteScenesWaitForRealContentAndTrackConversions() {
+        let director = makeDirector()
+        director.setEnabled(true)
+        let noteID = UUID(), freshID = UUID(), taskID = UUID()
+        let base = [note(noteID, "", hasContent: false),
+                    task(taskID, "写方案")]
+        director.updateTaskSnapshot(base)
+
+        // 浮窗会先建空草稿：只是新建还不算“记下”，不冒泡。
+        now = now.addingTimeInterval(1)
+        director.updateTaskSnapshot([note(noteID, "", hasContent: false),
+                                     note(freshID, "", hasContent: false),
+                                     task(taskID, "写方案")])
+        XCTAssertNil(director.presentation)
+
+        // 标题或正文有内容后才算真的写下第一笔。
+        now = now.addingTimeInterval(1)
+        director.updateTaskSnapshot([note(noteID, "周会纪要"),
+                                     note(freshID, "", hasContent: false),
+                                     task(taskID, "写方案")])
+        XCTAssertEqual(director.presentation?.scene, .noteWritten)
+        XCTAssertTrue(director.presentation?.message.contains("周会纪要") == true)
+
+        // 笔记转任务：同一 id 变成 text，提示转成待办。
+        now = now.addingTimeInterval(21)
+        director.tick()
+        director.updateTaskSnapshot([task(noteID, "周会纪要"),
+                                     note(freshID, "", hasContent: false),
+                                     task(taskID, "写方案")])
+        XCTAssertEqual(director.presentation?.scene, .noteConverted)
+        XCTAssertTrue(director.presentation?.message.contains("变成待办") == true)
+
+        // 任务转笔记：同一 id 变回 note，用的是“整理成笔记”文案。
+        now = now.addingTimeInterval(21)
+        director.tick()
+        director.updateTaskSnapshot([note(noteID, "周会纪要"),
+                                     note(freshID, "", hasContent: false),
+                                     task(taskID, "写方案")])
+        XCTAssertEqual(director.presentation?.scene, .noteWritten)
+        XCTAssertTrue(director.presentation?.message.contains("整理成笔记") == true)
+    }
+
+    @MainActor
+    func testBulkNoteConversionUsesCountCopy() {
+        let director = makeDirector()
+        director.setEnabled(true)
+        let a = UUID(), b = UUID()
+        director.updateTaskSnapshot([note(a, "A"), note(b, "B")])
+
+        now = now.addingTimeInterval(1)
+        director.updateTaskSnapshot([task(a, "A"), task(b, "B")])
+        XCTAssertEqual(director.presentation?.scene, .noteConverted)
+        XCTAssertEqual(director.presentation?.message, "2 条笔记变成待办了，我帮你盯住")
+    }
+
     @MainActor
     func testTaskSnapshotMapsCreateCompleteAndHighPriority() {
         let director = makeDirector()
@@ -149,7 +209,7 @@ final class CompanionSceneDirectorTests: XCTestCase {
         let director = makeDirector()
         let id = UUID()
         director.overdueProvider = {
-            CompanionOverdueTask(id: id, title: "交季度报告", delayText: "2天")
+            CompanionOverdueTask(id: id, title: "整理第三季度复盘材料", delayText: "2天3小时")
         }
         var postponedID: UUID?
         director.onPostponeOverdue = { postponedID = $0; return true }
@@ -157,7 +217,8 @@ final class CompanionSceneDirectorTests: XCTestCase {
         director.setEnabled(true)
         XCTAssertEqual(director.presentation?.scene, .overdue)
         XCTAssertEqual(director.presentation?.actionTitle, "顺延到明天")
-        XCTAssertTrue(director.presentation?.message.contains("延迟2天") == true)
+        // 带按钮的气泡只留一行：标题缩到 6 字，延迟只保留最大单位。
+        XCTAssertEqual(director.presentation?.message, "「整理第三季度…」逾期2天")
 
         director.postponeOverdueTask()
         XCTAssertEqual(postponedID, id)
@@ -197,6 +258,27 @@ final class CompanionSceneDirectorTests: XCTestCase {
         XCTAssertNil(director.presentation)
     }
 
+    @MainActor
+    func testNoteAIStoreFlagsAnyRunningForCompanion() async {
+        let store = NoteAIConversationStore()
+        let model = store.model(for: UUID())
+        XCTAssertFalse(store.isAnyRunning)
+
+        let context = NoteAIContext(noteID: UUID(), title: "周会纪要", content: "结论",
+                                    referenceDate: now, existingTitles: [])
+        model.ask(.organize, context: context, using: { _, _, _, _, _ in
+            try await _Concurrency.Task.sleep(nanoseconds: 2_000_000_000)
+            return "{}"
+        })
+        XCTAssertTrue(model.isRunning)
+        try? await _Concurrency.Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertTrue(store.isAnyRunning, "笔记右侧 AI 生成时小伙伴要进入思考状态")
+
+        model.stop()
+        try? await _Concurrency.Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertFalse(store.isAnyRunning)
+    }
+
     func testBubbleShapeAddsLeftTailNearMascotHead() {
         let rect = CGRect(x: 0, y: 0, width: CompanionLayout.bubbleWidth, height: 72)
         let path = CompanionBubbleShape().path(in: rect)
@@ -204,10 +286,76 @@ final class CompanionSceneDirectorTests: XCTestCase {
         XCTAssertEqual(path.boundingRect.maxX, rect.maxX, accuracy: 0.01)
         XCTAssertEqual(path.boundingRect.minY, rect.minY, accuracy: 0.01)
         XCTAssertEqual(path.boundingRect.maxY, rect.maxY, accuracy: 0.01)
-        XCTAssertTrue(path.contains(CGPoint(x: -4, y: 57)),
-                      "Tail tip should sit 15pt above the bubble bottom")
-        XCTAssertFalse(path.contains(CGPoint(x: -4, y: 30)))
-        XCTAssertFalse(path.contains(CGPoint(x: -9, y: 57)))
+        XCTAssertTrue(path.contains(CGPoint(x: -4, y: 36)),
+                      "Tail should sit at the bubble's vertical center")
+        XCTAssertFalse(path.contains(CGPoint(x: -4, y: 10)))
+        XCTAssertFalse(path.contains(CGPoint(x: -9, y: 36)))
+    }
+
+    @MainActor
+    func testDismissHidesOverdueBubbleThenRepeatsAfterCooldown() {
+        let director = makeDirector()
+        let id = UUID()
+        director.overdueProvider = {
+            CompanionOverdueTask(id: id, title: "交报告", delayText: "1天")
+        }
+        director.setEnabled(true)
+        XCTAssertEqual(director.presentation?.scene, .overdue)
+
+        director.dismissPresentation()
+        XCTAssertNil(director.presentation, "点 × 后气泡应立刻收起")
+
+        now = now.addingTimeInterval(60)
+        director.checkOverdue(force: true)
+        XCTAssertNil(director.presentation, "冷却期内不该马上再弹")
+
+        now = now.addingTimeInterval(601)
+        director.checkOverdue(force: true)
+        XCTAssertEqual(director.presentation?.scene, .overdue,
+                       "收起只是暂时的，冷却结束后还能再提醒")
+
+        // 收起后的任务仍可顺延：再次出现时按钮仍然有效。
+        var postponedID: UUID?
+        director.onPostponeOverdue = { postponedID = $0; return true }
+        director.postponeOverdueTask()
+        XCTAssertEqual(postponedID, id)
+    }
+
+    @MainActor
+    func testDismissLeavesStickyScenesAlone() {
+        let director = makeDirector()
+        director.setEnabled(true)
+        director.setFocusPhase(.focusing)
+        XCTAssertEqual(director.presentation?.scene, .focus)
+
+        director.dismissPresentation()
+        XCTAssertEqual(director.presentation?.scene, .focus,
+                       "常驻场景没有 ×，收起接口不应误伤")
+    }
+
+    @MainActor
+    func testHoverKeepsShortBubbleAliveLongEnoughToReachTheX() {
+        let director = makeDirector()
+        director.setEnabled(true)
+        director.pet()
+        XCTAssertEqual(director.presentation?.scene, .pet)
+        XCTAssertEqual(director.presentation?.isSticky, false)
+
+        director.setBubbleHovered(true)
+        now = now.addingTimeInterval(3)
+        director.tick()
+        XCTAssertEqual(director.presentation?.scene, .pet, "鼠标压着气泡时先不收回")
+
+        director.setBubbleHovered(false)
+        now = now.addingTimeInterval(1)
+        director.tick()
+        XCTAssertNil(director.presentation)
+
+        director.pet()
+        director.setBubbleHovered(true)
+        now = now.addingTimeInterval(26)
+        director.tick()
+        XCTAssertNil(director.presentation, "悬停最多多留 20 秒，指针一直压着也会到期")
     }
 
     @MainActor

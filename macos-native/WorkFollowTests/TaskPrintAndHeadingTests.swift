@@ -47,7 +47,7 @@ final class HeadingLevelTests: XCTestCase {
         let toggledOff = DocumentTextCodec.decode(view.attributedString(), preserving: .empty)
         XCTAssertNil(toggledOff.blocks.first?.bodySize)
         XCTAssertEqual((view.attributedString().attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize,
-                       14)
+                       EditorPreferences.bodyFontSize, "取消档位回到设置页的正文默认字号")
     }
 
     func testBodySizeCommandsMapToTwelveSixteenEighteenPoints() {

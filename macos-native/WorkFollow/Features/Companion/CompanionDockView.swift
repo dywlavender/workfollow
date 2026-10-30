@@ -5,7 +5,9 @@ enum CompanionLayout {
     static let perchMascotSize: CGFloat = 46
     static let bubbleWidth: CGFloat = 196
     static let perchWidth: CGFloat = 250
-    static let perchHeight: CGFloat = 140
+    /// 气泡以角色头部中线为轴上下展开；下方多留 20pt，气泡变高时先向下长。
+    static let perchMascotBottomInset: CGFloat = 20
+    static let perchHeight: CGFloat = 160
     /// 图标栏底部的同步/搜索/设置三行加上内边距；猫停在它们上方。
     static let railBottomReserve: CGFloat = 156
 }
@@ -37,15 +39,10 @@ struct CompanionPerchView: View {
                 .accessibilityLabel("小伙伴")
                 .accessibilityHint("点一下互动")
                 .accessibilityAddTraits(.isButton)
+                .padding(.bottom, CompanionLayout.perchMascotBottomInset)
 
             if let presentation, !presentation.isSticky, !presentation.message.isEmpty {
-                CompanionBubble(message: presentation.message,
-                                actionTitle: presentation.actionTitle,
-                                onAction: { director.postponeOverdueTask() })
-                    .frame(width: CompanionLayout.bubbleWidth, alignment: .leading)
-                    .offset(x: CompanionLayout.perchMascotSize + 8, y: 4)
-                    .id(presentation.id)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .bottomLeading)))
+                bubbleView(presentation)
             }
         }
         .frame(width: CompanionLayout.perchWidth,
@@ -54,21 +51,45 @@ struct CompanionPerchView: View {
         .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.82),
                    value: presentation?.id)
     }
+
+    /// 气泡中心对齐角色头部中线：短气泡贴着嘴角，长气泡上下平分增长。
+    private func bubbleView(_ presentation: CompanionPresentation) -> some View {
+        let centerOffset = CompanionLayout.perchMascotBottomInset
+            + CompanionLayout.perchMascotSize / 2
+        return CompanionBubble(message: presentation.message,
+                               actionTitle: presentation.actionTitle,
+                               onAction: { director.postponeOverdueTask() },
+                               onDismiss: { director.dismissPresentation() },
+                               onHoverChanged: { director.setBubbleHovered($0) })
+            .frame(width: CompanionLayout.bubbleWidth, alignment: .leading)
+            .alignmentGuide(.bottom) { dimensions in
+                dimensions.height / 2 + centerOffset
+            }
+            .offset(x: CompanionLayout.perchMascotSize + 8)
+            .id(presentation.id)
+            .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
+    }
 }
 
 private struct CompanionBubble: View {
     let message: String
     let actionTitle: String?
     let onAction: () -> Void
+    let onDismiss: () -> Void
+    let onHoverChanged: (Bool) -> Void
 
     @Environment(\.workfollowBackgroundTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(message)
                 .font(.system(size: 11.5))
                 .foregroundStyle(WFColors.text)
+                // 带操作按钮的气泡必须保持一行（逾期文案已压缩）；普通提示最多两行。
+                .lineLimit(actionTitle == nil ? 2 : 1)
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.leading)
             if let actionTitle {
@@ -83,7 +104,9 @@ private struct CompanionBubble: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, 10)
+        // 右上角 × 的常驻槽位：悬停时才画出按钮，文字不因此重排。
+        .padding(.trailing, 24)
         .padding(.vertical, 7)
         .frame(maxWidth: CompanionLayout.bubbleWidth, alignment: .leading)
         // 气泡是浮在任意页面上的弹层，底色跟主题弹层同一套不透明底色；
@@ -93,23 +116,45 @@ private struct CompanionBubble: View {
             CompanionBubbleShape()
                 .stroke(WFColors.border, lineWidth: 1)
         }
+        .overlay(alignment: .topTrailing) {
+            if hovering {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(WFColors.secondaryText)
+                        .frame(width: 15, height: 15)
+                        .background(Circle().fill(WFColors.hover))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("关闭提示")
+                .accessibilityLabel("关闭提示")
+                .padding(.top, 3)
+                .padding(.trailing, 4)
+            }
+        }
         .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-        .accessibilityElement(children: .combine)
+        .onHover {
+            hovering = $0
+            onHoverChanged($0)
+        }
+        // 气泡在鼠标还压着时到期消失，不会触发 onHover(false)，这里补一次复位。
+        .onDisappear { onHoverChanged(false) }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: hovering)
+        // 用 contain 而不是 combine：× 要能单独被读屏和键盘选中。
+        .accessibilityElement(children: .contain)
     }
 }
 
-/// 左边缘带小尖角的对话气泡。尖角固定在离底边 15pt 的位置，
-/// 正好指向旁边猫/兔的头部；单行气泡和多行逾期气泡共用同一个尖角高度，
-/// 不会因为气泡变高就把尾巴抬到角色头顶之外。
+/// 左边缘带小尖角的对话气泡。尖角在左边缘垂直居中，正对角色头部中线。
 struct CompanionBubbleShape: Shape {
     var cornerRadius: CGFloat = 10
     var tailWidth: CGFloat = 8
     var tailHalfHeight: CGFloat = 3
-    var tailCenterFromBottom: CGFloat = 15
 
     func path(in rect: CGRect) -> Path {
         let radius = min(cornerRadius, rect.height / 2)
-        let centerY = rect.maxY - tailCenterFromBottom
+        let centerY = rect.midY
         var path = Path()
         path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY))
         path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))

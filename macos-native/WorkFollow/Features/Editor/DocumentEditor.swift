@@ -407,17 +407,30 @@ struct DocumentEditor: View {
     var readOnly = false
 
     var body: some View {
-        if let ready = try? document.materialized() {
-        DocumentEditorContent(documentID: documentID, document: ready,
-                              onDocumentChange: onDocumentChange, onEscape: onEscape,
-                              onEditingChanged: onEditingChanged, profile: profile,
+        DocumentBodyFontSizeReader { bodyFontSize in
+            if let ready = try? document.materialized() {
+            DocumentEditorContent(documentID: documentID, document: ready,
+                                  onDocumentChange: onDocumentChange, onEscape: onEscape,
+                                  onEditingChanged: onEditingChanged, profile: profile,
                                   contentSized: contentSized, handle: handle,
                                   decorationVisibleMinX: decorationVisibleMinX,
-                                  readOnly: readOnly)
-            .padding(.leading, -DocumentEditorGeometry.decorationLane)
-        } else {
-            Text("正文读取失败，暂时无法编辑").foregroundStyle(.secondary)
+                                  readOnly: readOnly, bodyFontSize: bodyFontSize)
+                .padding(.leading, -DocumentEditorGeometry.decorationLane)
+            } else {
+                Text("正文读取失败，暂时无法编辑").foregroundStyle(.secondary)
+            }
         }
+    }
+}
+
+/// 正文默认字号来自设置页；`@AppStorage` 让已经打开的编辑器即时重排。
+private struct DocumentBodyFontSizeReader<Content: View>: View {
+    @AppStorage(EditorPreferences.bodyFontSizeKey)
+    private var storedSize = Double(EditorPreferences.defaultBodyFontSize)
+    @ViewBuilder var content: (CGFloat) -> Content
+
+    var body: some View {
+        content(EditorPreferences.clampedBodyFontSize(CGFloat(storedSize)))
     }
 }
 
@@ -432,6 +445,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
     var handle: DocumentEditorHandle?
     var decorationVisibleMinX: CGFloat = 0
     var readOnly = false
+    var bodyFontSize: CGFloat = EditorPreferences.defaultBodyFontSize
 
     func makeCoordinator() -> DocumentEditorCoordinator {
         let coordinator = DocumentEditorCoordinator(documentID: documentID, document: document,
@@ -447,6 +461,7 @@ private struct DocumentEditorContent: NSViewRepresentable {
         defer { handle?.endViewUpdate() }
         let textView = NativeTextView(frame: .zero, textContainer: nil)
         textView.paragraphSpacingOverride = profile.paragraphSpacing
+        textView.appliedBodyFontSize = bodyFontSize
         textView.decorationVisibleMinX = decorationVisibleMinX
         textView.documentIdentity = documentID
         // 只读预览仍可选中/复制，但不能输入、勾选或打开块菜单。
@@ -520,10 +535,21 @@ private struct DocumentEditorContent: NSViewRepresentable {
         }
         // 段距随 profile 变；先落到 textView，再让协调器按新节奏重建。
         textView.paragraphSpacingOverride = profile.paragraphSpacing
+        let fontSizeChanged = textView.appliedBodyFontSize != bodyFontSize
+        textView.appliedBodyFontSize = bodyFontSize
         context.coordinator.update(textView, documentID: documentID, document: document,
                                    onDocumentChange: onDocumentChange,
                                    onEscape: onEscape,
                                    onEditingChanged: onEditingChanged)
+        if fontSizeChanged {
+            // 提交组合串可能回写模型，排到本轮更新之外再重排。
+            DispatchQueue.main.async { [weak textView, weak coordinator = context.coordinator, weak handle] in
+                guard let textView, let coordinator,
+                      textView.documentIdentity == coordinator.documentID else { return }
+                coordinator.reloadBodyTypography(in: textView)
+                handle?.refreshStyle()
+            }
+        }
         // Flush the outgoing document with its own host actions before rebinding.
         textView.profile = profile
         if contentSized { textView.invalidateIntrinsicContentSize() }

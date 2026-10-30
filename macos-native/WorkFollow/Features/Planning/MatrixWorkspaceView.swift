@@ -70,7 +70,7 @@ struct MatrixWorkspaceView: View {
                 anchorSink: anchorSink)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .workfollowPageSurface(0.82)
+        .background { MatrixPageBackdrop() }
         // 浮层的坐标基准：锚点矩形与弹框位置都在这一个坐标系里算。
         .coordinateSpace(name: PlanningCoordinateSpace.name)
         .sheet(item: $editingRule) { value in
@@ -200,6 +200,20 @@ struct MatrixWorkspaceView: View {
 
 // MARK: - 棋盘
 
+/// 棋盘底板：无主题时用窗灰（对齐滴答的灰底白卡），有主题时让出整窗画布。
+/// 象限卡本身是近白实底，底板必须比它深一档，四块区域才立得起来。
+private struct MatrixPageBackdrop: View {
+    @Environment(\.workfollowBackgroundTheme) private var theme
+
+    var body: some View {
+        if theme.isThemed {
+            ThemedPageSurface(opacity: 0.82)
+        } else {
+            WFColors.boardBackground
+        }
+    }
+}
+
 /// 固定的 2×2 棋盘。每个子格自己拥有滚动区，一个象限里的长列表不会把另外三个
 /// 推下去。
 struct MatrixBoardView: View {
@@ -220,16 +234,21 @@ struct MatrixBoardView: View {
     let anchorSink: PlanningAnchorRef
 
     var body: some View {
-        VStack(spacing: WFSpace.control) {
-            row(Array(quadrants.prefix(2).map(\.quadrant)))
-            row(Array(quadrants.dropFirst(2).prefix(2).map(\.quadrant)))
+        // 两行严格均分可用高度：否则任务多的行会把内容撑高，四块卡大小不一。
+        GeometryReader { proxy in
+            let rowHeight = max(0, (proxy.size.height - WFSpace.control) / 2)
+            VStack(spacing: WFSpace.control) {
+                row(Array(quadrants.prefix(2).map(\.quadrant)), height: rowHeight)
+                row(Array(quadrants.dropFirst(2).prefix(2).map(\.quadrant)), height: rowHeight)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .padding(.leading, WFSpace.cardInset)
         .padding(.trailing, WFSpace.cardInset)
         .padding(.bottom, WFSpace.cardInset)
     }
 
-    private func row(_ values: [MatrixQuadrant]) -> some View {
+    private func row(_ values: [MatrixQuadrant], height: CGFloat) -> some View {
         HStack(spacing: WFSpace.control) {
             ForEach(values, id: \.self) { quadrant in
                 if let model = quadrants.first(where: { $0.quadrant == quadrant }) {
@@ -254,7 +273,7 @@ struct MatrixBoardView: View {
                 }
             }
         }
-        .frame(maxHeight: .infinity)
+        .frame(height: height)
     }
 }
 
@@ -359,6 +378,8 @@ struct MatrixQuadrantCard: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // 与清单页同一个细滚条：外层命中区仍保留，墨迹只画 3pt。
+                    .compactScrollbars()
                 }
             }
         }
@@ -368,17 +389,18 @@ struct MatrixQuadrantCard: View {
         .padding(.trailing, WFMatrixMetrics.quadrantPadding.trailing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background {
-            if dropping {
-                color.opacity(0.07)
-            } else {
-                ThemedPageSurface(opacity: 0.94)
+            // 近白实底 + 明确描边 + 轻投影：四块区域从灰底/主题底上分得开。
+            ZStack {
+                WFColors.content.opacity(0.94)
+                if dropping { color.opacity(0.10) }
             }
         }
         .overlay {
             RoundedRectangle(cornerRadius: WFMatrixMetrics.quadrantRadius)
-                .stroke(dropping ? color.opacity(0.60) : WFColors.border.opacity(0.35), lineWidth: 1)
+                .stroke(dropping ? color.opacity(0.60) : WFColors.border, lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: WFMatrixMetrics.quadrantRadius))
+        .shadow(color: .black.opacity(0.06), radius: 10, y: 2)
         .onHover { hovering = $0 }
         .background(PlanningAnchorProbe(ref: anchor))
         .dropDestination(for: String.self) { values, _ in

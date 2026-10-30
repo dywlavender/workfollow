@@ -123,6 +123,7 @@ struct AIChatWorkspaceView: View {
                         }
                     }.padding(.horizontal, 24)
                 }.padding(.bottom, 8)
+                .compactScrollbars()
             }
             AIConversationView(model: current, generate: environment.conversationClient().generator(for: current),
                undoAction: { environment.undoAIAction($0) },

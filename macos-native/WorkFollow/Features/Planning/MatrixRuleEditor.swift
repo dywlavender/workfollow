@@ -101,6 +101,7 @@ struct MatrixRuleEditor: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .compactScrollbars()
             Text("同一任务命中多条规则时，按 I → II → III → IV 归属；移动象限位置不改变匹配顺序。")
                 .font(.caption).foregroundStyle(WFColors.secondaryText)
             HStack {

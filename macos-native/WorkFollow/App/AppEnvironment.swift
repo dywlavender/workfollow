@@ -465,9 +465,9 @@ final class AppEnvironment: ObservableObject {
             .sink { [weak self] id in self?.companion.setMeetingActive(id != nil) }
             .store(in: &subscriptions)
 
-        aiChat.$current
-            .map { $0.$isRunning }
-            .switchToLatest()
+        // AI 对话页和笔记右侧 AI 栏是两套会话，任意一边在生成都算“一起想”。
+        Publishers.Merge(aiChat.$current.map { $0.$isRunning }.switchToLatest(),
+                         NoteAIConversationStore.shared.$isAnyRunning)
             .removeDuplicates()
             .sink { [weak self] running in self?.companion.setAIThinking(running) }
             .store(in: &subscriptions)
@@ -500,7 +500,9 @@ final class AppEnvironment: ObservableObject {
                 priority: task.priority,
                 isNote: task.isNoteTask,
                 isDeleted: task.deletedAt != nil,
-                isConverted: task.isConverted
+                isConverted: task.isConverted,
+                hasContent: !task.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || !task.document.isEmpty
             )
         }
     }

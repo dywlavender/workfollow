@@ -77,6 +77,7 @@ struct CalendarTimelineView: View {
                             hourHeight: hourHeight, request: scrollRequest,
                             onZoomWheel: zoomWheel, onZoomWheelEnded: finishZoom))
                     }
+                    .compactScrollbars()
                     .simultaneousGesture(MagnifyGesture().onChanged { value in
                         if !pinchActive {
                             scrollController.cancelWheelFinish()
@@ -396,6 +397,7 @@ private struct CalendarAllDayArea: View {
                 }
                 .frame(height: height, alignment: .top)
             }
+            .compactScrollbars()
         }
         .frame(height: CGFloat(preferences.allDayHeight))
         .background(WFColors.calendarCanvas.opacity(0.45)).background(PlanningAnchorProbe(ref: anchor))

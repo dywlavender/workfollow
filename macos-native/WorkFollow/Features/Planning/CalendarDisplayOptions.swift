@@ -49,6 +49,7 @@ struct CalendarDisplayOptions: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .compactScrollbars()
             HStack { Spacer(); Button("完成") { dismiss() }.keyboardShortcut(.defaultAction) }
         }.padding(20).frame(width: 440, height: 600)
             .workfollowPopupSurface(fallback: WFColors.canvas)

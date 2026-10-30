@@ -456,6 +456,7 @@ struct NotesWorkspaceView: View {
                     }
                 }
             }
+            .compactScrollbars()
         }.padding(.horizontal, 10).padding(.bottom, 16)
     }
 

@@ -34,6 +34,7 @@ struct AIReferencePicker: View {
                     if choices.isEmpty { Text("没有匹配的资料").foregroundStyle(WFColors.secondaryText) }
                 }
             }
+            .compactScrollbars()
         }.font(WFType.body).padding(16).frame(width: 340, height: 390)
     }
 }

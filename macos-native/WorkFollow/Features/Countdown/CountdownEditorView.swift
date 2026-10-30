@@ -203,6 +203,7 @@ struct CountdownEditorView: View {
                 .padding(.horizontal, Self.inset)
                 .padding(.vertical, WFSpace.xxl)
             }
+            .compactScrollbars()
             // 固定高度：下拉是浮层，不再把面板撑高（参考图的面板就是固定大小）。
             // 410 是「提醒」「重复」都能挂在行下方的最小高度（「显示」在最底下，
             // 无论如何都要翻到上面）。
@@ -284,7 +285,9 @@ struct CountdownEditorView: View {
     @ViewBuilder
     private func popupBody(for row: Row, maxHeight: CGFloat) -> some View {
         if popupHeight(for: row) > maxHeight {
-            ScrollView { editor(for: row) }.frame(height: maxHeight)
+            ScrollView { editor(for: row) }
+                .frame(height: maxHeight)
+                .compactScrollbars()
         } else {
             editor(for: row)
         }
@@ -1341,6 +1344,7 @@ struct ArchivedCountdownsView: View {
                         }
                     }
                 }
+                .compactScrollbars()
                 .frame(maxHeight: 320)
             }
             Divider()

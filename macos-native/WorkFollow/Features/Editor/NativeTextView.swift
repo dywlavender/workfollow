@@ -58,6 +58,8 @@ final class NativeTextView: NSTextView {
     /// 正文段后间距；nil 用 `DocumentTextCodec` 的笔记默认值（10pt）。
     /// 任务详情设 0，对齐滴答"Enter 即 22pt 行盒、没有额外段距"。
     var paragraphSpacingOverride: CGFloat?
+    /// 当前排版用的正文默认字号；设置页改动后据此判断是否需要整篇重排。
+    var appliedBodyFontSize: CGFloat = EditorPreferences.defaultBodyFontSize
 
     /// 编辑器内部一律经这两个入口取样式：override 只在这里注入，
     /// 避免格式化/粘贴等旁路渲染又落回笔记段距。
@@ -1605,7 +1607,7 @@ final class NativeTextView: NSTextView {
         backgroundColor = .clear
         textColor = NSColor(WFColors.documentText)
         insertionPointColor = NSColor(WFColors.documentText)
-        font = .systemFont(ofSize: DocumentEditorPresentationMetrics.bodyFontSize)
+        font = .systemFont(ofSize: EditorPreferences.bodyFontSize)
         // Empty documents must begin at the same origin as rendered paragraphs
         // and headings; NSTextView's default typing style has zero indent.
         typingAttributes = paragraphAttributes()

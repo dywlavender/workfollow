@@ -127,6 +127,7 @@ struct TaskTemplateGalleryView: View {
                     .padding(.vertical, 2)
                 }
             }
+            .compactScrollbars()
             .scrollIndicators(.visible)
             .padding(.top, 18)
 

@@ -36,6 +36,7 @@ struct TaskKanbanView: View {
             .padding(.horizontal, WFSpace.md)
             .padding(.vertical, WFSpace.sm)
         }
+        .compactScrollbars()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -141,6 +142,7 @@ struct TaskKanbanView: View {
                     .padding(.horizontal, WFSpace.xs)
                     .padding(.bottom, WFSpace.sm)
                 }
+                .compactScrollbars()
                 .kanbanDropFrame(.viewport)
             }
             .frame(width: columnWidth, alignment: .topLeading)

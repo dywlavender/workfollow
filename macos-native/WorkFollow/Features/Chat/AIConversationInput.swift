@@ -99,6 +99,7 @@ struct AIConversationInput: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView(); scroll.drawsBackground = false; scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
+        CompactScrollStyle.apply(to: scroll)
         let input = Input(frame: NSRect(x: 0, y: 0, width: 300, height: 64))
         input.minSize = NSSize(width: 0, height: 64)
         input.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)

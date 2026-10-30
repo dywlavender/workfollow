@@ -54,7 +54,7 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         defer { window.close() }
         let editor = try XCTUnwrap(editor(in: host))
         XCTAssertEqual(editor.documentIdentity, id)
-        XCTAssertEqual(editor.font?.pointSize, DocumentEditorPresentationMetrics.bodyFontSize)
+        XCTAssertEqual(editor.font?.pointSize, EditorPreferences.bodyFontSize)
         XCTAssertTrue(editor.usesHostScrollView)
         editor.setSelectedRange(NSRange(location: 0, length: 2))
         // 格式工具条常驻在正文上方，不再依赖底栏 A 开关。

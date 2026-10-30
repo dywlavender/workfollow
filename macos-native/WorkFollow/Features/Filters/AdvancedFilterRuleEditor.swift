@@ -121,6 +121,7 @@ struct AdvancedFilterRuleEditor: View {
                 }
                 .padding(WFSpace.md).frame(maxWidth: .infinity, alignment: .leading)
             }
+            .compactScrollbars()
             .frame(maxHeight: 240)
         }
         .frame(width: PopupMetrics.sortOptionWidth)

@@ -107,6 +107,7 @@ struct TaskTrashView: View {
                 }
                 .padding(.horizontal, WFSpace.md)
             }
+            .compactScrollbars()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .workfollowPageSurface(0.90)

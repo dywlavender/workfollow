@@ -41,26 +41,6 @@ enum NativeBackgroundTheme: String, CaseIterable, Identifiable {
         chromeFill(rail: false, scheme: scheme)
     }
 
-    /// 编辑格式工具条的底色。必须是**不透明**色：工具条常驻在正文上方，
-    /// 半透明会把滚到下面的文字透出来。约 10% 主题色混白/混深，只做一层
-    /// 很淡的着色，不改变正文墨色的对比判断。
-    func editorBarFill(for scheme: ColorScheme) -> Color {
-        guard isThemed else { return WFColors.content }
-        let dark = scheme == .dark
-        switch self {
-        case .none:
-            return WFColors.content
-        case .peachSoda:
-            return bgColor(dark ? 0x2E2521 : 0xFFF1E7)
-        case .mintCloud:
-            return bgColor(dark ? 0x1D2D28 : 0xE9F9F3)
-        case .creamSticker:
-            return bgColor(dark ? 0x2E291D : 0xFFF7E3)
-        case .auroraJelly:
-            return bgColor(dark ? 0x1B2738 : 0xEDF4FF)
-        }
-    }
-
     /// 弹层/下拉/对话框的底色。必须**不透明**：它们浮在任意页面或编辑器上方，
     /// 半透明会让下面的文字透出来。只混入很少的主题色，保持深色文字对比。
     func popupFill(for scheme: ColorScheme) -> Color {
@@ -273,6 +253,32 @@ struct WorkfollowPageCanvas: View {
     }
 }
 
+/// 独立窗口（笔记/任务悬浮编辑窗）的整窗主题底：和主窗口的页面同源——
+/// 底图在下、底纱在中、动效在上——但没有图标栏/导航列的横向渐变。
+/// 主题关闭时退回原来的不透明内容色。
+struct WorkfollowStandalonePageBackground: View {
+    @Environment(\.workfollowBackgroundTheme) private var theme
+    @Environment(\.workfollowBackgroundIntensity) private var intensity
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("backgroundAnimated") private var animated = true
+
+    var body: some View {
+        if theme.isThemed {
+            ZStack {
+                WorkFollowBackgroundView(theme: theme, intensity: intensity,
+                                         animated: false, layer: .base)
+                theme.pageVeil(for: colorScheme)
+                    .opacity(intensity.pageOpacity(base: 0.90))
+                WorkFollowBackgroundView(theme: theme, intensity: intensity,
+                                         animated: animated, layer: .motion)
+                    .opacity(NativeBackgroundMotion.opacity(for: colorScheme, intensity: intensity))
+            }
+        } else {
+            WFColors.content
+        }
+    }
+}
+
 /// 弹层/下拉/对话框的不透明主题底。`fallback` 用于主题关闭时保留各弹窗原来的
 /// 底色（例如专注记录用 FocusTheme.canvas、系统 sheet 用 canvas）。
 struct ThemedPopupSurface: View {
@@ -292,12 +298,35 @@ extension View {
     }
 }
 
+/// 背景可以拆成两层用：底图（渐变/柔光）留在页面底纱下面，动态元素
+/// （气泡、云朵、贴纸、极光带与星点）叠在底纱上面。底纱原本会把动效一起
+/// 洗成近白，分层后动态才看得清，同时页面底色保持原来的浓度。
+enum WorkFollowBackgroundLayer {
+    case full
+    case base
+    case motion
+
+    var showsBase: Bool { self != .motion }
+    var showsMotion: Bool { self != .base }
+}
+
+/// 叠在页面底纱之上的动效层强度。随浓度缩放，但保一个下限：调到“淡”
+/// 时页面变白，气泡/云朵仍然要能看见，否则又回到“动态看不清楚”。
+enum NativeBackgroundMotion {
+    static func opacity(for scheme: ColorScheme,
+                        intensity: NativeBackgroundIntensity) -> Double {
+        let base = scheme == .dark ? 0.34 : 0.42
+        return max(0.30, base * intensity.opacity)
+    }
+}
+
 /// 四套背景共用的外壳：按外观取色、按浓度淡出、按系统设置静止。
 /// 20fps 足够慢速漂移，避免 60fps 下持续重绘整块窗口背景。
 struct WorkFollowBackgroundView: View {
     let theme: NativeBackgroundTheme
     var intensity: NativeBackgroundIntensity = .full
     var animated: Bool = true
+    var layer: WorkFollowBackgroundLayer = .full
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.controlActiveState) private var controlActiveState
@@ -333,13 +362,13 @@ struct WorkFollowBackgroundView: View {
         case .none:
             Color.clear
         case .peachSoda:
-            PeachSodaScene(size: size, dark: colorScheme == .dark, time: time)
+            PeachSodaScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
         case .mintCloud:
-            MintCloudScene(size: size, dark: colorScheme == .dark, time: time)
+            MintCloudScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
         case .creamSticker:
-            CreamStickerScene(size: size, dark: colorScheme == .dark, time: time)
+            CreamStickerScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
         case .auroraJelly:
-            AuroraJellyScene(size: size, dark: colorScheme == .dark, time: time)
+            AuroraJellyScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
         }
     }
 }
@@ -350,47 +379,60 @@ private struct PeachSodaScene: View {
     let size: CGSize
     let dark: Bool
     let time: TimeInterval
+    let layer: WorkFollowBackgroundLayer
+
+    private var sodaTints: [Color] {
+        dark
+            ? [bgColor(0xE07A5C), bgColor(0xD9738F), bgColor(0xC79A48)]
+            : [bgColor(0xFF8F6B), bgColor(0xFF9FB8), bgColor(0xFFC15E)]
+    }
 
     var body: some View {
         let w = size.width
         let h = size.height
         let unit = max(w, h)
         ZStack {
-            LinearGradient(colors: dark
-                ? [bgColor(0x171113), bgColor(0x1F1518)]
-                : [bgColor(0xFFF9F4), bgColor(0xFFF6EC)],
-                startPoint: .topLeading, endPoint: .bottomTrailing)
+            if layer.showsBase {
+                LinearGradient(colors: dark
+                    ? [bgColor(0x171113), bgColor(0x1F1518)]
+                    : [bgColor(0xFFF9F4), bgColor(0xFFF6EC)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing)
 
-            SoftBlob(color: dark ? bgColor(0xC97A5B) : bgColor(0xFFA880))
-                .frame(width: unit * 0.56, height: unit * 0.56)
-                .position(x: w * 0.04 + drift(time, period: 26) * w * 0.035,
-                          y: h * 0.02 + drift(time, period: 33, phase: 0.3) * h * 0.035)
+                SoftBlob(color: dark ? bgColor(0xD97A55) : bgColor(0xFF9B6E))
+                    .frame(width: unit * 0.56, height: unit * 0.56)
+                    .position(x: w * 0.04 + drift(time, period: 26) * w * 0.035,
+                              y: h * 0.02 + drift(time, period: 33, phase: 0.3) * h * 0.035)
 
-            SoftBlob(color: dark ? bgColor(0xB08A3A) : bgColor(0xFFE28C))
-                .frame(width: unit * 0.46, height: unit * 0.46)
-                .position(x: w * 0.96 + drift(time, period: 31, phase: 0.5) * -w * 0.03,
-                          y: h * 0.04 + drift(time, period: 24, phase: 0.7) * h * 0.03)
+                SoftBlob(color: dark ? bgColor(0xC9973A) : bgColor(0xFFD166))
+                    .frame(width: unit * 0.46, height: unit * 0.46)
+                    .position(x: w * 0.96 + drift(time, period: 31, phase: 0.5) * -w * 0.03,
+                              y: h * 0.04 + drift(time, period: 24, phase: 0.7) * h * 0.03)
 
-            SoftBlob(color: dark ? bgColor(0xA85B74) : bgColor(0xFFB2C7))
-                .frame(width: unit * 0.62, height: unit * 0.62)
-                .position(x: w * 0.72 + drift(time, period: 36, phase: 0.2) * w * 0.04,
-                          y: h * 1.02 + drift(time, period: 29, phase: 0.6) * -h * 0.03)
+                SoftBlob(color: dark ? bgColor(0xC25C7C) : bgColor(0xFF9FBA))
+                    .frame(width: unit * 0.62, height: unit * 0.62)
+                    .position(x: w * 0.72 + drift(time, period: 36, phase: 0.2) * w * 0.04,
+                              y: h * 1.02 + drift(time, period: 29, phase: 0.6) * -h * 0.03)
 
-            SoftBlob(color: dark ? bgColor(0x8A7350) : bgColor(0xFFF2CE))
-                .frame(width: unit * 0.36, height: unit * 0.36)
-                .position(x: w * 0.34 + drift(time, period: 23, phase: 0.8) * -w * 0.025,
-                          y: h * 0.98 + drift(time, period: 27, phase: 0.4) * h * 0.02)
-                .opacity(dark ? 0.55 : 0.9)
+                SoftBlob(color: dark ? bgColor(0x8A7350) : bgColor(0xFFF2CE))
+                    .frame(width: unit * 0.36, height: unit * 0.36)
+                    .position(x: w * 0.34 + drift(time, period: 23, phase: 0.8) * -w * 0.025,
+                              y: h * 0.98 + drift(time, period: 27, phase: 0.4) * h * 0.02)
+                    .opacity(dark ? 0.55 : 0.9)
+            }
 
-            ForEach(0..<6, id: \.self) { index in
-                let period = 22 + Double(index) * 3
-                let progress = rise(time, period: period, phase: Double(index) * 0.17)
-                let diameter = unit * (0.012 + CGFloat(index % 3) * 0.005)
-                let wobble = CGFloat(sin(Double(progress) * .pi * 2))
-                SodaBubble(diameter: diameter, dark: dark)
-                    .position(x: w * (0.10 + CGFloat(index) * 0.145) + wobble * w * 0.008,
-                              y: h * (1.10 - progress * 1.24))
-                    .opacity(progress > 0.04 && progress < 0.92 ? 1 : 0)
+            if layer.showsMotion {
+                ForEach(0..<7, id: \.self) { index in
+                    let period = 20 + Double(index) * 3
+                    let progress = rise(time, period: period, phase: Double(index) * 0.14)
+                    let diameter = unit * (0.016 + CGFloat(index % 3) * 0.008)
+                    let wobble = CGFloat(sin(Double(progress) * .pi * 2))
+                    // 白泡泡在半透底纱上等于没有；换成珊瑚/玫瑰/琥珀色汽水泡，
+                    // 靠色相而不是亮度留在背景里。
+                    SodaBubble(diameter: diameter, dark: dark, tint: sodaTints[index % sodaTints.count])
+                        .position(x: w * (0.09 + CGFloat(index) * 0.125) + wobble * w * 0.008,
+                                  y: h * (1.10 - progress * 1.24))
+                        .opacity(progress > 0.04 && progress < 0.92 ? 1 : 0)
+                }
             }
         }
         .frame(width: w, height: h)
@@ -419,19 +461,20 @@ private struct SoftBlob: View {
 private struct SodaBubble: View {
     let diameter: CGFloat
     let dark: Bool
+    let tint: Color
 
     var body: some View {
         Circle()
             .fill(RadialGradient(
                 stops: [
-                    .init(color: .white.opacity(dark ? 0.22 : 0.95), location: 0),
-                    .init(color: .white.opacity(dark ? 0.06 : 0.18), location: 0.6),
-                    .init(color: .white.opacity(0), location: 1)
+                    .init(color: .white.opacity(dark ? 0.30 : 0.55), location: 0),
+                    .init(color: tint.opacity(dark ? 0.65 : 0.65), location: 0.58),
+                    .init(color: tint.opacity(dark ? 0.45 : 0.72), location: 1)
                 ],
                 center: UnitPoint(x: 0.32, y: 0.28),
                 startRadius: 0,
                 endRadius: max(1, diameter * 0.5)))
-            .overlay(Circle().strokeBorder(.white.opacity(dark ? 0.16 : 0.5), lineWidth: 1))
+            .overlay(Circle().strokeBorder(tint.opacity(dark ? 0.75 : 0.9), lineWidth: 1.4))
             .frame(width: diameter, height: diameter)
     }
 }
@@ -442,51 +485,74 @@ private struct MintCloudScene: View {
     let size: CGSize
     let dark: Bool
     let time: TimeInterval
+    let layer: WorkFollowBackgroundLayer
 
     var body: some View {
         let w = size.width
         let h = size.height
-        let cloudColor = dark ? Color.white.opacity(0.13) : Color.white.opacity(0.96)
         ZStack {
-            LinearGradient(colors: dark
-                ? [bgColor(0x0C1B24), bgColor(0x0E2420), bgColor(0x1C1B14)]
-                : [bgColor(0xDCF1FF), bgColor(0xE8F9F2), bgColor(0xFFF7E6)],
-                startPoint: .top, endPoint: .bottom)
+            if layer.showsBase {
+                LinearGradient(colors: dark
+                    ? [bgColor(0x0C1B24), bgColor(0x0E2420), bgColor(0x1C1B14)]
+                    : [bgColor(0xDCF1FF), bgColor(0xE8F9F2), bgColor(0xFFF7E6)],
+                    startPoint: .top, endPoint: .bottom)
 
-            Ellipse()
-                .fill(RadialGradient(colors: [
-                    bgColor(0xFFF3B8, alpha: dark ? 0.16 : 0.82),
-                    bgColor(0xFFF3B8, alpha: 0)
-                ], center: .center, startRadius: 0, endRadius: max(1, w * 0.34)))
-                .frame(width: w * 0.62, height: h * 0.55)
-                .position(x: w * 0.92, y: h * 0.02)
+                Ellipse()
+                    .fill(RadialGradient(colors: [
+                        bgColor(0xFFF3B8, alpha: dark ? 0.16 : 0.82),
+                        bgColor(0xFFF3B8, alpha: 0)
+                    ], center: .center, startRadius: 0, endRadius: max(1, w * 0.34)))
+                    .frame(width: w * 0.62, height: h * 0.55)
+                    .position(x: w * 0.92, y: h * 0.02)
+            }
 
-            cloud(width: w * 0.20, height: w * 0.064, color: cloudColor)
-                .position(x: w * 0.07 + drift(time, period: 52) * w * 0.035, y: h * 0.11)
-            cloud(width: w * 0.14, height: w * 0.045, color: cloudColor.opacity(0.9))
-                .position(x: w * 0.87 + drift(time, period: 68, phase: 0.4) * -w * 0.028, y: h * 0.23)
-            cloud(width: w * 0.23, height: w * 0.074, color: cloudColor.opacity(0.82))
-                .position(x: w * 0.31 + drift(time, period: 74, phase: 0.7) * w * 0.03, y: h * 0.94)
+            if layer.showsMotion {
+                cloud(width: w * 0.20, height: w * 0.064, face: true)
+                    .position(x: w * 0.07 + drift(time, period: 52) * w * 0.035, y: h * 0.11)
+                cloud(width: w * 0.14, height: w * 0.045, face: false)
+                    .position(x: w * 0.87 + drift(time, period: 68, phase: 0.4) * -w * 0.028, y: h * 0.23)
+                cloud(width: w * 0.23, height: w * 0.074, face: true)
+                    .position(x: w * 0.31 + drift(time, period: 74, phase: 0.7) * w * 0.03, y: h * 0.94)
 
-            sparkle(x: 0.18, y: 0.25, side: 14, index: 0)
-            sparkle(x: 0.77, y: 0.15, side: 9, index: 1)
-            sparkle(x: 0.58, y: 0.41, side: 11, index: 2)
-            sparkle(x: 0.90, y: 0.45, side: 8, index: 3)
+                sparkle(x: 0.18, y: 0.25, side: 18, index: 0)
+                sparkle(x: 0.77, y: 0.15, side: 12, index: 1)
+                sparkle(x: 0.58, y: 0.41, side: 15, index: 2)
+                sparkle(x: 0.90, y: 0.45, side: 11, index: 3)
+            }
         }
         .frame(width: w, height: h)
         .clipped()
     }
 
-    private func cloud(width: CGFloat, height: CGFloat, color: Color) -> some View {
+    /// 云不能再用纯白：底纱压过之后白云和白底没有区别。改成上白下蓝的
+    /// 渐变云，再给两朵大云画上表情，靠蓝色轮廓和墨点在背景里留形。
+    private func cloud(width: CGFloat, height: CGFloat, face: Bool) -> some View {
         CuteCloudShape()
-            .fill(color)
+            .fill(LinearGradient(
+                colors: dark
+                    ? [Color.white.opacity(0.22), Color.white.opacity(0.10)]
+                    : [Color.white, bgColor(0xA9D3E8)],
+                startPoint: .top, endPoint: .bottom))
             .frame(width: width, height: height)
+            .overlay {
+                if face {
+                    StickerFace(size: height * 0.9,
+                                ink: (dark ? bgColor(0xD7E8F2) : bgColor(0x5C8FB3))
+                                    .opacity(dark ? 0.55 : 1))
+                        .offset(y: height * 0.14)
+                }
+            }
+            .shadow(color: dark ? .clear : bgColor(0x7FAEC8).opacity(0.45),
+                    radius: height * 0.28, y: height * 0.18)
     }
 
     private func sparkle(x: CGFloat, y: CGFloat, side: CGFloat, index: Int) -> some View {
         let pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin((time / 5.5 + Double(index) * 0.37) * .pi * 2))
+        let tint: Color = index.isMultiple(of: 2)
+            ? (dark ? bgColor(0x9FC1FF) : bgColor(0xF2B21F))
+            : (dark ? bgColor(0xFFE0A0) : bgColor(0x5F87F2))
         return CuteSparkleShape()
-            .fill((dark ? bgColor(0xCFE7FF) : bgColor(0xFFF3B8)).opacity(0.65 + 0.35 * pulse))
+            .fill(tint.opacity(0.55 + 0.45 * pulse))
             .frame(width: side, height: side)
             .position(x: size.width * x, y: size.height * y)
             .scaleEffect(0.82 + 0.18 * CGFloat(pulse))
@@ -533,51 +599,56 @@ private struct CreamStickerScene: View {
     let size: CGSize
     let dark: Bool
     let time: TimeInterval
+    let layer: WorkFollowBackgroundLayer
 
     var body: some View {
         let w = size.width
         let h = size.height
         let unit = max(h, w * 0.5)
         ZStack {
-            (dark ? bgColor(0x1E1A15) : bgColor(0xFFF8E9))
+            if layer.showsBase {
+                (dark ? bgColor(0x1E1A15) : bgColor(0xFFF8E9))
 
-            Ellipse()
-                .fill(RadialGradient(colors: [
-                    dark ? bgColor(0x3A3022, alpha: 0.7) : bgColor(0xFFFDF6),
-                    .clear
-                ], center: .center, startRadius: 0, endRadius: max(1, w * 0.55)))
-                .frame(width: w * 0.9, height: h * 0.9)
-                .position(x: w * 0.5, y: h * 0.18)
-
-            Group {
-                SunSticker(size: unit * 0.13)
-                    .position(x: w * 0.90, y: h * 0.10)
-                    .rotationEffect(.degrees(Double(drift(time, period: 9)) * 5))
-
-                FlowerSticker(size: unit * 0.075)
-                    .position(x: w * 0.08, y: h * 0.46)
-                    .rotationEffect(.degrees(Double(drift(time, period: 7, phase: 0.4)) * -6))
-
-                StickerStar(size: unit * 0.06)
-                    .position(x: w * 0.20 + drift(time, period: 6, phase: 0.8) * w * 0.006,
-                              y: h * 0.13 + drift(time, period: 5.5) * h * 0.008)
-
-                CloudSticker(size: unit * 0.13)
-                    .position(x: w * 0.86, y: h * 0.82 + drift(time, period: 8, phase: 0.6) * h * 0.01)
-
-                LeafSticker(size: unit * 0.055)
-                    .position(x: w * 0.12, y: h * 0.90)
-                    .rotationEffect(.degrees(Double(drift(time, period: 7.5, phase: 0.2)) * 7))
-
-                HeartSticker(size: unit * 0.035)
-                    .position(x: w * 0.47, y: h * 0.09 + drift(time, period: 5.5, phase: 0.5) * h * 0.01)
+                Ellipse()
+                    .fill(RadialGradient(colors: [
+                        dark ? bgColor(0x3A3022, alpha: 0.7) : bgColor(0xFFFDF6),
+                        .clear
+                    ], center: .center, startRadius: 0, endRadius: max(1, w * 0.55)))
+                    .frame(width: w * 0.9, height: h * 0.9)
+                    .position(x: w * 0.5, y: h * 0.18)
             }
-            .opacity(dark ? 0.72 : 1)
 
-            stickerDot(color: bgColor(0xFFC53D), x: 0.34, y: 0.22, side: 6)
-            stickerDot(color: bgColor(0x8FD9A8), x: 0.70, y: 0.30, side: 5)
-            stickerDot(color: bgColor(0x9EC5FF), x: 0.84, y: 0.62, side: 7)
-            stickerDot(color: bgColor(0xFF9FB2), x: 0.26, y: 0.70, side: 5)
+            if layer.showsMotion {
+                Group {
+                    SunSticker(size: unit * 0.13)
+                        .position(x: w * 0.90, y: h * 0.10)
+                        .rotationEffect(.degrees(Double(drift(time, period: 9)) * 5))
+
+                    FlowerSticker(size: unit * 0.075)
+                        .position(x: w * 0.08, y: h * 0.46)
+                        .rotationEffect(.degrees(Double(drift(time, period: 7, phase: 0.4)) * -6))
+
+                    StickerStar(size: unit * 0.06)
+                        .position(x: w * 0.20 + drift(time, period: 6, phase: 0.8) * w * 0.006,
+                                  y: h * 0.13 + drift(time, period: 5.5) * h * 0.008)
+
+                    CloudSticker(size: unit * 0.13)
+                        .position(x: w * 0.86, y: h * 0.82 + drift(time, period: 8, phase: 0.6) * h * 0.01)
+
+                    LeafSticker(size: unit * 0.055)
+                        .position(x: w * 0.12, y: h * 0.90)
+                        .rotationEffect(.degrees(Double(drift(time, period: 7.5, phase: 0.2)) * 7))
+
+                    HeartSticker(size: unit * 0.035)
+                        .position(x: w * 0.47, y: h * 0.09 + drift(time, period: 5.5, phase: 0.5) * h * 0.01)
+                }
+                .opacity(dark ? 0.72 : 1)
+
+                stickerDot(color: bgColor(0xFFC53D), x: 0.34, y: 0.22, side: 6)
+                stickerDot(color: bgColor(0x8FD9A8), x: 0.70, y: 0.30, side: 5)
+                stickerDot(color: bgColor(0x9EC5FF), x: 0.84, y: 0.62, side: 7)
+                stickerDot(color: bgColor(0xFF9FB2), x: 0.26, y: 0.70, side: 5)
+            }
         }
         .frame(width: w, height: h)
         .clipped()
@@ -772,34 +843,43 @@ private struct AuroraJellyScene: View {
     let size: CGSize
     let dark: Bool
     let time: TimeInterval
+    let layer: WorkFollowBackgroundLayer
 
     var body: some View {
         let w = size.width
         let h = size.height
         ZStack {
-            (dark ? bgColor(0x080B12) : bgColor(0xEFF6FF))
+            if layer.showsBase {
+                (dark ? bgColor(0x080B12) : bgColor(0xEFF6FF))
+            }
 
-            aurora(color: dark ? bgColor(0x0E6B5B) : bgColor(0xA9EED9),
-                    width: w * 0.80, height: h * 1.00, x: 0.10, y: 0.06,
-                    angle: -18, period: 34, phase: 0)
-            aurora(color: dark ? bgColor(0x1B2C6B) : bgColor(0xBBD3FF),
-                    width: w * 0.78, height: h * 0.95, x: 0.95, y: 0.12,
-                    angle: 22, period: 40, phase: 0.35)
-            aurora(color: dark ? bgColor(0x6B2440) : bgColor(0xFFD2E5),
-                    width: w * 0.82, height: h * 0.90, x: 0.56, y: 1.05,
-                    angle: -8, period: 30, phase: 0.7)
+            if layer.showsMotion {
+                aurora(color: dark ? bgColor(0x2FE0B5) : bgColor(0x3FCB9E),
+                        width: w * 0.86, height: h * 0.55, x: 0.10, y: 0.08,
+                        angle: -24, period: 34, phase: 0)
+                aurora(color: dark ? bgColor(0x6E8BFF) : bgColor(0x6A8DFF),
+                        width: w * 0.82, height: h * 0.52, x: 0.95, y: 0.28,
+                        angle: 20, period: 40, phase: 0.35)
+                aurora(color: dark ? bgColor(0xFF6FAE) : bgColor(0xFF7FBA),
+                        width: w * 0.88, height: h * 0.50, x: 0.56, y: 0.94,
+                        angle: -10, period: 30, phase: 0.7)
 
-            ForEach(0..<4, id: \.self) { index in
-                let specs: [(CGFloat, CGFloat, CGFloat)] = [(0.32, 0.20, 5), (0.74, 0.34, 4), (0.86, 0.70, 6), (0.16, 0.64, 4)]
-                let spec = specs[index]
-                let pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin((time / 6 + Double(index) * 0.31) * .pi * 2))
-                Circle()
-                    .fill(Color.white.opacity(dark ? 0.85 : 0.9))
-                    .frame(width: spec.2, height: spec.2)
-                    .shadow(color: (dark ? Color.white : bgColor(0x6389F5)).opacity(0.55),
-                            radius: 5)
-                    .position(x: w * spec.0, y: h * spec.1)
-                    .opacity(0.35 + 0.65 * pulse)
+                ForEach(0..<5, id: \.self) { index in
+                    let specs: [(CGFloat, CGFloat, CGFloat)] = [(0.28, 0.18, 13), (0.72, 0.32, 10),
+                                                                (0.86, 0.68, 15), (0.14, 0.62, 9),
+                                                                (0.48, 0.52, 11)]
+                    let spec = specs[index]
+                    let pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin((time / 6 + Double(index) * 0.31) * .pi * 2))
+                    let tint: Color = index.isMultiple(of: 2)
+                        ? (dark ? Color.white : bgColor(0x3F6FE0))
+                        : (dark ? bgColor(0x9FC1FF) : bgColor(0xE0A000))
+                    CuteSparkleShape()
+                        .fill(tint.opacity(0.6 + 0.4 * pulse))
+                        .frame(width: spec.2, height: spec.2)
+                        .shadow(color: tint.opacity(0.45), radius: 6)
+                        .position(x: w * spec.0, y: h * spec.1)
+                        .opacity(0.35 + 0.65 * pulse)
+                }
             }
         }
         .frame(width: w, height: h)
@@ -813,8 +893,8 @@ private struct AuroraJellyScene: View {
         return Ellipse()
             .fill(RadialGradient(
                 stops: [
-                    .init(color: color.opacity(dark ? 0.72 : 0.55), location: 0),
-                    .init(color: color.opacity(dark ? 0.30 : 0.22), location: 0.55),
+                    .init(color: color.opacity(dark ? 0.85 : 0.80), location: 0),
+                    .init(color: color.opacity(dark ? 0.38 : 0.38), location: 0.55),
                     .init(color: color.opacity(0), location: 1)
                 ],
                 center: .center,

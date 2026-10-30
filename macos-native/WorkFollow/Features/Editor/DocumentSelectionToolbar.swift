@@ -12,7 +12,10 @@ enum DocumentFormatToolbarMetrics {
     static let borderWidth: CGFloat = 0
     static let horizontalInset: CGFloat = 5
     static let dividerInset: CGFloat = 5
-    static let highlightFill = Color(nsColor: .systemYellow).opacity(0.45)
+    /// 工具条常带主题底色，`listRowHover` / `accentFaint` 在那层上几乎看不出来；
+    /// 交互底改用一层墨色与强调色，任意主题下都读得出悬停和激活。
+    static let hoverFill = Color.primary.opacity(0.07)
+    static let activeFill = WFColors.accent.opacity(0.14)
     static let shadowRadius: CGFloat = 10
     static let shadowOffset: CGFloat = 3
 }
@@ -35,6 +38,8 @@ struct DocumentSelectionToolbarView: View {
     var onHighlightColor: (String?) -> Void = { _ in }
 
     @State private var openColorPicker: DocumentToolbarPicker?
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let coordinateSpace = "editor-selection-toolbar"
 
@@ -94,7 +99,9 @@ struct DocumentSelectionToolbarView: View {
         }
         .frame(idealWidth: preferredWidth)
         .frame(height: 34)
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        // 和其他浮层一样吃主题底色；主题关闭时仍是原来的白卡面。
+        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme),
+                    in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .coordinateSpace(name: Self.coordinateSpace)
         .hidesSystemFocusEffect()
@@ -113,27 +120,17 @@ struct DocumentSelectionToolbarView: View {
         .editorCommandFrame(command.id, space: Self.coordinateSpace)
     }
 
-    /// 背景色：整块「A」就是色板入口（面板首行「无颜色」负责清除），
-    /// 与主工具条同款，不再保留只能点小箭头的第二入口。
+    /// 颜色入口统一成“图标 + 当前颜色细条”：高亮用荧光笔图标，文字颜色用 A，
+    /// 与相邻图标按钮同一种视觉重量（原来高亮垫整块黄底，在工具条上很跳）。
+    /// 点一下直接弹出色板，首行负责清除颜色。
     private var backgroundButton: some View {
         Button { toggleColorPicker(.highlightColor) } label: {
-            ZStack(alignment: .bottomTrailing) {
-                Text("A")
-                    .font(.system(size: 13))
-                    .foregroundStyle(WFColors.text)
-                    .padding(.horizontal, 3)
-                    .padding(.trailing, 2)
-                    .background(DocumentFormatToolbarMetrics.highlightFill,
-                                in: RoundedRectangle(cornerRadius: 3))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 6, weight: .bold))
-                    .foregroundStyle(WFColors.secondaryText)
-                    .allowsHitTesting(false)
-            }
-            .frame(width: 24, height: 26)
-            .background(highlightHex != nil ? WFColors.accentFaint : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 4))
-            .contentShape(Rectangle())
+            DocumentColorIndicator(glyph: .symbol("highlighter"), color: highlightSwatch, size: 13)
+                .foregroundStyle(highlightHex != nil ? WFColors.accent : WFColors.text)
+                .frame(width: 24, height: 26)
+                .background(highlightHex != nil ? DocumentFormatToolbarMetrics.activeFill : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background { colorPickerPresenter(.highlightColor) }
@@ -144,24 +141,32 @@ struct DocumentSelectionToolbarView: View {
 
     private var textColorButton: some View {
         Button { toggleColorPicker(.textColor) } label: {
-            VStack(spacing: 1) {
-                Text("A").font(.system(size: 12, weight: .medium))
-                Capsule()
-                    .fill(textColorHex
-                        .flatMap { NSColor(documentHex: $0) }.map { Color(nsColor: $0) } ?? WFColors.text)
-                    .frame(width: 12, height: 3)
-            }
-            .frame(width: 24, height: 26)
-            .background(textColorHex != nil ? WFColors.accentFaint : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 4))
-            .contentShape(Rectangle())
+            DocumentColorIndicator(glyph: .letter("A"), color: textColorSwatch, size: 12)
+                .foregroundStyle(textColorHex != nil ? WFColors.accent : WFColors.text)
+                .frame(width: 24, height: 26)
+                .background(textColorHex != nil ? DocumentFormatToolbarMetrics.activeFill : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(textColorHex != nil ? WFColors.accent : WFColors.text)
         .background { colorPickerPresenter(.textColor) }
         .hoverTip("文字颜色", placement: .above, activeAlways: true)
         .accessibilityLabel("文字颜色")
         .editorCommandFrame("format.textColor", space: Self.coordinateSpace)
+    }
+
+    /// 未设高亮时色条显示默认高亮色，和文字颜色的“默认墨色”色条同义。
+    private var highlightSwatch: Color {
+        color(fromHex: highlightHex) ?? color(fromHex: DocumentColorPalette.defaultHighlight)
+            ?? Color(nsColor: .systemYellow)
+    }
+
+    private var textColorSwatch: Color {
+        color(fromHex: textColorHex) ?? WFColors.text
+    }
+
+    private func color(fromHex hex: String?) -> Color? {
+        hex.flatMap { NSColor(documentHex: $0) }.map { Color(nsColor: $0) }
     }
 
     private func toggleColorPicker(_ picker: DocumentToolbarPicker) {
@@ -352,38 +357,21 @@ struct DocumentFormatToolbarView: View {
             .background { pickerPresenter(.heading) }
             .editorPopupTriggerFrame("heading")
             formatButton("format.bold")
-            // 「A」底下永远垫一块高亮色（原版 `label: 'A', highlight: true`）。
-            // 整块 A 就是色板入口：点一下直接弹出颜色面板，面板首行「无颜色」
-            // 负责清除高亮——不再保留只能点右下角小箭头的第二入口。
+            // 原版是“A 垫一块高亮色”（`label: 'A', highlight: true`）。这里换成
+            // 荧光笔图标 + 当前高亮色条：和文字颜色的 A 同一套写法，不再让某一个
+            // 按钮单独顶着一块色底；整块按钮仍直接弹色板。
             ToolbarButton(title: "高亮颜色", active: handle.style.marks.hasAnyHighlight, state: overlay,
                           action: { togglePicker(.highlightColor) }) {
-                ZStack(alignment: .bottomTrailing) {
-                    Text("A")
-                        .font(.system(size: 16))
-                        .foregroundStyle(WFColors.text)
-                        .padding(.horizontal, WFSpace.tight)
-                        .padding(.trailing, 3)
-                        .background(DocumentFormatToolbarMetrics.highlightFill,
-                                    in: RoundedRectangle(cornerRadius: 4))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(WFColors.secondaryText)
-                        .padding(.trailing, 1)
-                        .allowsHitTesting(false)
-                }
+                DocumentColorIndicator(glyph: .symbol("highlighter"), color: highlightSwatch,
+                                       size: 14, barWidth: 14)
             }
             .background { pickerPresenter(.highlightColor) }
             .editorPopupTriggerFrame("highlightColor")
             .editorCommandFrame("format.highlight", space: DocumentToolbarTooltip.space)
             ToolbarButton(title: "文字颜色", active: handle.style.marks.textColorHex != nil, state: overlay,
                           action: { togglePicker(.textColor) }) {
-                VStack(spacing: 1) {
-                    Text("A").font(.system(size: 14, weight: .medium))
-                    Capsule()
-                        .fill(handle.style.marks.textColorHex
-                            .flatMap { NSColor(documentHex: $0) }.map { Color(nsColor: $0) } ?? WFColors.text)
-                        .frame(width: 14, height: 3)
-                }
+                DocumentColorIndicator(glyph: .letter("A"), color: textColorSwatch,
+                                       size: 14, barWidth: 14)
             }
             .background { pickerPresenter(.textColor) }
             .editorPopupTriggerFrame("textColor")
@@ -478,11 +466,15 @@ struct DocumentFormatToolbarView: View {
         }
         .frame(maxWidth: maxWidth)
         .frame(height: DocumentFormatToolbarMetrics.height)
-        // 工具条本身在原版里就是一个浮层（`showTaskEditorPopover` 的卡面），所以取浮层
-        // 底色/描边/阴影，而不是画布色。嵌入正文时改用主题淡染，和侧栏呼应。
-        .background(embedded ? backgroundTheme.editorBarFill(for: colorScheme)
-                        : backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme),
-                    in: RoundedRectangle(cornerRadius: embedded ? 0 : DocumentFormatToolbarMetrics.cornerRadius))
+        // 工具条本身在原版里就是一个浮层（`showTaskEditorPopover` 的卡面），所以浮层
+        // 形态取浮层底色/描边/阴影。嵌入正文的常驻行不单独铺底色：它和页头、正文
+        // 本就在同一层，靠下面的分隔线分组就够，单独着色会在正文上方切出一条横带。
+        .background {
+            if !embedded {
+                RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius)
+                    .fill(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+            }
+        }
         .overlay {
             if !embedded {
                 RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius)
@@ -598,6 +590,20 @@ struct DocumentFormatToolbarView: View {
             .contains { handle.style.isBlock($0) }
     }
 
+    private var highlightSwatch: Color {
+        swatch(fromHex: handle.style.marks.highlightHex)
+            ?? swatch(fromHex: DocumentColorPalette.defaultHighlight)
+            ?? Color(nsColor: .systemYellow)
+    }
+
+    private var textColorSwatch: Color {
+        swatch(fromHex: handle.style.marks.textColorHex) ?? WFColors.text
+    }
+
+    private func swatch(fromHex hex: String?) -> Color? {
+        hex.flatMap { NSColor(documentHex: $0) }.map { Color(nsColor: $0) }
+    }
+
     private func togglePicker(_ picker: DocumentToolbarPicker) {
         showInsert = false
         pickerSize = nil
@@ -641,9 +647,35 @@ struct DocumentFormatToolbarView: View {
     }
 }
 
-/// 工具条上的一个按钮：**26 × 28**（原版 `toolbarControlWidth/Height`），激活态取
-/// `accentFaint` 底 + 强调色图标，指针悬停取列表行的中性底（原版 InkWell 的
-/// `overlayColor`，不是强调色——菜单/工具条是中性表面）。
+/// 颜色类按钮的统一写法：字形/图标 + 当前颜色的细条。高亮与文字颜色
+/// 只在图标上区分（荧光笔 / A），不再给其中一个单独垫一块色底。
+private struct DocumentColorIndicator: View {
+    enum Glyph {
+        case letter(String)
+        case symbol(String)
+    }
+
+    let glyph: Glyph
+    let color: Color
+    var size: CGFloat = 12
+    var barWidth: CGFloat = 12
+
+    var body: some View {
+        VStack(spacing: 1) {
+            switch glyph {
+            case .letter(let text):
+                Text(text).font(.system(size: size, weight: .medium))
+            case .symbol(let name):
+                Image(systemName: name).font(.system(size: size))
+            }
+            Capsule().fill(color).frame(width: barWidth, height: 3)
+        }
+    }
+}
+
+/// 工具条上的一个按钮：**26 × 28**（原版 `toolbarControlWidth/Height`），
+/// 激活态取强调色淡底 + 强调色图标；悬停取墨色淡底。工具条本身带主题色，
+/// 这里不能用几乎和底色同值的 `accentFaint` / `listRowHover`。
 private struct ToolbarButton<Label: View>: View {
     let title: String
     let active: Bool
@@ -660,8 +692,8 @@ private struct ToolbarButton<Label: View>: View {
                 .foregroundStyle(active ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: DocumentFormatToolbarMetrics.controlWidth,
                        height: DocumentFormatToolbarMetrics.controlHeight)
-                .background(active ? WFColors.accentFaint
-                            : hovering && enabled ? WFColors.listRowHover : Color.clear,
+                .background(active ? DocumentFormatToolbarMetrics.activeFill
+                            : hovering && enabled ? DocumentFormatToolbarMetrics.hoverFill : Color.clear,
                             in: RoundedRectangle(cornerRadius: 4))
                 .opacity(enabled ? 1 : 0.35)
         }
@@ -711,8 +743,8 @@ private struct InsertActionButton: View {
                 .foregroundStyle(active ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: DocumentFormatToolbarMetrics.controlWidth,
                        height: DocumentFormatToolbarMetrics.controlHeight)
-                .background(active ? WFColors.accentFaint
-                            : hovering ? WFColors.listRowHover : Color.clear,
+                .background(active ? DocumentFormatToolbarMetrics.activeFill
+                            : hovering ? DocumentFormatToolbarMetrics.hoverFill : Color.clear,
                             in: RoundedRectangle(cornerRadius: 4))
                 .contentShape(Rectangle())
         }

@@ -20,10 +20,12 @@ final class DialogFormInteractionTests: XCTestCase {
         draft.note = "未保存的笔记"
         let frames = Frames()
         let host = dialog(FocusRecordEditor(store: store, workspace: nil, draft: draft), frames: frames)
-        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 440, height: 446)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host,
+            width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)
         defer { window.close() }
         let initial = frames.values
-        XCTAssertTrue(CGRect(x: 0, y: 0, width: 440, height: 446).contains(try XCTUnwrap(initial[.primary])))
+        XCTAssertTrue(CGRect(x: 0, y: 0, width: FocusLayoutMetrics.recordEditorWidth,
+                             height: FocusLayoutMetrics.recordEditorHeight).contains(try XCTUnwrap(initial[.primary])))
         try click(.primary, frames: frames, host: host, window: window)
         XCTAssertNil(store.record(id: draft.id), "校验失败必须留在草稿，不产生记录")
         XCTAssertEqual(frames.values, initial, "错误出现后保存和取消按钮不移位")
@@ -39,7 +41,8 @@ final class DialogFormInteractionTests: XCTestCase {
         draft.note = "已确认的记录"
         let recordFrames = Frames()
         let recordHost = dialog(FocusRecordEditor(store: focus, workspace: nil, draft: draft), frames: recordFrames)
-        let recordWindow = InspectorPanelTestSupport.ownerWindow(for: recordHost, width: 440, height: 446)
+        let recordWindow = InspectorPanelTestSupport.ownerWindow(for: recordHost,
+            width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)
         defer { recordWindow.close() }
         try click(.primary, frames: recordFrames, host: recordHost, window: recordWindow)
         XCTAssertEqual(focus.record(id: draft.id)?.note, draft.note)
@@ -109,7 +112,8 @@ final class DialogFormInteractionTests: XCTestCase {
         XCTAssertTrue(focus.addTimer(name: "阅读", emoji: "📚", stopwatch: false, minutes: 25))
         let preset = try XCTUnwrap(focus.timers.first)
         let items: [(String, AnyView, CGSize)] = [
-            ("focus-record", AnyView(FocusRecordEditor(store: focus, workspace: workspace, draft: .init(now: now))), CGSize(width: 440, height: 446)),
+            ("focus-record", AnyView(FocusRecordEditor(store: focus, workspace: workspace, draft: .init(now: now))),
+             CGSize(width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)),
             ("focus-preset", AnyView(FocusPresetEditor(store: focus, workspace: workspace, preset: preset)), CGSize(width: 400, height: 380)),
             ("filter", AnyView(FilterEditorView(store: filters, workspace: workspace, initial: nil, onDismiss: {})), CGSize(width: 520, height: 600)),
             ("countdown", AnyView(CountdownEditorView(store: countdown, original: nil)), CGSize(width: 460, height: 546))

@@ -29,7 +29,8 @@ private struct ArchivedTaskDocument: NSViewRepresentable {
     let task: Task
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true; scroll.scrollerStyle = .overlay; scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true; scroll.drawsBackground = false
+        CompactScrollStyle.apply(to: scroll)
         let text = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 400), textContainer: nil)
         text.isEditable = false; text.isSelectable = true
         text.textContainerInset = NSSize(width: 20, height: 20)

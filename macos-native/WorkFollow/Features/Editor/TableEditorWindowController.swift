@@ -49,6 +49,7 @@ final class TableEditorWindowController: NSWindowController, NSWindowDelegate {
         scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
         scroll.drawsBackground = false
+        CompactScrollStyle.apply(to: scroll)
         scroll.documentView = documentView
 
         status.font = .systemFont(ofSize: 11)

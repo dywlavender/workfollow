@@ -49,6 +49,7 @@ struct SettingsPage<Content: View>: View {
                 .padding(24)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .compactScrollbars()
         .workfollowPopupSurface()
     }
 }
@@ -58,6 +59,8 @@ private struct SettingsGeneralView: View {
     @State private var showWidgetHelp = false
     @State private var loginStatus = SMAppService.mainApp.status
     @State private var loginError: String?
+    @AppStorage(EditorPreferences.bodyFontSizeKey)
+    private var bodyFontSize = Double(EditorPreferences.defaultBodyFontSize)
 
     var body: some View {
         SettingsPage {
@@ -97,6 +100,24 @@ private struct SettingsGeneralView: View {
                     Text(loginError).font(WFType.supporting).foregroundStyle(.red)
                         .padding(.horizontal, WFSpace.md)
                 }
+            }
+            WFFormSection("编辑", footnote: "只改变编辑栏里没有单独设置字号的“正文”；已选“正文 1/2/3”、标题、代码与列表保持原样，存量笔记立即生效。") {
+                WFFormRow("正文字号", showsDivider: false) {
+                    HStack(spacing: 8) {
+                        Text("\(Int(bodyFontSize)) pt")
+                            .monospacedDigit()
+                            .foregroundStyle(WFColors.secondaryText)
+                        Stepper("正文字号", value: $bodyFontSize,
+                                in: bodyFontSizeRange, step: 1)
+                            .labelsHidden()
+                            .accessibilityIdentifier("settings.body.fontSize")
+                    }
+                }
+                Text("正文预览：记录想法、会议和下一步行动。")
+                    .font(.system(size: EditorPreferences.clampedBodyFontSize(CGFloat(bodyFontSize))))
+                    .foregroundStyle(WFColors.text)
+                    .padding(.horizontal, WFSpace.md)
+                    .padding(.vertical, 8)
             }
             WFFormSection("背景", footnote: "侧栏、列表、各页面留白和弹窗都会带上主题色；正文与卡片保持纯色。") {
                 BackgroundThemePreview()
@@ -150,6 +171,10 @@ private struct SettingsGeneralView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             loginStatus = SMAppService.mainApp.status
         }
+    }
+
+    private var bodyFontSizeRange: ClosedRange<Double> {
+        return Double(EditorPreferences.bodyFontSizeRange.lowerBound)...Double(EditorPreferences.bodyFontSizeRange.upperBound)
     }
 
     private func updateLoginItem(_ enabled: Bool) {

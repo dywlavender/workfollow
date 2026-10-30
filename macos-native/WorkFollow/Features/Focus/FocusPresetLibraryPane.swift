@@ -30,6 +30,7 @@ struct FocusPresetLibraryPane: View {
                     }
                 }.padding(.horizontal, FocusLayoutMetrics.libraryListInset).padding(.top, 6)
             }
+            .compactScrollbars()
             compactTimerBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

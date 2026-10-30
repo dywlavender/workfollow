@@ -411,6 +411,7 @@ struct BusinessMenuContent<Content: View>: View {
                                                    value: geometry.size.height)
                         })
                     }
+                    .compactScrollbars()
                     .scrollBounceBehavior(.basedOnSize)
                     .frame(height: min(contentHeight, maximumHeight))
                     .onChange(of: controller.scrollTarget) { _, id in if let id { proxy.scrollTo(id, anchor: .center) } }

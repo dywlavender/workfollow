@@ -119,6 +119,7 @@ struct FilterEditorView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(WFSpace.xxl)
             }
+            .compactScrollbars()
 
             DialogFooter(canSubmit: !draft.trimmedName.isEmpty,
                          cancelIdentifier: "filter.editor.cancel", primaryIdentifier: "filter.editor.save",

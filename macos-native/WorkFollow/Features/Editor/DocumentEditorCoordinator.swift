@@ -150,6 +150,33 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         }
     }
 
+    /// 设置页改了正文字号：按当前模型重排，保留选区、滚动位置与文末段落级别。
+    func reloadBodyTypography(in textView: NativeTextView) {
+        flushPendingComposition(in: textView)
+        let selection = textView.selectedRange()
+        let scrollOrigin = textView.enclosingScrollView?.contentView.bounds.origin
+        let length = (document.plainText as NSString).length
+        textView.font = .systemFont(ofSize: EditorPreferences.bodyFontSize)
+        textView.textStorage?.setAttributedString(textView.renderDocument(document))
+        let location = min(selection.location, length)
+        let selectedLength = min(selection.length, length - location)
+        textView.setSelectedRange(NSRange(location: location, length: selectedLength))
+        if selectedLength == 0, let storage = textView.textStorage, storage.length > 0 {
+            // 光标处接着输入的样式跟住所在段落（标题/列表/加粗），不要退回纯正文。
+            let probe = location > 0 ? location - 1 : 0
+            textView.typingAttributes = storage.attributes(at: probe, effectiveRange: nil)
+        }
+        textView.seedTrailingParagraphKind(Self.trailingBlockKind(of: document),
+            indentLevel: document.blocks.last?.indentLevel ?? 0,
+            listStart: document.blocks.last?.listStart,
+            align: document.blocks.last?.align)
+        if let scrollView = textView.enclosingScrollView, let scrollOrigin {
+            scrollView.contentView.scroll(to: scrollOrigin)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+        didLoadDocument(in: textView)
+    }
+
     func didLoadDocument(in textView: NativeTextView, reparseInline: Bool = false) {
         handle?.syncLiveTextIsEmpty(textView.string.isEmpty)
         committedStorageRevision = textView.storageRevision

@@ -418,6 +418,7 @@ struct SettingsDataView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .compactScrollbars()
             .background { ThemedPopupSurface() }
             .navigationTitle("选择要恢复的备份")
             .toolbar {

@@ -65,7 +65,7 @@ struct FocusOverviewPane: View {
             if store.recordGroups.isEmpty && !store.historyLoading && !store.historyHasMore && store.historyError == nil {
                 emptyRecordsState
             } else {
-                ScrollView { recordsList }
+                ScrollView { recordsList }.compactScrollbars()
             }
         }
         .padding(.horizontal, FocusLayoutMetrics.overviewHorizontalPadding)
