@@ -34,19 +34,26 @@ struct FilterEditorView: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: WFSpace.lg) {
                 DialogTitle(text: initial == nil ? "新建过滤器" : "编辑过滤器")
-                TextField("过滤器名称", text: $draft.name)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityIdentifier("filter.editor.name")
-                    .onChange(of: draft.name) { _, _ in conflict = false }
-                Picker("筛选方式", selection: Binding(get: { draft.mode }, set: { mode in
-                    if draft.switchMode(to: mode) { modeIssue = nil }
-                    else { modeIssue = draft.basicConversionIssue }
-                })) {
-                    Text("普通").tag(FilterEditorMode.basic)
-                    Text("高级").tag(FilterEditorMode.advanced)
+                WFFormSection {
+                    WFFormRow("名称") {
+                        TextField("过滤器名称", text: $draft.name)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("filter.editor.name")
+                            .onChange(of: draft.name) { _, _ in conflict = false }
+                    }
+                    WFFormRow("筛选方式", showsDivider: false) {
+                        Picker("筛选方式", selection: Binding(get: { draft.mode }, set: { mode in
+                            if draft.switchMode(to: mode) { modeIssue = nil }
+                            else { modeIssue = draft.basicConversionIssue }
+                        })) {
+                            Text("普通").tag(FilterEditorMode.basic)
+                            Text("高级").tag(FilterEditorMode.advanced)
+                        }
+                        .pickerStyle(.segmented).labelsHidden()
+                        .accessibilityIdentifier("filter.editor.mode")
+                    }
                 }
-                .pickerStyle(.segmented).labelsHidden()
-                .accessibilityIdentifier("filter.editor.mode")
                 if modeIssue != nil, let issue = draft.basicConversionIssue {
                     Text(issue).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 }
@@ -62,32 +69,34 @@ struct FilterEditorView: View {
                         .foregroundStyle(WFColors.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    VStack(alignment: .leading, spacing: WFSpace.sm) {
-                        sectionLabel("清单")
+                    WFFormSection("清单") {
                         chips(listOptions, symbol: "list.bullet", selection: draft.selectedLists,
                               onToggle: { draft.selectedLists = $0 })
+                            .padding(.horizontal, WFSpace.md)
                     }
 
-                    VStack(alignment: .leading, spacing: WFSpace.sm) {
-                        sectionLabel("标签")
+                    WFFormSection("标签") {
                         if tagOptions.isEmpty {
                             emptyHint("先在侧栏新建标签")
+                                .padding(.horizontal, WFSpace.md)
                         } else {
                             chips(tagOptions, symbol: "tag", selection: draft.selectedTags,
                                   onToggle: { draft.selectedTags = $0 })
+                                .padding(.horizontal, WFSpace.md)
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: WFSpace.sm) {
-                        sectionLabel("关键词")
-                        TextField("在标题与正文中匹配，空格或逗号分隔", text: $draft.keywordText)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityIdentifier("filter.editor.keywords")
-                            .help("多个关键词需全部命中；匹配标题与正文，忽略大小写")
+                    WFFormSection {
+                        WFFormRow("关键词", showsDivider: false) {
+                            TextField("在标题与正文中匹配，空格或逗号分隔", text: $draft.keywordText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityIdentifier("filter.editor.keywords")
+                                .help("多个关键词需全部命中；匹配标题与正文，忽略大小写")
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: WFSpace.sm) {
-                        sectionLabel("优先级")
+                    WFFormSection("优先级") {
                         HStack(spacing: WFSpace.sm) {
                             ForEach(TaskPriority.menuOrder, id: \.self) { priority in
                                 chip(Self.priorityTitle(priority), symbol: "flag",
@@ -98,17 +107,19 @@ struct FilterEditorView: View {
                                 }
                             }
                         }
+                        .padding(.horizontal, WFSpace.md)
                     }
 
-                    VStack(alignment: .leading, spacing: WFSpace.sm) {
-                        sectionLabel("日期范围")
-                        Picker("日期范围", selection: $draft.dateRange) {
-                            ForEach(SavedFilterDateRange.allCases, id: \.self) { range in
-                                Text(range.title).tag(range)
+                    WFFormSection {
+                        WFFormRow("日期范围", showsDivider: false) {
+                            Picker("日期范围", selection: $draft.dateRange) {
+                                ForEach(SavedFilterDateRange.allCases, id: \.self) { range in
+                                    Text(range.title).tag(range)
+                                }
                             }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
                         }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
                     }
                     } else {
                         advancedConditions
@@ -202,10 +213,6 @@ struct FilterEditorView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(WFSpace.md)
         .background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
-    }
-
-    private func sectionLabel(_ title: String) -> some View {
-        Text(title).font(WFType.section).foregroundStyle(WFColors.secondaryText)
     }
 
     private func emptyHint(_ text: String) -> some View {

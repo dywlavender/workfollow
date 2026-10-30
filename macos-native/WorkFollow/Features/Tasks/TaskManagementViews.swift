@@ -434,62 +434,87 @@ struct TaskComposer: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("新建任务").font(WFType.detailTitle)
-            TextField("准备做什么？", text: $title,
-                      prompt: Text("准备做什么？").foregroundStyle(QuickAddBarStyle.placeholderColor))
-                .foregroundStyle(WFColors.text)
-                .focused($titleFocused)
-            BusinessPicker("清单", selection: $list, options:
-                workspace.availableListNames.map { BusinessChoice($0, $0, symbol: "tray") })
-            .onChange(of: list) { _, _ in listEdited = true }
-            scheduleRow
-            BusinessPicker("优先级", selection: $priority, options:
-                TaskPriority.menuOrder.map { BusinessChoice($0, $0.title, symbol: "flag", color: $0.menuColor) })
-            .onChange(of: priority) { _, _ in priorityEdited = true }
-            TextField("标签（逗号分隔）", text: $tags)
-                .onChange(of: tags) { _, _ in tagsEdited = true }
-            HStack {
-                Spacer()
-                Button("取消") { onClose(false) }.keyboardShortcut(.cancelAction)
-                Button("创建") {
-                    let parsed = QuickAddParser.parse(title, now: workspace.clock(), calendar: workspace.calendar,
-                                                     knownLists: Set(workspace.availableListNames),
-                                                     dismissedTokenIDs: dismissedTokenIDs)
-                    guard !parsed.title.isEmpty else { return }
-                    // 面板没动过时按**当前标题**重新解析（用户可能打开后才在标题里打"明天"）；
-                    // 动过就以面板结果为准 —— 与快速添加条"草稿 > 解析"同一口径。
-                    let finalPlan = scheduleEdited
-                        ? plan
-                        : Self.plan(parsed: parsed, initial: initialSchedule,
-                                    scheduled: scheduled, date: presetDate,
-                                    calendar: workspace.calendar)
-                    let parsedTags = tags.replacingOccurrences(of: "，", with: ",").components(separatedBy: ",")
-                    let enteredTags = tagsEdited || initialProperties.tags != nil
-                        ? parsedTags : parsedTags + parsed.tags
-                    let finalTags = (workspace.activeTag.map { [$0] } ?? []) + enteredTags
-                    let finalList = listEdited ? list : parsed.listName ?? list
-                    let finalPriority = priorityEdited ? priority : parsed.priority
-                    // 创建也走唯一入口：日程 / 时间段 / 提醒 / 重复整体落地，不再逐字段拆参。
-                    let result = workspace.createDraft(title: parsed.title, list: finalList,
-                                                       plan: finalPlan, priority: finalPriority,
-                                                       tags: finalTags)
-                    if result.taskID != nil { onClose(true) }
-                }.keyboardShortcut(.defaultAction).disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        VStack(spacing: 0) {
+            DialogHeader(title: "新建任务")
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: WFSpace.lg) {
+                    WFFormSection {
+                        WFFormRow("标题") {
+                            TextField("准备做什么？", text: $title,
+                                      prompt: Text("准备做什么？").foregroundStyle(QuickAddBarStyle.placeholderColor))
+                                .textFieldStyle(.roundedBorder)
+                                .foregroundStyle(WFColors.text)
+                                .focused($titleFocused)
+                                .frame(maxWidth: .infinity)
+                        }
+                        WFFormRow("清单") {
+                            BusinessPicker("清单", selection: $list, options:
+                                workspace.availableListNames.map { BusinessChoice($0, $0, symbol: "tray") })
+                            .labelsHidden()
+                            .onChange(of: list) { _, _ in listEdited = true }
+                        }
+                        WFFormRow("日期") { scheduleRow }
+                        WFFormRow("优先级") {
+                            BusinessPicker("优先级", selection: $priority, options:
+                                TaskPriority.menuOrder.map { BusinessChoice($0, $0.title, symbol: "flag", color: $0.menuColor) })
+                            .labelsHidden()
+                            .onChange(of: priority) { _, _ in priorityEdited = true }
+                        }
+                        WFFormRow("标签", showsDivider: false) {
+                            TextField("用逗号分隔", text: $tags)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: .infinity)
+                                .onChange(of: tags) { _, _ in tagsEdited = true }
+                        }
+                    }
+                }.padding(PopupMetrics.formInset)
             }
-        }.padding(24).frame(width: 360)
-            .workfollowPopupSurface(fallback: WFColors.canvas)
-            // 日程唯一编辑器：与列表行 / 四象限 / 快速组合器同一个面板、同一份 plan。
-            .schedulePopover(isPresented: $showSchedulePanel) {
-                TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: .main,
-                                  draftCommit: { plan = $0; scheduleEdited = true }) {
-                    showSchedulePanel = false
-                }
-                .environment(\.calendar, workspace.calendar)
-                .environment(\.timeZone, workspace.calendar.timeZone)
+            .compactScrollbars()
+            DialogFooter(primaryTitle: "创建",
+                         canSubmit: !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                         onCancel: { onClose(false) }, onSubmit: create) {
+                Text("").accessibilityHidden(true)
             }
-            .onAppear { titleFocused = true }
-            .environment(\.calendar, workspace.calendar).environment(\.timeZone, workspace.calendar.timeZone)
+        }
+        .frame(width: 360, height: 440)
+        .workfollowPopupSurface(fallback: WFColors.canvas)
+        // 日程唯一编辑器：与列表行 / 四象限 / 快速组合器同一个面板、同一份 plan。
+        .schedulePopover(isPresented: $showSchedulePanel) {
+            TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: .main,
+                              draftCommit: { plan = $0; scheduleEdited = true }) {
+                showSchedulePanel = false
+            }
+            .environment(\.calendar, workspace.calendar)
+            .environment(\.timeZone, workspace.calendar.timeZone)
+        }
+        .onAppear { titleFocused = true }
+        .environment(\.calendar, workspace.calendar).environment(\.timeZone, workspace.calendar.timeZone)
+    }
+
+    private func create() {
+        let parsed = QuickAddParser.parse(title, now: workspace.clock(), calendar: workspace.calendar,
+                                          knownLists: Set(workspace.availableListNames),
+                                          dismissedTokenIDs: dismissedTokenIDs)
+        guard !parsed.title.isEmpty else { return }
+        // 面板没动过时按**当前标题**重新解析（用户可能打开后才在标题里打"明天"）；
+        // 动过就以面板结果为准 —— 与快速添加条"草稿 > 解析"同一口径。
+        let finalPlan = scheduleEdited
+            ? plan
+            : Self.plan(parsed: parsed, initial: initialSchedule,
+                        scheduled: scheduled, date: presetDate,
+                        calendar: workspace.calendar)
+        let parsedTags = tags.replacingOccurrences(of: "，", with: ",").components(separatedBy: ",")
+        let enteredTags = tagsEdited || initialProperties.tags != nil
+            ? parsedTags : parsedTags + parsed.tags
+        let finalTags = (workspace.activeTag.map { [$0] } ?? []) + enteredTags
+        let finalList = listEdited ? list : parsed.listName ?? list
+        let finalPriority = priorityEdited ? priority : parsed.priority
+        // 创建也走唯一入口：日程 / 时间段 / 提醒 / 重复整体落地，不再逐字段拆参。
+        let result = workspace.createDraft(title: parsed.title, list: finalList,
+                                           plan: finalPlan, priority: finalPriority,
+                                           tags: finalTags)
+        if result.taskID != nil { onClose(true) }
     }
 
     // MARK: 日程入口（共享面板）
@@ -499,9 +524,9 @@ struct TaskComposer: View {
             showSchedulePanel = true
         } label: {
             HStack(spacing: WFSpace.sm) {
+                Spacer(minLength: 0)
                 Image(systemName: "calendar").font(.system(size: 16))
                 Text(scheduleLabel).font(WFType.control)
-                Spacer(minLength: 0)
             }
             .foregroundStyle(plan.schedule.dueAt == nil ? WFColors.tertiaryText : WFColors.accent)
             .contentShape(Rectangle())

@@ -93,24 +93,16 @@ struct CountdownEditorView: View {
     private var calendar: Calendar { .current }
     private var isNew: Bool { original == nil }
 
-    // 参考面板实测（1512pt 窗口下的原版「添加」面板）：
-    // 面板 460×448，左右内边距 39，行高 34，行间距 10，标签列宽 54，
-    // 行内控件 322×34，底部按钮 102×32。这里按同一组数排，别凭感觉调。
+    // 参考面板实测（1512pt 窗口下的原版「添加」面板）：面板宽 460。
+    // 名称行保留参考图的图标 + 名称框结构；属性行改用 WFForm 行，
+    // 日期/提醒等浮层仍按字段锚点定位。
     private static let panelWidth: CGFloat = 460
-    private static let inset: CGFloat = 40
     private static let labelWidth: CGFloat = 54
     /// 名称行的图标**槽**宽（不是图标本体宽度 38）。
     ///
-    /// 名称框的左边界必须和属性字段**完全重合**。参照图 2× 特写实测：名称框与
-    /// 属性字段是**同一个矩形**——左边框都在 x=200、右边框都在 x=839。
-    ///
-    /// 属性字段的左边界 = `labelWidth` + `WFSpace.inline`；
-    /// 名称框的左边界 = 图标槽 + `WFSpace.lg`。差的这 6pt 只能由槽宽补上：
-    /// 改 `nameRow` 里 `HStack` 的 spacing 会把名称框到「图标」按钮的 16pt 一起改掉。
-    /// 54 + 6 - 16 = 44。
+    /// 名称框与图标之间的横向节奏沿用参考图；属性行由 WFForm 接管。
     private static let nameBadgeSlot: CGFloat = labelWidth + WFSpace.inline - WFSpace.lg
     private static let rowHeight: CGFloat = 34
-    private static let rowGap: CGFloat = 10
     private static let buttonWidth: CGFloat = 102
     /// 下拉浮层里选项行的高度。
     ///
@@ -191,16 +183,22 @@ struct CountdownEditorView: View {
             DialogHeader(title: (isNew ? "添加" : "编辑") + kind.title)
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: Self.rowGap) {
-                    nameRow
-                    dateRow
-                    reminderRow
-                    repeatRow
-                    kindRow
-                    displayRow
-                    if kind.hasAgeOption { ageRow }
+                VStack(alignment: .leading, spacing: WFSpace.lg) {
+                    WFFormSection {
+                        nameRow
+                            .padding(.horizontal, WFSpace.md)
+                            .padding(.vertical, 10)
+                    }
+                    WFFormSection {
+                        dateRow
+                        reminderRow
+                        repeatRow
+                        kindRow
+                        displayRow
+                        if kind.hasAgeOption { ageRow }
+                    }
                 }
-                .padding(.horizontal, Self.inset)
+                .padding(.horizontal, WFSpace.xxl)
                 .padding(.vertical, WFSpace.xxl)
             }
             .compactScrollbars()
@@ -492,12 +490,9 @@ struct CountdownEditorView: View {
 
     // MARK: 属性行
 
-    private func propertyRow(_ row: Row, label: String, value: String, isPlaceholder: Bool) -> some View {
-        HStack(spacing: WFSpace.inline) {
-            Text(label)
-                .font(WFType.supporting)
-                .foregroundStyle(WFColors.secondaryText)
-                .frame(width: Self.labelWidth, alignment: .leading)
+    private func propertyRow(_ row: Row, label: String, value: String, isPlaceholder: Bool,
+                             showsDivider: Bool = true) -> some View {
+        WFFormRow(label, showsDivider: showsDivider) {
             Button {
                 let next: Row? = openRow == row ? nil : row
                 // 每次打开日期浮层都从**已确定**的那份重新拷一份来编辑，
@@ -507,7 +502,7 @@ struct CountdownEditorView: View {
             } label: {
                 HStack(spacing: WFSpace.xs) {
                     Text(value)
-                        .font(WFType.supporting)
+                        .font(WFType.body)
                         .foregroundStyle(isPlaceholder ? WFColors.tertiaryText : WFColors.text)
                         .lineLimit(1)
                     Spacer(minLength: WFSpace.xs)
@@ -515,13 +510,7 @@ struct CountdownEditorView: View {
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(WFColors.tertiaryText)
                 }
-                .padding(.horizontal, WFSpace.sm)
-                .frame(height: Self.rowHeight)
                 .frame(maxWidth: .infinity)
-                .background(WFColors.content, in: RoundedRectangle(cornerRadius: 6))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6).stroke(WFColors.border)
-                }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -890,7 +879,8 @@ struct CountdownEditorView: View {
     }
 
     private var displayRow: some View {
-        propertyRow(.display, label: "显示", value: smartListDisplay.rowText, isPlaceholder: false)
+        propertyRow(.display, label: "显示", value: smartListDisplay.rowText,
+                    isPlaceholder: false, showsDivider: kind.hasAgeOption)
     }
 
     /// 「显示」下拉：一个「在智能清单中」分组标题，下面五项
@@ -914,21 +904,9 @@ struct CountdownEditorView: View {
         .background(WFColors.content, in: RoundedRectangle(cornerRadius: 6))
     }
 
-    /// 「显示岁数」这一行参考图里是**开关在左、文字在右**（和上面几行
-    /// 「标签在左、控件在右」正好相反），而且开关落在标签列上、不再缩进。
+    /// 「显示岁数」这一行按 WFForm 统一为标签在左、开关在右。
     private var ageRow: some View {
-        HStack(spacing: WFSpace.sm) {
-            Toggle("", isOn: $showsAge)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .controlSize(.small)
-                .accessibilityLabel("显示岁数")
-            Text("显示岁数")
-                .font(WFType.supporting)
-                .foregroundStyle(WFColors.text)
-            Spacer(minLength: 0)
-        }
-        .frame(height: Self.rowHeight)
+        WFFormToggleRow("显示岁数", isOn: $showsAge, showsDivider: false)
     }
 
     private func optionRow(_ title: String, checked: Bool, action: @escaping () -> Void) -> some View {

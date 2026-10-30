@@ -16,13 +16,21 @@ struct MeetingTranscriptEditor: View {
         self.save = save; _text = State(initialValue: line.text); _speaker = State(initialValue: line.speakerDisplayName)
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text("校正对话").font(WFType.detailTitle)
-            TextField("讲话人", text: $speaker).textFieldStyle(.roundedBorder)
-            Toggle("同时修改该讲话人的其他片段", isOn: $renameAll).font(WFType.supporting)
-            TextEditor(text: $text).font(WFType.body).frame(minHeight: 150)
-                .compactTextEditorScrollbars()
-                .overlay(RoundedRectangle(cornerRadius: 6).stroke(WFColors.border))
+            WFFormSection {
+                WFFormRow("讲话人") {
+                    TextField("讲话人", text: $speaker).textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+                }
+                WFFormToggleRow("同时修改该讲话人的其他片段", isOn: $renameAll, showsDivider: false)
+            }
+            WFFormSection("内容") {
+                TextEditor(text: $text).font(WFType.body).frame(minHeight: 150)
+                    .compactTextEditorScrollbars()
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(WFColors.border))
+                    .padding(.horizontal, WFSpace.md)
+            }
             HStack {
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()

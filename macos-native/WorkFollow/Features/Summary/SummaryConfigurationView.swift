@@ -44,24 +44,18 @@ struct SummaryConfigurationView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: WFSpace.lg) {
                 templateSection
                 section("筛选") {
                     control("日期", value: dateLabel, kind: .date)
                     control("清单", value: listLabel, kind: .list)
                     control("状态", value: options.filter.status.rawValue, kind: .status)
-                    control("更多", value: moreLabel, kind: .more)
+                    control("更多", value: moreLabel, kind: .more, showsDivider: false)
                 }
                 section("显示设置") {
                     control("分组", value: options.grouping.rawValue, kind: .grouping)
-                    control("显示内容", value: "\(options.content.count)项", kind: .content)
-                }
-                HStack {
-                    Text("下一周期任务").font(WFType.sectionSemibold)
-                    Spacer()
-                    Toggle("下一周期任务", isOn: $options.includesNextWeek)
-                        .toggleStyle(.switch).labelsHidden().controlSize(.mini)
-                        .help("带入下一天、周、月或相同长度的下一段日期中已安排的任务")
+                    control("显示内容", value: "\(options.content.count)项", kind: .content, showsDivider: false)
+                    WFFormToggleRow("下一周期任务", isOn: $options.includesNextWeek, showsDivider: false)
                 }
                 aiSection
             }
@@ -71,10 +65,11 @@ struct SummaryConfigurationView: View {
         .tint(WFColors.summaryAction)
     }
 
-    private func control(_ title: String, value: String, kind: Control) -> some View {
+    private func control(_ title: String, value: String, kind: Control, showsDivider: Bool = true) -> some View {
         SummarySettingControl(title: title, value: value,
             isPresented: Binding(get: { activePopover == kind }, set: { activePopover = $0 ? kind : nil }),
-            width: kind.width, anchor: "summary.setting." + kind.rawValue) {
+            width: kind.width, anchor: "summary.setting." + kind.rawValue,
+            showsDivider: showsDivider) {
             popover(kind).tint(WFColors.summaryAction)
         }
     }
@@ -148,8 +143,7 @@ struct SummaryConfigurationView: View {
     }
 
     private var templateSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("模板").font(WFType.sectionSemibold)
+        WFFormSection("模板") {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     Button { onTemplate(nil) } label: { templateLabel("标准摘要") }.help("套用标准摘要配置")
@@ -163,6 +157,7 @@ struct SummaryConfigurationView: View {
                     }.hoverTip("将当前筛选与显示配置存为模板").accessibilityLabel("添加摘要模板")
                 }.buttonStyle(.borderless).padding(.vertical, 1)
             }
+            .padding(.horizontal, WFSpace.md)
         }
     }
     private func templateLabel(_ text: String) -> some View {
@@ -171,61 +166,51 @@ struct SummaryConfigurationView: View {
             .background(WFColors.panelFill, in: Capsule())
     }
     private var aiSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Text("内容优化").font(WFType.sectionSemibold)
-                Text("AI").font(.system(size: 9, weight: .medium)).foregroundStyle(WFColors.summaryAction)
-                    .padding(.horizontal, 3).padding(.vertical, 1)
-                    .overlay { RoundedRectangle(cornerRadius: 2).stroke(WFColors.summaryAction.opacity(0.65), lineWidth: 0.8) }
-                Spacer()
-                Toggle("内容优化", isOn: $aiEnabled).toggleStyle(.switch).labelsHidden().controlSize(.mini)
-            }
+        WFFormSection {
+            WFFormToggleRow("内容优化", isOn: $aiEnabled, showsDivider: aiEnabled)
             if aiEnabled {
-                Text("按当前任务重新组织摘要，先预览再采用。")
-                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText).fixedSize(horizontal: false, vertical: true)
-                VStack(spacing: 0) {
-                    control("长度", value: aiOptions.length.rawValue, kind: .aiLength)
-                    aiRowDivider
-                    control("语言风格", value: aiOptions.style.rawValue, kind: .aiStyle)
-                    aiRowDivider
-                    aiTextRow("职业", placeholder: "可选，如产品经理", text: $aiOptions.profession)
-                    aiRowDivider
-                    aiTextRow("补充要求", placeholder: "可选，如不要用第一人称", text: $aiOptions.hint)
-                }.background(WFColors.panelFill, in: RoundedRectangle(cornerRadius: 8))
-                if let aiError {
-                    Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger).fixedSize(horizontal: false, vertical: true)
-                    Button("AI 接入设置…", action: onConfigureAI).buttonStyle(.borderless)
+                Text("AI · 按当前任务重新组织摘要，先预览再采用。")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, WFSpace.md).padding(.vertical, 6)
+                control("长度", value: aiOptions.length.rawValue, kind: .aiLength)
+                control("语言风格", value: aiOptions.style.rawValue, kind: .aiStyle)
+                WFFormRow("职业") {
+                    TextField("可选，如产品经理", text: $aiOptions.profession)
+                        .textFieldStyle(.plain).multilineTextAlignment(.trailing)
+                        .foregroundStyle(WFColors.secondaryText).frame(maxWidth: 190)
+                        .accessibilityLabel("职业")
                 }
-                if aiRunning { Button("取消生成", action: onCancelAI).buttonStyle(.borderless) }
-                Button(action: onGenerateAI) {
-                    HStack(spacing: 8) {
-                        if aiRunning { ProgressView().controlSize(.small).tint(.white) }
-                        Text(aiRunning ? "正在整理…" : "AI 优化").font(WFType.body)
-                    }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
-                        .background(WFColors.summaryAction, in: RoundedRectangle(cornerRadius: 8))
-                        .contentShape(RoundedRectangle(cornerRadius: 8))
-                }.buttonStyle(.plain).disabled(aiRunning || !canGenerate)
-                    .opacity(canGenerate ? 1 : 0.45)
+                WFFormRow("补充要求", showsDivider: false) {
+                    TextField("可选，如不要用第一人称", text: $aiOptions.hint)
+                        .textFieldStyle(.plain).multilineTextAlignment(.trailing)
+                        .foregroundStyle(WFColors.secondaryText).frame(maxWidth: 190)
+                        .accessibilityLabel("补充要求")
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    if let aiError {
+                        Text(aiError).font(WFType.supporting).foregroundStyle(WFColors.danger)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button("AI 接入设置…", action: onConfigureAI).buttonStyle(.borderless)
+                    }
+                    if aiRunning { Button("取消生成", action: onCancelAI).buttonStyle(.borderless) }
+                    Button(action: onGenerateAI) {
+                        HStack(spacing: 8) {
+                            if aiRunning { ProgressView().controlSize(.small).tint(.white) }
+                            Text(aiRunning ? "正在整理…" : "AI 优化").font(WFType.body)
+                        }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
+                            .background(WFColors.summaryAction, in: RoundedRectangle(cornerRadius: 8))
+                            .contentShape(RoundedRectangle(cornerRadius: 8))
+                    }.buttonStyle(.plain).disabled(aiRunning || !canGenerate)
+                        .opacity(canGenerate ? 1 : 0.45)
+                }
+                .padding(.horizontal, WFSpace.md).padding(.vertical, 8)
             }
         }
     }
-    private var aiRowDivider: some View {
-        Divider().overlay(WFColors.border).padding(.leading, 16)
-    }
-    private func aiTextRow(_ title: String, placeholder: String, text: Binding<String>) -> some View {
-        HStack(spacing: 8) {
-            Text(title).font(WFType.body).foregroundStyle(WFColors.text)
-            Spacer(minLength: 8)
-            TextField(placeholder, text: text).textFieldStyle(.plain)
-                .multilineTextAlignment(.trailing).font(WFType.body)
-                .foregroundStyle(WFColors.secondaryText).frame(maxWidth: 190)
-                .accessibilityLabel(title)
-        }.padding(.horizontal, 16).frame(height: 38)
-    }
-    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(WFType.sectionSemibold)
-            VStack(spacing: 0, content: content).background(WFColors.panelFill, in: RoundedRectangle(cornerRadius: 8))
+    private func section<Content: View>(_ title: String, @ViewBuilder content: @escaping () -> Content) -> some View {
+        WFFormSection(title) {
+            content()
         }
     }
 }
@@ -237,21 +222,22 @@ struct SummarySettingControl<Content: View>: View {
     @Binding var isPresented: Bool
     let width: CGFloat
     var anchor = ""
+    var showsDivider = true
     @ViewBuilder let content: () -> Content
     @State private var hovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(title).font(WFType.body).foregroundStyle(WFColors.text)
-            Spacer(minLength: 8)
+        WFFormRow(title, showsDivider: showsDivider) {
             Button { isPresented.toggle() } label: {
                 HStack(spacing: 8) {
+                    Spacer(minLength: 0)
                     Text(value).font(WFType.body).foregroundStyle(WFColors.secondaryText)
                         .lineLimit(1).truncationMode(.middle)
                     Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
                         .foregroundStyle(WFColors.tertiaryText)
                 }
                 .padding(.horizontal, 6).frame(height: 28)
+                .frame(maxWidth: .infinity, alignment: .trailing)
                 .background(isPresented || hovered ? WFColors.border.opacity(0.5) : .clear,
                             in: RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())
@@ -264,7 +250,6 @@ struct SummarySettingControl<Content: View>: View {
                     placement: .dropdown, focusPolicy: .panelWindow, title: "摘要：" + title, content: content)
             }
         }
-        .padding(.horizontal, 16).frame(height: 38)
     }
 }
 

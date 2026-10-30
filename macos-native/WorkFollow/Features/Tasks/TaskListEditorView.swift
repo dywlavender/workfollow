@@ -175,11 +175,16 @@ struct TaskListCopyView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text("复制清单").font(WFType.section)
-            TextField("清单名称", text: $name).textFieldStyle(.roundedBorder)
-                .accessibilityIdentifier("list-copy-name")
-            VStack(alignment: .leading, spacing: 14) {
+            WFFormSection {
+                WFFormRow("清单名称", showsDivider: false) {
+                    TextField("清单名称", text: $name).textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("list-copy-name")
+                }
+            }
+            WFFormSection("复制范围") {
                 ForEach(TaskListCopyScope.allCases) { option in
                     Button { scope = option } label: {
                         HStack(spacing: 10) {
@@ -187,11 +192,15 @@ struct TaskListCopyView: View {
                                 .foregroundStyle(scope == option ? WFColors.accent : WFColors.secondaryText)
                             Text(option.title).foregroundStyle(WFColors.text)
                             Spacer()
-                        }.contentShape(Rectangle())
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, WFSpace.md)
+                        .contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityValue(scope == option ? "已选择" : "未选择")
                         .listManagementAnchor(.copyScope(option))
                 }
-            }.font(WFType.body)
+            }
+            .font(WFType.body)
             if let error { Text(error).font(WFType.supporting).foregroundStyle(.red) }
             HStack {
                 Spacer()
@@ -296,12 +305,17 @@ struct TaskFolderEditorView: View {
         _icon = State(initialValue: workspace.listFolders.first { $0.name == name }?.icon)
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text(originalName == nil ? "新建文件夹" : "编辑文件夹").font(WFType.section)
-            HStack(spacing: 12) {
-                TaskListIconPicker(icon: $icon, color: WFColors.secondaryText, fallbackSymbol: "folder")
-                TextField("文件夹名称", text: $name).textFieldStyle(.plain).font(.system(size: 18))
-                    .focused($nameFocused).onSubmit(save)
+            WFFormSection {
+                WFFormRow("图标") {
+                    TaskListIconPicker(icon: $icon, color: WFColors.secondaryText, fallbackSymbol: "folder")
+                }
+                WFFormRow("名称", showsDivider: false) {
+                    TextField("文件夹名称", text: $name).textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: .infinity)
+                        .focused($nameFocused).onSubmit(save)
+                }
             }
             if let error { Text(error).font(WFType.supporting).foregroundStyle(.red) }
             HStack {

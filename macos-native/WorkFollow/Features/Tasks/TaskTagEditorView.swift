@@ -32,28 +32,32 @@ struct TaskTagEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: WFSpace.lg) {
             Text(tagID == nil ? "新建标签" : "编辑标签").font(WFType.detailTitle)
-            HStack {
-                fieldLabel("名称")
-                TextField("标签名称", text: $name).textFieldStyle(.roundedBorder)
-                    .focused($nameFocused)
-                    .accessibilityIdentifier("tag.editor.name")
+            WFFormSection {
+                WFFormRow("名称", showsDivider: false) {
+                    TextField("标签名称", text: $name).textFieldStyle(.roundedBorder)
+                        .focused($nameFocused)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("tag.editor.name")
+                }
             }
-            HStack(alignment: .top) {
-                fieldLabel("颜色").padding(.top, 4)
+            WFFormSection("颜色") {
                 TaskTagColorGrid(color: $color)
+                    .padding(.horizontal, WFSpace.md)
             }
-            HStack {
-                fieldLabel("父标签")
-                BusinessPicker("父标签", selection: $parentID, options:
-                    [BusinessChoice(nil, "无")] + parents.map { tag in
-                        BusinessChoice(Optional(tag.id), String(repeating: "  ", count: workspace.tagDepth(tag.name)) + tag.name,
-                                       symbol: "tag", color: workspace.tagColor(tag.name))
-                    })
-                .labelsHidden().accessibilityIdentifier("tag.editor.parent")
+            WFFormSection {
+                WFFormRow("父标签", showsDivider: false) {
+                    BusinessPicker("父标签", selection: $parentID, options:
+                        [BusinessChoice(nil, "无")] + parents.map { tag in
+                            BusinessChoice(Optional(tag.id), String(repeating: "  ", count: workspace.tagDepth(tag.name)) + tag.name,
+                                           symbol: "tag", color: workspace.tagColor(tag.name))
+                        })
+                    .labelsHidden().accessibilityIdentifier("tag.editor.parent")
+                }
             }
             if invalid {
                 Text("名称为空、已存在，或父标签不可用")
                     .font(WFType.supporting).foregroundStyle(.red)
+                    .padding(.horizontal, WFSpace.md)
             }
             Divider()
             HStack {
@@ -77,11 +81,6 @@ struct TaskTagEditorView: View {
         .onAppear { DispatchQueue.main.async { nameFocused = true } }
         .onChange(of: name) { _, _ in invalid = false }
         .onChange(of: parentID) { _, _ in invalid = false }
-    }
-
-    private func fieldLabel(_ title: String) -> some View {
-        Text(title).font(WFType.body).foregroundStyle(WFColors.secondaryText)
-            .frame(width: 64, alignment: .leading)
     }
 }
 

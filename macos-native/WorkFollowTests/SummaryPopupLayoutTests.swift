@@ -53,15 +53,17 @@ final class SummaryPopupLayoutTests: XCTestCase {
             Text("日期选项").frame(height: 100)
         }
         let host = NSHostingView(rootView: control)
-        let owner = NSWindow(contentRect: CGRect(x: screen.minX + 200, y: screen.minY + 400, width: 360, height: 38),
+        // 行高 = 10（WFFormRow 纵向内边距）+ 28（值按钮），窗口按整行高度摆，
+        // 按钮坐标才是确定值；窗口压扁时 SwiftUI 会裁掉行内边距。
+        let owner = NSWindow(contentRect: CGRect(x: screen.minX + 200, y: screen.minY + 400, width: 360, height: 48),
             styleMask: [.borderless], backing: .buffered, defer: false)
         owner.isReleasedWhenClosed = false; owner.contentView = host; owner.orderFront(nil)
         settle(host)
         defer { owner.close() }
         let panel = try XCTUnwrap(owner.childWindows?.first { $0.title == "摘要：日期" })
         XCTAssertEqual(panel.frame.width, SummaryPopoverMetrics.dateWidth, accuracy: 0.5)
-        XCTAssertEqual(panel.frame.maxX, owner.frame.maxX - 16, accuracy: 0.5)
-        XCTAssertEqual(panel.frame.maxY, owner.frame.minY + 5 - 4, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.maxX, owner.frame.maxX - WFSpace.md, accuracy: 0.5)
+        XCTAssertEqual(panel.frame.maxY, owner.frame.minY + 10 - 4, accuracy: 0.5)
     }
 
     func testFullWeekLabelFitsWithoutWrappingInTheNarrowDateMenu() {

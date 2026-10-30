@@ -114,9 +114,13 @@ final class DialogFormInteractionTests: XCTestCase {
         let items: [(String, AnyView, CGSize)] = [
             ("focus-record", AnyView(FocusRecordEditor(store: focus, workspace: workspace, draft: .init(now: now))),
              CGSize(width: FocusLayoutMetrics.recordEditorWidth, height: FocusLayoutMetrics.recordEditorHeight)),
-            ("focus-preset", AnyView(FocusPresetEditor(store: focus, workspace: workspace, preset: preset)), CGSize(width: 400, height: 380)),
+            ("focus-preset", AnyView(FocusPresetEditor(store: focus, workspace: workspace, preset: preset)), CGSize(width: 400, height: 420)),
             ("filter", AnyView(FilterEditorView(store: filters, workspace: workspace, initial: nil, onDismiss: {})), CGSize(width: 520, height: 600)),
-            ("countdown", AnyView(CountdownEditorView(store: countdown, original: nil)), CGSize(width: 460, height: 546))
+            ("countdown", AnyView(CountdownEditorView(store: countdown, original: nil)), CGSize(width: 460, height: 546)),
+            ("task-composer", AnyView(TaskComposer(workspace: workspace, onClose: { _ in }, title: "",
+                list: TaskList.inbox.name, scheduled: false, date: now,
+                initialSchedule: nil, initialProperties: QuickAddPropertiesOverrides())),
+             CGSize(width: 360, height: 440))
         ]
         for scheme in [ColorScheme.light, .dark] {
             for (name, content, size) in items {
