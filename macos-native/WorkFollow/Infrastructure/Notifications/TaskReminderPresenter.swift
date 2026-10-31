@@ -27,6 +27,9 @@ final class TaskReminderPresenter {
         panel.title = "任务提醒"; panel.level = .floating
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
+        // 玻璃材质要采样窗口背后的内容，窗口本身必须非不透明。
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.contentView = NSHostingView(rootView: TaskReminderPanel(delivery: delivery,
             defaultMinutes: preferences.snoozeMinutes, onSnooze: onSnooze, onStop: onStop, onOpen: onOpen)
@@ -75,7 +78,10 @@ private struct TaskReminderPanel: View {
             }
         }.padding(20).frame(width: 350, height: 160, alignment: .topLeading)
             .background {
-                WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+                ZStack {
+                    WFGlassScrim(opacity: 0.72)
+                    WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+                }
             }
             .hidesSystemFocusEffect()
     }

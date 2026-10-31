@@ -75,27 +75,29 @@ struct TaskInspectorHeader<Schedule: View, Priority: View>: View {
             .frame(maxWidth: .infinity)
             .frame(height: WFMetrics.controlHeight)
             .inspectorRenderAnchor(.scheduleViewport)
-            if let onKind {
-                AppKitIconButton(symbol: kindSymbol, pointSize: 13,
-                                 tint: .inspectorSecondary, accessibilityLabel: "任务类型",
-                                 action: onKind)
-                    .frame(width: 24, height: WFMetrics.controlHeight)
-                    .propertyPanelTrigger(TaskInspectorHeaderPanel.kind)
-                    .inspectorRenderAnchor(.kind)
+            WFGlassControlGroup(spacing: 4) {
+                if let onKind {
+                    AppKitIconButton(symbol: kindSymbol, pointSize: 13,
+                                     tint: .inspectorSecondary, accessibilityLabel: "任务类型",
+                                     action: onKind)
+                        .frame(width: 24, height: WFMetrics.controlHeight)
+                        .propertyPanelTrigger(TaskInspectorHeaderPanel.kind)
+                        .inspectorRenderAnchor(.kind)
+                }
+                if let onInfo {
+                    AppKitIconButton(symbol: "info.circle", pointSize: 13,
+                                     tint: .inspectorSecondary, accessibilityLabel: "笔记信息",
+                                     action: onInfo)
+                        .frame(width: 24, height: WFMetrics.controlHeight)
+                        .propertyPanelTrigger(TaskInspectorHeaderPanel.info)
+                        .inspectorRenderAnchor(.noteInfo)
+                }
+                if let onDetach {
+                    FloatingEditorButton(action: onDetach)
+                }
+                priority().fixedSize()
+                    .inspectorRenderAnchor(.priority)
             }
-            if let onInfo {
-                AppKitIconButton(symbol: "info.circle", pointSize: 13,
-                                 tint: .inspectorSecondary, accessibilityLabel: "笔记信息",
-                                 action: onInfo)
-                    .frame(width: 24, height: WFMetrics.controlHeight)
-                    .propertyPanelTrigger(TaskInspectorHeaderPanel.info)
-                    .inspectorRenderAnchor(.noteInfo)
-            }
-            if let onDetach {
-                FloatingEditorButton(action: onDetach)
-            }
-            priority().fixedSize()
-                .inspectorRenderAnchor(.priority)
         }
         .padding(.horizontal, horizontalPadding)
         .frame(height: height)

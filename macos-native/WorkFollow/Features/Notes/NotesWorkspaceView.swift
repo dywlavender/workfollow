@@ -20,12 +20,18 @@ struct NotesWorkspaceView: View {
     var windowWidth: CGFloat = 0
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @FocusState private var focusedTitle: UUID?
     @State private var showNavigation = false
     @State private var dragOrigin: CGFloat?
     @State private var query = ""
     private var folder: String? { notes.folderFilter }
     private var favorites: Bool { notes.favoritesOnly }
+    private var glassActive: Bool {
+        WFGlassSupport.isActive(material,
+                                reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency)
+    }
     @State private var detailOnly = false
     @State private var confirmClear = false
     @State private var purgeID: UUID?
@@ -366,7 +372,7 @@ struct NotesWorkspaceView: View {
             }
             .frame(height: 44)
             if !trash { HStack(spacing: 4) {
-                if backgroundTheme.isThemed {
+                if backgroundTheme.isThemed || glassActive {
                     TextField("搜索笔记", text: $query)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 8)
@@ -382,11 +388,13 @@ struct NotesWorkspaceView: View {
                     TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
                 }
                 if !trash {
-                    BusinessMenu {
-                        Button("按标题排序") { notes.sort(.title) }
-                        Button("按最近编辑排序") { notes.sort(.recentlyEdited) }
-                    } label: { Image(systemName: "arrow.up.arrow.down") }
-                    .fixedSize().hoverTip("笔记排序")
+                    WFGlassControlGroup(spacing: 0) {
+                        BusinessMenu {
+                            Button("按标题排序") { notes.sort(.title) }
+                            Button("按最近编辑排序") { notes.sort(.recentlyEdited) }
+                        } label: { Image(systemName: "arrow.up.arrow.down") }
+                        .fixedSize().hoverTip("笔记排序")
+                    }
                 }
             }.frame(height: 34) }
             ScrollView {

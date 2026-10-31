@@ -99,17 +99,19 @@ struct MatrixWorkspaceView: View {
             // 页头「…」只管一件事：整页的已完成任务显隐。
             // 撤销/重做、展开/折叠分组都不在这里——拖拽与规则编辑本身可以 ⌘Z，
             // 展开折叠是每个分组的局部动作（点分组标题）。
-            BusinessMenu {
-                Button(showCompleted ? "隐藏已完成" : "显示已完成") {
-                    settings.updateMatrix { $0.showCompleted.toggle() }
+            WFGlassControlGroup(spacing: 0) {
+                BusinessMenu {
+                    Button(showCompleted ? "隐藏已完成" : "显示已完成") {
+                        settings.updateMatrix { $0.showCompleted.toggle() }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
+                .fixedSize()
+                .hoverTip("四象限设置")
             }
-            .fixedSize()
-            .hoverTip("四象限设置")
         }
         .padding(.leading, WFSpace.relaxed)
         .padding(.top, WFSpace.cardInset)

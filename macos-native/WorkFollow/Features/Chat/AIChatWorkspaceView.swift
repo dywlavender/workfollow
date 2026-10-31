@@ -87,8 +87,10 @@ struct AIChatWorkspaceView: View {
         return VStack(spacing: 0) {
             HStack(spacing: 16) {
                 if showHistoryButton {
-                    Button("历史对话", systemImage: "clock.arrow.circlepath") { historyPresented = true }
-                        .propertyPanelTrigger("ai.chat.history")
+                    WFGlassControlGroup(spacing: 0) {
+                        Button("历史对话", systemImage: "clock.arrow.circlepath") { historyPresented = true }
+                            .propertyPanelTrigger("ai.chat.history")
+                    }
                 }
                 Text("AI 对话").font(WFType.detailTitle)
                 Spacer()

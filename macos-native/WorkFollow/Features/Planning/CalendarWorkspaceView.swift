@@ -174,16 +174,18 @@ struct CalendarWorkspaceView: View {
             Text(CalendarDayLabels.monthTitle(month, calendar: calendar)).font(WFType.pageTitle).foregroundStyle(WFColors.text).lineLimit(1)
             if mode == .day { Text(String(calendar.component(.day, from: selectedDay)) + "日").font(WFType.pageTitle) }
             Spacer(minLength: 0)
-            Button {
-                anchorSink.rect = addAnchor.rect; presentComposer(on: selectedDay)
-            } label: { Image(systemName: "plus").frame(width: 32, height: 32) }
-            .buttonStyle(.plain).background(PlanningAnchorProbe(ref: addAnchor)).hoverTip("新建任务")
-            BusinessMenu {
-                ForEach(CalendarViewMode.allCases, id: \.self) { value in
-                    BusinessMenuOption(value.label, selected: value == mode) { settings.updateCalendar { $0.mode = value } }
-                }
-            } label: { Text(mode.label).font(WFType.control).frame(minWidth: 38, minHeight: 30) }
-            .fixedSize().help("日历视图")
+            WFGlassControlGroup(spacing: 2) {
+                Button {
+                    anchorSink.rect = addAnchor.rect; presentComposer(on: selectedDay)
+                } label: { Image(systemName: "plus").frame(width: 32, height: 32) }
+                .buttonStyle(.plain).background(PlanningAnchorProbe(ref: addAnchor)).hoverTip("新建任务")
+                BusinessMenu {
+                    ForEach(CalendarViewMode.allCases, id: \.self) { value in
+                        BusinessMenuOption(value.label, selected: value == mode) { settings.updateCalendar { $0.mode = value } }
+                    }
+                } label: { Text(mode.label).font(WFType.control).frame(minWidth: 38, minHeight: 30) }
+                .fixedSize().help("日历视图")
+            }
             ToolbarPill {
                 HStack(spacing: 0) {
                     rangeButton("chevron.left", help: mode.previousLabel) { step(-1) }
@@ -191,18 +193,20 @@ struct CalendarWorkspaceView: View {
                     rangeButton("chevron.right", help: mode.nextLabel) { step(1) }
                 }
             }
-            Button { settings.updateCalendar { $0.showArrangePane.toggle() } } label: {
-                Image(systemName: "sidebar.right").frame(width: 30, height: 30)
-                    .foregroundStyle(settings.calendar.showArrangePane ? WFColors.accent : WFColors.secondaryText)
-            }.buttonStyle(.plain).hoverTip("安排任务")
-            BusinessMenu {
-                Toggle("显示已完成任务", isOn: preference(\.showCompleted))
-                Toggle("显示未来重复周期", isOn: preference(\.showFutureOccurrences))
-                Toggle("显示子任务", isOn: preference(\.showSubtasks))
-                Divider()
-                Button("显示设置…") { showDisplayOptions = true }
-            } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
-            .fixedSize().hoverTip("日历设置")
+            WFGlassControlGroup(spacing: 2) {
+                Button { settings.updateCalendar { $0.showArrangePane.toggle() } } label: {
+                    Image(systemName: "sidebar.right").frame(width: 30, height: 30)
+                        .foregroundStyle(settings.calendar.showArrangePane ? WFColors.accent : WFColors.secondaryText)
+                }.buttonStyle(.plain).hoverTip("安排任务")
+                BusinessMenu {
+                    Toggle("显示已完成任务", isOn: preference(\.showCompleted))
+                    Toggle("显示未来重复周期", isOn: preference(\.showFutureOccurrences))
+                    Toggle("显示子任务", isOn: preference(\.showSubtasks))
+                    Divider()
+                    Button("显示设置…") { showDisplayOptions = true }
+                } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
+                .fixedSize().hoverTip("日历设置")
+            }
         }
         .padding(.horizontal, WFSpace.pageHorizontal)
         .frame(height: WFCalendarMetrics.toolbarHeight)

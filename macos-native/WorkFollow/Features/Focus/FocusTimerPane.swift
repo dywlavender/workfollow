@@ -53,7 +53,9 @@ struct FocusTimerPane: View {
                 .buttonStyle(.plain).foregroundStyle(theme.text2).hoverTip("返回常用专注库")
                 .accessibilityIdentifier("focus-timer-back-library").focusRenderAnchor(.timerBackToLibrary)
                 Spacer(minLength: 0)
-                headerIcons
+                WFGlassControlGroup(spacing: 0) {
+                    headerIcons
+                }
             }
 
             if store.phase == .idle {

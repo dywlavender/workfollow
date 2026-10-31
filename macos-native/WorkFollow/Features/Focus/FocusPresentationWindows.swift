@@ -60,6 +60,9 @@ final class FocusPresentationWindows: NSWindowController {
                 styleMask: [.titled, .closable, .utilityWindow], backing: .buffered, defer: false)
             window.level = .floating
             (window as? NSPanel)?.hidesOnDeactivate = false
+            // 迷你专注窗用玻璃底：窗口非不透明才能采到桌面。
+            window.isOpaque = false
+            window.backgroundColor = .clear
         }
         window.title = immersive ? "沉浸专注" : "Mini 专注"
         window.isReleasedWhenClosed = false
@@ -78,6 +81,7 @@ private struct FocusWindowRoot: View {
     var body: some View {
         FocusCompactPresentation(store: store, immersive: immersive)
             .preferredColorScheme(appearance.selection.colorScheme)
+            .workfollowNativeTheme()
             .hidesSystemFocusEffect()
     }
 }
@@ -86,6 +90,14 @@ struct FocusCompactPresentation: View {
     @ObservedObject var store: FocusStore
     let immersive: Bool
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    private var glassActive: Bool {
+        WFGlassSupport.isActive(material,
+                                reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency)
+    }
+
     var body: some View {
         let p = store.presentation
         let theme = FocusTheme(scheme)
@@ -107,6 +119,16 @@ struct FocusCompactPresentation: View {
                     .font(.caption).foregroundStyle(theme.text3)
             }
         }
-        .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(theme.canvas)
+        .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            if !immersive, glassActive {
+                ZStack {
+                    WFGlassScrim(opacity: 0.72)
+                    WFGlassSurface(shape: Rectangle(), fallback: theme.canvas)
+                }
+            } else {
+                theme.canvas
+            }
+        }
     }
 }

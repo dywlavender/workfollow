@@ -124,30 +124,32 @@ struct CountdownWorkspaceView: View {
             Spacer(minLength: WFSpace.sm)
             // 原版的 `+` 不是直接开面板，而是先弹一个「纪念日 / 倒数日 / 生日 / 节日」
             // 菜单，选中哪个就开哪个类型的面板（参考图 4 的四张面板正是这么来的）。
-            BusinessMenu {
-                ForEach(CountdownKind.allCases) { kind in
-                    Button(kind.title) { sheet = .create(kind) }
+            WFGlassControlGroup(spacing: 4) {
+                BusinessMenu {
+                    ForEach(CountdownKind.allCases) { kind in
+                        Button(kind.title) { sheet = .create(kind) }
+                    }
+                } label: {
+                    Image(systemName: "plus").font(.system(size: 15))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
                 }
-            } label: {
-                Image(systemName: "plus").font(.system(size: 15))
-                    .frame(width: 26, height: 26)
-                    .contentShape(Rectangle())
+                .fixedSize()
+                .hoverTip("新建")
+                .accessibilityLabel("新建")
+                // 参考图的「更多」菜单内容不可见，这里只放本页真正需要的入口：
+                // 归档记录得有个地方能进得去。
+                BusinessMenu {
+                    Button("已归档…") { sheet = .archived }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 15))
+                        .frame(width: 26, height: 26)
+                        .contentShape(Rectangle())
+                }
+                .fixedSize()
+                .hoverTip("更多")
+                .accessibilityLabel("更多")
             }
-            .fixedSize()
-            .hoverTip("新建")
-            .accessibilityLabel("新建")
-            // 参考图的「更多」菜单内容不可见，这里只放本页真正需要的入口：
-            // 归档记录得有个地方能进得去。
-            BusinessMenu {
-                Button("已归档…") { sheet = .archived }
-            } label: {
-                Image(systemName: "ellipsis").font(.system(size: 15))
-                    .frame(width: 26, height: 26)
-                    .contentShape(Rectangle())
-            }
-            .fixedSize()
-            .hoverTip("更多")
-            .accessibilityLabel("更多")
         }
         .foregroundStyle(WFColors.text)
     }

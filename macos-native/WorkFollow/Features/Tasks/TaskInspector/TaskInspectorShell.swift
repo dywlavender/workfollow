@@ -806,33 +806,35 @@ struct TaskInspectorShell: View {
             listMenu(task)
                 .inspectorRenderAnchor(.footerList)
             Spacer(minLength: 0)
-            // 标签出口（tagButton）：有标签才显示。
-            if !task.tags.isEmpty {
-                footerIconButton("tag", label: "标签") {
-                    let opening = actionPresentation.panel != .tags
-                    dismissTransientPanels()
-                    if opening { openActionPanel(.tags) }
-                }
-                    .inspectorRenderAnchor(.footerTag)
-            }
-            // 合并出口（mergeButton）：有子任务才显示，子任务标题并入正文后软删。
             let children = editorChildren(task.id)
-            if !children.isEmpty {
-                footerIconButton("arrow.triangle.merge", label: "合并子任务到正文") {
-                    _ = workspace.mergeChildrenIntoDocument(task.id)
-                }
-                .inspectorRenderAnchor(.footerMerge)
-            }
-            // 评论出口（commentButton）：打开任务评论面板；有条数角标（TI2-09）。
-            footerIconButton("bubble.left", label: "评论") { showComments.toggle() }
-                .overlay(alignment: .topTrailing) {
-                    if let commentStore {
-                        TaskCommentCountBadge(store: commentStore, taskID: task.id)
+            WFGlassControlGroup(spacing: WFSpace.xs) {
+                // 标签出口（tagButton）：有标签才显示。
+                if !task.tags.isEmpty {
+                    footerIconButton("tag", label: "标签") {
+                        let opening = actionPresentation.panel != .tags
+                        dismissTransientPanels()
+                        if opening { openActionPanel(.tags) }
                     }
+                        .inspectorRenderAnchor(.footerTag)
                 }
-                .inspectorRenderAnchor(.footerComment)
-            moreMenu(task)
-                .inspectorRenderAnchor(.footerMore)
+                // 合并出口（mergeButton）：有子任务才显示，子任务标题并入正文后软删。
+                if !children.isEmpty {
+                    footerIconButton("arrow.triangle.merge", label: "合并子任务到正文") {
+                        _ = workspace.mergeChildrenIntoDocument(task.id)
+                    }
+                    .inspectorRenderAnchor(.footerMerge)
+                }
+                // 评论出口（commentButton）：打开任务评论面板；有条数角标（TI2-09）。
+                footerIconButton("bubble.left", label: "评论") { showComments.toggle() }
+                    .overlay(alignment: .topTrailing) {
+                        if let commentStore {
+                            TaskCommentCountBadge(store: commentStore, taskID: task.id)
+                        }
+                    }
+                    .inspectorRenderAnchor(.footerComment)
+                moreMenu(task)
+                    .inspectorRenderAnchor(.footerMore)
+            }
         }
         .font(WFType.body)
         .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)

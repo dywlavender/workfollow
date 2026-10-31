@@ -54,6 +54,7 @@ final class AISelectionWindowController: NSObject, NSWindowDelegate {
         panel.title = "AI 润色"; panel.level = .floating
         panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false; panel.isMovableByWindowBackground = true
+        panel.isOpaque = false; panel.backgroundColor = .clear
         panel.minSize = NSSize(width: 440, height: 360); panel.delegate = self
         let generate = client.generator(for: model)
         let content = AISelectionConversationView(model: model, generate: generate,
@@ -96,7 +97,10 @@ private struct AISelectionConversationView: View {
             if let error { Text(error).font(WFType.caption).foregroundStyle(WFColors.danger).padding(12) }
         }
         .background {
-            WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+            ZStack {
+                WFGlassScrim(opacity: 0.78)
+                WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+            }
         }
         .hidesSystemFocusEffect()
     }

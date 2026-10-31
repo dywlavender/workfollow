@@ -110,3 +110,65 @@ struct WFGlassControlGroup<Content: View>: View {
         }
     }
 }
+
+/// 透明玻璃窗口里的底衬：桌面只淡淡透出，文字对比度由玻璃材质兜底。
+/// 经典模式返回透明，窗口内容仍由各自的实色底负责。
+struct WFGlassScrim: View {
+    var opacity: Double = 0.72
+
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if #available(macOS 26.0, *),
+           WFGlassSupport.isActive(material,
+                                   reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency) {
+            WFColors.content.opacity(opacity)
+        } else {
+            Color.clear
+        }
+    }
+}
+
+/// 让承载玻璃的独立窗口/面板变成非不透明窗口。
+/// 不透明窗户会把玻璃采样源压成一块实色，正是“液态玻璃不明显”的根因。
+struct WFGlassWindowBackdrop: NSViewRepresentable {
+    var enabled: Bool
+
+    func makeNSView(context: Context) -> BackdropView { BackdropView(enabled: enabled) }
+
+    func updateNSView(_ nsView: BackdropView, context: Context) {
+        nsView.enabled = enabled
+        nsView.apply()
+    }
+
+    final class BackdropView: NSView {
+        var enabled: Bool
+
+        init(enabled: Bool) {
+            self.enabled = enabled
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { fatalError("not intended") }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            guard let window else { return }
+            if window.isOpaque == enabled { window.isOpaque = !enabled }
+            let target: NSColor = enabled ? .clear : .windowBackgroundColor
+            if window.backgroundColor != target { window.backgroundColor = target }
+        }
+    }
+}
+
+extension View {
+    func wfGlassWindowBackdrop(_ enabled: Bool) -> some View {
+        background { WFGlassWindowBackdrop(enabled: enabled) }
+    }
+}

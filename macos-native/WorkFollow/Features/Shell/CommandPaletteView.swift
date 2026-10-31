@@ -6,6 +6,12 @@ struct CommandPaletteView: View {
     @ObservedObject var session: WorkspaceSearchSession
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var notes: NotesWorkspaceModel
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    private var glassActive: Bool {
+        WFGlassSupport.isActive(material,
+                                reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency)
+    }
     private var query: String { session.query }
     private var selectedIndex: Int {
         get { session.selectedIndex }
@@ -144,6 +150,8 @@ struct CommandPaletteView: View {
             .padding(.vertical, WFSpace.sm)
         }
         .workfollowPopupSurface()
+        .background { WFGlassScrim(opacity: 0.82) }
+        .wfGlassWindowBackdrop(glassActive)
         .frame(width: session.showAll || session.askingAI ? 700 : 620, height: session.askingAI ? 620 : session.showAll ? 580 : 420)
         .onAppear { focused = true }
         .onChange(of: query) { _, _ in selectedIndex = 0 }
