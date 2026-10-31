@@ -38,11 +38,23 @@ enum WFColors {
     /// 其余地方（菜单、浮层候选、日历格）继续用 `selection`：那里是
     /// 中性表面上的强调色，不是列表选中。深色未实测，取 `menuSelected` 同族的灰。
     static let listSelection = themed(rgb(0xF2F2F2), rgb(0x363A42))
+    /// 主题页面上的列表/侧栏选中行：不靠明度（纯白在白底上看不出），而是用
+    /// 固定色相——白底混入约 8–10% 强调蓝。白页面上是极浅蓝白，蜜桃/薄荷/奶油/
+    /// 极光上也能靠色相拉开距离，观感仍偏白。弹层表面不透主题，继续用
+    /// `listSelection`。
+    static let listSelectionOnTheme = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.21, green: 0.24, blue: 0.33, alpha: 1)
+            : NSColor(red: 0.939, green: 0.954, blue: 0.996, alpha: 1)
+    })
     static let hover = Color.primary.opacity(0.04)
     /// 快速添加条未选中的底色（滴答/Flutter `tokens.canvas` = 0xFFF2F4F8）：
     /// 带一点蓝调的极浅灰，比中性的 hover 更接近滴答那条浅浅的输入位。
     /// 深色沿用 Flutter 暗色 canvas。
     static let quickAddIdleFill = themed(rgb(0xF2F4F8), rgb(0x1B1D22))
+    /// 主题页面上的输入框底色：比选中行更接近白，混入极少量强调蓝；
+    /// 需要一层 `border` 才能在白底上定形。关闭主题时仍用各输入框原底色。
+    static let inputFillOnTheme = themed(rgb(0xF7FAFF), rgb(0x222A36))
     /// 右栏配置卡片的底色（滴答 ≈ #F7F8FA，暗色 ≈ #2A2A2C）。
     static let panelFill = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

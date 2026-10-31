@@ -165,7 +165,7 @@ private struct AIChatHistoryRow: View {
         }.padding(.trailing, 6)
             .background(selected ? WFColors.selection : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle()).onHover { hovered = $0 }.disabled(deleting)
-            .contextMenu {
+            .businessContextMenu {
                 Button("删除对话", systemImage: "trash", role: .destructive, action: onDelete).disabled(deleting)
             }
     }

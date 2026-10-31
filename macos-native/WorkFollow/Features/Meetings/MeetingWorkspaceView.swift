@@ -418,14 +418,22 @@ struct MeetingWorkspaceView: View {
             }
             Spacer(minLength: WFSpace.sm)
             if !store.recordingFiles(for: meeting).isEmpty {
-                Menu("录音") {
+                BusinessMenu(title: "录音操作") {
                     Button("从头播放") { playRecording(at: 0) }
                     Button("重新转写…") { retranscriptionTarget = meeting.id }
                     if meeting.previousTranscript != nil { Button("撤销转写修改") { store.restoreTranscript(meeting.id) } }
                     Divider()
                     Button("在 Finder 中查看录音") { NSWorkspace.shared.activateFileViewerSelecting(store.recordingFiles(for: meeting)) }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("录音").font(WFType.supporting)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(WFColors.secondaryText)
+                    }
+                    .frame(minHeight: 24)
                 }
-                    .controlSize(.small)
+                    .fixedSize()
                     .disabled(store.recordingID != nil || store.retranscribingID != nil || store.savingRecordingIDs.contains(meeting.id))
             }
             if store.savingRecordingIDs.contains(meeting.id) {
@@ -510,6 +518,9 @@ struct MeetingWorkspaceView: View {
                 }
                 .compactScrollbars()
                 .coordinateSpace(name: Self.transcriptSpace)
+                // 转写是整页里最长的连续正文，铺阅读面压住文字背后的动效；
+                // 纪要编辑器本身已是不透明正文底，不需要重复加。
+                .background { WorkfollowReadingSurface() }
                 .background(viewportProbe)
                 .onPreferenceChange(TranscriptBottomKey.self) {
                     transcriptContentBottom = $0
@@ -664,7 +675,7 @@ struct MeetingWorkspaceView: View {
         }
         .padding(.horizontal, WFSpace.md)
         .padding(.vertical, WFSpace.xs)
-        .contextMenu {
+        .businessContextMenu {
             Button("播放此处录音") { playRecording(at: line.offset) }
             Button("校正文字和讲话人…") {
                 if let meeting = store.selected { correction = .init(meetingID: meeting.id, line: line) }

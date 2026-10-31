@@ -278,8 +278,9 @@ struct SummaryWorkspaceView: View {
                 if aiRunning {
                     AIStreamingTextView(text: aiPreview, status: aiStatus)
                 } else {
-                DocumentFormatToolbarView(handle: editorHandle, maxWidth: .infinity, embedded: true)
-                    .padding(.horizontal, 10)
+                DocumentFormattingToolbarRow(handle: editorHandle,
+                                             leadingPadding: 10,
+                                             trailingPadding: 10)
                 Divider().overlay(WFColors.border)
                 DocumentEditor(documentID: editorID, document: document,
                     onDocumentChange: { document = $0 }, onEscape: { .keepInspector },

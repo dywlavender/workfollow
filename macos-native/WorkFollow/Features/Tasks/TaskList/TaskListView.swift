@@ -51,6 +51,7 @@ struct TaskListView: View {
     @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var draft = ""
     @State private var restoredCaptureDraft = false
@@ -563,7 +564,10 @@ struct TaskListView: View {
     }
 
     private func quickAddBar(in scope: TaskListScope) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        // 解析一次给整条输入区用：此前 tokens、日期徽标、属性面板各取一次
+        // `quickAddResult`，每次 body 会重复跑 3–4 遍全文解析。
+        let parsed = quickAddResult
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: WFSpace.sm) {
                 // 待办框视觉走唯一真源 QuickAddBarStyle（滴答对齐：小而浅的加号）。
                 Image(systemName: "plus")
@@ -572,7 +576,7 @@ struct TaskListView: View {
                 QuickAddTextField(
                     text: $draft,
                     placeholder: "添加任务至“\(quickAddTargetName)”",
-                    tokens: quickAddResult.tokens,
+                    tokens: parsed.tokens,
                     focused: $quickAddFocused,
                     onSubmit: { addTask(in: scope) },
                     onEscape: handleQuickAddEscape,
@@ -586,7 +590,7 @@ struct TaskListView: View {
                 )
                 .frame(maxWidth: .infinity)
                 if quickAddExpanded {
-                    let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
+                    let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope, parsed: parsed)
                     Button {
                         quickAddSchedulePage = .main
                         showQuickAddSchedule = true
@@ -640,9 +644,9 @@ struct TaskListView: View {
                     .background(AnchoredPropertyPanel(isPresented: $showQuickAddProperties, width: PopupMetrics.quickAddPropertiesWidth) {
                         QuickAddPropertiesPopover(
                             workspace: workspace,
-                            selectedPriority: quickAddPriorityOverride ?? quickAddResult.priority,
-                            selectedList: quickAddListOverride ?? quickAddResult.listName ?? workspace.activeList ?? TaskList.inbox.name,
-                            selectedTags: quickAddTagsOverride ?? quickAddResult.tags,
+                            selectedPriority: quickAddPriorityOverride ?? parsed.priority,
+                            selectedList: quickAddListOverride ?? parsed.listName ?? workspace.activeList ?? TaskList.inbox.name,
+                            selectedTags: quickAddTagsOverride ?? parsed.tags,
                             attachments: quickAddAttachments,
                             displayMode: quickAddDisplayMode,
                             onPriority: { value in
@@ -681,7 +685,6 @@ struct TaskListView: View {
                 }
                 .padding(.leading, 24)
             }
-            let parsed = quickAddResult
             if !parsed.tokens.isEmpty {
                 QuickAddTokenFlowLayout(horizontalSpacing: 5, verticalSpacing: 5) {
                     ForEach(parsed.tokens) { token in
@@ -704,7 +707,7 @@ struct TaskListView: View {
                 .padding(.leading, 24)
             }
             if quickAddExpanded, !parsed.tokens.isEmpty {
-                let summary = quickAddSummary(for: scope)
+                let summary = quickAddSummary(for: scope, parsed: parsed)
                 if !summary.isEmpty {
                     Text(summary)
                         .font(WFType.metaMedium)
@@ -717,13 +720,18 @@ struct TaskListView: View {
         // 滴答式两态：未选中是带蓝调的极浅灰条（QuickAddBarStyle.idleFill）、
         // 无描边；选中后底色提亮到窗口底色、描边换「今天」同款强调色。
         .background(RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
-            .fill(quickAddExpanded ? WFColors.canvas : QuickAddBarStyle.idleFill))
+            .fill(quickAddExpanded ? WFColors.canvas
+                  : backgroundTheme.isThemed ? WFColors.inputFillOnTheme : QuickAddBarStyle.idleFill))
         .overlay {
             if quickAddExpanded {
                 RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
                     .stroke(WFColors.accent, lineWidth: 1)
                     // 纯装饰层：必须放行点击，否则它会压在输入框上方把点击吃掉，
                     // 输入框拿不到第一响应者，展开也就无从触发。
+                    .allowsHitTesting(false)
+            } else if backgroundTheme.isThemed {
+                RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
+                    .stroke(WFColors.border, lineWidth: 1)
                     .allowsHitTesting(false)
             }
         }
@@ -902,9 +910,8 @@ struct TaskListView: View {
         }
     }
 
-    private func quickAddSummary(for scope: TaskListScope) -> String {
-        let parsed = quickAddResult
-        let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope)
+    private func quickAddSummary(for scope: TaskListScope, parsed: QuickAddParseResult) -> String {
+        let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope, parsed: parsed)
         var parts: [String] = []
         if let dueAt = timing.dueAt {
             let start = TaskDateLabel.text(dueAt, hasTime: timing.hasTime,
@@ -1529,10 +1536,11 @@ struct TaskListView: View {
             dismissedTokenIDs: dismissedQuickAddTokens)
     }
 
-    private func currentQuickAddSchedule(for scope: TaskListScope) -> QuickAddScheduleDraft {
+    private func currentQuickAddSchedule(for scope: TaskListScope,
+                                         parsed: QuickAddParseResult? = nil) -> QuickAddScheduleDraft {
         // 时间型视图默认排期到"那一天"（今天 / 最近 7 天 = 当天，明天 = 次日），
         // 对齐 Flutter「Time-based views keep the default-today behaviour」；收集箱不注入。
-        QuickAddScheduleDraft(parsed: quickAddResult,
+        QuickAddScheduleDraft(parsed: parsed ?? quickAddResult,
                               defaultDueAt: hasDismissedQuickAddScheduleToken
                                 ? nil : quickAddDefaultDue(for: scope))
     }

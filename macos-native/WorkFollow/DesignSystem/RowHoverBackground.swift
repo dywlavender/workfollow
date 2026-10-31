@@ -12,12 +12,25 @@ struct RowHoverBackground: NSViewRepresentable {
     /// 可视底色相对整行左右各内缩多少；追踪区域仍覆盖整行。
     var horizontalInset: CGFloat = 0
     var idleFill: Color = .clear
-    var selectedFill: Color = WFColors.listSelection
+    /// nil 表示按当前表面取默认选中色：主题页面用偏白底，其他表面用中性灰。
+    var selectedFill: Color? = nil
     var hoverFill: Color = WFColors.hover
     /// 菜单子窗口通常不成为 key window，需用 app 级追踪才能收到 hover。
     var activeInActiveApp = false
     /// 需要悬停时显示行内操作的行接这个回调；只画背景的行留空即可。
     var onHoverChanged: ((Bool) -> Void)?
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
+
+    /// 只有主题页面才换成偏白选中底：弹层和独立面板不透视主题，仍用中性灰。
+    private var usesThemedSelection: Bool {
+        selectedFill == nil && backgroundTheme.isThemed && pageCanvasActive
+    }
+
+    private var resolvedSelectedFill: Color {
+        if let selectedFill { return selectedFill }
+        return usesThemedSelection ? WFColors.listSelectionOnTheme : WFColors.listSelection
+    }
 
     func makeNSView(context: Context) -> RowHoverView {
         let view = RowHoverView()
@@ -34,7 +47,7 @@ struct RowHoverBackground: NSViewRepresentable {
         view.cornerRadius = cornerRadius
         view.horizontalInset = horizontalInset
         view.idleFill = idleFill
-        view.selectedFill = selectedFill
+        view.selectedFill = resolvedSelectedFill
         view.hoverFill = hoverFill
         view.activeInActiveApp = activeInActiveApp
         view.setSelected(selected)
@@ -153,7 +166,7 @@ private struct RowHoverBackgroundModifier: ViewModifier {
     let cornerRadius: CGFloat
     let horizontalInset: CGFloat
     let idleFill: Color
-    let selectedFill: Color
+    let selectedFill: Color?
     let hoverFill: Color
     let activeInActiveApp: Bool
     let onHoverChanged: ((Bool) -> Void)?
@@ -180,7 +193,7 @@ extension View {
         cornerRadius: CGFloat = WFMetrics.corner,
         horizontalInset: CGFloat = 0,
         idleFill: Color = .clear,
-        selectedFill: Color = WFColors.listSelection,
+        selectedFill: Color? = nil,
         hoverFill: Color = WFColors.hover,
         activeInActiveApp: Bool = false,
         onHoverChanged: ((Bool) -> Void)? = nil

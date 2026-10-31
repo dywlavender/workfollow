@@ -244,10 +244,23 @@ struct TaskCommentSection: View {
         return flattened.count > 24 ? String(flattened.prefix(24)) + "…" : flattened
     }
 
-    private static func timeText(_ date: Date) -> String {
+    /// DateFormatter 创建成本很高，评论行每次 body 都新建会把详情栏重绘拖慢。
+    private static let timeOnlyFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = Calendar.current.isDateInToday(date) ? "HH:mm" : "M月d日 HH:mm"
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    private static let dayTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日 HH:mm"
+        return formatter
+    }()
+
+    private static func timeText(_ date: Date) -> String {
+        let formatter = Calendar.current.isDateInToday(date) ? timeOnlyFormatter : dayTimeFormatter
         return formatter.string(from: date)
     }
 }

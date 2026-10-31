@@ -550,7 +550,7 @@ struct SummaryContentPopover: View {
                     .onDrop(of: [UTType.text], delegate: SummaryContentDropDelegate(
                         target: field, order: metadataOrder,
                         dragging: $dragging, dropTarget: $dropTarget))
-                    .contextMenu {
+                    .businessContextMenu {
                         Button("上移") { moveMetadata(field, by: -1) }
                             .disabled(index(of: field) == 0)
                         Button("下移") { moveMetadata(field, by: 1) }

@@ -159,17 +159,47 @@ enum QuickAddParser {
         return parts.joined(separator: " + ")
     }
 
+    /// 规则表是固定的静态字面量，编译一次即可复用。此前每次 parse 都重新编译
+    /// 约 20 条 NSRegularExpression，切换页面时布局阶段会连续触发多次解析，
+    /// 正则编译成了主线程的主要开销（Instruments 采样可见大量 uregex_open）。
+    private static let regexLock = NSLock()
+    private static var regexCache: [String: NSRegularExpression] = [:]
+
+    private static func regex(_ pattern: String) -> NSRegularExpression? {
+        regexLock.lock()
+        defer { regexLock.unlock() }
+        if let cached = regexCache[pattern] { return cached }
+        guard let compiled = try? NSRegularExpression(pattern: pattern) else { return nil }
+        regexCache[pattern] = compiled
+        return compiled
+    }
+
+    /// 只有连接符的区间（`9点至11点` 的「至」）：命中时后一个时钟不单独成 chip。
+    private static func isRangeConnector(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        return trimmed.unicodeScalars.allSatisfy { scalar in
+            "-–—~～至".unicodeScalars.contains(scalar)
+        }
+    }
+
     /// - Parameters:
     ///   - knownLists: 已存在的清单名。@ 片段只有命中其中之一才识别为清单
     ///     token，未知名保持原样留在标题里。
     static func parse(_ input: String, now: Date, calendar: Calendar,
                       knownLists: Set<String>, dismissedTokenIDs: Set<String> = []) -> QuickAddParseResult {
+        if input.isEmpty && dismissedTokenIDs.isEmpty {
+            return QuickAddParseResult(title: "", listName: nil, dueAt: nil, dueEndAt: nil,
+                                       hasTime: false, reminderAt: nil, reminderOffsets: [],
+                                       recurrence: .never, recurrenceRule: nil, tags: [],
+                                       priority: .none, tokens: [], sourceText: input)
+        }
         let source = input as NSString
         let today = calendar.startOfDay(for: now)
         var candidates: [Candidate] = []
 
         func append(_ pattern: String, _ build: (NSTextCheckingResult) -> Candidate?) {
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
+            guard let regex = Self.regex(pattern) else { return }
             for match in regex.matches(in: input, range: NSRange(location: 0, length: source.length)) {
                 if let candidate = build(match) { candidates.append(candidate) }
             }
@@ -609,9 +639,7 @@ enum QuickAddParser {
                NSMaxRange(prior.token.range) <= candidate.token.range.location {
                 let between = source.substring(with: NSRange(location: NSMaxRange(prior.token.range),
                     length: candidate.token.range.location - NSMaxRange(prior.token.range)))
-                if between.trimmingCharacters(in: .whitespaces).range(of: "^[-–—~～至]+$", options: .regularExpression) != nil {
-                    continue
-                }
+                if isRangeConnector(between) { continue }
             }
             accepted.append(candidate)
             end = NSMaxRange(candidate.token.range)

@@ -260,7 +260,6 @@ struct SettingsDataView: View {
     @State private var importBusy = false
     @State private var confirmReplaceImport = false
     @State private var showingRestoreSheet = false
-    @State private var restoreEntries: [SnapshotRestoreEntry] = []
     @State private var restoreCandidate: SnapshotRestoreEntry?
     @State private var showFileDetails = false
 
@@ -332,7 +331,8 @@ struct SettingsDataView: View {
             .font(WFType.body)
         }
         .sheet(isPresented: $showingRestoreSheet) {
-            restoreSheet
+            RestoreBackupSheet(dataDirectory: dataDirectory, onChoose: choose,
+                               onClose: { showingRestoreSheet = false })
         }
         .workfollowAlert(
             "清空本机后导入？",
@@ -384,50 +384,6 @@ struct SettingsDataView: View {
                 .foregroundStyle(WFColors.tertiaryText)
         }
         .padding(.vertical, WFSpace.xs)
-    }
-
-    @ViewBuilder
-    private var restoreSheet: some View {
-        NavigationStack {
-            List {
-                Section("每日快照备份") {
-                    let snapshots = restoreEntries.filter { !$0.isLegacyDirectoryBackup }
-                    if snapshots.isEmpty {
-                        Text("还没有可恢复的快照备份。")
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.tertiaryText)
-                    }
-                    ForEach(snapshots) { entry in
-                        Button(entry.name) { choose(entry) }
-                            .buttonStyle(.plain)
-                            .font(WFType.supporting)
-                    }
-                }
-                Section("旧版整目录备份") {
-                    let legacy = restoreEntries.filter(\.isLegacyDirectoryBackup)
-                    if legacy.isEmpty {
-                        Text("暂无。")
-                            .font(WFType.supporting)
-                            .foregroundStyle(WFColors.tertiaryText)
-                    }
-                    ForEach(legacy) { entry in
-                        Button(entry.name) { choose(entry) }
-                            .buttonStyle(.plain)
-                            .font(WFType.supporting)
-                    }
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .compactScrollbars()
-            .background { ThemedPopupSurface() }
-            .navigationTitle("选择要恢复的备份")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { showingRestoreSheet = false }
-                }
-            }
-        }
-        .frame(width: 420, height: 380)
     }
 
     private func choose(_ entry: SnapshotRestoreEntry) {
@@ -742,15 +698,6 @@ struct SettingsDataView: View {
     }
 
     private func openRestoreSheet() {
-        let snapshots = repository.listBackups().reversed().map { url in
-            SnapshotRestoreEntry(id: url.path, name: url.lastPathComponent, url: url,
-                                 isLegacyDirectoryBackup: false)
-        }
-        let legacy = DataBackup.directoryBackups(in: dataDirectory).reversed().map { url in
-            SnapshotRestoreEntry(id: url.path, name: url.lastPathComponent, url: url,
-                                 isLegacyDirectoryBackup: true)
-        }
-        restoreEntries = Array(snapshots) + Array(legacy)
         showingRestoreSheet = true
     }
 
@@ -795,5 +742,93 @@ struct SettingsDataView: View {
         feedbackKind = kind
         feedbackText = text
         feedbackIsError = isError
+    }
+}
+
+/// 恢复备份列表作为独立 sheet 视图持有条目状态：打开时重新枚举，
+/// 不依赖父页面在呈现前写入的 `@State`，避免 sheet 捕获旧数组显示为空。
+private struct RestoreBackupSheet: View {
+    let dataDirectory: URL
+    let onChoose: (SettingsDataView.SnapshotRestoreEntry) -> Void
+    let onClose: () -> Void
+    @State private var entries: [SettingsDataView.SnapshotRestoreEntry]
+
+    init(dataDirectory: URL,
+         onChoose: @escaping (SettingsDataView.SnapshotRestoreEntry) -> Void,
+         onClose: @escaping () -> Void) {
+        self.dataDirectory = dataDirectory
+        self.onChoose = onChoose
+        self.onClose = onClose
+        _entries = State(initialValue: Self.loadEntries(in: dataDirectory))
+    }
+
+    private static func loadEntries(in dataDirectory: URL) -> [SettingsDataView.SnapshotRestoreEntry] {
+        let snapshots = NativePreviewRepository(directory: dataDirectory).listBackups().reversed().map { url in
+            SettingsDataView.SnapshotRestoreEntry(id: url.path, name: url.lastPathComponent, url: url,
+                                                  isLegacyDirectoryBackup: false)
+        }
+        let legacy = DataBackup.directoryBackups(in: dataDirectory).reversed().map { url in
+            SettingsDataView.SnapshotRestoreEntry(id: url.path, name: url.lastPathComponent, url: url,
+                                                  isLegacyDirectoryBackup: true)
+        }
+        return Array(snapshots) + Array(legacy)
+    }
+
+    private var snapshots: [SettingsDataView.SnapshotRestoreEntry] {
+        entries.filter { !$0.isLegacyDirectoryBackup }
+    }
+    private var legacy: [SettingsDataView.SnapshotRestoreEntry] {
+        entries.filter(\.isLegacyDirectoryBackup)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DialogHeader(title: "选择要恢复的备份")
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: WFSpace.xl) {
+                    WFFormSection("每日快照备份") {
+                        entryRows(snapshots, empty: "还没有可恢复的快照备份。")
+                    }
+                    WFFormSection("旧版整目录备份") {
+                        entryRows(legacy, empty: "暂无。")
+                    }
+                }
+                .padding(PopupMetrics.formInset)
+            }
+            .compactScrollbars()
+            DialogCloseFooter(title: "关闭", onClose: onClose)
+        }
+        .frame(width: 420, height: 380)
+        .workfollowPopupSurface()
+        .onAppear { entries = Self.loadEntries(in: dataDirectory) }
+    }
+
+    @ViewBuilder
+    private func entryRows(_ values: [SettingsDataView.SnapshotRestoreEntry],
+                           empty: String) -> some View {
+        VStack(spacing: 0) {
+            if values.isEmpty {
+                Text(empty)
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.tertiaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, WFSpace.md)
+                    .padding(.vertical, 10)
+            } else {
+                ForEach(Array(values.enumerated()), id: \.element.id) { index, entry in
+                    Button { onChoose(entry) } label: {
+                        WFFormRow(entry.name, showsDivider: index < values.count - 1) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(WFColors.tertiaryText)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .popupMenuRowBackground(cornerRadius: WFMetrics.corner)
+                }
+            }
+        }
     }
 }

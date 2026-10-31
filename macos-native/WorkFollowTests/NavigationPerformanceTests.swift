@@ -98,6 +98,53 @@ final class NavigationPerformanceTests: XCTestCase {
         XCTAssertEqual(bridge.navigation.destination, .today)
     }
 
+    func testTaskPagesRemainMountedAcrossScopeSwitches() throws {
+        let environment = AppEnvironment()
+        environment.navigation.destination = .today
+        let host = NSHostingView(rootView: RootShellView(workspace: environment.taskWorkspace,
+            navigation: environment.navigation).environmentObject(environment)
+            .frame(width: 1280, height: 800))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1280, height: 800)
+        defer { window.close() }
+        func container(in view: NSView) -> WorkspacePageHost.Container? {
+            if let container = view as? WorkspacePageHost.Container { return container }
+            return view.subviews.lazy.compactMap { container(in: $0) }.first
+        }
+        let pageContainer = try XCTUnwrap(container(in: host))
+        func pageHosts() -> [NSHostingView<AnyView>] {
+            pageContainer.subviews.compactMap { $0 as? NSHostingView<AnyView> }
+        }
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(pageHosts().count, 1)
+
+        environment.navigate(to: .inbox)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(pageHosts().count, 2, "任务清单之间切换应保留上一个页面宿主")
+        XCTAssertEqual(pageHosts().filter { !$0.isHidden }.count, 1)
+
+        environment.navigate(to: .today)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(pageHosts().count, 2)
+
+        for destination: NativeDestination in [.tomorrow, .allTasks, .nextSevenDays, .completed] {
+            environment.navigate(to: destination)
+            InspectorPanelTestSupport.settle(window)
+        }
+        XCTAssertEqual(pageHosts().count, WorkspacePageCache.mountedPageLimit,
+                       "常驻页超限时淘汰最久未访问的页面，避免内存随清单数增长")
+        XCTAssertEqual(pageHosts().filter { !$0.isHidden }.count, 1)
+
+        environment.navigate(to: .today)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(pageHosts().count, WorkspacePageCache.mountedPageLimit)
+        XCTAssertEqual(pageHosts().filter { !$0.isHidden }.count, 1,
+                       "回访已淘汰的页面应重建并显示")
+
+        environment.navigate(to: .notes)
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(pageHosts().count, 1, "离开任务模块后任务页仍应卸载以触发清理回调")
+    }
+
     func testTaskDataChangedWhileHiddenAppearsOnReturn() throws {
         let environment = AppEnvironment()
         let workspace = TaskWorkspaceModel(seedDemoData: false)

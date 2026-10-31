@@ -30,7 +30,7 @@ final class WorkspaceContinuityTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: GlobalQuickAddDraft.storageKey))
     }
 
-    func testTaskNotesRoundTripRestoresSelectionsAndListContextInFullShell() throws {
+    func testTaskNotesRoundTripRestoresListContextButClosesDetails() throws {
         let environment = AppEnvironment()
         let workspace = environment.taskWorkspace
         let navigation = environment.navigation
@@ -44,22 +44,47 @@ final class WorkspaceContinuityTests: XCTestCase {
         environment.navigate(to: .notes)
         InspectorPanelTestSupport.settle(window)
         environment.notesWorkspace.create()
-        let noteID = try XCTUnwrap(environment.notesWorkspace.selectedID)
+        XCTAssertNotNil(environment.notesWorkspace.selectedID)
+        XCTAssertNil(workspace.selectedTaskID, "切到笔记后任务详情关闭")
         environment.navigate(to: .today)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(workspace.selectedTaskID, id)
+        XCTAssertNil(workspace.selectedTaskID, "切回清单不再恢复任务详情")
         environment.navigate(to: .notes)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(environment.notesWorkspace.selectedID, noteID)
+        XCTAssertNil(environment.notesWorkspace.selectedID, "切回笔记不再恢复笔记详情")
         environment.openTask(id)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(workspace.selectedTaskID, id, "显式链接优先于页面记忆")
+        XCTAssertEqual(workspace.selectedTaskID, id, "显式链接仍直接打开任务")
         _ = workspace.moveToList(id, TaskList(name: "工作"))
         workspace.activeList = "工作"
         environment.navigate(to: .notes); InspectorPanelTestSupport.settle(window)
         environment.navigate(to: .allTasks); InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(workspace.activeList, "工作", "清单上下文仍然逐页恢复")
+        XCTAssertNil(workspace.selectedTaskID, "清单上下文不包含选中任务")
+    }
+
+    func testSwitchingScopesClosesTaskAndNoteDetails() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let notes = NotesWorkspaceModel()
+        let navigation = AppNavigation(destination: .today)
+        let memory = WorkspaceSelectionMemory()
+        memory.connect(workspace: workspace, notes: notes, navigation: navigation)
+        let id = try XCTUnwrap(workspace.createTask(title: "关闭详情", in: .today).taskID)
+        workspace.activeList = "工作"
+        workspace.select(id)
+        navigation.destination = .inbox
+        XCTAssertNil(workspace.selectedTaskID)
+        navigation.destination = .today
+        XCTAssertNil(workspace.selectedTaskID, "返回清单只恢复筛选上下文，不恢复详情")
         XCTAssertEqual(workspace.activeList, "工作")
-        XCTAssertEqual(workspace.selectedTaskID, id)
+
+        navigation.destination = .notes
+        notes.create()
+        XCTAssertNotNil(notes.selectedID)
+        navigation.destination = .notesTrash
+        XCTAssertNil(notes.selectedID)
+        navigation.destination = .notes
+        XCTAssertNil(notes.selectedID, "笔记与垃圾桶之间切换同样不恢复详情")
     }
 
     func testReturnMemoryDoesNotReopenDeletedTask() throws {

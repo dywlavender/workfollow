@@ -19,6 +19,7 @@ struct NotesWorkspaceView: View {
     /// 直接挂在测试宿主里时为 0，此时不做自动收起。
     var windowWidth: CGFloat = 0
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @FocusState private var focusedTitle: UUID?
     @State private var showNavigation = false
     @State private var dragOrigin: CGFloat?
@@ -365,7 +366,18 @@ struct NotesWorkspaceView: View {
             }
             .frame(height: 44)
             if !trash { HStack(spacing: 4) {
-                TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
+                if backgroundTheme.isThemed {
+                    TextField("搜索笔记", text: $query)
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 8)
+                        .frame(height: 28)
+                        .background(WFColors.inputFillOnTheme, in: RoundedRectangle(cornerRadius: 6))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6).strokeBorder(WFColors.border, lineWidth: 1)
+                        }
+                } else {
+                    TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
+                }
                 if !trash {
                     BusinessMenu {
                         Button("按标题排序") { notes.sort(.title) }

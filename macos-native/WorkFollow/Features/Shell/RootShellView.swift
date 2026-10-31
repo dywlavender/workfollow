@@ -39,8 +39,11 @@ struct RootShellView: View {
         case .calendar: return AnyView(CalendarWorkspaceView(workspace: workspace, systemCalendar: environment.systemCalendar))
         case .matrix: return AnyView(MatrixWorkspaceView(workspace: workspace))
         default:
-            return AnyView(TaskWorkspaceView(workspace: workspace, navigation: pageCache.navigation(for: destination.rawValue, appNavigation: navigation, belongsToPage: { $0 == destination }),
-                                            navigationVisible: navigationVisible))
+            return AnyView(TaskWorkspaceView(workspace: workspace,
+                                             navigation: pageCache.navigation(for: destination.rawValue,
+                                                appNavigation: navigation,
+                                                belongsToPage: { $0 == destination }),
+                                             navigationVisible: navigationVisible))
         }
     }
 
@@ -59,6 +62,29 @@ struct RootShellView: View {
         #else
         return AnyView(content.tint(WFColors.accent))
         #endif
+    }
+
+    /// 缓存页只在"页面结构可能变化"时重设 rootView；切换清单/智能清单时
+    /// 目标页的这组值不变，SwiftUI 可沿用已有图，只做挂载与布局。
+    ///
+    /// 不含 destination：同一 pageKey 的页面结构相同，页面内部的跳转由各页
+    /// 自己的 navigation bridge 推送（SwiftUI 观察得到），不必重建整页。
+    private func pageContentSignature(navigationVisible: Bool,
+                                      windowWidth: CGFloat) -> String {
+        var parts = [
+            navigationVisible ? "1" : "0",
+            "\(Int(windowWidth.rounded()))",
+            "\(Int(railInset.rounded()))",
+            environment.storageNeedsReload ? "1" : "0",
+            String(describing: colorScheme),
+            environment.backgroundTheme.rawValue,
+            environment.backgroundIntensity.rawValue
+        ]
+        #if DEBUG
+        parts.append(popupObservation == nil ? "0" : "1")
+        parts.append(workflowObservation == nil ? "0" : "1")
+        #endif
+        return parts.joined(separator: "|")
     }
 
     var body: some View {
@@ -90,6 +116,12 @@ struct RootShellView: View {
                         .overlay(alignment: .trailing) { ShellColumnSeparator() }
                 }
                 WorkspacePageHost(cache: pageCache, pageKey: pageKey,
+                                  contentSignature: pageContentSignature(
+                                    navigationVisible: navigationVisible,
+                                    windowWidth: geometry.size.width),
+                                  // 任务列之间切换只做显隐；离开任务模块仍卸载，
+                                  // 保留笔记/会议等页面的 onDisappear 清理。
+                                  keepsMounted: TaskWorkspaceModel.scope(for: destination) != nil,
                                   content: hostedPage(destination: destination,
                                                       navigationVisible: navigationVisible,
                                                       windowWidth: geometry.size.width))

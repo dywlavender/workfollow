@@ -5,6 +5,7 @@ import SwiftUI
 struct AIConversationView: View {
     @ObservedObject var model: AIConversationModel
     let generate: AIConversationModel.Generate
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
     var adopt: ((String, Bool) -> Void)?
     var undoAction: ((AIActionReceipt) -> Void)? = nil
     var canUndoAction: ((AIActionReceipt) -> Bool)? = nil
@@ -75,7 +76,15 @@ struct AIConversationView: View {
                 submit: { if let submit { submit() } else { model.send(using: generate) } },
                 compact: compact, identifierPrefix: identifierPrefix, instanceID: model.record.id)
                 .frame(maxWidth: 800).padding(.horizontal, compact ? 16 : 24).padding(.bottom, compact ? 12 : 20)
-        }.workfollowPageSurface(0.92)
+        }.background {
+            ZStack {
+                ThemedPageSurface(opacity: 0.92)
+                // 主窗口的消息流直接铺在整窗画布上；AI 回复是长文本，
+                // 再压一层阅读面，气泡/极光才不会从字后经过。AI 选窗
+                // 这类弹层自带不透明底，不需要也不应该再洗白。
+                if pageCanvasActive { WorkfollowReadingSurface() }
+            }
+        }
     }
 
     @ViewBuilder private func messageView(_ message: AIConversationMessage) -> some View {
