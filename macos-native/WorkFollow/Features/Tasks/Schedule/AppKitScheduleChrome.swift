@@ -53,13 +53,7 @@ final class ScheduleFooterCanvas: NSView {
         NSRect(x: clearRect.maxX + gap, y: 0, width: buttonWidth, height: bounds.height)
     }
 
-    private var accentColor: NSColor {
-        NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(red: 0.494, green: 0.533, blue: 1, alpha: 1)
-                : NSColor(red: 0.357, green: 0.361, blue: 0.922, alpha: 1)
-        }
-    }
+    private var accentColor: NSColor { WFColors.nsAccent }
 
     override func draw(_ dirtyRect: NSRect) {
         guard bounds.width > 0 else { return }

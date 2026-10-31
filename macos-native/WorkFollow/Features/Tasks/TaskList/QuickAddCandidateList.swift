@@ -95,8 +95,8 @@ struct QuickAddCandidateList: View {
         .padding(.vertical, Self.verticalPadding)
         .frame(width: Self.width)
         .background(
-            RoundedRectangle(cornerRadius: WFMetrics.corner, style: .continuous)
-                .fill(WFColors.overlay)
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: WFMetrics.corner, style: .continuous),
+                           fallback: WFColors.overlay)
                 .overlay(
                     RoundedRectangle(cornerRadius: WFMetrics.corner, style: .continuous)
                         .strokeBorder(WFColors.overlayBorder)

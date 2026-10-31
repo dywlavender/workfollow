@@ -101,6 +101,24 @@ final class AITaskDraftTests: XCTestCase {
         XCTAssertEqual(workspace.task(for: parentID), parent)
     }
 
+    func testBreakdownChildKeepsFullSchedulePlanFromSharedDatePanel() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false, initialTasks: [])
+        let parentID = try XCTUnwrap(workspace.createTask(title: "准备报价", in: .inbox).taskID)
+        let plan = SchedulePlan(
+            schedule: TaskSchedule(dueAt: date, hasTime: true, dueEndAt: date.addingTimeInterval(3600)),
+            reminder: date.addingTimeInterval(-300), reminderOffsets: [-5],
+            frequency: .weekly, recurrenceRule: RecurrenceRule(interval: 1, weekday: 6))
+        let draft = AITaskDraft(title: "核对成本", plan: plan, priority: .high)
+        let id = try XCTUnwrap(workspace.createAITasks([draft], request: request(.task(parentID))).first)
+        let saved = try XCTUnwrap(workspace.task(for: id))
+        XCTAssertEqual(saved.schedule, plan.schedule)
+        XCTAssertEqual(saved.reminderAt, plan.reminder)
+        XCTAssertEqual(saved.reminderOffsets, plan.reminderOffsets)
+        XCTAssertEqual(saved.recurrence, plan.frequency)
+        XCTAssertEqual(saved.recurrenceRule, plan.recurrenceRule)
+        XCTAssertEqual(saved.priority, .high)
+    }
+
     func testMeetingProvenanceAndDatePrioritySurviveSQLiteRoundTrip() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("ai-drafts-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

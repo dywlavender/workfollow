@@ -28,6 +28,38 @@ enum WFType {
     static let caption = Font.system(size: 11)
     /// 工具条文字控件（月/周、今天）。
     static let control = Font.system(size: 13, weight: .medium)
+    /// 弹层与表单的常规标签：日期面板、检查项提醒、显示设置等。
+    static let controlLabel = Font.system(size: 13)
+    /// 弹层分区标题、面板名称。
+    static let controlLabelStrong = Font.system(size: 13, weight: .semibold)
+    /// 紧凑标题：显示设置卡片、AI 面板待办计数。
+    static let captionStrong = Font.system(size: 12, weight: .semibold)
+    /// 数字角标：评论数、同步问题数、菜单偏移量。
+    static let badgeStrong = Font.system(size: 10, weight: .semibold)
+    /// 极小计数角标：评论数、同步问题数。
+    static let badgeSmall = Font.system(size: 9, weight: .semibold)
+    /// 设置页与统计页的强调页面标题。
+    static let pageTitleStrong = Font.system(size: 20, weight: .semibold)
+    /// 显示设置的分节标题。
+    static let groupTitle = Font.system(size: 15, weight: .semibold)
+    /// 专注页任务标题与节奏行等较大正文。
+    static let bodyLarge = Font.system(size: 15)
+    /// 专注设置行标题与时长输入。
+    static let controlLarge = Font.system(size: 16, weight: .medium)
+    /// 专注笔记等分栏面板标题。
+    static let paneTitle = Font.system(size: 17, weight: .semibold)
+    /// AI 面板紧凑操作文字。
+    static let compact = Font.system(size: 10.5)
+    /// AI 面板最小说明与来源。
+    static let compactCaption = Font.system(size: 9.5)
+    /// AI 面板最小注释文字。
+    static let compactFine = Font.system(size: 9)
+    /// AI 面板紧凑强调文字。
+    static let compactStrong = Font.system(size: 11, weight: .medium)
+    /// 对话框正文。
+    static let dialogBody = Font.system(size: 12.5)
+    /// 对话框按钮文字。
+    static let dialogAction = Font.system(size: 12.5, weight: .medium)
     /// 任务列表分组标题：滴答 14pt Demi。
     static let sectionSemibold = Font.system(size: 14, weight: .semibold)
     static let listTitleMedium = Font.system(size: 14, weight: .medium)

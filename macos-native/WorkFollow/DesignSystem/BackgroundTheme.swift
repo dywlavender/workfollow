@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 可选背景主题。主页面用半透明内容面透出底图；弹层、下拉与对话框用不透明的
@@ -63,6 +64,32 @@ enum NativeBackgroundTheme: String, CaseIterable, Identifiable {
     /// 弹层底色；主题关闭时保留调用方原来的底色（专注页用 FocusTheme.canvas 等）。
     func popupFillOrFallback(_ fallback: Color, for scheme: ColorScheme) -> Color {
         isThemed ? popupFill(for: scheme) : fallback
+    }
+
+    /// 列表 / 看板 / 时间线共用**同一个**选中行底色。每个主题用自己色相的浅色块：
+    /// 极光偏蓝紫、蜜桃偏暖橙、薄荷偏绿、奶油偏琥珀。之前四套主题共用一个近白蓝
+    /// `#EFF3FE`，在蜜桃/薄荷/奶油画布上几乎看不出选中；这里保证一眼可分。
+    /// 关闭主题时沿用滴答实测的中性灰 `listSelection`。
+    var selectionFill: Color {
+        switch self {
+        case .none: return WFColors.listSelection
+        case .peachSoda: return adaptiveColor(light: 0xFFDCC4, dark: 0x4C3428)
+        case .mintCloud: return adaptiveColor(light: 0xCFEFE1, dark: 0x21423A)
+        case .creamSticker: return adaptiveColor(light: 0xF8E4B5, dark: 0x4A3A1B)
+        case .auroraJelly: return adaptiveColor(light: 0xD9E1FF, dark: 0x333A5F)
+        }
+    }
+
+    /// 主题页面上的输入框底色（快速添加、笔记搜索）：与选中同色相、更接近白的
+    /// 常驻表面，靠一层细描边定形。关闭主题时回到各输入框自己的原底色。
+    var inputFill: Color {
+        switch self {
+        case .none: return WFColors.quickAddIdleFill
+        case .peachSoda: return adaptiveColor(light: 0xFFF7F0, dark: 0x2E2521)
+        case .mintCloud: return adaptiveColor(light: 0xF1FBF7, dark: 0x1E2D28)
+        case .creamSticker: return adaptiveColor(light: 0xFFFAEC, dark: 0x2F2820)
+        case .auroraJelly: return adaptiveColor(light: 0xF3F8FF, dark: 0x1B2431)
+        }
     }
 
     /// 主页面底纱的颜色。整窗画布与各页面的 `ThemedPageSurface` 共用同一个值，
@@ -171,6 +198,7 @@ extension EnvironmentValues {
 enum NativeThemeBridge {
     static var theme: NativeBackgroundTheme = .none
     static var intensity: NativeBackgroundIntensity = .medium
+    static var material: WFAppearanceMaterial = .classic
 }
 
 extension View {
@@ -178,6 +206,7 @@ extension View {
     func workfollowNativeTheme() -> some View {
         environment(\.workfollowBackgroundTheme, NativeThemeBridge.theme)
             .environment(\.workfollowBackgroundIntensity, NativeThemeBridge.intensity)
+            .environment(\.workfollowMaterial, NativeThemeBridge.material)
     }
 }
 
@@ -224,6 +253,8 @@ struct WorkfollowPageCanvas: View {
     var leadingWidth: CGFloat = RailMetrics.width
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         if theme.isThemed {
@@ -231,17 +262,23 @@ struct WorkfollowPageCanvas: View {
                 let width = max(proxy.size.width, 1)
                 let railEdge = min(RailMetrics.width, width)
                 let navEdge = min(max(leadingWidth, railEdge), width)
+                // 玻璃模式下图标栏/导航列自己画玻璃，画布让出背景，
+                // 否则玻璃只会模糊一层已经着色的渐变，看不到壁纸。
+                let glass = WFGlassSupport.isActive(material,
+                                                    reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency)
+                let rail = glass ? Color.clear : theme.railFill(for: colorScheme)
                 // 没有二级导航时，图标栏直接过渡到正文底色。
-                let chrome = leadingWidth > RailMetrics.width + 1
-                    ? theme.navigationFill(for: colorScheme)
-                    : theme.railFill(for: colorScheme)
+                let chrome = glass ? Color.clear
+                    : leadingWidth > RailMetrics.width + 1
+                        ? theme.navigationFill(for: colorScheme)
+                        : theme.railFill(for: colorScheme)
                 let fade = min(max(width * 0.12, 96), 180)
                 let fadeEnd = min(width, navEdge + fade)
                 let veil = theme.pageVeil(for: colorScheme)
                     .opacity(intensity.pageOpacity(base: 0.90))
                 LinearGradient(stops: [
-                    .init(color: theme.railFill(for: colorScheme), location: 0),
-                    .init(color: theme.railFill(for: colorScheme), location: railEdge / width),
+                    .init(color: rail, location: 0),
+                    .init(color: rail, location: railEdge / width),
                     .init(color: chrome, location: navEdge / width),
                     .init(color: veil, location: fadeEnd / width),
                     .init(color: veil, location: 1)
@@ -318,7 +355,8 @@ struct ThemedPopupSurface: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        theme.isThemed ? theme.popupFill(for: colorScheme) : fallback
+        WFGlassSurface(shape: Rectangle(),
+                       fallback: theme.isThemed ? theme.popupFill(for: colorScheme) : fallback)
     }
 }
 
@@ -946,6 +984,17 @@ private func bgColor(_ hex: UInt32, alpha: Double = 1) -> Color {
           green: Double((hex >> 8) & 0xFF) / 255,
           blue: Double(hex & 0xFF) / 255,
           opacity: alpha)
+}
+
+/// 浅/深两套不透明色，随系统外观切换（与 `WFColors.themed` 同一机制）。
+private func adaptiveColor(light: UInt32, dark: UInt32) -> Color {
+    Color(nsColor: NSColor(name: nil) { appearance in
+        let hex = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        return NSColor(srgbRed: Double((hex >> 16) & 0xFF) / 255,
+                       green: Double((hex >> 8) & 0xFF) / 255,
+                       blue: Double(hex & 0xFF) / 255,
+                       alpha: 1)
+    })
 }
 
 private func drift(_ time: TimeInterval, period: Double, phase: Double = 0) -> CGFloat {

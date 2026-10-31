@@ -351,7 +351,7 @@ struct CountdownEditorView: View {
                     Circle().fill(countdownColor(colorIndex))
                     Image(systemName: symbol)
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(WFColors.onAccent)
                 }
                 .frame(width: 38, height: 38)
                 .overlay(alignment: .bottomTrailing) {
@@ -1164,7 +1164,7 @@ struct CountdownStyleView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("样式").font(.system(size: 14, weight: .semibold)).padding(.vertical, WFSpace.md)
+            Text("样式").font(WFType.sectionSemibold).padding(.vertical, WFSpace.md)
             Divider()
             VStack(alignment: .leading, spacing: WFSpace.md) {
                 preview
@@ -1182,7 +1182,7 @@ struct CountdownStyleView: View {
                                 if index == colorIndex {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(WFColors.onAccent)
                                 }
                             }
                             .contentShape(Circle())
@@ -1261,7 +1261,7 @@ struct CountdownNoteView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("备注").font(.system(size: 14, weight: .semibold)).padding(.vertical, WFSpace.md)
+            Text("备注").font(WFType.sectionSemibold).padding(.vertical, WFSpace.md)
             Divider()
             TextField("写点什么…", text: $note, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -1304,7 +1304,7 @@ struct ArchivedCountdownsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // 参照物语言包：`archived_countdowns` = 已归档倒数纪念日
-            Text("已归档倒数纪念日").font(.system(size: 14, weight: .semibold)).padding(.vertical, WFSpace.md)
+            Text("已归档倒数纪念日").font(WFType.sectionSemibold).padding(.vertical, WFSpace.md)
             Divider()
             if store.archivedEvents.isEmpty {
                 VStack(spacing: WFSpace.sm) {
@@ -1347,7 +1347,7 @@ struct ArchivedCountdownsView: View {
                 Circle().fill(countdownColor(event.colorIndex))
                 Image(systemName: event.safeSymbol)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WFColors.onAccent)
             }
             .frame(width: 20, height: 20)
             VStack(alignment: .leading, spacing: 1) {

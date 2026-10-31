@@ -78,7 +78,8 @@ final class TaskActions {
                 if case let .task(parentID) = request.source {
                     result = createChild(parentID, title: draft.title)
                     if let id = result.taskID {
-                        _ = updateAttributes(id, priority: draft.priority, schedule: draft.schedule)
+                        _ = updateAttributes(id, priority: draft.priority)
+                        _ = saveSchedule(draft.plan, to: .task(id))
                         _ = setDocument(id, draft.document(for: request))
                     }
                 } else {

@@ -54,7 +54,7 @@ private struct FeedbackToastView: View {
 
     /// 文案上限：超过即截断，短文案不被撑出一条死面。
     private static let messageWidthCap: CGFloat = 360
-    private static let dangerColor = Color(nsColor: .systemRed)
+    private static let dangerColor = WFColors.danger
     /// 尾部撤销箭头：深色底上用琥珀橙拉开对比，和正文白色区分动作与结果。
     private static let undoColor = Color(red: 1, green: 0.631, blue: 0)
     private static let cornerRadius: CGFloat = 9
@@ -79,7 +79,7 @@ private struct FeedbackToastView: View {
                     .foregroundStyle(Self.dangerColor)
             }
             Text(event.message)
-                .font(.system(size: 14, weight: .medium))
+                .font(WFType.listTitleMedium)
                 .foregroundStyle(WFColors.tooltipText)
                 .lineLimit(1)
                 .allowsTightening(true)

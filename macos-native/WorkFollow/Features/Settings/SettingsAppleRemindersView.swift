@@ -34,7 +34,7 @@ struct SettingsAppleRemindersView: View {
                     WFFormNote("同步已暂停，已同步到提醒事项的任务仍保留。")
                 }
                 if let message = integration.message {
-                    Text(message).font(WFType.supporting).foregroundStyle(.red)
+                    Text(message).font(WFType.supporting).foregroundStyle(WFColors.danger)
                         .padding(.horizontal, WFSpace.md)
                     Button("重试连接") { _Concurrency.Task { await integration.connect() } }
                         .disabled(integration.connecting)
@@ -56,7 +56,7 @@ struct SettingsAppleRemindersView: View {
                         .padding(.horizontal, WFSpace.md)
                 }
                 if let message = calendarIntegration.message {
-                    Text(message).font(WFType.supporting).foregroundStyle(.red)
+                    Text(message).font(WFType.supporting).foregroundStyle(WFColors.danger)
                         .padding(.horizontal, WFSpace.md)
                 }
             }

@@ -112,6 +112,22 @@ final class EditorScrollRoutingTests: XCTestCase {
         XCTAssertNotNil(scroller.action)
     }
 
+    /// 内容装得下时不画滚条，避免短列表/短正文旁常驻一条满长细线。
+    func testSlimOverlayKnobIsSkippedWhenContentFits() throws {
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+        let document = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+        scroll.documentView = document
+        XCTAssertFalse(CompactOverlayScroller.hasOverflow(scroll, horizontal: false))
+        XCTAssertFalse(CompactOverlayScroller.hasOverflow(scroll, horizontal: true))
+
+        document.frame.size.height = 600
+        XCTAssertTrue(CompactOverlayScroller.hasOverflow(scroll, horizontal: false))
+
+        document.frame.size = NSSize(width: 600, height: 120)
+        XCTAssertFalse(CompactOverlayScroller.hasOverflow(scroll, horizontal: false))
+        XCTAssertTrue(CompactOverlayScroller.hasOverflow(scroll, horizontal: true))
+    }
+
     /// 修饰器直接加在 ScrollView 外层（不再放进内容里）也要生效：
     /// 设置页、筛选弹窗等大量深层页面都是这种写法。
     func testScrollViewLevelModifierStylesTheHost() throws {

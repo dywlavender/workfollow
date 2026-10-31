@@ -83,6 +83,32 @@ final class SidebarLayoutTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(scroll.documentView).frame.height, expandedHeight, accuracy: 1)
     }
 
+    /// 清单行之间不再插入 6pt 排序热区：每多一条清单，侧栏只长一个 38pt 行高
+    /// （修复前是 44 = 38 行 + 6 插入带）。
+    func testListRowsUseTickTickRowStepWithoutInsertionGap() throws {
+        let fixture = try makeSidebar(height: 900)
+        let workspace = fixture.environment.taskWorkspace
+        let scroll = try XCTUnwrap(scrollViews(in: fixture.host).first)
+        func documentHeight() throws -> CGFloat {
+            try XCTUnwrap(scroll.documentView).frame.height
+        }
+
+        _ = workspace.createDraft(title: "梳理报价", list: "工作", schedule: TaskSchedule(),
+                                  priority: .none, tags: [], reminder: nil,
+                                  repeatFrequency: .never, selectCreatedTask: false)
+        InspectorPanelTestSupport.settle(fixture.window)
+        let oneListHeight = try documentHeight()
+
+        _ = workspace.createDraft(title: "阅读计划", list: "生活", schedule: TaskSchedule(),
+                                  priority: .none, tags: [], reminder: nil,
+                                  repeatFrequency: .never, selectCreatedTask: false)
+        InspectorPanelTestSupport.settle(fixture.window)
+        let twoListHeight = try documentHeight()
+
+        XCTAssertEqual(twoListHeight - oneListHeight, NavigationMetrics.rowHeight, accuracy: 0.5,
+                       "清单行步长应为 38pt，排序热区不能占布局")
+    }
+
     /// 滴答标签头「⋯」（实测 2026-10-25）：只有三个显示状态、菜单用紧凑宽度；
     /// 选「隐藏」只收组内标签行，分组头保留，入口随时能点开改回来。
     func testTagSectionMenuIsCompactAndHidesRowsWithoutLosingHeader() throws {

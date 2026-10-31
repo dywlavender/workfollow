@@ -50,6 +50,12 @@ struct WorkFollowApp: App {
         .handlesExternalEvents(matching: [])
     }
 
+    private var glassWindowBackdrop: Bool {
+        environment.appearanceMaterial == .liquidGlass
+            && WFAppearanceMaterial.isAvailable
+            && !WFGlassSupport.systemReduceTransparency
+    }
+
     private var configuredMainWindow: some Scene {
         // SceneBuilder has no if/else. Its public availability erasure keeps
         // both branches the same type without raising the macOS 14 minimum.
@@ -72,7 +78,8 @@ struct WorkFollowApp: App {
                 .frame(minWidth: WFMetrics.minimumWindow.width,
                        minHeight: WFMetrics.minimumWindow.height)
                 .background(WindowFramePersistence(launchPolicy: windowLaunch))
-                .background(MainWindowChromeConfiguration(railInset: $mainWindowRailInset))
+                .background(MainWindowChromeConfiguration(railInset: $mainWindowRailInset,
+                                                          glassBackdrop: glassWindowBackdrop))
                 .onAppear {
                     lifecycle.environment = environment
                     lifecycle.resourceLinks.configure(route: { [weak environment] url in

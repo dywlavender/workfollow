@@ -38,7 +38,7 @@ struct FocusCompletionPane: View {
                         .focusRenderAnchor(.completionActions)
 
                     if showSavedToast {
-                        Text("已保存").font(.system(size: 13)).foregroundStyle(theme.text2)
+                        Text("已保存").font(WFType.controlLabel).foregroundStyle(theme.text2)
                             .padding(.horizontal, 14).padding(.vertical, 7)
                             .background(theme.chipBackground, in: RoundedRectangle(cornerRadius: 6))
                             .frame(maxWidth: .infinity)
@@ -113,7 +113,7 @@ struct FocusCompletionPane: View {
                     }
                 } label: {
                     Text("+" + FocusViewLogic.clockText(store.availableExtraSeconds))
-                        .font(.system(size: 12)).monospacedDigit().foregroundStyle(.white)
+                        .font(WFType.supporting).monospacedDigit().foregroundStyle(WFColors.onAccent)
                         .padding(.horizontal, 9).padding(.vertical, 4)
                         .overlay(Capsule().stroke(.white.opacity(0.85),
                                                  style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
@@ -178,8 +178,8 @@ struct FocusCompletionPane: View {
     private func actionButton(_ title: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
         let completionAccent = Color(red: 0, green: 0.79, blue: 0.61)
         return Button(action: action) {
-            Text(title).font(.system(size: 14))
-                .foregroundStyle(prominent ? Color.white : completionAccent)
+            Text(title).font(WFType.body)
+                .foregroundStyle(prominent ? WFColors.onAccent : completionAccent)
                 .frame(width: FocusLayoutMetrics.primaryButtonWidth, height: FocusLayoutMetrics.primaryButtonHeight)
                 .background(prominent ? completionAccent : Color.clear, in: Capsule())
                 .overlay(Capsule().stroke(completionAccent, lineWidth: prominent ? 0 : 1))
@@ -200,13 +200,13 @@ struct FocusCompletionPane: View {
     private func durationEditor(_ record: PomodoroRecord) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("专注时长").font(.system(size: 13))
+                Text("专注时长").font(WFType.controlLabel)
                 Spacer()
                 BusinessPicker("分钟", selection: durationMinutesBinding, options:
                     durationMinuteRange.map { BusinessChoice($0, "\($0) 分钟") }).labelsHidden().frame(width: 96)
                     .accessibilityIdentifier("focus-completed-duration-minutes")
             }
-            Text(durationPreview(record)).font(.system(size: 12)).foregroundStyle(theme.text2)
+            Text(durationPreview(record)).font(WFType.supporting).foregroundStyle(theme.text2)
                 .accessibilityIdentifier("focus-completed-duration-preview")
             HStack {
                 Spacer()

@@ -208,7 +208,7 @@ private struct TaskTrashConfirmationOverlay: View {
                 Button(action: onCancel) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(WFColors.onAccent)
                         .frame(width: 22, height: 22)
                         .background(.red, in: Circle())
                 }

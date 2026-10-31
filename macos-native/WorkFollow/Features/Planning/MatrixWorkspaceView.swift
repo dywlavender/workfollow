@@ -427,7 +427,7 @@ struct MatrixQuadrantCard: View {
                 .background(color, in: Circle())
             Spacer().frame(width: WFSpace.sm)
             Text(title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(WFType.sectionSemibold)
                 .foregroundStyle(color)
                 .frame(maxWidth: .infinity, alignment: .leading)
             hoverAction(icon: "plus", tooltip: "在\(style.title)中新建任务",

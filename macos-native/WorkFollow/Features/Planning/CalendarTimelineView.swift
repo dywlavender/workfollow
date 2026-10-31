@@ -137,7 +137,7 @@ struct CalendarTimelineView: View {
         VStack(spacing: 0) {
             ForEach(0..<24, id: \.self) { hour in
                 Text(String(format: "%02d:00", hour))
-                    .font(.system(size: 10)).foregroundStyle(WFColors.secondaryText)
+                    .font(WFType.taskMeta).foregroundStyle(WFColors.secondaryText)
                     .frame(width: WFCalendarTimelineMetrics.axisWidth - 5, height: CGFloat(hourHeight), alignment: .topTrailing)
                     .id("calendar-hour-\(hour)")
             }
@@ -535,7 +535,7 @@ private struct CalendarTimeBlock: View {
                 Text(task.title).font(WFType.listMeta).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
             }
             if displayedSchedule.dueEndAt != nil {
-                Text(timeLabel).font(.system(size: 10)).foregroundStyle(WFColors.secondaryText).lineLimit(1)
+                Text(timeLabel).font(WFType.taskMeta).foregroundStyle(WFColors.secondaryText).lineLimit(1)
             }
             Spacer(minLength: 0)
         }

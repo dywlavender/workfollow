@@ -216,7 +216,7 @@ extension NativeTextView {
             ? storage.attributes(at: range.location, effectiveRange: nil) : typingAttributes
         var attributes = base
         for key in [DocumentTextCodec.attachmentKey, DocumentTextCodec.formulaKey,
-                    NSAttributedString.Key.attachment, .toolTip] {
+                    NSAttributedString.Key.attachment, DocumentTextCodec.hoverTitleKey] {
             attributes.removeValue(forKey: key)
         }
         if attributes[DocumentTextCodec.blockKey] == nil {
@@ -224,7 +224,7 @@ extension NativeTextView {
         }
         guard let data = try? JSONEncoder().encode(formula) else { return false }
         attributes[DocumentTextCodec.formulaKey] = data
-        attributes[.toolTip] = "公式 · 双击编辑"
+        attributes[DocumentTextCodec.hoverTitleKey] = "公式 · 双击编辑"
         let attachment = NSTextAttachment()
         attachment.attachmentCell = DocumentFormulaCell(formula: formula)
         attributes[.attachment] = attachment

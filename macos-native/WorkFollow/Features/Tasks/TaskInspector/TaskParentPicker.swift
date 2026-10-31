@@ -106,7 +106,7 @@ struct TaskParentPicker: View {
                 .compactScrollbars()
             }
             if failed {
-                Text("任务状态已变化，请重新选择").font(WFType.supporting).foregroundStyle(.red).padding(8)
+                Text("任务状态已变化，请重新选择").font(WFType.supporting).foregroundStyle(WFColors.danger).padding(8)
             }
             PopupActionBar {
                 PopupActionButton(title: "取消", action: onClose)

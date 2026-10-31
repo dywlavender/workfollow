@@ -360,7 +360,7 @@ struct NotesWorkspaceView: View {
                     Button("全部删除") { confirmClear = true }.disabled(!notes.notes.contains { $0.deletedAt != nil })
                 } else {
                     Button(action: createNote) { Image(systemName: "plus").frame(width: 28, height: 28) }
-                        .buttonStyle(.plain).foregroundStyle(.white)
+                        .buttonStyle(.plain).foregroundStyle(WFColors.onAccent)
                         .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6)).hoverTip("新建笔记")
                 }
             }
@@ -371,7 +371,10 @@ struct NotesWorkspaceView: View {
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 8)
                         .frame(height: 28)
-                        .background(WFColors.inputFillOnTheme, in: RoundedRectangle(cornerRadius: 6))
+                        .background {
+                            WFGlassSurface(shape: RoundedRectangle(cornerRadius: 6),
+                                           fallback: backgroundTheme.inputFill)
+                        }
                         .overlay {
                             RoundedRectangle(cornerRadius: 6).strokeBorder(WFColors.border, lineWidth: 1)
                         }
@@ -841,7 +844,7 @@ struct NotesWorkspaceView: View {
             Spacer()
             if let error = environment.storageError {
                 Button("保存失败 · 重试") { environment.flush { _ in } }
-                    .buttonStyle(.plain).font(.caption).foregroundStyle(.red).help(error)
+                    .buttonStyle(.plain).font(.caption).foregroundStyle(WFColors.danger).help(error)
             }
             noteActionsMenu(note)
         }

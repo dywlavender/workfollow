@@ -9,6 +9,7 @@ struct RootShellView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.mainWindowRailInset) private var railInset
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     #if DEBUG
     @Environment(\.popupContentObservation) private var popupObservation
     @Environment(\.workflowActionObservation) private var workflowObservation
@@ -100,6 +101,11 @@ struct RootShellView: View {
                 && destination != .calendar && destination != .matrix
                 && destination != .countdown && destination != .meetings
                 && destination != .focus && destination != .aiChat
+            let glassActive = WFGlassSupport.isActive(
+                environment.appearanceMaterial,
+                reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency)
+            let leadingWidth = WFMetrics.railWidth
+                + (showsNavigationColumn ? WFMetrics.navigationWidth : 0)
             HStack(spacing: 0) {
                 IconRailView(workspace: workspace, navigation: navigation,
                              onNavigate: environment.navigate,
@@ -143,6 +149,14 @@ struct RootShellView: View {
                         WorkFollowBackgroundView(theme: environment.backgroundTheme,
                                                  intensity: environment.backgroundIntensity,
                                                  animated: false, layer: .base)
+                    } else if glassActive {
+                        // 玻璃模式且无主题：图标栏与导航列让出底色，
+                        // 但先压一层内容色底衬，桌面只淡淡透出，避免过透影响可读性。
+                        HStack(spacing: 0) {
+                            WFColors.content.opacity(0.70)
+                                .frame(width: leadingWidth)
+                            WFColors.content
+                        }
                     } else {
                         WFColors.content
                     }
@@ -150,8 +164,7 @@ struct RootShellView: View {
                     // 多栏页面的列边界因此没有深浅台阶。
                     WorkfollowPageCanvas(theme: environment.backgroundTheme,
                                          intensity: environment.backgroundIntensity,
-                                         leadingWidth: WFMetrics.railWidth
-                                            + (showsNavigationColumn ? WFMetrics.navigationWidth : 0))
+                                         leadingWidth: leadingWidth)
                     // 动效单独叠在底纱之上：底纱只压底图，气泡/云朵/极光带
                     // 不再一起被洗成近白。
                     if environment.backgroundTheme.isThemed {
@@ -166,6 +179,7 @@ struct RootShellView: View {
             }
             .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)
             .environment(\.workfollowBackgroundIntensity, environment.backgroundIntensity)
+            .environment(\.workfollowMaterial, environment.appearanceMaterial)
             .environment(\.workfollowPageCanvasActive, environment.backgroundTheme.isThemed)
             .disabled(environment.storageNeedsReload)
             .onAppear {
@@ -199,7 +213,7 @@ struct RootShellView: View {
                 if let error = environment.storageError {
                     // 保存失败不是"看一眼就好"：重试成功后提示自己消失。
                     HStack(spacing: 8) {
-                        Text(error).font(.caption).foregroundStyle(.red)
+                        Text(error).font(.caption).foregroundStyle(WFColors.danger)
                         Button("重试") { environment.retryStorage() }
                             .buttonStyle(.link)
                             .font(.caption)
@@ -216,6 +230,7 @@ struct RootShellView: View {
         // 放在最外层：根级 sheet（命令面板、欢迎页）也要继承主题，弹层才有底色。
         .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)
         .environment(\.workfollowBackgroundIntensity, environment.backgroundIntensity)
+        .environment(\.workfollowMaterial, environment.appearanceMaterial)
     }
 }
 
@@ -249,12 +264,20 @@ struct FocusWorkspaceShellView: View {
 /// 1pt 边框压在导航列最后一像素上）。改成 overlay 后列宽分配与滴答一致，
 /// 线仍然可见、不可命中。
 private struct ShellColumnSeparator: View {
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     var body: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: WFMetrics.divider)
-            .frame(maxHeight: .infinity)
-            .allowsHitTesting(false)
+        if WFGlassSupport.isActive(material,
+                                   reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency) {
+            Color.clear.frame(width: WFMetrics.divider)
+        } else {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor))
+                .frame(width: WFMetrics.divider)
+                .frame(maxHeight: .infinity)
+                .allowsHitTesting(false)
+        }
     }
 }
 
@@ -340,9 +363,11 @@ private struct TaskWorkspaceView: View {
                                            commentStore: environment.taskCommentStore)
                             .frame(width: min(420, max(320, geometry.size.width - 64)),
                                    height: max(280, geometry.size.height - 32))
-                            .background(environment.backgroundTheme.popupFillOrFallback(
-                                WFColors.content, for: colorScheme),
-                                        in: RoundedRectangle(cornerRadius: 12))
+                            .background {
+                                WFGlassSurface(shape: RoundedRectangle(cornerRadius: 12),
+                                               fallback: environment.backgroundTheme.popupFillOrFallback(
+                                                WFColors.content, for: colorScheme))
+                            }
                             .overlay {
                                 RoundedRectangle(cornerRadius: 12)
                                     .stroke(WFColors.border, lineWidth: 1)

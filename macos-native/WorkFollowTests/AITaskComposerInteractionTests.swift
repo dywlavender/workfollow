@@ -93,6 +93,48 @@ final class AITaskComposerInteractionTests: XCTestCase {
         XCTAssertEqual(environment.notesWorkspace.notes.count, 1)
     }
 
+    func testCandidateDateRowUsesSharedSchedulePanelAndWritesDraft() throws {
+        let environment = try environment()
+        let calendar = environment.taskWorkspace.calendar
+        let original = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 30)))
+        var draft = AITaskDraft(title: "核对成本",
+                                schedule: TaskSchedule(dueAt: original, deadlineAt: original),
+                                priority: .none, quote: "核对成本。")
+        var writes = 0
+        let binding = Binding(get: { draft }, set: { draft = $0; writes += 1 })
+        let host = NSHostingView(rootView: AITaskDraftRow(draft: binding,
+                                                          destination: TaskList.inbox.name,
+                                                          initiallyExpanded: true)
+            .environmentObject(environment))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 560, height: 320)
+        defer { window.close() }
+
+        try screenshot(window, name: "candidate-date-row")
+        try InspectorPanelTestSupport.clickButton(containing: "安排日期", in: window)
+        let duePanel = try InspectorPanelTestSupport.panel(title: InspectorPanelTestSupport.datePanelTitle,
+                                                           below: window)
+        XCTAssertEqual(duePanel.frame.width, ScheduleMetrics.panelWidth, accuracy: 1)
+        try screenshot(duePanel, name: "candidate-date-panel-due")
+        try InspectorPanelTestSupport.sendEscape(to: duePanel)
+        try InspectorPanelTestSupport.waitUntil("Escape 关闭日期面板") { !duePanel.isVisible }
+        XCTAssertEqual(writes, 0, "取消日期面板不写候选草稿")
+
+        try InspectorPanelTestSupport.clickButton(containing: "安排日期", in: window)
+        let confirmed = try InspectorPanelTestSupport.panel(title: InspectorPanelTestSupport.datePanelTitle,
+                                                            below: window)
+        try InspectorPanelTestSupport.sendReturn(to: confirmed)
+        try InspectorPanelTestSupport.waitUntil("确认日期面板后关闭") { !confirmed.isVisible }
+        XCTAssertGreaterThan(writes, 0, "统一日期面板确认后写回候选草稿")
+        XCTAssertEqual(draft.schedule.dueAt, original)
+
+        try InspectorPanelTestSupport.clickButton(containing: "截止日期", in: window)
+        let deadlinePanel = try InspectorPanelTestSupport.panel(title: InspectorPanelTestSupport.datePanelTitle,
+                                                                 below: window)
+        try InspectorPanelTestSupport.sendReturn(to: deadlinePanel)
+        try InspectorPanelTestSupport.waitUntil("确认截止日期后关闭") { !deadlinePanel.isVisible }
+        XCTAssertEqual(draft.schedule.deadlineAt, original)
+    }
+
     func testBreakdownPreviewSupportsDarkModeAndEscapeWithoutMutation() async throws {
         let environment = try environment()
         let parentID = try XCTUnwrap(environment.taskWorkspace.createTask(title: "准备客户报价", in: .inbox).taskID)

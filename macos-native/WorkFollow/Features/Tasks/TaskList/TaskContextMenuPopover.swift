@@ -404,7 +404,7 @@ struct TaskContextMenuPopover: View {
         .accessibilityLabel(offset == 7 ? "7 天后" : title)
         .overlay {
             if offset == 7 {
-                Text("+7").font(.system(size: 9, weight: .semibold))
+                Text("+7").font(WFType.badgeSmall)
                     .background(WFColors.content).offset(y: 2)
                     .allowsHitTesting(false).accessibilityHidden(true)
             }
@@ -494,8 +494,8 @@ struct TaskContextMenuPopover: View {
                     .foregroundStyle(WFColors.secondaryText)
             }
         }
-        .font(.system(size: 13))
-        .foregroundStyle(destructive ? Color.red : WFColors.text)
+        .font(WFType.controlLabel)
+        .foregroundStyle(destructive ? WFColors.danger : WFColors.text)
         .frame(minHeight: PopupMetrics.menuRowHeight)
         .padding(.horizontal, 8)
         .contentShape(Rectangle())

@@ -12,8 +12,8 @@ struct TaskCommentCountBadge: View {
         let count = store.count(for: taskID)
         if count > 0 {
             Text(count > 99 ? "99+" : "\(count)")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(Color.white)
+                .font(WFType.badgeSmall)
+                .foregroundStyle(WFColors.onAccent)
                 .padding(.horizontal, 3)
                 .frame(minWidth: 14, minHeight: 14)
                 .background(WFColors.accent, in: Capsule())

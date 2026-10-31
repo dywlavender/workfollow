@@ -60,7 +60,7 @@ struct SettingsAIModelsView: View {
                     Button("刷新 Pi 模型") { refresh += 1 }.disabled(catalog.loading)
                 }.font(WFType.supporting).padding(.horizontal, WFSpace.md)
                 if let error = catalog.error {
-                    Text(error).font(WFType.supporting).foregroundStyle(.red).padding(.horizontal, WFSpace.md)
+                    Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger).padding(.horizontal, WFSpace.md)
                 } else if !catalog.loading && catalog.models.isEmpty {
                     WFFormNote("请先按欢迎清单的“AI 配置说明”配置本机 Pi，再刷新模型列表。")
                 }

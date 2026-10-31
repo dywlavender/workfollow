@@ -35,7 +35,7 @@ struct PopupActionButton: View {
     var body: some View {
         Button(action: action) {
             Text(title).font(WFType.body)
-                .foregroundStyle(primary ? Color.white : WFColors.secondaryText)
+                .foregroundStyle(primary ? WFColors.onAccent : WFColors.secondaryText)
                 .frame(maxWidth: .infinity).frame(height: PopupMetrics.compactButtonHeight)
                 .background(primary ? tint : Color.clear,
                             in: RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius))
@@ -67,7 +67,7 @@ struct PopupActionBar<Actions: View>: View {
 struct DialogTitle: View {
     let text: String
     var body: some View {
-        Text(text).font(.system(size: 18, weight: .semibold))
+        Text(text).font(WFType.detailTitle)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

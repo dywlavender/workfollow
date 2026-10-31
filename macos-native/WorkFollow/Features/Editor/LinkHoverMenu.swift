@@ -115,7 +115,10 @@ private struct LinkHoverMenuView: View {
         }
         .padding(3)
         .frame(idealWidth: PopupMetrics.linkHoverMenuWidth, maxWidth: .infinity)
-        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: 8),
+                           fallback: backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        }
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.overlayBorder))
         .hidesSystemFocusEffect()
@@ -125,7 +128,7 @@ private struct LinkHoverMenuView: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: symbol).font(.system(size: 10))
-                Text(title).font(.system(size: 12))
+                Text(title).font(WFType.supporting)
             }
             .foregroundStyle(WFColors.text)
             .padding(.horizontal, 8)

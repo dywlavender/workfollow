@@ -197,7 +197,7 @@ private struct TagCandidateList: View {
                             .foregroundStyle(WFColors.secondaryText)
                             .frame(width: 14)
                         Text(tag)
-                            .font(.system(size: 13))
+                            .font(WFType.controlLabel)
                             .foregroundStyle(WFColors.text)
                             .lineLimit(1)
                         Spacer(minLength: 0)
@@ -221,7 +221,10 @@ private struct TagCandidateList: View {
         .frame(height: max(0, viewportSize.height - 8))
         .padding(4)
         .frame(width: viewportSize.width)
-        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        }
         .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .transaction { $0.animation = nil }

@@ -116,7 +116,7 @@ struct FocusTaskPickerPopover: View {
                         ForEach(groups) { group in
                             if let title = group.title {
                                 Text(title)
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(WFType.metaMedium)
                                     .foregroundStyle(theme.text2)
                                     .frame(maxWidth: .infinity, minHeight: FocusTaskPickerMetrics.groupHeaderHeight,
                                            alignment: .leading)
@@ -151,7 +151,10 @@ struct FocusTaskPickerPopover: View {
         .frame(width: FocusTaskPickerMetrics.width, height: FocusTaskPickerMetrics.height,
                alignment: .topLeading)
         .coordinateSpace(name: "focus-task-picker")
-        .background(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme), in: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
+        }
         .overlay(RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius)
             .stroke(theme.hairline, lineWidth: 1))
         .onAppear { DispatchQueue.main.async { searchFocused = true } }

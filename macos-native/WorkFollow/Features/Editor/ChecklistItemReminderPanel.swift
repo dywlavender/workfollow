@@ -211,8 +211,10 @@ private struct ChecklistItemReminderCard: View {
         }
         .padding(.vertical, 4)
         .frame(width: 252)
-        .background(backgroundTheme.popupFill(for: colorScheme),
-                    in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFill(for: colorScheme))
+        }
         .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
         .background(PopupEscapeRouter(depth: 2, onEscape: onClose))
         .onChange(of: page) { _, _ in
@@ -242,7 +244,7 @@ private struct ChecklistItemReminderCard: View {
             }
             if let notice {
                 Text(notice)
-                    .font(.system(size: 11))
+                    .font(WFType.caption)
                     .foregroundStyle(WFColors.warning)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -267,12 +269,12 @@ private struct ChecklistItemReminderCard: View {
         Button(action: openCalendar) {
             HStack(spacing: 6) {
                 Text("自定义")
-                    .font(.system(size: 13))
+                    .font(WFType.controlLabel)
                     .foregroundStyle(isCustomSelected ? WFColors.accent : WFColors.text)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 Text(customDetail)
-                    .font(.system(size: 12))
+                    .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
                     .lineLimit(1)
                 Image(systemName: "chevron.right")
@@ -376,7 +378,7 @@ private struct ChecklistItemReminderCard: View {
                 }
             }
             if options.isEmpty {
-                Text("今天没有更晚的时间").font(.system(size: 12))
+                Text("今天没有更晚的时间").font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText).padding(10)
             }
         } label: {
@@ -385,11 +387,11 @@ private struct ChecklistItemReminderCard: View {
                     .font(.system(size: 13))
                     .foregroundStyle(WFColors.secondaryText)
                 Text("时间")
-                    .font(.system(size: 13))
+                    .font(WFType.controlLabel)
                     .foregroundStyle(WFColors.text)
                 Spacer(minLength: 6)
                 Text(ChecklistItemReminderPanel.clockText(customTime, calendar: calendar))
-                    .font(.system(size: 13))
+                    .font(WFType.controlLabel)
                     .monospacedDigit()
                     .foregroundStyle(WFColors.text)
                 Image(systemName: "chevron.right")
@@ -435,7 +437,7 @@ private struct ChecklistItemReminderCard: View {
                      horizontalPadding: 12) {
             HStack {
                 Text(title)
-                    .font(.system(size: 13))
+                    .font(WFType.controlLabel)
                     .foregroundStyle(destructive ? WFColors.danger
                         : checked ? WFColors.accent : WFColors.text)
                     .lineLimit(1)
@@ -455,7 +457,7 @@ private struct ChecklistItemReminderCard: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: filled ? .semibold : .medium))
-                .foregroundStyle(filled ? Color.white : WFColors.text)
+                .foregroundStyle(filled ? WFColors.onAccent : WFColors.text)
                 .frame(maxWidth: .infinity, minHeight: 26)
                 .background(filled ? WFColors.accent : WFColors.content,
                             in: RoundedRectangle(cornerRadius: 7))

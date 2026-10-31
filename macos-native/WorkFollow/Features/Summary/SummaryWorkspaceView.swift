@@ -236,24 +236,26 @@ struct SummaryWorkspaceView: View {
                 .hoverTip("显示或隐藏侧栏").accessibilityLabel("显示或隐藏侧栏")
             Text(journalMode ? "每日手记" : "摘要").font(WFType.detailTitle).foregroundStyle(WFColors.text)
             Spacer()
-            if !journalMode {
-                if !showsInspector {
-                    Button { showsConfiguration = true } label: { Image(systemName: "slider.horizontal.3") }
-                        .hoverTip("筛选与显示设置").accessibilityLabel("筛选与显示设置")
-                }
-                Button { reloadDocument() } label: { Image(systemName: "arrow.clockwise") }
-                    .hoverTip("刷新摘要").accessibilityLabel("刷新摘要")
-            }
-            BusinessMenu {
-                Button(journalMode ? "周回顾" : "每日手记") { journalMode.toggle() }
+            WFGlassControlGroup(spacing: 12) {
                 if !journalMode {
-                    Divider()
-                    Button("打印") { TaskPrintService.printDocument(title: "摘要 " + range.title(calendar: workspace.calendar), body: document.plainText) }
+                    if !showsInspector {
+                        Button { showsConfiguration = true } label: { Image(systemName: "slider.horizontal.3") }
+                            .hoverTip("筛选与显示设置").accessibilityLabel("筛选与显示设置")
+                    }
+                    Button { reloadDocument() } label: { Image(systemName: "arrow.clockwise") }
+                        .hoverTip("刷新摘要").accessibilityLabel("刷新摘要")
                 }
-            } label: { Image(systemName: "ellipsis.circle") }
-                .fixedSize()
-                .hoverTip("摘要更多操作")
-                .accessibilityLabel("摘要更多操作")
+                BusinessMenu {
+                    Button(journalMode ? "周回顾" : "每日手记") { journalMode.toggle() }
+                    if !journalMode {
+                        Divider()
+                        Button("打印") { TaskPrintService.printDocument(title: "摘要 " + range.title(calendar: workspace.calendar), body: document.plainText) }
+                    }
+                } label: { Image(systemName: "ellipsis.circle") }
+                    .fixedSize()
+                    .hoverTip("摘要更多操作")
+                    .accessibilityLabel("摘要更多操作")
+            }
         }
         .buttonStyle(.borderless).foregroundStyle(WFColors.secondaryText)
         .padding(.horizontal, 22).frame(height: 52)
@@ -720,7 +722,7 @@ private struct SummaryMenuLabel: View {
             case let .file(text, color):
                 Text(text)
                     .font(.system(size: text.count > 2 ? 6.5 : text.count == 2 ? 8.5 : 10, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WFColors.onAccent)
                     .frame(width: 20, height: 20)
                     .background(color, in: RoundedRectangle(cornerRadius: 4))
             case let .symbol(name, color):

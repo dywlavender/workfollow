@@ -120,7 +120,6 @@ private struct NoteAITaskDraftEditor: View {
         }
         .frame(width: NoteAIPaneMetrics.draftEditorSize.width,
                height: NoteAIPaneMetrics.draftEditorSize.height)
-        .background(WFColors.overlay)
         .hidesSystemFocusEffect()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("编辑候选任务")

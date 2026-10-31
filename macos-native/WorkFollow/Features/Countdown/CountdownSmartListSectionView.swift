@@ -43,7 +43,7 @@ struct CountdownSmartListSectionView: View {
                     .frame(width: TaskListMetrics.groupChevronSize,
                            height: TaskListMetrics.groupChevronSize)
                 Text(CountdownSmartListSection.title).font(WFType.sectionSemibold)
-                Text("\(section.count)").font(.system(size: 11))
+                Text("\(section.count)").font(WFType.caption)
                     .foregroundStyle(WFColors.secondaryText)
                 Spacer(minLength: 0)
             }
@@ -98,7 +98,7 @@ struct CountdownSmartListRow: View {
             Circle().fill(countdownColor(entry.colorIndex))
             Image(systemName: entry.symbol)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(WFColors.onAccent)
         }
         .frame(width: 22, height: 22)
     }

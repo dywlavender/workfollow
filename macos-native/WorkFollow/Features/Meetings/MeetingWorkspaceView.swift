@@ -189,7 +189,7 @@ struct MeetingWorkspaceView: View {
                 Button { store.create() } label: {
                     Image(systemName: "plus").frame(width: 28, height: 28)
                 }
-                .buttonStyle(.plain).foregroundStyle(.white)
+                .buttonStyle(.plain).foregroundStyle(WFColors.onAccent)
                 .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6))
                 .hoverTip("新建会议").accessibilityLabel("新建会议")
             }

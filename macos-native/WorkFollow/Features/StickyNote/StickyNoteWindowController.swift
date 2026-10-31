@@ -56,6 +56,7 @@ final class StickyNoteWindowController: ObservableObject {
                 onOpenInMain: { [weak self] in self?.openInMain(taskID) })
                 .environment(\.workfollowBackgroundTheme, environment?.backgroundTheme ?? .none)
                 .environment(\.workfollowBackgroundIntensity, environment?.backgroundIntensity ?? .medium)
+                .environment(\.workfollowMaterial, environment?.appearanceMaterial ?? .classic)
         }
     }
 

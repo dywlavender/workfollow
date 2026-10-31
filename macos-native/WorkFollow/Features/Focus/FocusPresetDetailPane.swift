@@ -69,7 +69,7 @@ struct FocusPresetDetailPane: View {
             }.fixedSize().foregroundStyle(theme.text2)
                 .hoverTip("更多预设操作")
                 .accessibilityIdentifier("focus-preset-detail-menu")
-        }.font(.system(size: 13)).frame(height: 28)
+        }.font(WFType.controlLabel).frame(height: 28)
     }
 
     private func title(_ preset: FocusStore.TimerPreset) -> some View {
@@ -77,9 +77,9 @@ struct FocusPresetDetailPane: View {
             Text(preset.emoji).font(.system(size: 26)).frame(width: 40, height: 40)
                 .background(theme.avatarBackground, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
-                Text(preset.name).font(.system(size: 18, weight: .semibold)).foregroundStyle(theme.text)
+                Text(preset.name).font(WFType.detailTitle).foregroundStyle(theme.text)
                 Text(preset.stopwatch ? "正计时" : "番茄计时 \(preset.minutes)m")
-                    .font(.system(size: 12)).foregroundStyle(theme.text3)
+                    .font(WFType.supporting).foregroundStyle(theme.text3)
             }
             Spacer()
         }.frame(height: 44)
@@ -95,10 +95,10 @@ struct FocusPresetDetailPane: View {
 
     private func card(_ label: String, value: Int, unit: String?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 12)).foregroundStyle(theme.text3)
+            Text(label).font(WFType.supporting).foregroundStyle(theme.text3)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text("\(value)").font(.system(size: 24)).monospacedDigit().foregroundStyle(theme.text)
-                if let unit { Text(unit).font(.system(size: 12)).foregroundStyle(theme.text) }
+                if let unit { Text(unit).font(WFType.supporting).foregroundStyle(theme.text) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
@@ -111,7 +111,7 @@ struct FocusPresetDetailPane: View {
             HStack(alignment: .center) {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("\(statistics.periodActiveSeconds / 60)").font(.system(size: 24)).monospacedDigit()
-                    Text("m").font(.system(size: 13))
+                    Text("m").font(WFType.controlLabel)
                 }.foregroundStyle(theme.text)
                 Spacer()
                 BusinessPicker("统计周期", selection: $period, options:
@@ -121,7 +121,7 @@ struct FocusPresetDetailPane: View {
             HStack(spacing: 6) {
                 Button { movePeriod(-1) } label: { Image(systemName: "chevron.left").frame(width: 16, height: 18) }
                     .buttonStyle(.plain).hoverTip("上一周期").accessibilityIdentifier("focus-preset-period-previous")
-                Text(periodLabel(statistics.periodInterval)).font(.system(size: 12))
+                Text(periodLabel(statistics.periodInterval)).font(WFType.supporting)
                 Button { movePeriod(1) } label: { Image(systemName: "chevron.right").frame(width: 16, height: 18) }
                     .buttonStyle(.plain).hoverTip("下一周期").accessibilityIdentifier("focus-preset-period-next")
             }.foregroundStyle(theme.text2).frame(height: 20)
@@ -135,14 +135,14 @@ struct FocusPresetDetailPane: View {
     private func recordsSection(_ statistics: FocusPresetStatistics, preset: FocusStore.TimerPreset) -> some View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(recordGroups(statistics.records), id: \.day) { group in
-                Text(shortDate(group.day)).font(.system(size: 13)).foregroundStyle(theme.text3)
+                Text(shortDate(group.day)).font(WFType.controlLabel).foregroundStyle(theme.text3)
                     .padding(.top, 6).padding(.bottom, 20)
                 ForEach(group.records) { record in
                     recordRow(record, preset: preset)
                 }
             }
             if statistics.records.isEmpty {
-                Text("本\(period.title)暂无专注记录").font(.system(size: 13)).foregroundStyle(theme.text3)
+                Text("本\(period.title)暂无专注记录").font(WFType.controlLabel).foregroundStyle(theme.text3)
                     .frame(maxWidth: .infinity).padding(.top, 18)
             }
         }
@@ -158,14 +158,14 @@ struct FocusPresetDetailPane: View {
             }
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text(recordTime(record)).font(.system(size: 12)).foregroundStyle(theme.text3)
+                    Text(recordTime(record)).font(WFType.supporting).foregroundStyle(theme.text3)
                     Spacer()
-                    Text("\(record.activeSeconds / 60)m").font(.system(size: 12)).foregroundStyle(theme.text3)
+                    Text("\(record.activeSeconds / 60)m").font(WFType.supporting).foregroundStyle(theme.text3)
                 }
                 Text(record.taskID.flatMap { workspace?.task(for: $0)?.title } ?? preset.name)
-                    .font(.system(size: 14, weight: .medium)).foregroundStyle(theme.text).lineLimit(2)
+                    .font(WFType.listTitleMedium).foregroundStyle(theme.text).lineLimit(2)
                 if let note = record.note {
-                    Text(note).font(.system(size: 13)).foregroundStyle(theme.text2).lineLimit(2)
+                    Text(note).font(WFType.controlLabel).foregroundStyle(theme.text2).lineLimit(2)
                 }
             }
         }
@@ -236,7 +236,7 @@ private struct FocusPresetChart: View {
                         let y = height * CGFloat(index) / 3
                         Rectangle().fill(theme.hairline).frame(width: plotWidth, height: 1).offset(y: y)
                         Text(axisLabel(maximumSeconds * (3 - index) / 3))
-                            .font(.system(size: 12)).foregroundStyle(theme.text3)
+                            .font(WFType.supporting).foregroundStyle(theme.text3)
                             .frame(width: axisWidth, height: 16, alignment: .leading)
                             .offset(x: plotWidth + 8, y: y - 8)
                     }
@@ -253,14 +253,14 @@ private struct FocusPresetChart: View {
                     if let targetSeconds {
                         let y = height * (1 - CGFloat(targetSeconds) / CGFloat(maximumSeconds))
                         Rectangle().fill(theme.warn).frame(width: plotWidth, height: 1).offset(y: y)
-                        Text("\(targetSeconds / 60)m").font(.system(size: 12)).foregroundStyle(theme.warn)
+                        Text("\(targetSeconds / 60)m").font(WFType.supporting).foregroundStyle(theme.warn)
                             .frame(width: axisWidth, height: 16, alignment: .leading).offset(x: plotWidth + 8, y: y - 8)
                     }
                 }
             }.frame(height: FocusLayoutMetrics.presetDetailChartHeight)
             HStack(spacing: 0) {
                 ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
-                    Text(dayLabel(day.day, index: index)).font(.system(size: 12)).foregroundStyle(theme.text3)
+                    Text(dayLabel(day.day, index: index)).font(WFType.supporting).foregroundStyle(theme.text3)
                         .frame(maxWidth: .infinity)
                 }
                 Color.clear.frame(width: axisWidth)

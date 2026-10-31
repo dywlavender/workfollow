@@ -243,7 +243,7 @@ struct FocusWorkspaceView: View {
                     Button { submitAddTimer() } label: {
                         Text("确定")
                             .font(.system(size: 15 * s, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(WFColors.onAccent)
                             .frame(width: 92 * s, height: 36 * s)
                             .background(RoundedRectangle(cornerRadius: 8 * s)
                                 .fill(theme.accent.opacity(nameValid ? 1 : 0.45)))
@@ -254,8 +254,11 @@ struct FocusWorkspaceView: View {
             }
             .padding(28 * s)
             .frame(width: 560 * s)
-            .background(RoundedRectangle(cornerRadius: 16 * s).fill(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
-                .shadow(color: .black.opacity(0.16), radius: 30 * s))
+            .background {
+                WFGlassSurface(shape: RoundedRectangle(cornerRadius: 16 * s),
+                               fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
+                    .shadow(color: .black.opacity(0.16), radius: 30 * s)
+            }
             .overlay(RoundedRectangle(cornerRadius: 16 * s).stroke(theme.hairline, lineWidth: 1))
             .background(FocusOutsideClickObserver { showAddTimer = false })
             .background(PopupEscapeRouter(depth: 1) { showAddTimer = false })

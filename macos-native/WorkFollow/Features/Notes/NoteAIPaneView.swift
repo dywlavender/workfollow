@@ -64,9 +64,9 @@ struct NoteAIPaneView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(WFColors.accent)
             VStack(alignment: .leading, spacing: 1) {
-                Text("AI 助手").font(.system(size: 13, weight: .semibold))
+                Text("AI 助手").font(WFType.controlLabelStrong)
                 Text("基于当前笔记「\(noteTitle)」")
-                    .font(.system(size: 10))
+                    .font(WFType.taskMeta)
                     .foregroundStyle(WFColors.secondaryText)
                     .lineLimit(1)
             }
@@ -99,7 +99,7 @@ struct NoteAIPaneView: View {
             }
             .frame(width: 24, height: 24)
             Text("可以直接与我交流，也可以一键整理、润色或提取待办。")
-                .font(.system(size: 12))
+                .font(WFType.supporting)
                 .foregroundStyle(WFColors.text)
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -119,9 +119,9 @@ struct NoteAIPaneView: View {
                         }
                         .frame(width: 24, height: 24)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(action.title).font(.system(size: 12.5, weight: .medium))
+                            Text(action.title).font(WFType.listBody)
                                 .foregroundStyle(WFColors.text)
-                            Text(action.subtitle).font(.system(size: 10))
+                            Text(action.subtitle).font(WFType.taskMeta)
                                 .foregroundStyle(WFColors.secondaryText)
                         }
                         Spacer(minLength: 0)
@@ -226,11 +226,11 @@ private struct NoteAITaskExchangeView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 ProgressView().controlSize(.small)
-                Text(session.status).font(.system(size: 11)).foregroundStyle(WFColors.secondaryText)
+                Text(session.status).font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             }
             if !session.preview.isEmpty {
                 Text(session.preview)
-                    .font(.system(size: 11))
+                    .font(WFType.caption)
                     .foregroundStyle(WFColors.secondaryText)
                     .lineLimit(10)
                     .textSelection(.enabled)
@@ -249,10 +249,10 @@ private struct NoteAITaskExchangeView: View {
         if session.drafts.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("没有发现新的\(exchange.taskRequest?.isBreakdown == true ? "子任务" : "待办")")
-                    .font(.system(size: 12, weight: .medium))
-                Text("原有内容和任务保持不变").font(.system(size: 11))
+                    .font(WFType.metaMedium)
+                Text("原有内容和任务保持不变").font(WFType.caption)
                     .foregroundStyle(WFColors.secondaryText)
-                Button("重新生成", action: onRetry).font(.system(size: 11))
+                Button("重新生成", action: onRetry).font(WFType.caption)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,7 +264,7 @@ private struct NoteAITaskExchangeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("\(session.drafts.count) 项待办")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(WFType.captionStrong)
                     Spacer()
                     Button(session.drafts.allSatisfy { $0.selected } ? "全不选" : "全选") {
                         let next = !session.drafts.allSatisfy { $0.selected }
@@ -296,7 +296,7 @@ private struct NoteAITaskExchangeView: View {
                     appliedSummary
                 }
                 if let error = exchange.applyError {
-                    Text(error).font(.system(size: 10.5)).foregroundStyle(WFColors.danger)
+                    Text(error).font(WFType.compact).foregroundStyle(WFColors.danger)
                 }
             }
         }
@@ -305,8 +305,8 @@ private struct NoteAITaskExchangeView: View {
     private var createButton: some View {
         Button(action: apply) {
             Text("创建 \(session.selectedCount) 项待办")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(WFType.captionStrong)
+                .foregroundStyle(WFColors.onAccent)
                 .frame(maxWidth: .infinity)
                 .frame(height: 34)
                 .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 9))
@@ -321,10 +321,10 @@ private struct NoteAITaskExchangeView: View {
         HStack(spacing: 6) {
             if exchange.isApplied {
                 Text("已保存到「\(destination)」")
-                    .font(.system(size: 9.5))
+                    .font(WFType.compactCaption)
                     .foregroundStyle(WFColors.tertiaryText)
             } else {
-                Text("保存到").font(.system(size: 9.5)).foregroundStyle(WFColors.secondaryText)
+                Text("保存到").font(WFType.compactCaption).foregroundStyle(WFColors.secondaryText)
                 BusinessMenu {
                     ForEach(environment.taskWorkspace.availableListNames, id: \.self) { name in
                         BusinessMenuOption(name, selected: destination == name, symbol: "list.bullet") {
@@ -334,7 +334,7 @@ private struct NoteAITaskExchangeView: View {
                     }
                 } label: {
                     Label(destination, systemImage: destination == TaskList.inbox.name ? "tray" : "list.bullet")
-                        .font(.system(size: 9.5))
+                        .font(WFType.compactCaption)
                 }
                 let sections = environment.taskWorkspace.listSections(forList: destination)
                 if !sections.isEmpty {
@@ -347,12 +347,12 @@ private struct NoteAITaskExchangeView: View {
                         }
                     } label: {
                         Text(sections.first { $0.id == sectionID }?.title ?? "未分组")
-                            .font(.system(size: 9.5))
+                            .font(WFType.compactCaption)
                     }
                 }
             }
             Spacer(minLength: 4)
-            Text("保留来源与原文").font(.system(size: 9)).foregroundStyle(WFColors.tertiaryText)
+            Text("保留来源与原文").font(WFType.compactFine).foregroundStyle(WFColors.tertiaryText)
         }
     }
 
@@ -362,14 +362,14 @@ private struct NoteAITaskExchangeView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(WFColors.accent)
             Text("已创建 \(exchange.appliedIDs.count) 项待办")
-                .font(.system(size: 11, weight: .medium))
+                .font(WFType.compactStrong)
             Spacer()
             Button("撤销") { undo() }
-                .buttonStyle(.plain).font(.system(size: 10.5))
+                .buttonStyle(.plain).font(WFType.compact)
                 .foregroundStyle(WFColors.secondaryText)
                 .workflowActionAnchor("note.ai.undoCreated")
             Button("查看") { onReveal(exchange.appliedIDs) }
-                .buttonStyle(.plain).font(.system(size: 10.5))
+                .buttonStyle(.plain).font(WFType.compact)
                 .foregroundStyle(WFColors.accent)
         }
         .padding(.top, 2)
@@ -449,7 +449,7 @@ private struct NoteAITaskDraftRow: View {
                     if draft.selected {
                         Image(systemName: "checkmark")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(WFColors.onAccent)
                     }
                 }
                 .frame(width: 19, height: 19)
@@ -473,7 +473,7 @@ private struct NoteAITaskDraftRow: View {
                         Spacer(minLength: 4)
                         if let dueText {
                             Text(dueText)
-                                .font(.system(size: 10))
+                                .font(WFType.taskMeta)
                                 .foregroundStyle(draft.selected ? dueColor : WFColors.tertiaryText)
                                 .lineLimit(1)
                         }
@@ -482,14 +482,14 @@ private struct NoteAITaskDraftRow: View {
                         HStack(spacing: 6) {
                             if !draft.quote.isEmpty {
                                 Text(draft.quote)
-                                    .font(.system(size: 10))
+                                    .font(WFType.taskMeta)
                                     .foregroundStyle(WFColors.tertiaryText)
                                     .lineLimit(1)
                             }
                             Spacer(minLength: 4)
                             if let deadlineText {
                                 Text(deadlineText)
-                                    .font(.system(size: 9.5))
+                                    .font(WFType.compactCaption)
                                     .foregroundStyle(WFColors.tertiaryText)
                                     .lineLimit(1)
                             }
@@ -547,11 +547,11 @@ private struct NoteAIRewriteExchangeView: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 ProgressView().controlSize(.small)
-                Text(session.status).font(.system(size: 11)).foregroundStyle(WFColors.secondaryText)
+                Text(session.status).font(WFType.caption).foregroundStyle(WFColors.secondaryText)
             }
             if !session.preview.isEmpty {
                 Text(session.preview)
-                    .font(.system(size: 11))
+                    .font(WFType.caption)
                     .foregroundStyle(WFColors.secondaryText)
                     .lineLimit(12)
                     .textSelection(.enabled)
@@ -598,23 +598,23 @@ private struct NoteAIRewriteExchangeView: View {
             if let noteID = exchange.savedNoteID {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(WFColors.accent)
-                    Text("已保存为新笔记").font(.system(size: 10.5))
+                    Text("已保存为新笔记").font(WFType.compact)
                     Button("打开") { onOpenNote(noteID) }
-                        .buttonStyle(.plain).font(.system(size: 10.5))
+                        .buttonStyle(.plain).font(WFType.compact)
                         .foregroundStyle(WFColors.accent)
                 }
             }
             if exchange.didReplaceBody {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(WFColors.accent)
-                    Text("已替换当前正文").font(.system(size: 10.5))
+                    Text("已替换当前正文").font(WFType.compact)
                 }
             }
             if let error = exchange.saveError {
-                Text(error).font(.system(size: 10.5)).foregroundStyle(WFColors.danger)
+                Text(error).font(WFType.compact).foregroundStyle(WFColors.danger)
             }
             Text("保存会另建笔记并附来源链接，不覆盖原文")
-                .font(.system(size: 9))
+                .font(WFType.compactFine)
                 .foregroundStyle(WFColors.tertiaryText)
         }
         .workfollowAlert(

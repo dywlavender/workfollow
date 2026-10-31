@@ -28,14 +28,14 @@ struct FocusActiveSessionPane: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("专注笔记")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(WFType.paneTitle)
                     .foregroundStyle(theme.text)
                     .focusRenderAnchor(.activeFocusNoteHeader)
 
                 ZStack(alignment: .topLeading) {
                     if note.isEmpty && noteEditorIsEmpty {
                         Text("记录你的想法...")
-                            .font(.system(size: 14))
+                            .font(WFType.body)
                             .foregroundStyle(theme.text3)
                             .padding(.horizontal, 9).padding(.top, 8)
                             .allowsHitTesting(false)
@@ -85,7 +85,7 @@ struct FocusActiveSessionPane: View {
                     .foregroundStyle(theme.text).lineLimit(1)
             } else {
                 FocusTomatoIcon(color: theme.accent).focusRenderAnchor(.activeSessionTomatoIcon)
-                Text(sessionTitle).font(.system(size: 18, weight: .semibold)).foregroundStyle(theme.text)
+                Text(sessionTitle).font(WFType.detailTitle).foregroundStyle(theme.text)
             }
             Spacer()
             Button {

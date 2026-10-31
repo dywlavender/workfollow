@@ -7,6 +7,9 @@ enum DocumentTextCodec {
     static let diagramKey = NSAttributedString.Key("WorkFollow.diagram")
     static let tableKey = NSAttributedString.Key("WorkFollow.table")
     static let formulaKey = NSAttributedString.Key("WorkFollow.formula")
+    /// 附件、绘图、表格、公式的悬停名称。不用系统 `.toolTip`：它约 1 秒才出现，
+    /// 且样式与 §8.6 的统一提示卡不一致。
+    static let hoverTitleKey = NSAttributedString.Key("WorkFollow.hoverTitle")
     static let inlineCodeKey = NSAttributedString.Key("WorkFollow.inlineCode")
     static let mutedKey = NSAttributedString.Key("WorkFollow.muted")
     static let captionKey = NSAttributedString.Key("WorkFollow.caption")
@@ -267,7 +270,7 @@ enum DocumentTextCodec {
                 }
                 if let file = run.attachment, let data = try? JSONEncoder().encode(file) {
                     attrs[attachmentKey] = data
-                    attrs[.toolTip] = file.name
+                    attrs[hoverTitleKey] = file.name
                     let attachment = NSTextAttachment()
                     if let image = Self.pastedImage(from: file) {
                         // 粘贴图片以 data URL 存在附件里（NativeDocument 暂无图片块类型），
@@ -282,21 +285,21 @@ enum DocumentTextCodec {
                 }
                 if let diagram = run.diagram, let data = try? JSONEncoder().encode(diagram) {
                     attrs[diagramKey] = data
-                    attrs[.toolTip] = diagram.title + " · 双击编辑"
+                    attrs[hoverTitleKey] = diagram.title + " · 双击编辑"
                     let attachment = NSTextAttachment()
                     attachment.attachmentCell = DocumentDiagramCell(diagram: diagram)
                     attrs[.attachment] = attachment
                 }
                 if let table = run.table, let data = try? JSONEncoder().encode(table) {
                     attrs[tableKey] = data
-                    attrs[.toolTip] = "表格 · 双击编辑"
+                    attrs[hoverTitleKey] = "表格 · 双击编辑"
                     let attachment = NSTextAttachment()
                     attachment.attachmentCell = DocumentTableCell(table: table)
                     attrs[.attachment] = attachment
                 }
                 if let formula = run.formula, let data = try? JSONEncoder().encode(formula) {
                     attrs[formulaKey] = data
-                    attrs[.toolTip] = "公式 · 双击编辑"
+                    attrs[hoverTitleKey] = "公式 · 双击编辑"
                     let attachment = NSTextAttachment()
                     attachment.attachmentCell = DocumentFormulaCell(formula: formula)
                     attrs[.attachment] = attachment

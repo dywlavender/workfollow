@@ -211,8 +211,10 @@ struct SlashCommandList: View {
         .transaction { $0.animation = nil }
         .foregroundStyle(WFColors.text)
         // Task compact cards have no hard outline; the panel owns their shadow.
-        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme),
-                    in: RoundedRectangle(cornerRadius: SlashMenuMetrics.radius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: SlashMenuMetrics.radius),
+                           fallback: backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        }
         .overlay {
             if !compact {
                 RoundedRectangle(cornerRadius: SlashMenuMetrics.radius)
@@ -242,7 +244,7 @@ struct SlashCommandList: View {
                 Text(command.title).lineLimit(1)
                 Spacer(minLength: 0)
                 if !compact {
-                    Text(command.group).font(.system(size: 11)).foregroundStyle(WFColors.secondaryText)
+                    Text(command.group).font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 }
                 Color.clear.frame(width: compact ? SlashMenuMetrics.itemTrailing : WFSpace.md)
             }

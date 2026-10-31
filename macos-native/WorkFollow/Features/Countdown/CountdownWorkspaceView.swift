@@ -342,9 +342,9 @@ struct CountdownCardView: View {
             Button(action: onTogglePin) {
                 Image(systemName: event.pinned ? "pin.fill" : "pin")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WFColors.onAccent)
                     .frame(width: 26, height: 26)
-                    .background(Color(nsColor: .secondaryLabelColor),
+                    .background(WFColors.secondaryText,
                                 in: RoundedRectangle(cornerRadius: 7))
                     .contentShape(RoundedRectangle(cornerRadius: 7))
             }
@@ -357,9 +357,9 @@ struct CountdownCardView: View {
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WFColors.onAccent)
                     .frame(width: 26, height: 26)
-                    .background(Color(nsColor: .secondaryLabelColor),
+                    .background(WFColors.secondaryText,
                                 in: RoundedRectangle(cornerRadius: 7))
                     .contentShape(RoundedRectangle(cornerRadius: 7))
             }
@@ -498,7 +498,7 @@ struct CountdownCardFace: View {
             Circle().fill(countdownColor(colorIndex))
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(WFColors.onAccent)
         }
         .frame(width: 22, height: 22)
     }

@@ -198,7 +198,7 @@ struct SummaryConfigurationView: View {
                         HStack(spacing: 8) {
                             if aiRunning { ProgressView().controlSize(.small).tint(.white) }
                             Text(aiRunning ? "正在整理…" : "AI 优化").font(WFType.body)
-                        }.foregroundStyle(.white).frame(maxWidth: .infinity).frame(height: 38)
+                        }.foregroundStyle(WFColors.onAccent).frame(maxWidth: .infinity).frame(height: 38)
                             .background(WFColors.summaryAction, in: RoundedRectangle(cornerRadius: 8))
                             .contentShape(RoundedRectangle(cornerRadius: 8))
                     }.buttonStyle(.plain).disabled(aiRunning || !canGenerate)

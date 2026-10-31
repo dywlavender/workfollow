@@ -238,7 +238,10 @@ struct DocumentToolbarPickerCard: View {
         .compactScrollbars()
         }
         .frame(height: viewportHeight ?? picker.height)
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: WFColors.overlay)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder, lineWidth: 1)
         }
@@ -260,7 +263,7 @@ struct DocumentColorPickerCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.system(size: 12))
+                .font(WFType.supporting)
                 .foregroundStyle(WFColors.secondaryText)
             Button { onPick(nil) } label: {
                 Text(defaultTitle)
@@ -312,7 +315,10 @@ struct DocumentColorPickerCard: View {
         .padding(10)
         .frame(width: DocumentToolbarPicker.textColorWidth, height: DocumentToolbarPicker.textColorHeight,
                alignment: .top)
-        .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: WFColors.overlay)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius)
                 .stroke(WFColors.overlayBorder, lineWidth: 1)
@@ -342,7 +348,7 @@ struct DocumentToolbarPickerRow: View {
             HStack(spacing: 0) {
                 if let badge {
                     Text(badge)
-                        .font(.system(size: 14, weight: .regular))
+                        .font(WFType.body)
                         .foregroundStyle(WFColors.secondaryText)
                         .frame(width: 26, alignment: .leading)
                         .accessibilityHidden(true)

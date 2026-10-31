@@ -39,7 +39,10 @@ struct FocusTaskScopePopover: View {
         .scrollIndicators(.automatic)
         .padding(8)
         .frame(width: FocusTaskPickerMetrics.scopeWidth, height: panelHeight)
-        .background(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme), in: RoundedRectangle(cornerRadius: 12))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: 12),
+                           fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
+        }
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.hairline, lineWidth: 1))
         .onKeyPress(.escape) {
             onDismiss()

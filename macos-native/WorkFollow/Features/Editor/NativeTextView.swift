@@ -504,12 +504,17 @@ final class NativeTextView: NSTextView {
         if isPointerOverSiblingOverlay(event.locationInWindow) {
             // 格式工具条叠在正文上方，跟踪区仍会收到 mouseMoved；留箭头。
             updateChecklistHover(at: nil)
+            updateAttachmentHover(at: nil)
             NSCursor.arrow.set()
             hideLinkHoverMenu()
             return
         }
         let point = convert(event.locationInWindow, from: nil)
         updateChecklistHover(at: point)
+        if updateAttachmentHover(at: point) {
+            hideLinkHoverMenu()
+            return
+        }
         guard isEditable else { hideLinkHoverMenu(); return }
         guard let range = linkRange(at: point) else { hideLinkHoverMenu(); return }
         guard range != hoveredLinkRange || linkHoverPanel == nil else { return }
@@ -534,6 +539,51 @@ final class NativeTextView: NSTextView {
         super.mouseExited(with: event)
         hideLinkHoverMenu()
         updateChecklistHover(at: nil)
+        updateAttachmentHover(at: nil)
+    }
+
+    private var attachmentHoverActive = false
+
+    /// 附件、绘图、表格、公式的悬停名称走统一提示卡；正文不显示系统 `.toolTip`。
+    @discardableResult
+    private func updateAttachmentHover(at point: NSPoint?) -> Bool {
+        guard let point, let target = attachmentHover(at: point), let window else {
+            if attachmentHoverActive {
+                attachmentHoverActive = false
+                HoverTipCenter.shared.hide()
+            }
+            return false
+        }
+        attachmentHoverActive = true
+        let anchor = window.convertToScreen(convert(target.rect, to: nil))
+        HoverTipCenter.shared.show(target.title, anchor: anchor, placement: .automatic,
+                                   windowNumber: window.windowNumber,
+                                   appearance: window.effectiveAppearance,
+                                   container: window.frame)
+        return true
+    }
+
+    private func attachmentHover(at point: NSPoint) -> (title: String, rect: NSRect)? {
+        guard let storage = textStorage, storage.length > 0,
+              let layoutManager, let textContainer else { return nil }
+        let origin = textContainerOrigin
+        let containerPoint = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
+        var fraction: CGFloat = 0
+        let glyph = layoutManager.glyphIndex(for: containerPoint, in: textContainer,
+                                             fractionOfDistanceThroughGlyph: &fraction)
+        let character = layoutManager.characterIndexForGlyph(at: glyph)
+        guard character < storage.length,
+              storage.attribute(.attachment, at: character, effectiveRange: nil) != nil,
+              let title = storage.attribute(DocumentTextCodec.hoverTitleKey, at: character,
+                                            effectiveRange: nil) as? String
+        else { return nil }
+        let glyphRange = layoutManager.glyphRange(
+            forCharacterRange: NSRange(location: character, length: 1),
+            actualCharacterRange: nil)
+        var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
+        rect.origin.x += origin.x
+        rect.origin.y += origin.y
+        return (title, rect)
     }
 
     /// 悬停行的铃铛/删除是行级控件，不改变光标；只在清单任务里启用。

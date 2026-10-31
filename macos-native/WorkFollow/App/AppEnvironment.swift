@@ -102,6 +102,12 @@ final class AppEnvironment: ObservableObject {
     @Published var backgroundAnimated: Bool {
         didSet { preferences.set(backgroundAnimated, forKey: "backgroundAnimated") }
     }
+    @Published var appearanceMaterial: WFAppearanceMaterial {
+        didSet {
+            preferences.set(appearanceMaterial.rawValue, forKey: "appearanceMaterial")
+            NativeThemeBridge.material = appearanceMaterial
+        }
+    }
     @Published var companionEnabled: Bool {
         didSet {
             preferences.set(companionEnabled, forKey: "companionEnabled")
@@ -135,6 +141,8 @@ final class AppEnvironment: ObservableObject {
         backgroundIntensity = NativeBackgroundIntensity(rawValue:
             preferences.string(forKey: "backgroundIntensity") ?? "medium") ?? .medium
         backgroundAnimated = preferences.object(forKey: "backgroundAnimated") as? Bool ?? true
+        appearanceMaterial = WFAppearanceMaterial(rawValue:
+            preferences.string(forKey: "appearanceMaterial") ?? "classic") ?? .classic
         companion = CompanionSceneDirector(now: clock, calendar: calendar)
         companionEnabled = preferences.object(forKey: "companionEnabled") as? Bool ?? false
         companionCharacter = CompanionCharacter(rawValue:
@@ -201,6 +209,7 @@ final class AppEnvironment: ObservableObject {
         moduleStores = [focusStore, taskActivityStore, taskCommentStore, summaryStore, countdownStore, meetingStore, filterStore, TemplateStore.shared, viewPreferences, reminders, systemCalendar, systemReminders, aiChat]
         NativeThemeBridge.theme = backgroundTheme
         NativeThemeBridge.intensity = backgroundIntensity
+        NativeThemeBridge.material = appearanceMaterial
         AISelectionWindowController.shared.makeClient = { [weak self] in self?.conversationClient() }
         AISelectionWindowController.shared.undoAction = { [weak self] in self?.undoAIAction($0) }
         AISelectionWindowController.shared.canUndoAction = { [weak self] in self?.taskWorkspace.automationUndoID == $0.undoID }

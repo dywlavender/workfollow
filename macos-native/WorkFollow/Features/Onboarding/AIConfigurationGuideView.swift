@@ -41,7 +41,7 @@ struct AIConfigurationGuideView: View {
                         }
                     }.buttonStyle(.bordered)
                     code(AIConfigurationGuide.piModelsTemplate)
-                    if let error { Text(error).font(WFType.supporting).foregroundStyle(.red) }
+                    if let error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
                 }.padding(.top, 10)
             }.font(WFType.body)
 

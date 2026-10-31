@@ -11,25 +11,31 @@ enum WFColors {
     /// 非本月日期（日历工作区与日期面板月历共用）：比 `tertiaryText` 浅一档，
     /// 亮色 ≈ #C0C4CB、暗色 ≈ #6B7078。自绘处（`AppKitMonthGridView`）手写了同样的值，
     /// 改色时两处一起改。
-    static let outOfMonthText = Color(nsColor: NSColor(name: nil) { appearance in
+    static let nsOutOfMonthText = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 0.42, green: 0.44, blue: 0.48, alpha: 1)
             : NSColor(red: 0.753, green: 0.769, blue: 0.796, alpha: 1)
-    })
+    }
+    static let outOfMonthText = Color(nsColor: nsOutOfMonthText)
     static let border = Color(nsColor: .separatorColor).opacity(0.5)
     /// 滴答 2026-10 参考截图（Display P3 → sRGB）的全界面蓝：约 #6389F5。
     /// 之前是偏紫的 #5B5CEB；任务栏、日历、详情统一改成滴答蓝后，
     /// `priorityLow`（#5B8CFB）与强调色几乎同色，这是滴答本身的配色。
-    static let accent = Color(nsColor: NSColor(name: nil) { appearance in
+    /// 动态 NSColor 版本：AppKit 自绘（日期面板、日程行、确认条）直接复用，
+    /// 不能再手写一份色值——旧版三处仍停留在紫蓝 #5B5CEB。
+    static let nsAccent = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor(red: 0.561, green: 0.663, blue: 1, alpha: 1)
             : NSColor(red: 0.388, green: 0.537, blue: 0.961, alpha: 1)
-    })
+    }
+    static let accent = Color(nsColor: nsAccent)
+    /// 强调色、危险色或深色底上的文字与图标。
+    static let onAccent = Color.white
     /// Hover emphasis used for time fragments in Flutter's smart Quick Add.
     static let accentHover = themed(rgb(0x4D74E8), rgb(0xA2B7FF))
     static let selection = accent.opacity(0.10)
-    /// 第二栏（导航）与第三栏（任务/笔记列表）的**选中行底色**。滴答实测：导航栏
-    /// 选中 `(241,241,241)`、任务行选中 `(242,242,242)`——同一档中性灰，取 `#F2F2F2`。
+    /// 第二栏（导航）与第三栏（任务/笔记列表）的**非主题**选中行底色。滴答实测：
+    /// 导航栏选中 `(241,241,241)`、任务行选中 `(242,242,242)`——同一档中性灰，取 `#F2F2F2`。
     ///
     /// 这两栏原来用 `selection`（accent 10% ≈ `(239,239,252)`），用户反馈"太显眼"，
     /// 要求照滴答改成灰。注意它比行分割线 `listRowSeparator`（`#F4F4F4`）只深 2 级
@@ -38,23 +44,17 @@ enum WFColors {
     /// 其余地方（菜单、浮层候选、日历格）继续用 `selection`：那里是
     /// 中性表面上的强调色，不是列表选中。深色未实测，取 `menuSelected` 同族的灰。
     static let listSelection = themed(rgb(0xF2F2F2), rgb(0x363A42))
-    /// 主题页面上的列表/侧栏选中行：不靠明度（纯白在白底上看不出），而是用
-    /// 固定色相——白底混入约 8–10% 强调蓝。白页面上是极浅蓝白，蜜桃/薄荷/奶油/
-    /// 极光上也能靠色相拉开距离，观感仍偏白。弹层表面不透主题，继续用
-    /// `listSelection`。
-    static let listSelectionOnTheme = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(red: 0.21, green: 0.24, blue: 0.33, alpha: 1)
-            : NSColor(red: 0.939, green: 0.954, blue: 0.996, alpha: 1)
-    })
+    /// 列表 / 看板 / 时间线统一的选中色解析：主题页面按主题取对应色相
+    /// （见 `NativeBackgroundTheme.selectionFill`），非主题页面与弹层保持中性灰。
+    static func listSelectionFill(theme: NativeBackgroundTheme, pageCanvasActive: Bool) -> Color {
+        theme.isThemed && pageCanvasActive ? theme.selectionFill : listSelection
+    }
     static let hover = Color.primary.opacity(0.04)
     /// 快速添加条未选中的底色（滴答/Flutter `tokens.canvas` = 0xFFF2F4F8）：
     /// 带一点蓝调的极浅灰，比中性的 hover 更接近滴答那条浅浅的输入位。
-    /// 深色沿用 Flutter 暗色 canvas。
+    /// 深色沿用 Flutter 暗色 canvas。主题页面的输入框底色见
+    /// `NativeBackgroundTheme.inputFill`（每个主题一个色相）。
     static let quickAddIdleFill = themed(rgb(0xF2F4F8), rgb(0x1B1D22))
-    /// 主题页面上的输入框底色：比选中行更接近白，混入极少量强调蓝；
-    /// 需要一层 `border` 才能在白底上定形。关闭主题时仍用各输入框原底色。
-    static let inputFillOnTheme = themed(rgb(0xF7FAFF), rgb(0x222A36))
     /// 右栏配置卡片的底色（滴答 ≈ #F7F8FA，暗色 ≈ #2A2A2C）。
     static let panelFill = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

@@ -64,7 +64,7 @@ struct TaskRelationPicker: View {
                 .compactScrollbars()
             }
             if failed {
-                Text("无法插入关联，请返回正文后重试").font(.caption).foregroundStyle(.red)
+                Text("无法插入关联，请返回正文后重试").font(.caption).foregroundStyle(WFColors.danger)
             }
         }.padding(16).frame(width: PopupMetrics.relationPickerWidth, height: 300)
             .coordinateSpace(name: "task-relation-picker")

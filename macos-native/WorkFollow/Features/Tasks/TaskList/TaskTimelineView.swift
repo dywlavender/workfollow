@@ -9,6 +9,8 @@ struct TaskTimelineView: View {
     let allowsCreation: Bool
     let onCreate: (TaskSchedule) -> Void
     let onSelect: (UUID) -> Void
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
     @State private var viewport: TaskTimelineViewport
     @State private var colorSource: TaskTimelineColorSource = .list
     @State private var showsPool = true
@@ -200,7 +202,9 @@ struct TaskTimelineView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(workspace.selectedTaskID == task.id ? WFColors.listSelection : Color.clear)
+        .background(workspace.selectedTaskID == task.id
+                    ? WFColors.listSelectionFill(theme: backgroundTheme, pageCanvasActive: pageCanvasActive)
+                    : Color.clear)
         .overlay(alignment: .bottom) { Divider() }.help(task.title)
         .accessibilityIdentifier("tasks.timeline.label.\(task.id.uuidString)")
     }

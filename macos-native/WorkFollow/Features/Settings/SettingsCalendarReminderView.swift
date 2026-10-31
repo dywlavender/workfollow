@@ -46,7 +46,7 @@ struct SettingsCalendarReminderView: View {
                         .labelsHidden()
                 }
                 if let message = reminders.message {
-                    Text(message).foregroundStyle(.red).font(WFType.supporting)
+                    Text(message).foregroundStyle(WFColors.danger).font(WFType.supporting)
                         .padding(.horizontal, WFSpace.md)
                 }
             }

@@ -21,7 +21,7 @@ struct AttachmentListView: View {
                         }
                     }
                 }
-                if let error { Text(error).font(.caption).foregroundStyle(.red) }
+                if let error { Text(error).font(.caption).foregroundStyle(WFColors.danger) }
             }.padding(.top, 8)
         }
     }

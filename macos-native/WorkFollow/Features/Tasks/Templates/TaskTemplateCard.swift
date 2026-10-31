@@ -15,7 +15,7 @@ struct TaskTemplateCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(template.name)
-                .font(.system(size: 14, weight: .semibold))
+                .font(WFType.sectionSemibold)
                 .foregroundStyle(WFColors.text)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)

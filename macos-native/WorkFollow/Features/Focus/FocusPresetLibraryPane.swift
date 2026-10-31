@@ -25,7 +25,7 @@ struct FocusPresetLibraryPane: View {
                     }
                     if presets.isEmpty {
                         Text(store.presetLibrarySection == .archived ? "暂无已归档的专注" : "点击 + 添加常用专注")
-                            .font(.system(size: 13)).foregroundStyle(theme.text3)
+                            .font(WFType.controlLabel).foregroundStyle(theme.text3)
                             .frame(maxWidth: .infinity).padding(.top, 45)
                     }
                 }.padding(.horizontal, FocusLayoutMetrics.libraryListInset).padding(.top, 6)
@@ -43,7 +43,7 @@ struct FocusPresetLibraryPane: View {
     private var libraryHeader: some View {
         ZStack {
             HStack(spacing: 6) {
-                Text("番茄专注").font(.system(size: 18, weight: .semibold)).foregroundStyle(theme.text)
+                Text("番茄专注").font(WFType.detailTitle).foregroundStyle(theme.text)
                 Spacer()
                 Button(action: onAddTimer) {
                     Image(systemName: "plus").font(.system(size: 17)).frame(width: 28, height: 28)
@@ -85,11 +85,11 @@ struct FocusPresetLibraryPane: View {
                     Text(preset.emoji).font(.system(size: 19))
                         .frame(width: FocusLayoutMetrics.libraryAvatarSize, height: FocusLayoutMetrics.libraryAvatarSize)
                         .background(theme.avatarBackground, in: Circle())
-                    Text(preset.name).font(.system(size: 13, weight: .medium)).foregroundStyle(theme.text).lineLimit(1)
+                    Text(preset.name).font(WFType.section).foregroundStyle(theme.text).lineLimit(1)
                     Spacer(minLength: 8)
                     if preset.archivedAt == nil {
                         Text(preset.stopwatch ? "正计时" : "\(preset.minutes)m")
-                            .font(.system(size: 13)).foregroundStyle(theme.text3)
+                            .font(WFType.controlLabel).foregroundStyle(theme.text3)
                     }
                 }
                 .contentShape(Rectangle()).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -131,7 +131,7 @@ struct FocusPresetLibraryPane: View {
                         FocusTomatoIcon(color: theme.accent).frame(width: 30)
                     }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(compactTitle).font(.system(size: 12)).foregroundStyle(theme.text3).lineLimit(1)
+                        Text(compactTitle).font(WFType.supporting).foregroundStyle(theme.text3).lineLimit(1)
                         Text(FocusViewLogic.clockText(store.presentation.displaySeconds))
                             .font(.system(size: 21)).monospacedDigit().foregroundStyle(theme.text)
                     }

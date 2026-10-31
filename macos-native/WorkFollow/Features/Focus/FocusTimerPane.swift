@@ -159,7 +159,7 @@ struct FocusTimerPane: View {
 
             if store.phase == .breaking, store.preferences.autoStartNextPomodoro {
                 Text("下一番茄 \(nextAutoStartTime) 自动开始")
-                    .font(.system(size: 12))
+                    .font(WFType.supporting)
                     .foregroundStyle(theme.text3)
                     .padding(.top, 4)
             }
@@ -188,12 +188,12 @@ struct FocusTimerPane: View {
                             .frame(width: 8, height: 8)
                     }
                     Text(title ?? "专注")
-                        .font(.system(size: 15, weight: title == nil ? .regular : .semibold))
+                        .font(title == nil ? WFType.bodyLarge : WFType.groupTitle)
                         .foregroundStyle(title == nil ? theme.text3
                                          : (overdue ? theme.warn : theme.text))
                         .lineLimit(1)
                     Text("›")
-                        .font(.system(size: 14))
+                        .font(WFType.body)
                         .foregroundStyle(theme.text3)
                 }
                 .contentShape(Rectangle())
@@ -236,7 +236,7 @@ struct FocusTimerPane: View {
                 .frame(width: FocusLayoutMetrics.statusDotSize,
                        height: FocusLayoutMetrics.statusDotSize)
             Text(store.presentation.phaseTitle)
-                .font(.system(size: 14))
+                .font(WFType.body)
                 .foregroundStyle(theme.text2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -301,8 +301,8 @@ struct FocusTimerPane: View {
     private func primaryButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.white)
+                .font(WFType.controlLarge)
+                .foregroundStyle(WFColors.onAccent)
                 .frame(width: FocusLayoutMetrics.primaryButtonWidth,
                        height: FocusLayoutMetrics.primaryButtonHeight)
                 .background(Capsule().fill(theme.accent))
@@ -314,7 +314,7 @@ struct FocusTimerPane: View {
     private func outlineButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 16, weight: .medium))
+                .font(WFType.controlLarge)
                 .foregroundStyle(theme.accent)
                 .frame(width: FocusLayoutMetrics.primaryButtonWidth,
                        height: FocusLayoutMetrics.primaryButtonHeight)
@@ -327,7 +327,7 @@ struct FocusTimerPane: View {
     private func linkButton(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14))
+                .font(WFType.body)
                 .foregroundStyle(theme.text2)
                 .padding(.vertical, 10)
         }
@@ -347,7 +347,7 @@ struct FocusTimerPane: View {
     private var rhythmPopover: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("节奏")
-                .font(.system(size: 20, weight: .semibold))
+                .font(WFType.pageTitleStrong)
                 .foregroundStyle(theme.text)
                 .padding(.bottom, 8)
             rhythmStepper("短休息", value: store.preferences.breakMinutes, unit: "分钟",
@@ -361,7 +361,7 @@ struct FocusTimerPane: View {
                 Spacer(minLength: 12)
                 SwitchView(isOn: Binding(get: { store.preferences.autoStartBreak },
                     set: { store.setAutoStartBreak($0) }), accessibilityTitle: "自动开始休息")
-            }.font(.system(size: 15)).padding(.vertical, 12)
+            }.font(WFType.bodyLarge).padding(.vertical, 12)
             rhythmStepper("自动轮数", value: store.preferences.automaticCycleLimit, unit: "轮",
                           range: 0...12) { store.setAutomaticCycleLimit($0) }
             HStack {
@@ -372,13 +372,13 @@ struct FocusTimerPane: View {
                     get: { store.preferences.autoStartNextPomodoro },
                     set: { store.setAutoStartNextPomodoro($0) }))
             }
-            .font(.system(size: 15))
+            .font(WFType.bodyLarge)
             .padding(.vertical, 12)
             .overlay(alignment: .bottom) {
                 Rectangle().fill(theme.hairline).frame(height: 1)
             }
             Text("自动轮数 0 表示持续；休息结束后使用下次配置开始。")
-                .font(.system(size: 14))
+                .font(WFType.body)
                 .foregroundStyle(theme.text3)
                 .padding(.top, 12)
             Divider().padding(.top, 14)
@@ -407,7 +407,7 @@ struct FocusTimerPane: View {
                 if value < range.upperBound { _ = setter(value + 1) }
             }
         }
-        .font(.system(size: 15))
+        .font(WFType.bodyLarge)
         .padding(.vertical, 11)
         .overlay(alignment: .bottom) {
             Rectangle().fill(theme.hairline).frame(height: 1)

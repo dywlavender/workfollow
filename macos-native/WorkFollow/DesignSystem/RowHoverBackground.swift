@@ -22,14 +22,10 @@ struct RowHoverBackground: NSViewRepresentable {
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
 
-    /// 只有主题页面才换成偏白选中底：弹层和独立面板不透视主题，仍用中性灰。
-    private var usesThemedSelection: Bool {
-        selectedFill == nil && backgroundTheme.isThemed && pageCanvasActive
-    }
-
+    /// 弹层和独立面板不透视主题，仍用中性灰；主题页面按主题取对应色相。
     private var resolvedSelectedFill: Color {
         if let selectedFill { return selectedFill }
-        return usesThemedSelection ? WFColors.listSelectionOnTheme : WFColors.listSelection
+        return WFColors.listSelectionFill(theme: backgroundTheme, pageCanvasActive: pageCanvasActive)
     }
 
     func makeNSView(context: Context) -> RowHoverView {

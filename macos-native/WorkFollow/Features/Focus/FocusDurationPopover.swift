@@ -56,7 +56,7 @@ struct FocusDurationPopover: View {
             HStack(spacing: 8) {
                 TextField("25", text: $session.draftText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(WFType.controlLarge)
                     .monospacedDigit()
                     .multilineTextAlignment(.center)
                     .frame(width: 62, height: 30)
@@ -71,7 +71,7 @@ struct FocusDurationPopover: View {
                     .accessibilityIdentifier("focus-duration-stepper")
 
                 Text("分钟")
-                    .font(.system(size: 14))
+                    .font(WFType.body)
                     .foregroundStyle(theme.text2)
             }
 
@@ -88,7 +88,10 @@ struct FocusDurationPopover: View {
         }
         .padding(12)
         .frame(width: 232, height: 104)
-        .background(backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme), in: RoundedRectangle(cornerRadius: 12))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: 12),
+                           fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
+        }
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.hairline, lineWidth: 1))
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.14),
                 radius: 14, x: 0, y: 5)
@@ -244,7 +247,7 @@ private struct DurationButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(isPrimary ? Color.white.opacity(isEnabled ? 1 : 0.55) : theme.text2)
+            .foregroundStyle(isPrimary ? WFColors.onAccent.opacity(isEnabled ? 1 : 0.55) : theme.text2)
             .frame(width: 72, height: 30)
             .background {
                 RoundedRectangle(cornerRadius: 7)

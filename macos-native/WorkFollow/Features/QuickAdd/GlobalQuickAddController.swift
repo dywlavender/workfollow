@@ -387,8 +387,8 @@ private struct GlobalQuickAddPanelView: View {
             Color.clear.preference(key: GlobalPanelHeightKey.self, value: proxy.size.height)
         })
         .background(
-            RoundedRectangle(cornerRadius: WFMetrics.corner + 2, style: .continuous)
-                .fill(backgroundTheme.popupFill(for: colorScheme))
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: WFMetrics.corner + 2, style: .continuous),
+                           fallback: backgroundTheme.popupFill(for: colorScheme))
                 .overlay(
                     RoundedRectangle(cornerRadius: WFMetrics.corner + 2, style: .continuous)
                         .strokeBorder(WFColors.border)

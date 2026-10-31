@@ -779,10 +779,10 @@ struct TaskDatePopoverV2: View {
     /// 自定义提前量：提前 [数量] [分钟/小时/天]（确定时并入所选）。
     private var customOffsetRow: some View {
         HStack(spacing: 6) {
-            Text("提前").font(.system(size: 12)).foregroundStyle(WFColors.text)
+            Text("提前").font(WFType.supporting).foregroundStyle(WFColors.text)
             TextField("10", text: $customOffsetAmount)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12))
+                .font(WFType.supporting)
                 .multilineTextAlignment(.center)
                 .frame(width: 36)
                 .padding(.vertical, 2)
@@ -912,7 +912,7 @@ struct TaskDatePopoverV2: View {
             .disabled(lunarPickerIndex == 0)
             Spacer()
             Text(title.isEmpty ? "农历" : "农历\(title)")
-                .font(.system(size: 13, weight: .medium))
+                .font(WFType.section)
                 .foregroundStyle(WFColors.text)
             Spacer()
             Button {
@@ -953,8 +953,8 @@ struct TaskDatePopoverV2: View {
             applyLunarPick(day: day, info: info)
         } label: {
             Text(ChineseWorkCalendar.lunarDayName(day))
-                .font(.system(size: 12))
-                .foregroundStyle(isSelected ? Color.white : WFColors.text)
+                .font(WFType.supporting)
+                .foregroundStyle(isSelected ? WFColors.onAccent : WFColors.text)
                 .frame(maxWidth: .infinity)
                 .frame(height: 26)
                 .background(isSelected ? WFColors.accent : WFColors.hover,
@@ -1084,14 +1084,14 @@ struct TaskDatePopoverV2: View {
     private var intervalEditor: some View {
         HStack(spacing: 10) {
             Text("每")
-                .font(.system(size: 13))
+                .font(WFType.controlLabel)
                 .foregroundStyle(WFColors.text)
             Text("\(model.interval)")
-                .font(.system(size: 13, weight: .semibold))
+                .font(WFType.controlLabelStrong)
                 .foregroundStyle(WFColors.text)
                 .frame(minWidth: 20)
             Text(Self.intervalUnitTitle(model.frequency))
-                .font(.system(size: 13))
+                .font(WFType.controlLabel)
                 .foregroundStyle(WFColors.text)
             Spacer(minLength: 6)
             HStack(spacing: 4) {
@@ -1233,7 +1233,7 @@ struct TaskDatePopoverV2: View {
                      horizontalPadding: 12) {
             HStack {
                 optionLabel(title, checked: checked)
-                    .font(.system(size: 13))
+                    .font(WFType.controlLabel)
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 if checked {
@@ -1266,7 +1266,7 @@ struct TaskDatePopoverV2: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: filled ? .semibold : .medium))
-                .foregroundStyle(filled ? Color.white : WFColors.text)
+                .foregroundStyle(filled ? WFColors.onAccent : WFColors.text)
                 .frame(maxWidth: .infinity, minHeight: 26)
                 .background(filled ? WFColors.accent : WFColors.content, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(filled ? Color.clear : WFColors.border))
@@ -1523,7 +1523,7 @@ struct CalendarAnnotationOverlay: View {
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 14) {
-                Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.clear)
+                Text(title).font(WFType.sectionSemibold).foregroundStyle(.clear)
                 Spacer()
                 ForEach(0..<3, id: \.self) { _ in Color.clear.frame(width: 18, height: 18) }
             }

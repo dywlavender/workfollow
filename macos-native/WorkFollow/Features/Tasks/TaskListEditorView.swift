@@ -120,7 +120,7 @@ struct TaskListEditorView: View {
                     WFFormToggleRow("设为默认清单", isOn: $draft.isDefault, showsDivider: false)
                 }.padding(.top, 8)
             }.font(WFType.body).listManagementAnchor(.more)
-            if let error { Text(error).font(WFType.supporting).foregroundStyle(.red) }
+            if let error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -201,7 +201,7 @@ struct TaskListCopyView: View {
                 }
             }
             .font(WFType.body)
-            if let error { Text(error).font(WFType.supporting).foregroundStyle(.red) }
+            if let error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -317,7 +317,7 @@ struct TaskFolderEditorView: View {
                         .focused($nameFocused).onSubmit(save)
                 }
             }
-            if let error { Text(error).font(WFType.supporting).foregroundStyle(.red) }
+            if let error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
             HStack {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)

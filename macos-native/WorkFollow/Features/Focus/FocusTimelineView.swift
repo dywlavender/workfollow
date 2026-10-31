@@ -61,7 +61,7 @@ struct FocusTimelineView: View {
     private func tickRow(_ date: Date, axisWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             Text("\(store.presentationCalendar.component(.hour, from: date))")
-                .font(.system(size: 13))
+                .font(WFType.controlLabel)
                 .monospacedDigit()
                 .foregroundStyle(theme.text3)
                 .frame(width: FocusLayoutMetrics.timelineLabelWidth, alignment: .leading)

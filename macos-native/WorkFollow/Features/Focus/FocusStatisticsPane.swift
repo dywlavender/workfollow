@@ -26,7 +26,7 @@ struct FocusStatisticsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack {
-                    Text("专注统计").font(.system(size: 20, weight: .semibold))
+                    Text("专注统计").font(WFType.pageTitleStrong)
                     Spacer()
                     Button("返回概览") { store.showOverview() }.buttonStyle(.plain)
                 }

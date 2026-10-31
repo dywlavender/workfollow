@@ -21,6 +21,14 @@ enum TaskNamePrompt {
     }
 }
 
+/// 清单行顶部的排序热区：拖到行内顶部 6pt = 插到该行之前，其余位置仍是建文件夹。
+/// 热区并入行走，不再单独占一行，侧栏清单行保持 38pt 步长。
+private struct SidebarListInsertion {
+    static let edgeHeight: CGFloat = 6
+    let target: String?
+    let clearsFolder: Bool
+}
+
 /// 侧栏"清单"分组：小号灰字标题 + 右侧新建，行内右侧灰色计数。
 /// 行样式对齐 Flutter _TaskListItem：色板圆点 + hover"⋯"清单操作 +
 /// 拖放高亮；置顶清单排在分组前。
@@ -59,23 +67,23 @@ struct TaskCollectionsView: View {
                     switch node {
                     case .list(let name):
                         if workspace.listMeta(for: name)?.isPinned != true {
-                            insertionStrip(before: name, clearsFolder: true)
-                            SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0]) { openList(name) }
+                            SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0],
+                                               insertion: SidebarListInsertion(target: name, clearsFolder: true)) { openList(name) }
                         }
                     case .folder(let folder, let lists):
-                        // 文件夹前的空档落在"文件夹第一个成员"位置 → 仍属文件夹内，别误删归属。
-                        insertionStrip(before: lists.first, clearsFolder: false)
-                        folderRow(folder, count: lists.count)
+                        // 文件夹顶部的插入落在"文件夹第一个成员"位置 → 仍属文件夹内，别误删归属。
+                        folderRow(folder, count: lists.count,
+                                  insertion: SidebarListInsertion(target: lists.first, clearsFolder: false))
                         if !collapsedFolders.contains(folder) {
                             ForEach(lists, id: \.self) { name in
-                                insertionStrip(before: name, clearsFolder: false)
-                                SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0]) { openList(name) }
+                                SidebarListRowView(workspace: workspace, name: name, openCount: counts[name, default: 0],
+                                                   insertion: SidebarListInsertion(target: name, clearsFolder: false)) { openList(name) }
                                     .padding(.leading, Self.folderIndent)
                             }
                         }
                     }
                 }
-                insertionStrip(before: nil, clearsFolder: true)
+                insertionBand(before: nil, clearsFolder: true)
                 if !workspace.archivedListNames.isEmpty {
                     archivedLists
                 }
@@ -153,9 +161,9 @@ struct TaskCollectionsView: View {
         }
     }
 
-    /// 行间拖放带：清单拖到这里 = **排序**（拖到行上才是"建文件夹"，滴答同一手势两种结果）。
-    /// 顶层间隙同时支持移出文件夹，文件夹内间隙保留归属。
-    private func insertionStrip(before target: String?, clearsFolder: Bool) -> some View {
+    /// 清单列表末尾的拖放带（target = nil = 移动到最后）。行间排序热区已并进行内顶部，
+    /// 这里只留尾部一段，不再在清单之间插入可见空隙。
+    private func insertionBand(before target: String?, clearsFolder: Bool) -> some View {
         Color.clear
             .frame(height: 6)
             .contentShape(Rectangle())
@@ -167,7 +175,8 @@ struct TaskCollectionsView: View {
     }
 
     /// 文件夹行：展开箭头 + 名称 + 成员清单数；右键重命名 / 删除（清单保留，回到顶层）。
-    private func folderRow(_ folder: String, count: Int) -> some View {
+    private func folderRow(_ folder: String, count: Int,
+                           insertion: SidebarListInsertion? = nil) -> some View {
         let collapsed = collapsedFolders.contains(folder)
         return Button {
             if collapsed { collapsedFolders.remove(folder) } else { collapsedFolders.insert(folder) }
@@ -194,8 +203,11 @@ struct TaskCollectionsView: View {
             .rowHoverBackground(selected: targetedFolder == folder)
         }
         .buttonStyle(.plain)
-        .dropDestination(for: String.self) { values, _ in
+        .dropDestination(for: String.self) { values, location in
             guard let raw = values.first, case .list(let name)? = SidebarDragPayload.decode(raw) else { return false }
+            if let insertion, location.y < SidebarListInsertion.edgeHeight {
+                return workspace.moveList(name, before: insertion.target, clearsFolder: insertion.clearsFolder)
+            }
             return workspace.setListFolder(name, folder)
         } isTargeted: { targeted in targetedFolder = targeted ? folder : nil }
         .businessContextMenu {
@@ -240,6 +252,7 @@ private struct SidebarListRowView: View {
     @ObservedObject var workspace: TaskWorkspaceModel
     let name: String
     let openCount: Int
+    var insertion: SidebarListInsertion? = nil
     let onOpen: () -> Void
     @State private var hovering = false
     @State private var menuPresented = false
@@ -316,14 +329,17 @@ private struct SidebarListRowView: View {
             .strokeBorder(dragTargeted ? WFColors.accent : Color.clear, lineWidth: 1))
         .businessContextMenu { menuItems }
         // 拖拽：任务拖进来 = 移入本清单（HUD 由 workspace 自动上报）；
-        // 清单拖进来 = 建文件夹（滴答主手势：拖动一个清单到另一个清单上方）。
+        // 清单拖到行顶 6pt = 排序，拖到行中部 = 建文件夹（滴答同一手势两种结果）。
         .draggable(SidebarDragPayload.encode(.list(name)))
-        .dropDestination(for: String.self) { values, _ in
+        .dropDestination(for: String.self) { values, location in
             guard let raw = values.first, let payload = SidebarDragPayload.decode(raw) else { return false }
             switch payload {
             case .task(let id):
                 return workspace.moveToList(id, TaskList(name: name)).taskID != nil
             case .list(let moved):
+                if let insertion, location.y < SidebarListInsertion.edgeHeight {
+                    return workspace.moveList(moved, before: insertion.target, clearsFolder: insertion.clearsFolder)
+                }
                 return combine(moved, into: name)
             }
         } isTargeted: { dragTargeted = $0 }

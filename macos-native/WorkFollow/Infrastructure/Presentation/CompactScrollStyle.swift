@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Overlay thumbs stay slim even when macOS is set to always show scrollbars.
 /// The native track and hit target remain available for dragging and paging.
+/// Knobs are skipped entirely when the document fits the viewport.
 @MainActor
 enum CompactScrollStyle {
     static func apply(to scroll: NSScrollView) {
@@ -40,11 +41,21 @@ final class CompactOverlayScroller: NSScroller {
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
 
     override func drawKnob() {
+        guard let scroll = enclosingScrollView,
+              Self.hasOverflow(scroll, horizontal: isHorizontal) else { return }
         let knob = rect(for: .knob)
         guard !knob.isEmpty else { return }
         let thumb = Self.thumbRect(in: knob, isHorizontal: isHorizontal)
         NSColor.labelColor.withAlphaComponent(0.30).setFill()
         NSBezierPath(roundedRect: thumb, xRadius: 1.5, yRadius: 1.5).fill()
+    }
+
+    /// 内容装得下时不画滚条：否则短列表/短正文旁边会常驻一条满长的 3pt 细线。
+    static func hasOverflow(_ scroll: NSScrollView, horizontal: Bool) -> Bool {
+        guard let document = scroll.documentView else { return false }
+        let content = horizontal ? document.frame.width : document.frame.height
+        let viewport = horizontal ? scroll.contentView.bounds.width : scroll.contentView.bounds.height
+        return content > viewport + 0.5
     }
 
     static func thumbRect(in knob: NSRect, isHorizontal: Bool = false) -> NSRect {

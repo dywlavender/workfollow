@@ -30,6 +30,7 @@ enum InspectorRenderAnchor: Hashable {
     case aiBreakdownMenuRow
     case agentCopyInstructions, agentCopyCommand
     case focusPomodoro, focusStopwatch, focusEstimate, focusEstimateClear
+    case focusEstimateDuration, focusEstimatePomodoros
 }
 struct InspectorFramesKey: PreferenceKey {
     static let defaultValue: [InspectorRenderAnchor: CGRect] = [:]

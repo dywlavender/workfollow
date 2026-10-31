@@ -110,7 +110,9 @@ struct CalendarDayAgenda: View {
                 .compactScrollbars()
             }
             if tasks.isEmpty && externalEvents.isEmpty { Text("当天没有安排").foregroundStyle(WFColors.secondaryText) }
-        }.padding(14).background(backgroundTheme.popupFill(for: colorScheme))
+        }.padding(14).background {
+            WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+        }
     }
 }
 

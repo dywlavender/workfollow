@@ -121,7 +121,10 @@ struct WFOverlayCard<Content: View>: View {
 
     var body: some View {
         content
-            .background(WFColors.overlay, in: RoundedRectangle(cornerRadius: radius))
+            .background {
+                WFGlassSurface(shape: RoundedRectangle(cornerRadius: radius),
+                               fallback: WFColors.overlay)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: radius)
                     .stroke(WFColors.overlayBorder, lineWidth: 1)

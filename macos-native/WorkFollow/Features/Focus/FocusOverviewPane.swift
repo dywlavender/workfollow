@@ -148,7 +148,7 @@ struct FocusOverviewPane: View {
         LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(store.recordGroups) { group in
                 Text(FocusViewLogic.dayLabel(for: group.day, now: store.currentTime, calendar: store.presentationCalendar))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(WFType.controlLabelStrong)
                     .foregroundStyle(theme.text3)
                     .padding(.top, FocusLayoutMetrics.recordGroupTop)
                     .padding(.bottom, FocusLayoutMetrics.recordGroupBottom)

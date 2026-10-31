@@ -164,7 +164,10 @@ struct FloatingTaskTopBar: View {
         }
         .padding(8)
         .frame(width: PopupMetrics.priorityMenuWidth)
-        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFill(for: colorScheme))
+        }
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showPriority = false })
     }
@@ -193,7 +196,10 @@ struct FloatingTaskTopBar: View {
         }
         .padding(8)
         .frame(width: PopupMetrics.taskMenuWidth)
-        .background(backgroundTheme.popupFill(for: colorScheme), in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFill(for: colorScheme))
+        }
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.border))
         .background(PopupEscapeRouter(depth: 2) { showKind = false })
     }

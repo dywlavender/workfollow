@@ -36,6 +36,7 @@ struct SettingsShellView: View {
         // 设置窗口里的下拉、确认面板也沿用主题弹层底色。
         .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)
         .environment(\.workfollowBackgroundIntensity, environment.backgroundIntensity)
+        .environment(\.workfollowMaterial, environment.appearanceMaterial)
     }
 }
 
@@ -97,7 +98,7 @@ private struct SettingsGeneralView: View {
                         .padding(.horizontal, WFSpace.md)
                 }
                 if let loginError {
-                    Text(loginError).font(WFType.supporting).foregroundStyle(.red)
+                    Text(loginError).font(WFType.supporting).foregroundStyle(WFColors.danger)
                         .padding(.horizontal, WFSpace.md)
                 }
             }
@@ -119,7 +120,7 @@ private struct SettingsGeneralView: View {
                     .padding(.horizontal, WFSpace.md)
                     .padding(.vertical, 8)
             }
-            WFFormSection("背景", footnote: "侧栏、列表、各页面留白和弹窗都会带上主题色；正文与卡片保持纯色。") {
+            WFFormSection("背景", footnote: "侧栏、列表、各页面留白和弹窗都会带上主题色；正文与卡片保持纯色。液态玻璃需要 macOS 26 及以上，系统开启“降低透明度”时会自动回退经典材质。") {
                 BackgroundThemePreview()
                     .padding(.horizontal, WFSpace.md)
                     .padding(.top, 8)
@@ -132,6 +133,17 @@ private struct SettingsGeneralView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 180)
                     .disabled(!environment.backgroundTheme.isThemed)
+                }
+                WFFormRow("外观材质") {
+                    Picker("外观材质", selection: $environment.appearanceMaterial) {
+                        ForEach(WFAppearanceMaterial.allCases) { material in
+                            Text(material.title).tag(material)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 180)
+                    .disabled(!WFAppearanceMaterial.isAvailable)
                 }
                 WFFormToggleRow("背景动效", isOn: $environment.backgroundAnimated, showsDivider: false)
                     .disabled(!environment.backgroundTheme.isThemed)
@@ -198,8 +210,8 @@ private struct BackgroundThemePreview: View {
                 previewSurface
                     .frame(height: 124)
                 HStack(spacing: 6) {
-                    Text(selection.title).font(.system(size: 12, weight: .semibold))
-                    Text(selection.subtitle).font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(selection.title).font(WFType.captionStrong)
+                    Text(selection.subtitle).font(WFType.taskMeta).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -229,7 +241,7 @@ private struct BackgroundThemePreview: View {
                 WFColors.secondarySurface
                 VStack(spacing: 6) {
                     Image(systemName: "paintbrush.pointed").font(.system(size: 18))
-                    Text("当前使用系统纯色表面").font(.system(size: 11))
+                    Text("当前使用系统纯色表面").font(WFType.caption)
                 }
                 .foregroundStyle(WFColors.tertiaryText)
             }

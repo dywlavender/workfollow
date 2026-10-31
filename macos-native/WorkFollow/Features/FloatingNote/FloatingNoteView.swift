@@ -38,7 +38,9 @@ struct FloatingNoteView: View {
                         aiPane(note: note)
                             .frame(width: min(CGFloat(aiPaneWidth),
                                               max(240, geometry.size.width - 340)))
-                            .background(WFColors.panelFill)
+                            .background {
+                                WFGlassSurface(shape: Rectangle(), fallback: WFColors.panelFill)
+                            }
                             .shadow(color: .black.opacity(0.18), radius: 18, x: -6, y: 0)
                     }
                 }

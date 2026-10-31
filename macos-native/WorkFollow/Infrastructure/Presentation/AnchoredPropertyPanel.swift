@@ -82,6 +82,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var presentingWindow: PopupPresentingWindow?
         var title: String?
         var popupFill: Color = WFColors.content
+        var material: WFAppearanceMaterial = .classic
         private var lastContentSize: CGSize = .zero
         private var contentResizeQueued = false
 
@@ -98,10 +99,14 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 .onPreferenceChange(PropertyPanelContentSizeKey.self) { [weak self] size in
                     self?.contentSizeChanged(size)
                 }
-                .background(popupFill, in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+                .background {
+                    WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                                   fallback: popupFill)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
                 .background(PopupEscapeRouter(depth: escapeDepth) { [weak self] in self?.dismiss() })
                 .environment(\.popupPresentingWindow, presentingWindow)
+                .environment(\.workfollowMaterial, material)
                 .hidesSystemFocusEffect()
             if host == nil {
                 let contentHost = ContentHost(rootView: AnyView(card))
@@ -315,6 +320,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         coordinator.presentingWindow = context.environment.popupPresentingWindow
         coordinator.popupFill = context.environment.workfollowBackgroundTheme
             .popupFill(for: context.environment.colorScheme)
+        coordinator.material = context.environment.workfollowMaterial
         // Closed anchors do not need to construct or retain panel content.
         if isPresented {
             coordinator.root = AnyView(content().environment(\.self, context.environment))

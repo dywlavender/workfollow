@@ -92,9 +92,11 @@ struct AIChatWorkspaceView: View {
                 }
                 Text("AI 对话").font(WFType.detailTitle)
                 Spacer()
-                Button("引用资料", systemImage: "paperclip") { referencesPresented = true }
-                    .workflowActionAnchor("ai.chat.reference")
-                    .propertyPanelTrigger("ai.chat.references")
+                WFGlassControlGroup(spacing: 16) {
+                    Button("引用资料", systemImage: "paperclip") { referencesPresented = true }
+                        .workflowActionAnchor("ai.chat.reference")
+                        .propertyPanelTrigger("ai.chat.references")
+                }
             }
             .buttonStyle(.plain).padding(.horizontal, 24).padding(.top, 36).padding(.bottom, 14)
             .anchoredPropertyPanel(isPresented: $historyPresented, trigger: "ai.chat.history",

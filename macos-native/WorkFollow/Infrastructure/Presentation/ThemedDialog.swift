@@ -309,7 +309,8 @@ private final class WorkfollowDialogController: NSObject, NSWindowDelegate {
                 self.text = value
                 self.onTextChange?(value)
             })
-            .workfollowNativeTheme())
+            .workfollowNativeTheme()
+            .hidesSystemFocusEffect())
         #if DEBUG
         if let observation {
             card = AnyView(card.environment(\.workflowActionObservation, observation))
@@ -498,12 +499,12 @@ private struct WorkfollowDialogCard: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 7) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(WFType.sectionSemibold)
                     .foregroundStyle(WFColors.text)
                     .fixedSize(horizontal: false, vertical: true)
                 if let message, !message.isEmpty {
                     Text(message)
-                        .font(.system(size: 12.5))
+                        .font(WFType.dialogBody)
                         .foregroundStyle(WFColors.secondaryText)
                         .lineSpacing(2.5)
                         .fixedSize(horizontal: false, vertical: true)
@@ -512,7 +513,7 @@ private struct WorkfollowDialogCard: View {
             if let field {
                 TextField(field.placeholder, text: $text)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 13))
+                    .font(WFType.controlLabel)
                     .focused($fieldFocused)
                     .onChange(of: text) { _, value in onTextChange(value) }
             }
@@ -525,8 +526,8 @@ private struct WorkfollowDialogCard: View {
         }
         .padding(22)
         .frame(width: 400, alignment: .leading)
-        .background(theme.popupFill(for: colorScheme),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .wfGlassSurface(RoundedRectangle(cornerRadius: 14, style: .continuous),
+                        fallback: theme.popupFill(for: colorScheme))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(WFColors.border, lineWidth: 1)
@@ -540,8 +541,8 @@ private struct WorkfollowDialogCard: View {
             onAction(index)
         } label: {
             Text(action.title)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(filled ? Color.white : WFColors.text)
+                .font(WFType.dialogAction)
+                .foregroundStyle(filled ? WFColors.onAccent : WFColors.text)
                 .padding(.horizontal, 14)
                 .frame(minWidth: 68, minHeight: 30)
                 .background {

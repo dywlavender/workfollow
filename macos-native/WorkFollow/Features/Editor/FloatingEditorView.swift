@@ -52,6 +52,9 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
                     .padding(.trailing, FloatingEditorMetrics.contentHorizontalPadding)
             }
             .frame(height: FloatingEditorMetrics.topBarHeight)
+            .background {
+                WFGlassSurface(shape: Rectangle(), fallback: .clear)
+            }
             Divider()
             DocumentFormattingToolbarRow(handle: editorHandle,
                                          leadingPadding: FloatingEditorMetrics.documentLeadingPadding,
@@ -101,6 +104,9 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
             }
             .padding(.horizontal, FloatingEditorMetrics.contentHorizontalPadding)
             .frame(height: DocumentEditorPresentationMetrics.footerHeight)
+            .background {
+                WFGlassSurface(shape: Rectangle(), fallback: .clear)
+            }
         }
         .ignoresSafeArea(.container, edges: .top)
         // 悬浮编辑窗也铺主页面同一套主题背景；主题关闭时仍是 WFColors.content。

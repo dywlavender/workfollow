@@ -111,7 +111,10 @@ private struct CompanionBubble: View {
         .frame(maxWidth: CompanionLayout.bubbleWidth, alignment: .leading)
         // 气泡是浮在任意页面上的弹层，底色跟主题弹层同一套不透明底色；
         // 继续用 WFColors.content 会在主题开启时成为唯一一块不跟着变色的卡片。
-        .background(theme.popupFill(for: colorScheme), in: CompanionBubbleShape())
+        .background {
+            WFGlassSurface(shape: CompanionBubbleShape(),
+                           fallback: theme.popupFill(for: colorScheme))
+        }
         .overlay {
             CompanionBubbleShape()
                 .stroke(WFColors.border, lineWidth: 1)
@@ -127,7 +130,8 @@ private struct CompanionBubble: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("关闭提示")
+                .hoverTip("关闭提示")
+                .accessibilityLabel("关闭提示")
                 .accessibilityLabel("关闭提示")
                 .padding(.top, 3)
                 .padding(.trailing, 4)

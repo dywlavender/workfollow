@@ -134,7 +134,7 @@ struct TaskTemplateGalleryView: View {
             Button("管理模板") {
                 showingManagement = true
             }
-            .font(.system(size: 14, weight: .medium))
+            .font(WFType.listTitleMedium)
             .foregroundStyle(WFColors.accent)
             .buttonStyle(.plain)
             .accessibilityIdentifier("task-template-management")
@@ -160,7 +160,7 @@ struct TaskTemplateGalleryView: View {
             Color.clear.frame(width: slotWidth, height: 40)
             Spacer(minLength: 0)
             Text("任务模板")
-                .font(.system(size: 18, weight: .semibold))
+                .font(WFType.detailTitle)
                 .lineLimit(1)
                 .fixedSize()
             Spacer(minLength: 0)

@@ -74,7 +74,9 @@ private struct TaskReminderPanel: View {
                 Button("停止", action: onStop).keyboardShortcut(.cancelAction)
             }
         }.padding(20).frame(width: 350, height: 160, alignment: .topLeading)
-            .background(backgroundTheme.popupFill(for: colorScheme))
+            .background {
+                WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+            }
             .hidesSystemFocusEffect()
     }
 }

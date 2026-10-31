@@ -12,6 +12,8 @@ struct IconRailView: View {
     @Environment(\.mainWindowRailInset) private var mainWindowRailInset
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedDestination: NativeDestination?
     @State private var focusRequest = UUID()
@@ -81,7 +83,18 @@ struct IconRailView: View {
         .padding(.bottom, RailMetrics.topPadding)
         .frame(width: RailMetrics.width)
         // 整窗画布已经把图标栏的底色画进去了，这里再铺一层就会在列边界留台阶。
-        .background(pageCanvasActive ? Color.clear : backgroundTheme.railFill(for: colorScheme))
+        // 玻璃模式下画布让出这一列，玻璃直接采样壁纸与动效。
+        .background {
+            if WFGlassSupport.isActive(material,
+                                       reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency) {
+                WFGlassSurface(shape: Rectangle(),
+                               fallback: backgroundTheme.railFill(for: colorScheme))
+            } else if pageCanvasActive {
+                Color.clear
+            } else {
+                backgroundTheme.railFill(for: colorScheme)
+            }
+        }
         .coordinateSpace(name: RailTooltipOverlay.space)
         .overlay(alignment: .topLeading) { RailTooltipOverlay(state: tooltips) }
         // Draw across the rail boundary above the adjacent navigation column.
@@ -265,6 +278,8 @@ struct NavigationColumnView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorScheme) private var colorScheme
     /// Seam for the saved-filter group (Wave 1 F5): the shell passes the
     /// module's FilterStore here; when nil the section stays hidden.
@@ -303,7 +318,18 @@ struct NavigationColumnView: View {
         .padding(.vertical, WFSpace.md)
         .frame(maxHeight: .infinity)
         // 同上：整窗画布已经包含导航列的底色，渐变过渡到正文。
-        .background(pageCanvasActive ? Color.clear : backgroundTheme.navigationFill(for: colorScheme))
+        // 玻璃模式下这一列由玻璃自己呈现，画布让出背景。
+        .background {
+            if WFGlassSupport.isActive(material,
+                                       reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency) {
+                WFGlassSurface(shape: Rectangle(),
+                               fallback: backgroundTheme.navigationFill(for: colorScheme))
+            } else if pageCanvasActive {
+                Color.clear
+            } else {
+                backgroundTheme.navigationFill(for: colorScheme)
+            }
+        }
     }
 
     /// 滴答口径的单滚动列表：智能清单 → 32pt 间隔 → 清单/过滤器/标签 →

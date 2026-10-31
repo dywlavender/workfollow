@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct AITaskComposerView: View {
@@ -24,7 +25,7 @@ struct AITaskComposerView: View {
             }.padding(20)
             Divider()
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
-            if let applyError { Text(applyError).font(WFType.supporting).foregroundStyle(.red).padding(.horizontal, 20).padding(.bottom, 8) }
+            if let applyError { Text(applyError).font(WFType.supporting).foregroundStyle(WFColors.danger).padding(.horizontal, 20).padding(.bottom, 8) }
             Divider()
             HStack {
                 Text(request.isBreakdown ? "添加到当前任务，可一次撤销" : "保留来源，可一次撤销")
@@ -67,7 +68,7 @@ struct AITaskComposerView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach($session.drafts) { $draft in
-                            AITaskDraftRow(draft: $draft)
+                            AITaskDraftRow(draft: $draft, destination: list)
                             Divider()
                         }
                     }.padding(.horizontal, 20)
@@ -104,14 +105,75 @@ struct AITaskComposerView: View {
     }
 }
 
-private struct AITaskDraftRow: View {
+struct AITaskDraftRow: View {
     @Binding var draft: AITaskDraft
-    @State private var expanded = false
+    let destination: String
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var expanded: Bool
+    @State private var activeDateField: DateField?
+
+    private enum DateField: Equatable { case due, deadline }
+
+    init(draft: Binding<AITaskDraft>, destination: String, initiallyExpanded: Bool = false) {
+        _draft = draft
+        self.destination = destination
+        _expanded = State(initialValue: initiallyExpanded)
+    }
+
+    private var workspace: TaskWorkspaceModel { environment.taskWorkspace }
+    private var now: Date { workspace.clock() }
+    private var calendar: Calendar { workspace.calendar }
+
+    private var draftTask: Task {
+        Task(id: draft.id, title: draft.title,
+             recurrence: draft.plan.frequency,
+             recurrenceRule: draft.plan.recurrenceRule,
+             reminderAt: draft.plan.reminder,
+             reminderOffsets: draft.plan.reminderOffsets,
+             list: TaskList(name: destination),
+             priority: draft.priority,
+             schedule: draft.plan.schedule,
+             childOrder: 0,
+             createdAt: now, updatedAt: now)
+    }
+
+    private var dueLabel: String {
+        guard let start = draft.schedule.dueAt else { return "设置日期" }
+        var text = TaskDateLabel.text(start, hasTime: draft.schedule.hasTime, now: now, calendar: calendar)
+        if let end = draft.schedule.dueEndAt {
+            if calendar.isDate(start, inSameDayAs: end), draft.schedule.hasTime {
+                text += " - " + ScheduleDisplay.clockText(end, calendar: calendar)
+            } else {
+                text += " - " + TaskDateLabel.text(end, hasTime: draft.schedule.hasTime, now: now, calendar: calendar)
+            }
+        }
+        return text
+    }
+
+    private var dueTint: NSColor {
+        switch TaskInspectorSchedulePresentation.tone(schedule: draft.schedule, now: now, calendar: calendar) {
+        case .overdue: .systemRed
+        case .scheduled: NSColor(WFColors.accent)
+        case .empty: .tertiaryLabelColor
+        }
+    }
+
+    private var deadlineText: String {
+        guard let deadline = draft.schedule.deadlineAt else { return "设置日期" }
+        return TaskDateLabel.text(deadline, hasTime: false, now: now, calendar: calendar)
+    }
+
+    private var deadlineTint: NSColor {
+        guard let deadline = draft.schedule.deadlineAt else { return .secondaryLabelColor }
+        let day = calendar.startOfDay(for: deadline)
+        let today = calendar.startOfDay(for: now)
+        return day < today ? .systemRed : .secondaryLabelColor
+    }
 
     private var summary: String {
         var parts: [String] = []
-        if let date = draft.schedule.dueAt { parts.append("安排 " + date.formatted(.dateTime.month().day().locale(.appDate))) }
-        if let due = draft.schedule.deadlineAt { parts.append("截止 " + due.formatted(.dateTime.month().day().locale(.appDate))) }
+        if draft.schedule.dueAt != nil { parts.append("安排 " + dueLabel) }
+        if draft.schedule.deadlineAt != nil { parts.append("截止 " + deadlineText) }
         if draft.priority != .none { parts.append(draft.priority.title) }
         return parts.isEmpty ? "日期与优先级" : parts.joined(separator: " · ")
     }
@@ -137,24 +199,77 @@ private struct AITaskDraftRow: View {
                         }
                         if !draft.quote.isEmpty { Text("原文：" + draft.quote).lineLimit(3).foregroundStyle(WFColors.secondaryText).textSelection(.enabled) }
                     }.padding(.top, 8).font(WFType.supporting)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } label: { Text(summary).font(WFType.caption).foregroundStyle(WFColors.secondaryText) }
             }
         }.padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func dateRow(_ title: String, deadline: Bool) -> some View {
+        let field: DateField = deadline ? .deadline : .due
         let value = deadline ? draft.schedule.deadlineAt : draft.schedule.dueAt
         return HStack {
             Toggle(title, isOn: Binding(get: { value != nil }, set: { enabled in
-                if deadline { draft.schedule.deadlineAt = enabled ? Calendar.current.startOfDay(for: Date()) : nil }
-                else { draft.schedule.dueAt = enabled ? Calendar.current.startOfDay(for: Date()) : nil; draft.schedule.hasTime = false }
+                if !enabled, activeDateField == field { activeDateField = nil }
+                if deadline {
+                    draft.schedule.deadlineAt = enabled ? calendar.startOfDay(for: now) : nil
+                } else {
+                    draft.schedule.dueAt = enabled ? calendar.startOfDay(for: now) : nil
+                    draft.schedule.hasTime = false
+                }
             })).toggleStyle(.checkbox)
             if value != nil {
-                DatePicker(title, selection: Binding(get: { value ?? Date() }, set: { date in
-                    if deadline { draft.schedule.deadlineAt = date } else { draft.schedule.dueAt = date }
-                }), displayedComponents: !deadline && draft.schedule.hasTime ? [.date, .hourAndMinute] : [.date])
-                .labelsHidden().datePickerStyle(.compact)
+                if deadline { deadlineButton } else { dueButton }
             }
         }
+    }
+
+    private var dueButton: some View {
+        AppKitScheduleChip(symbol: "calendar", title: dueLabel, tint: dueTint,
+                           accessibilityLabel: "安排日期：\(dueLabel)",
+                           action: { activeDateField = .due })
+            .frame(height: WFMetrics.controlHeight)
+            .fixedSize(horizontal: true, vertical: false)
+            .scheduleTrigger(.date)
+            .schedulePopover(isPresented: dateBinding(.due)) {
+                TaskDatePopoverV2(task: draftTask, workspace: workspace,
+                                  draftCommit: { draft.plan = $0 }) {
+                    activeDateField = nil
+                }
+                .environment(\.calendar, calendar)
+                .environment(\.timeZone, calendar.timeZone)
+            }
+    }
+
+    private var deadlineButton: some View {
+        AppKitScheduleChip(symbol: "calendar.badge.exclamationmark", title: deadlineText,
+                           tint: deadlineTint,
+                           accessibilityLabel: "截止日期：\(deadlineText)",
+                           action: { activeDateField = .deadline })
+            .frame(height: WFMetrics.controlHeight)
+            .fixedSize(horizontal: true, vertical: false)
+            .scheduleTrigger(.date)
+            .schedulePopover(isPresented: dateBinding(.deadline)) {
+                TaskDatePopoverV2(task: draftTask, workspace: workspace, deadline: true,
+                                  draftCommit: { draft.plan = $0 }) {
+                    activeDateField = nil
+                }
+                .environment(\.calendar, calendar)
+                .environment(\.timeZone, calendar.timeZone)
+            }
+    }
+
+    private func dateBinding(_ field: DateField) -> Binding<Bool> {
+        Binding(
+            get: { activeDateField == field },
+            set: { presented in
+                if presented {
+                    activeDateField = field
+                } else if activeDateField == field {
+                    activeDateField = nil
+                }
+            }
+        )
     }
 }

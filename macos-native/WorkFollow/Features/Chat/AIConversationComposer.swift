@@ -8,11 +8,14 @@ struct AIConversationComposer<Model: AIConversationComposing>: View {
     var compact = false
     var identifierPrefix = "ai.chat"
     var instanceID: UUID? = nil
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
     @State private var inputIsLiveEmpty = true
 
     private var attachments: AIAttachmentDraft { model.attachments }
     private var canSubmit: Bool { model.canSend && !model.isRunning && !attachments.isImporting }
     private var actionID: String { identifierPrefix + ".send" }
+    private var themedInput: Bool { pageCanvasActive && backgroundTheme.isThemed }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -52,8 +55,10 @@ struct AIConversationComposer<Model: AIConversationComposing>: View {
             }
         }
         .padding(12)
-        .background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: compact ? 12 : 16))
-        .overlay(RoundedRectangle(cornerRadius: compact ? 12 : 16).stroke(WFColors.overlayBorder, lineWidth: 1))
+        .background(themedInput ? backgroundTheme.inputFill : WFColors.secondarySurface,
+                    in: RoundedRectangle(cornerRadius: compact ? 12 : 16))
+        .overlay(RoundedRectangle(cornerRadius: compact ? 12 : 16)
+            .stroke(themedInput ? WFColors.border : WFColors.overlayBorder, lineWidth: 1))
         .workflowActionAnchor(identifierPrefix + ".composer")
     }
 

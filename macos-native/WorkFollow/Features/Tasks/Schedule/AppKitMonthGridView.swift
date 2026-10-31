@@ -168,27 +168,14 @@ final class MonthGridCanvas: NSView {
 
     private var gridTop: CGFloat { headerHeight + sectionGap + weekdayHeight + sectionGap }
 
-    /// 直接构造动态 accent（SwiftUI 动态 Color 转 NSColor 会固定成某个外观值，
-    /// 亮色下文字被转成白）；绘制时由 AppKit 按当前外观解析。
-    private var accentColor: NSColor {
-        NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(red: 0.494, green: 0.533, blue: 1, alpha: 1)
-                : NSColor(red: 0.357, green: 0.361, blue: 0.922, alpha: 1)
-        }
-    }
+    /// 绘制时由 AppKit 按当前外观解析动态色。
+    private var accentColor: NSColor { WFColors.nsAccent }
 
     private var selectionColor: NSColor { accentColor.withAlphaComponent(0.10) }
 
     /// 非本月日期：参考滴答的浅灰（≈ #C0C4CB），比 `tertiaryLabelColor` 更浅一档，
     /// 避免上/下月的日期抢走本月的视觉重点。
-    private var outOfMonthColor: NSColor {
-        NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-                ? NSColor(red: 0.42, green: 0.44, blue: 0.48, alpha: 1)
-                : NSColor(red: 0.753, green: 0.769, blue: 0.796, alpha: 1)
-        }
-    }
+    private var outOfMonthColor: NSColor { WFColors.nsOutOfMonthText }
 
     // MARK: 绘制
 

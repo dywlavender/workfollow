@@ -95,6 +95,9 @@ private struct AISelectionConversationView: View {
             }, undoAction: undoAction, canUndoAction: canUndoAction)
             if let error { Text(error).font(WFType.caption).foregroundStyle(WFColors.danger).padding(12) }
         }
-        .background(backgroundTheme.popupFill(for: colorScheme)).hidesSystemFocusEffect()
+        .background {
+            WFGlassSurface(shape: Rectangle(), fallback: backgroundTheme.popupFill(for: colorScheme))
+        }
+        .hidesSystemFocusEffect()
     }
 }

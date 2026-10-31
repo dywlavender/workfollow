@@ -24,28 +24,43 @@ enum MainWindowChromeGeometry {
 /// Main-window-only chrome. Does not replace SwiftUI's window delegate or alter panels/settings.
 struct MainWindowChromeConfiguration: NSViewRepresentable {
     @Binding var railInset: CGFloat
+    /// 液态玻璃需要窗口背后的内容做采样源；不透明窗户会让玻璃退化成一块实色。
+    var glassBackdrop: Bool = false
 
-    static func configure(_ window: NSWindow) {
+    static func configure(_ window: NSWindow, glassBackdrop: Bool = false) {
         window.styleMask.insert(.fullSizeContentView)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
         // Native titlebar retains dragging; editable content must not become a drag region.
         window.isMovableByWindowBackground = false
+        applyBackdrop(window, glassBackdrop: glassBackdrop)
+    }
+
+    static func applyBackdrop(_ window: NSWindow, glassBackdrop: Bool) {
+        if window.isOpaque == glassBackdrop { window.isOpaque = !glassBackdrop }
+        let target: NSColor = glassBackdrop ? .clear : .windowBackgroundColor
+        if window.backgroundColor != target { window.backgroundColor = target }
     }
 
     func makeNSView(context: Context) -> ChromeView {
         let view = ChromeView()
         view.publishInset = { railInset = $0 }
+        view.glassBackdrop = glassBackdrop
         return view
     }
 
     func updateNSView(_ nsView: ChromeView, context: Context) {
         nsView.publishInset = { railInset = $0 }
+        nsView.glassBackdrop = glassBackdrop
+        if let window = nsView.window {
+            Self.applyBackdrop(window, glassBackdrop: glassBackdrop)
+        }
     }
 
     final class ChromeView: NSView {
         var publishInset: ((CGFloat) -> Void)?
+        var glassBackdrop = false
         private var observers: [NSObjectProtocol] = []
         private weak var configuredWindow: NSWindow?
         private var updateScheduled = false
@@ -59,7 +74,7 @@ struct MainWindowChromeConfiguration: NSViewRepresentable {
             observers.removeAll()
             configuredWindow = window
             guard let window else { return }
-            MainWindowChromeConfiguration.configure(window)
+            MainWindowChromeConfiguration.configure(window, glassBackdrop: glassBackdrop)
             for name in [NSWindow.didUpdateNotification, NSWindow.didResizeNotification, NSWindow.didEnterFullScreenNotification,
                          NSWindow.didExitFullScreenNotification] {
                 observers.append(NotificationCenter.default.addObserver(
@@ -86,6 +101,7 @@ struct MainWindowChromeConfiguration: NSViewRepresentable {
 
         private func updateTrafficLights() {
             guard let window = configuredWindow, let content = window.contentView else { return }
+            MainWindowChromeConfiguration.applyBackdrop(window, glassBackdrop: glassBackdrop)
             guard !window.styleMask.contains(.fullScreen) else {
                 publishIfChanged(0)
                 return

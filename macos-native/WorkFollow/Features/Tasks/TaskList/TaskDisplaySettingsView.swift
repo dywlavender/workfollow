@@ -74,11 +74,11 @@ struct TaskDisplaySettingsView: View {
 
     private var titleBar: some View {
         ZStack {
-            Text(TaskDisplaySettingsText.title).font(.system(size: 20, weight: .semibold))
+            Text(TaskDisplaySettingsText.title).font(WFType.pageTitleStrong)
             HStack {
                 Button { dismiss() } label: {
                     Circle()
-                        .fill(Color(nsColor: .systemRed))
+                        .fill(WFColors.danger)
                         .frame(width: 12, height: 12)
                         .contentShape(Rectangle().inset(by: -4))
                 }
@@ -96,7 +96,7 @@ struct TaskDisplaySettingsView: View {
 
     private var dateDisplayRow: some View {
         HStack(spacing: WFSpace.md) {
-            Text(TaskDisplaySettingsText.dateRow).font(.system(size: 15, weight: .semibold))
+            Text(TaskDisplaySettingsText.dateRow).font(WFType.groupTitle)
             Spacer(minLength: WFSpace.md)
             BusinessMenu(width: PopupMetrics.menuWidthCompact,
                          title: TaskDisplaySettingsText.dateRow) {
@@ -129,9 +129,9 @@ struct TaskDisplaySettingsView: View {
 
     private var detailLayoutCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(TaskDisplaySettingsText.detailTitle).font(.system(size: 15, weight: .semibold))
+            Text(TaskDisplaySettingsText.detailTitle).font(WFType.groupTitle)
             Text(TaskDisplaySettingsText.detailDescription)
-                .font(.system(size: 13))
+                .font(WFType.controlLabel)
                 .foregroundStyle(WFColors.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: WFSpace.lg) {

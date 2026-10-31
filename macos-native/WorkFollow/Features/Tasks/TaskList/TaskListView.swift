@@ -52,6 +52,8 @@ struct TaskListView: View {
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowMaterial) private var material
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var draft = ""
     @State private var restoredCaptureDraft = false
@@ -372,8 +374,10 @@ struct TaskListView: View {
                 .contentShape(Rectangle())
                 .businessContextMenu { listTitleMenu }
             Spacer(minLength: 0)
-            viewMenu
-            moreMenu
+            WFGlassControlGroup {
+                viewMenu
+                moreMenu
+            }
         }
         .padding(.horizontal, TaskListMetrics.rowHorizontalPadding)
         .padding(.top, WFSpace.lg)
@@ -719,9 +723,19 @@ struct TaskListView: View {
         .padding(.horizontal, WFSpace.md)
         // 滴答式两态：未选中是带蓝调的极浅灰条（QuickAddBarStyle.idleFill）、
         // 无描边；选中后底色提亮到窗口底色、描边换「今天」同款强调色。
-        .background(RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
-            .fill(quickAddExpanded ? WFColors.canvas
-                  : backgroundTheme.isThemed ? WFColors.inputFillOnTheme : QuickAddBarStyle.idleFill))
+        .background {
+            let fallback = backgroundTheme.isThemed
+                ? backgroundTheme.inputFill
+                : (quickAddExpanded ? WFColors.canvas : QuickAddBarStyle.idleFill)
+            if WFGlassSupport.isActive(material,
+                                       reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency) {
+                WFGlassSurface(shape: RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius),
+                               fallback: fallback,
+                               interactive: true)
+            } else {
+                RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius).fill(fallback)
+            }
+        }
         .overlay {
             if quickAddExpanded {
                 RoundedRectangle(cornerRadius: TaskListMetrics.quickAddRadius)
@@ -1787,7 +1801,7 @@ struct TaskRowView: View {
             }
             if overflow > 0 {
                 Text("+\(overflow)")
-                    .font(.system(size: 11))
+                    .font(WFType.caption)
                     .foregroundStyle(WFColors.secondaryText)
             }
             Spacer(minLength: 0)
@@ -1800,7 +1814,7 @@ struct TaskRowView: View {
     private func tagChip(_ name: String) -> some View {
         let color = workspace.tag(named: name)?.colorARGB.map(WFListPalette.swatch)
         return Text(name)
-            .font(.system(size: 11))
+            .font(WFType.caption)
             .foregroundStyle(color ?? WFColors.text)
             .lineLimit(1)
             .padding(.horizontal, 6)
@@ -1863,7 +1877,7 @@ struct TaskRowCompletionBox: View {
                 .overlay {
                     Image(systemName: "checkmark")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(WFColors.onAccent)
                         .scaleEffect(checkPop ? 1 : 0.4)
                 }
                 .frame(width: 17, height: 17)
@@ -1909,7 +1923,7 @@ private struct TaskReorderDropModifier: ViewModifier {
                     RoundedRectangle(cornerRadius: WFMetrics.corner)
                         .stroke(WFColors.accent.opacity(0.45), lineWidth: 1)
                         .overlay(alignment: .bottomTrailing) {
-                            Text("作为子任务").font(.system(size: 10)).foregroundStyle(WFColors.secondaryText).padding(3)
+                            Text("作为子任务").font(WFType.taskMeta).foregroundStyle(WFColors.secondaryText).padding(3)
                         }
                 case .before, .rootBefore:
                     VStack { TaskDropMarker(); Spacer(minLength: 0) }
@@ -2243,7 +2257,8 @@ private struct TaskListMenuViewModeIcon: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(TaskListMoreMenuPolicy.viewModeHelp(mode))
+        .hoverTip(TaskListMoreMenuPolicy.viewModeHelp(mode), activeAlways: true)
+        .accessibilityLabel(TaskListMoreMenuPolicy.viewModeHelp(mode))
         .accessibilityLabel(TaskListMoreMenuPolicy.viewModeHelp(mode))
         .accessibilityValue(selected ? "已选择" : "未选择")
     }

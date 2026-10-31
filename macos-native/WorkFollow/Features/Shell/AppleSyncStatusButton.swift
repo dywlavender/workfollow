@@ -18,8 +18,8 @@ struct AppleSyncStatusButton: View {
                 .overlay(alignment: .topTrailing) {
                     if status.issueCount > 0 {
                         Text(status.issueCount > 9 ? "9+" : "\(status.issueCount)")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(WFType.badgeSmall)
+                            .foregroundStyle(WFColors.onAccent)
                             .padding(3).background(WFColors.danger, in: Circle())
                     }
                 }

@@ -71,7 +71,10 @@ struct TaskQuickComposer: View {
             divider
             listRow
         }
-        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        .background {
+            WFGlassSurface(shape: Rectangle(),
+                           fallback: backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        }
         .schedulePopover(isPresented: datePopoverBinding) {
             if let page = datePage {
                 TaskDatePopoverV2(task: draftTask, workspace: workspace, initialPage: page,
@@ -100,7 +103,7 @@ struct TaskQuickComposer: View {
                         .foregroundStyle(QuickAddBarStyle.cardDateColor(
                             hasDate: schedule.dueAt != nil, overdue: scheduleOverdue))
                     Text(scheduleLabel)
-                        .font(.system(size: 14))
+                        .font(WFType.body)
                         .lineLimit(1)
                         .foregroundStyle(QuickAddBarStyle.cardDateColor(
                             hasDate: schedule.dueAt != nil, overdue: scheduleOverdue))

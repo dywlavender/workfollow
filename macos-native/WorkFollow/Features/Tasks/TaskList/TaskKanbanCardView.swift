@@ -43,6 +43,8 @@ private struct TaskKanbanTaskRow: View {
     let showsChecklist: Bool
     let onSelect: () -> Void
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
+    @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
     @State private var hovering = false
     @State private var showDatePopover = false
     @State private var contextDateAnchor: CGRect?
@@ -118,7 +120,8 @@ private struct TaskKanbanTaskRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: WFMetrics.corner)
-                .fill(workspace.selectedTaskID == task.id ? WFColors.listSelection
+                .fill(workspace.selectedTaskID == task.id
+                      ? WFColors.listSelectionFill(theme: backgroundTheme, pageCanvasActive: pageCanvasActive)
                       : hovering ? WFColors.hover : WFColors.content)
         }
         .contentShape(Rectangle())
@@ -260,7 +263,7 @@ private struct TaskKanbanTaskRow: View {
                 Text(TaskDateLabel.text(deadline, hasTime: false,
                                         now: workspace.clock(), calendar: workspace.calendar) + "截止")
                     .lineLimit(1)
-                    .foregroundStyle(overdue ? Color.red : muted)
+                    .foregroundStyle(overdue ? WFColors.danger : muted)
             }
         }
     }

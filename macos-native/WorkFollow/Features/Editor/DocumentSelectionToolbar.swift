@@ -100,8 +100,10 @@ struct DocumentSelectionToolbarView: View {
         .frame(idealWidth: preferredWidth)
         .frame(height: 34)
         // 和其他浮层一样吃主题底色；主题关闭时仍是原来的白卡面。
-        .background(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme),
-                    in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+        }
         .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(WFColors.overlayBorder))
         .coordinateSpace(name: Self.coordinateSpace)
         .hidesSystemFocusEffect()
@@ -266,8 +268,10 @@ struct DocumentFormatToolbarView: View {
                 }
                 .padding(.horizontal, 6)
                 .frame(height: DocumentFormatToolbarMetrics.height)
-                .background(WFColors.overlay,
-                            in: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius))
+                .background {
+                    WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                                   fallback: WFColors.overlay)
+                }
                 .overlay {
                     RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius)
                         .stroke(WFColors.overlayBorder, lineWidth: 1)
@@ -471,8 +475,8 @@ struct DocumentFormatToolbarView: View {
         // 本就在同一层，靠下面的分隔线分组就够，单独着色会在正文上方切出一条横带。
         .background {
             if !embedded {
-                RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius)
-                    .fill(backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
+                WFGlassSurface(shape: RoundedRectangle(cornerRadius: DocumentFormatToolbarMetrics.cornerRadius),
+                               fallback: backgroundTheme.popupFillOrFallback(WFColors.overlay, for: colorScheme))
             }
         }
         .overlay {

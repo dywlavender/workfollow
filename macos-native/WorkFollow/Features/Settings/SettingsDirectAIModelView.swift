@@ -33,9 +33,9 @@ struct SettingsDirectAIModelView: View {
                             HStack { Text(draft.title).lineLimit(1); Image(systemName: "chevron.down").font(.system(size: 10)) }
                         }.accessibilityLabel("已存文字模型")
                         Button { newModel() } label: { Image(systemName: "plus") }
-                            .buttonStyle(.plain).help("添加模型").accessibilityLabel("添加模型")
+                            .buttonStyle(.plain).hoverTip("添加模型").accessibilityLabel("添加模型")
                         Button { deleting = true } label: { Image(systemName: "trash") }
-                            .buttonStyle(.plain).help("删除模型").accessibilityLabel("删除模型")
+                            .buttonStyle(.plain).hoverTip("删除模型").accessibilityLabel("删除模型")
                             .disabled(!models.profiles.contains { $0.id == draft.id })
                     }
                 }
@@ -64,7 +64,7 @@ struct SettingsDirectAIModelView: View {
                         else { SecureField(draft.requiresKey ? "API Key" : "本地服务可留空", text: keyBinding) }
                     }.textFieldStyle(.plain).accessibilityIdentifier("ai-model-key")
                     Button { revealKey.toggle() } label: { Image(systemName: revealKey ? "eye.slash" : "eye") }
-                        .buttonStyle(.plain).help(revealKey ? "隐藏 API Key" : "显示 API Key")
+                        .buttonStyle(.plain).hoverTip(revealKey ? "隐藏 API Key" : "显示 API Key")
                         .accessibilityLabel(revealKey ? "隐藏 API Key" : "显示 API Key")
                 }.frame(width: 300)
             }
@@ -100,7 +100,7 @@ struct SettingsDirectAIModelView: View {
                 })
         }.padding(.horizontal, WFSpace.md).padding(.vertical, 10)
         if let error = error ?? models.loadError {
-            Text(error).font(WFType.supporting).foregroundStyle(.red)
+            Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, WFSpace.md).padding(.bottom, 10)
         } else if let result {
             Text(result).font(WFType.supporting).foregroundStyle(WFColors.secondaryText)

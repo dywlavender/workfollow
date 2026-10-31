@@ -449,7 +449,7 @@ struct SettingsDataView: View {
         if feedbackKind == kind {
             Text(feedbackText)
                 .font(WFType.supporting)
-                .foregroundStyle(feedbackIsError ? Color.red : WFColors.secondaryText)
+                .foregroundStyle(feedbackIsError ? WFColors.danger : WFColors.secondaryText)
         }
     }
 

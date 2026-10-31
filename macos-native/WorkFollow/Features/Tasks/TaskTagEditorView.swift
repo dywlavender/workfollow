@@ -56,7 +56,7 @@ struct TaskTagEditorView: View {
             }
             if invalid {
                 Text("名称为空、已存在，或父标签不可用")
-                    .font(WFType.supporting).foregroundStyle(.red)
+                    .font(WFType.supporting).foregroundStyle(WFColors.danger)
                     .padding(.horizontal, WFSpace.md)
             }
             Divider()

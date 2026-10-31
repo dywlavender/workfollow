@@ -12,7 +12,7 @@ struct TemplateEducationView: View {
                 .accessibilityHidden(true)
 
             Text("如何创建模板")
-                .font(.system(size: 18, weight: .semibold))
+                .font(WFType.detailTitle)
                 .foregroundStyle(WFColors.text)
 
             Text("在任务详情页中先编辑好内容，再点击右下角“…”，选择“保存为模板”，输入标题即可将任务创建为模板")
@@ -26,7 +26,7 @@ struct TemplateEducationView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 42)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WFColors.onAccent)
                     .background(WFColors.accent, in: Capsule())
             }
                 .buttonStyle(.plain)

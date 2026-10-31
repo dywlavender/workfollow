@@ -100,7 +100,7 @@ struct FocusTimerRing: View {
                     .foregroundStyle(theme.text2)
                 if let taskTitle {
                     Text(taskTitle)
-                        .font(.system(size: 15))
+                        .font(WFType.bodyLarge)
                         .foregroundStyle(theme.text3)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)
