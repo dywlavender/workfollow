@@ -70,12 +70,18 @@ extension SheetDialog where Status == EmptyView {
     }
 }
 
+/// 表单弹框的宽度只有四档，新增弹框请从这四档里选，不要再写裸数字。
+///
+/// 原先散落 11 种宽度（360/380/400/420/440/480/500/520/560/640/760），
+/// 彼此只差 20pt，用户连着开几个弹框会觉得窗口在「乱跳」。
 enum SheetDialogMetrics {
-    /// 紧凑档：单列短表单（清单编辑、标签编辑）。
+    /// 窄档：只读详情、单列极短表单（专注记录、清单动态）。
+    static let narrowWidth: CGFloat = 360
+    /// 紧凑档：单列短表单（清单编辑、标签编辑、摘要预览）。
     static let compactWidth: CGFloat = 400
-    /// 常规档：带分组与说明的表单。
+    /// 常规档：带分组与说明的表单（日历显示设置、过滤器）。
     static let regularWidth: CGFloat = 480
-    /// 宽档：双列或多区块（模板库、规则编辑）。
+    /// 宽档：双列或多区块（模板库、象限规则、AI 任务拆分）。
     static let wideWidth: CGFloat = 640
     /// 按屏幕高度收紧：留出标题栏与 Dock 的余量，避免底部按钮落到屏幕外。
     static let heightLimit: CGFloat = 640

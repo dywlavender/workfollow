@@ -213,7 +213,7 @@ struct TaskListCopyView: View {
                 }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                     .listManagementAnchor(.save)
             }
-        }.padding(24).frame(width: 420)
+        }.padding(24).frame(width: SheetDialogMetrics.compactWidth)
             .workfollowPopupSurface()
             .coordinateSpace(name: "list-management")
     }
@@ -325,7 +325,7 @@ struct TaskFolderEditorView: View {
                     .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-        }.padding(24).frame(width: 420)
+        }.padding(24).frame(width: SheetDialogMetrics.compactWidth)
             .workfollowPopupSurface()
             .onAppear { nameFocused = true }
     }

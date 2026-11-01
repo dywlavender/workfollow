@@ -138,7 +138,7 @@ struct FocusRecordDetail: View {
                 }
             } else { Text("记录已删除"); Button("关闭") { dismiss() } }
         }
-        .padding(24).frame(width: PopupMetrics.focusRecordWidth)
+        .padding(24).frame(width: SheetDialogMetrics.narrowWidth)
         .workfollowPopupSurface(fallback: theme.canvas)
         .focusRenderAnchor(.recordDetail)
         .sheet(item: $draft) { value in FocusRecordEditor(store: store, workspace: workspace, draft: value) }

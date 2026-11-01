@@ -138,7 +138,7 @@ final class TaskListMoreMenuTests: XCTestCase {
         try sendKey(36, to: window)
         let sheet = try attachedSheet(of: window)
         InspectorPanelTestSupport.settle(sheet)
-        XCTAssertEqual(sheet.contentView?.bounds.width ?? 0, PopupMetrics.activitySheetWidth, accuracy: 1)
+        XCTAssertEqual(sheet.contentView?.bounds.width ?? 0, SheetDialogMetrics.narrowWidth, accuracy: 1)
         XCTAssertEqual(sheet.contentView?.bounds.height ?? 0, 420, accuracy: 1)
         try InspectorPanelTestSupport.sendEscape(to: sheet)
         try InspectorPanelTestSupport.waitUntil("Esc 应关闭清单动态") { window.attachedSheet == nil }
