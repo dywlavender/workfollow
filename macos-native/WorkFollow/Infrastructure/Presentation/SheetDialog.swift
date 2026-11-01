@@ -24,20 +24,36 @@ struct SheetDialog<Content: View, Status: View>: View {
     var primaryDecoration: (AnyView) -> AnyView = { $0 }
     let onCancel: () -> Void
     let onSubmit: () -> Void
+    /// 标题对齐。默认左对齐（与 12 个既有弹框一致）；
+    /// 清单编辑器按滴答口径用居中大标题。
+    var titleAlignment: HorizontalAlignment = .leading
+    /// 滴答口径：部分弹框的取消/保存居中（清单编辑）。默认保持右对齐。
+    var buttonsCentered = false
     @ViewBuilder let content: () -> Content
     @ViewBuilder let status: () -> Status
 
     var body: some View {
         VStack(spacing: 0) {
-            DialogHeader(title: title)
+            DialogHeader(title: title, alignment: titleAlignment)
             Divider()
+            // ScrollView 不给内容定宽，里面的 HStack 会按固有宽度排布，
+            // 固定宽度的标签列会被可伸展控件（TextField）挤到 0。
+            // 显式撑满可用宽度，标签列才拿得到 72pt。
             if let contentHeight {
-                ScrollView { content().padding(PopupMetrics.formInset) }
-                    .compactScrollbars()
-                    .frame(height: contentHeight)
+                ScrollView {
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(PopupMetrics.formInset)
+                }
+                .compactScrollbars()
+                .frame(height: contentHeight)
             } else {
-                ScrollView { content().padding(PopupMetrics.formInset) }
-                    .compactScrollbars()
+                ScrollView {
+                    content()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(PopupMetrics.formInset)
+                }
+                .compactScrollbars()
             }
             // DialogFooter 是 memberwise init，参数必须按声明顺序：
             // buttonWidth 在 cancelIdentifier 之前。
@@ -47,6 +63,7 @@ struct SheetDialog<Content: View, Status: View>: View {
                          primaryIdentifier: primaryIdentifier,
                          cancelDecoration: cancelDecoration,
                          primaryDecoration: primaryDecoration,
+                         buttonsCentered: buttonsCentered,
                          onCancel: onCancel, onSubmit: onSubmit, status: status)
         }
         .frame(width: width)

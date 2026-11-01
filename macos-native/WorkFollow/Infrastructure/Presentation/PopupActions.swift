@@ -66,15 +66,23 @@ struct PopupActionBar<Actions: View>: View {
 
 struct DialogTitle: View {
     let text: String
+    var alignment: HorizontalAlignment = .leading
+    /// 居中时用大一号字：滴答的居中标题是 17pt，左对齐标题是 14pt，
+    /// 两者是不同层级的视觉元素，不只是对齐方式不同。
     var body: some View {
-        Text(text).font(WFType.dialogTitle)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        Text(text)
+            // 居中标题按滴答实测 15pt（文字实测高 12.5pt）；左对齐标题仍 14pt。
+            .font(alignment == .center ? Font.system(size: 15, weight: .semibold) : WFType.dialogTitle)
+            .frame(maxWidth: .infinity, alignment: alignment == .center ? .center : .leading)
     }
 }
 
 struct DialogHeader: View {
     let title: String
-    var body: some View { DialogTitle(text: title).padding(PopupMetrics.formInset) }
+    var alignment: HorizontalAlignment = .leading
+    var body: some View {
+        DialogTitle(text: title, alignment: alignment).padding(PopupMetrics.formInset)
+    }
 }
 
 /// The status slot reserves two lines, keeping actions in place when validation
@@ -89,6 +97,8 @@ struct DialogFooter<Status: View>: View {
     /// 给按钮补测试锚点等装饰。默认原样返回，不影响既有调用。
     var cancelDecoration: (AnyView) -> AnyView = { $0 }
     var primaryDecoration: (AnyView) -> AnyView = { $0 }
+    /// 滴答口径的居中按钮排；状态文本上置一行，空则塌缩不留位。
+    var buttonsCentered = false
     let onCancel: () -> Void
     let onSubmit: () -> Void
     @ViewBuilder let status: () -> Status
@@ -96,33 +106,54 @@ struct DialogFooter<Status: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            HStack(spacing: PopupMetrics.actionSpacing) {
-                ZStack(alignment: .leading) {
-                    Color.clear.frame(height: 32).accessibilityHidden(true)
+            if buttonsCentered {
+                VStack(spacing: 4) {
                     status().font(WFType.supporting).lineLimit(2)
-                }.frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                cancelDecoration(AnyView(
-                    Button(action: onCancel) {
-                        Text(cancelTitle).frame(minWidth: buttonWidth - 24)
+                    HStack(spacing: PopupMetrics.actionSpacing) {
+                        cancelButton
+                        primaryButton
                     }
-                    .buttonStyle(.bordered).keyboardShortcut(.cancelAction)
-                    .accessibilityIdentifier(cancelIdentifier).workflowActionAnchor(cancelIdentifier)
-                    .dialogActionAnchor(false)
-                ))
-                primaryDecoration(AnyView(
-                    Button(action: onSubmit) {
-                        Text(primaryTitle).frame(minWidth: buttonWidth - 24)
-                    }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                    .disabled(!canSubmit).accessibilityIdentifier(primaryIdentifier).workflowActionAnchor(primaryIdentifier)
-                    .dialogActionAnchor(true)
-                ))
+                }
+                .controlSize(.regular)
+                .padding(.horizontal, PopupMetrics.formInset)
+                .padding(.vertical, PopupMetrics.formFooterInset)
+            } else {
+                HStack(spacing: PopupMetrics.actionSpacing) {
+                    ZStack(alignment: .leading) {
+                        Color.clear.frame(height: 32).accessibilityHidden(true)
+                        status().font(WFType.supporting).lineLimit(2)
+                    }.frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                    cancelButton
+                    primaryButton
+                }
+                .controlSize(.regular)
+                .padding(.horizontal, PopupMetrics.formInset)
+                .padding(.vertical, PopupMetrics.formFooterInset)
             }
-            .controlSize(.regular)
-            .padding(.horizontal, PopupMetrics.formInset)
-            .padding(.vertical, PopupMetrics.formFooterInset)
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var cancelButton: some View {
+        cancelDecoration(AnyView(
+            Button(action: onCancel) {
+                Text(cancelTitle).frame(minWidth: buttonWidth - 24)
+            }
+            .buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+            .accessibilityIdentifier(cancelIdentifier).workflowActionAnchor(cancelIdentifier)
+            .dialogActionAnchor(false)
+        ))
+    }
+
+    @ViewBuilder private var primaryButton: some View {
+        primaryDecoration(AnyView(
+            Button(action: onSubmit) {
+                Text(primaryTitle).frame(minWidth: buttonWidth - 24)
+            }
+            .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+            .disabled(!canSubmit).accessibilityIdentifier(primaryIdentifier).workflowActionAnchor(primaryIdentifier)
+            .dialogActionAnchor(true)
+        ))
     }
 }
 

@@ -185,6 +185,40 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         fixture.settle()
     }
 
+    /// 清单编辑弹框的滴答复刻样张：直接宿主弹框内容，出图到
+    /// /private/tmp/ux-flow-list-editor.png 供肉眼比对（无动画路径，XCTest 安全）。
+    fileprivate func deepDescendant(in root: NSView, where predicate: (NSView) -> Bool) -> NSView? {
+        var stack: [NSView] = [root]
+        while let view = stack.popLast() {
+            if predicate(view) { return view }
+            stack.append(contentsOf: view.subviews)
+        }
+        return nil
+    }
+
+    func testListEditorTickTickReplicaRender() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let environment = AppEnvironment(directory: directory)
+        environment.companionEnabled = false
+        let workspace = environment.taskWorkspace
+        _ = workspace.createDraft(title: "样例任务", list: "工作", schedule: .init(dueAt: environment.weeklyPlanning.weekStart),
+            priority: .none, tags: [], reminder: nil, repeatFrequency: .never,
+            selectCreatedTask: false)
+        let host = NSHostingView(rootView: TaskListEditorView(
+                workspace: workspace, preferences: environment.viewPreferences, name: "工作")
+            .environmentObject(environment)
+            .frame(width: 396, height: 560))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 396, height: 560)
+        defer { window.close() }
+        InspectorPanelTestSupport.settle(window)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            .write(to: URL(fileURLWithPath: "/private/tmp/ux-flow-list-editor.png"))
+    }
+
     func testSummaryContentPopoverStylesAutoEnableAndKeepPanelOpen() throws {
         let fixture = Fixture(destination: .summary)
         defer { fixture.close() }
