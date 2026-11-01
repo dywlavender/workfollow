@@ -43,7 +43,7 @@ final class RailTooltipTests: XCTestCase {
     }
 
     func testEveryRailIconShowsAnInwardTooltipWithoutChangingFocusOrBlockingClicks() throws {
-        let expected = ["任务", "笔记", "日历", "四象限", "倒数纪念日", "专注", "会议纪要", "Apple 同步", "快速打开（⌘K）", "设置（⌘,）"]
+        let expected = ["任务", "笔记", "日历", "四象限", "倒数纪念日", "专注", "会议纪要", "AI 对话", "Apple 同步", "快速打开（⌘K）", "设置（⌘,）"]
         for dark in [false, true] {
             let fixture = try fixture(dark: dark)
             let targets = railTargets(in: fixture.host)
