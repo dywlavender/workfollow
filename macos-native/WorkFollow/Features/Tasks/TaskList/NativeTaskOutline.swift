@@ -209,6 +209,7 @@ struct NativeTaskOutline: NSViewRepresentable {
         private var previousRow: Row?
         private var displayedSelectionID: UUID?
         private var contentRevision = 0
+        private var contentContext: String?
         var itemID: String?
 #if DEBUG
         private(set) var configurationCount = 0
@@ -220,7 +221,9 @@ struct NativeTaskOutline: NSViewRepresentable {
             Diagnostics.createdCells += 1
 #endif
             host.translatesAutoresizingMaskIntoConstraints = false
-            host.sizingOptions = [.intrinsicContentSize]
+            // The outline supplies row height and these four constraints supply
+            // width/height; intrinsic SwiftUI measurement is redundant here.
+            host.sizingOptions = []
             addSubview(host)
             NSLayoutConstraint.activate([
                 host.leadingAnchor.constraint(equalTo: leadingAnchor,
@@ -234,11 +237,12 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-        func configure(_ item: Item, selectedTaskID: UUID? = nil) {
+        func configure(_ item: Item, selectedTaskID: UUID? = nil, context: String? = nil) {
             currentItem = item
             let changed = itemID != item.id || previousRow?.hasSameContent(as: item.row) != true
-                || previousRow?.hasSameLayout(as: item.row) != true
+                || previousRow?.hasSameLayout(as: item.row) != true || contentContext != context
             previousRow = item.row
+            contentContext = context
             itemID = item.id
             let selectionChanged = displayedSelectionID != selectedTaskID
             displayedSelectionID = selectedTaskID
@@ -331,7 +335,8 @@ struct NativeTaskOutline: NSViewRepresentable {
             let scopeChanged = self.scopeKey != scopeKey
             let previousScope = self.scopeKey
             self.scopeKey = scopeKey
-            let structureChanged = items.map(\.id) != rows.map(\.id)
+            let oldIDs = items.map(\.id)
+            let structureChanged = oldIDs != rows.map(\.id)
             let previousY = scroll.contentView.bounds.minY
             let visible = outline.rows(in: outline.visibleRect)
             let anchorIndex = visible.location != NSNotFound ? visible.location : 0
@@ -353,35 +358,66 @@ struct NativeTaskOutline: NSViewRepresentable {
                 return item
             }
 
+            // 结构变化分两条路：**单边**增/删（快速添加落行、删除任务、分组折叠
+            // 展开）走 AppKit 的行动画，新行从上方滑入、下方行让位，与滚动锚位
+            // 逻辑兼容（endUpdates 后 rect 即终态几何）；换页（两侧同时增删）、
+            // 完成态身份变化与行移动仍是混合变动，继续整表重载。
+            var animatedStructure = false
+            var insertedIndexes = IndexSet()
             if structureChanged {
+                let newIDs = rows.map(\.id)
+                let oldSet = Set(oldIDs)
+                let newSet = Set(newIDs)
+                insertedIndexes = IndexSet(newIDs.enumerated().compactMap { oldSet.contains($1) ? nil : $0 })
+                let removedIndexes = IndexSet(oldIDs.enumerated().compactMap { newSet.contains($1) ? nil : $0 })
+                if removedIndexes.isEmpty, !insertedIndexes.isEmpty {
+                    outline.beginUpdates()
+                    outline.insertItems(at: insertedIndexes, inParent: nil, withAnimation: .slideDown)
+                    outline.endUpdates()
+                    animatedStructure = true
+                } else if insertedIndexes.isEmpty, !removedIndexes.isEmpty {
+                    outline.beginUpdates()
+                    outline.removeItems(at: removedIndexes, inParent: nil, withAnimation: .slideUp)
+                    outline.endUpdates()
+                    animatedStructure = true
+                }
+                if !animatedStructure {
 #if DEBUG
-                let reloadStart = ProcessInfo.processInfo.systemUptime
+                    let reloadStart = ProcessInfo.processInfo.systemUptime
 #endif
-                outline.reloadData()
-                outline.layoutSubtreeIfNeeded()
+                    outline.reloadData()
+                    outline.layoutSubtreeIfNeeded()
 #if DEBUG
-                Diagnostics.reloadTime += ProcessInfo.processInfo.systemUptime - reloadStart
+                    Diagnostics.reloadTime += ProcessInfo.processInfo.systemUptime - reloadStart
 #endif
-            } else if visible.location != NSNotFound {
-                let end = min(NSMaxRange(visible), items.count)
-                for index in visible.location..<end where contentChanged.contains(index) || layoutChanged.contains(index) {
-#if DEBUG
-                    guard refreshContent else { continue }
-#endif
-                    if let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell {
-                        cell.configure(items[index], selectedTaskID: selectionSource?.selectedTaskID)
-#if DEBUG
-                        configuredCellCount += 1
-#endif
-                    }
                 }
             }
-            if !structureChanged && !layoutChanged.isEmpty {
+            // 动画插入后既有行的内容/高度照样要刷新（分组头的计数徽标、
+            // 邻行让位后的复检），否则只有新行是对的。
+            if !structureChanged || animatedStructure {
+                if visible.location != NSNotFound {
+                    let end = min(NSMaxRange(visible), items.count)
+                    for index in visible.location..<end where scopeChanged || contentChanged.contains(index) || layoutChanged.contains(index) {
 #if DEBUG
-                guard refreshHeights else { return }
-                heightInvalidationCount += layoutChanged.count
+                        guard refreshContent else { continue }
 #endif
-                outline.noteHeightOfRows(withIndexesChanged: layoutChanged)
+                        if let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell {
+                            cell.configure(items[index], selectedTaskID: selectionSource?.selectedTaskID,
+                                           context: items[index].row.taskID == nil ? scopeKey : nil)
+#if DEBUG
+                            configuredCellCount += 1
+#endif
+                        }
+                    }
+                }
+                let heightIndexes = animatedStructure ? layoutChanged.subtracting(insertedIndexes) : layoutChanged
+                if !heightIndexes.isEmpty {
+#if DEBUG
+                    guard refreshHeights else { return }
+                    heightInvalidationCount += heightIndexes.count
+#endif
+                    outline.noteHeightOfRows(withIndexesChanged: heightIndexes)
+                }
             }
 
             if structureChanged || scopeChanged {
@@ -425,9 +461,10 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
             guard let item = item as? Item else { return nil }
-            // A task's badges differ by scope. Cache those row presentations,
-            // while keeping only one outline and one inspector in the window.
-            let cacheKey = (scopeKey ?? "") + "|" + item.id
+            // The same task keeps its native controls across smart lists.
+            // Reconfigure the scope's content/actions without replacing the
+            // task's SwiftUI identity. Headings retain their own scope state.
+            let cacheKey = (item.row.taskID == nil ? (scopeKey ?? "") + "|" : "task|") + item.id
             let cell = cellCache[cacheKey] ?? Cell()
             cellCache[cacheKey] = cell
             cellOrder.removeAll { $0 == cacheKey }
@@ -436,7 +473,8 @@ struct NativeTaskOutline: NSViewRepresentable {
                 cellCache.removeValue(forKey: cellOrder.removeFirst())
             }
             cell.identifier = cellID
-            cell.configure(item, selectedTaskID: selectionSource?.selectedTaskID)
+            cell.configure(item, selectedTaskID: selectionSource?.selectedTaskID,
+                           context: item.row.taskID == nil ? scopeKey : nil)
             return cell
         }
     }
