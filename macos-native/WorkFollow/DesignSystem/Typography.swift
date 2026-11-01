@@ -7,6 +7,10 @@ enum WFType {
     static let pageTitle = Font.system(size: 20, weight: .medium)
     static let taskListPageTitle = Font.system(size: 20, weight: .medium)
     static let detailTitle = Font.system(size: 18, weight: .semibold)
+    /// 表单弹框标题。原用 `detailTitle` 18pt，实测在 400pt 宽的弹框里
+    /// 标题占掉过多视觉重量（用户反馈「标题太大」）。16pt 与正文 14pt
+    /// 只差两档，层次仍在，但不再压住内容。
+    static let dialogTitle = Font.system(size: 16, weight: .semibold)
     /// 任务详情标题输入框（滴答富文本导出 `\fs38` = 19pt Medium，2026-10-16）。
     static let taskTitle = Font.system(size: 19, weight: .medium)
     static let navigation = Font.system(size: 14)

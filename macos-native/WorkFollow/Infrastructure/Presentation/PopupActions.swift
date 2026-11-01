@@ -67,7 +67,7 @@ struct PopupActionBar<Actions: View>: View {
 struct DialogTitle: View {
     let text: String
     var body: some View {
-        Text(text).font(WFType.detailTitle)
+        Text(text).font(WFType.dialogTitle)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

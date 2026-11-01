@@ -54,11 +54,14 @@ struct TaskListEditorView: View {
                     cancelDecoration: { AnyView($0.listManagementAnchor(.cancel)) },
                     primaryDecoration: { AnyView($0.listManagementAnchor(.save)) },
                     onCancel: { dismiss() }, onSubmit: save) {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
                 TaskListIconPicker(icon: $draft.icon, color: previewColor)
                 TextField("清单名称", text: $draft.name)
-                    .textFieldStyle(.plain).font(.system(size: 18))
+                    // 清单名输入框是弹框里的主输入，但不能比标题（16pt）还大——
+                    // 原来写死 18pt，「工作」看起来比「编辑清单」更重，层级反了。
+                    // 15pt 比正文 14 略强调，仍明确低于标题。
+                    .textFieldStyle(.plain).font(WFType.bodyLarge)
                     .focused($nameFocused).onSubmit(save)
                     .accessibilityIdentifier("list-editor-name")
             }
@@ -81,11 +84,11 @@ struct TaskListEditorView: View {
             HStack(spacing: 12) {
                 ForEach(TaskListViewMode.allCases) { value in
                     Button { mode = value } label: {
-                        VStack(spacing: 10) {
-                            Image(systemName: symbol(value)).font(.system(size: 25, weight: .light))
+                        VStack(spacing: 6) {
+                            Image(systemName: symbol(value)).font(.system(size: 22, weight: .light))
                             Text(value.title).font(WFType.body)
                         }
-                        .frame(maxWidth: .infinity).frame(height: 84)
+                        .frame(maxWidth: .infinity).frame(height: 64)
                         .foregroundStyle(mode == value ? WFColors.accent : WFColors.secondaryText)
                         .background(mode == value ? WFColors.accent.opacity(0.07) : WFColors.secondarySurface,
                                     in: RoundedRectangle(cornerRadius: 8))
@@ -126,7 +129,7 @@ struct TaskListEditorView: View {
                     WFFormToggleRow("任务提醒", isOn: $draft.remindersEnabled)
                         .help("控制本机通知及同步到提醒事项的到点提醒")
                     WFFormToggleRow("设为默认清单", isOn: $draft.isDefault, showsDivider: false)
-                }.padding(.top, 8)
+                }.padding(.top, 6)
             }.font(WFType.body).listManagementAnchor(.more)
             if let error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
             }

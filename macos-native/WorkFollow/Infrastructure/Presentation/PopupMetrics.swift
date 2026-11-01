@@ -12,7 +12,10 @@ enum PopupMetrics {
     static let actionSpacing: CGFloat = 12
     static let compactButtonHeight: CGFloat = 26
     static let buttonCornerRadius: CGFloat = 6
-    static let formInset: CGFloat = 24
+    /// 表单弹框的内边距（标题栏与内容区共用）。
+    /// 原 24 在 400pt 宽弹框里四周留白 96pt（占 24%），内容显得空。
+    /// 收到 18 后留白降到 14%，正文可用宽度多 12pt。
+    static let formInset: CGFloat = 18
     static let formFooterInset: CGFloat = 16
     static let submenuIntent: TimeInterval = 0.22
     /// 菜单宽度的默认值（含图标列 + 较长词条 + 子菜单箭头）。
