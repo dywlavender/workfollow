@@ -8,9 +8,11 @@ import SwiftUI
 /// - XCTest 宿主下禁用，交互测试的时序不因动画抖动。
 @MainActor
 enum WFMotion {
+    /// 测试覆写：动画路径的单元测试置 true，即可在 XCTest 宿主内覆盖动画分支。
+    static var overrideEnabled: Bool?
     static var enabled: Bool {
-        NSClassFromString("XCTestCase") == nil
-            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        overrideEnabled ?? (NSClassFromString("XCTestCase") == nil
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
     /// 在总闸关闭时给出 `nil` 动画（SwiftUI 约定：nil = 立即赋值，无过渡）。

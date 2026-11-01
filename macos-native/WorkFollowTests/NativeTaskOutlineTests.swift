@@ -105,6 +105,40 @@ final class NativeTaskOutlineTests: XCTestCase {
         XCTAssertEqual(outline.rect(ofRow: 20).height, 82, accuracy: 1)
     }
 
+    /// 完成任务/日期移动：一行离场、一行进场（共享 taskID），应走动画路径
+    /// 而不是整表重载——重载会让余下行瞬间跳位。
+    func testMovePairAnimatesWithoutFullReload() throws {
+        let coordinator = NativeTaskOutline.Coordinator()
+        let scroll = NativeTaskOutline.makeScrollView(coordinator: coordinator)
+        let window = InspectorPanelTestSupport.ownerWindow(for: scroll, width: 400, height: 300)
+        defer { window.close() }
+        let taskID = UUID()
+        func row(id: String, height: CGFloat) -> NativeTaskOutline.Row {
+            let isTask = id.hasPrefix("t1:")
+            return .init(id: id, taskID: isTask ? taskID : nil, state: id, layout: height,
+                         height: height) { Text(id).frame(height: height) }
+        }
+        coordinator.update([row(id: "t1:active", height: 50),
+                            row(id: "f1", height: 50),
+                            row(id: "f2", height: 50)], in: scroll)
+        settle(scroll)
+        WFMotion.overrideEnabled = true
+        defer { WFMotion.overrideEnabled = nil }
+        // 基线取装载之后：首次装载本来就合法重载一次。
+        let before = NativeTaskOutline.Diagnostics.reloadTime
+        coordinator.update([row(id: "f1", height: 50),
+                            row(id: "f2", height: 50),
+                            row(id: "t1:completed", height: 50)], in: scroll)
+        settle(scroll)
+        XCTAssertEqual(NativeTaskOutline.Diagnostics.reloadTime, before, accuracy: 0.0001,
+                       "成对变动应走行动画，不应整表重载")
+        let outline = try XCTUnwrap(coordinator.outline)
+        XCTAssertEqual(outline.numberOfRows, 3)
+        XCTAssertEqual(coordinator.items[0].id, "f1")
+        XCTAssertEqual(coordinator.items[2].id, "t1:completed")
+        XCTAssertEqual(outline.rect(ofRow: 1).height, 50, accuracy: 1)
+    }
+
     private func settle(_ view: NSView) {
         view.layoutSubtreeIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
