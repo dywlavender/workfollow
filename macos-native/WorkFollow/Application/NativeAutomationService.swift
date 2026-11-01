@@ -85,6 +85,11 @@ final class NativeAutomationService {
             try checkVersion(args, date: current.updatedAt)
             _ = try accepted(request.operation == "task.complete" ? tasks.complete(current.id) : tasks.restore(current.id))
             return try taskValue(try requiredTask(current.id), body: true)
+        case "task.trash":
+            let current = try task(args)
+            let value = try taskValue(current, body: true)
+            _ = try accepted(tasks.delete(current.id))
+            return value
         case "note.list":
             let items = notes.notes.filter {
                 $0.deletedAt == nil && (args["folder"] == nil || $0.folder == args["folder"]) &&
@@ -127,7 +132,7 @@ final class NativeAutomationService {
         }
     }
     static func writes(_ operation: String) -> Bool {
-        ["task.add", "task.update", "task.complete", "task.reopen", "note.create", "note.update", "note.append", "operation.undo"].contains(operation)
+        ["task.add", "task.update", "task.complete", "task.reopen", "task.trash", "note.create", "note.update", "note.append", "operation.undo"].contains(operation)
             || organizationWrites.contains(operation)
     }
     private func id(_ args: [String: String]) throws -> UUID {

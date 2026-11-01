@@ -16,6 +16,7 @@ struct AutomationInvocation {
         "task.lists": [], "task.get": ["id"],
         "task.update": ["id", "version", "title", "list", "section", "clear-section", "priority", "date", "due", "clear-date", "clear-due", "content", "reminder", "reminder-offsets", "clear-reminder", "repeat", "repeat-interval", "repeat-weekdays", "repeat-until", "repeat-count", "clear-repeat"],
         "task.complete": ["id", "version"], "task.reopen": ["id", "version"],
+        "task.trash": ["id"],
         "note.create": ["title", "folder", "content"],
         "note.list": ["query", "folder", "limit", "offset"], "note.folders": [], "note.get": ["id"],
         "note.update": ["id", "version", "title", "folder", "content"],
@@ -43,6 +44,7 @@ struct AutomationInvocation {
       task update --id UUID --version VERSION [--title TEXT] [--list NAME] [--priority VALUE]
                   [--section ID|--clear-section] [--date DATE|--clear-date] [--due DATE|--clear-due] [--content TEXT]
       task complete|reopen --id UUID --version VERSION
+      task trash --id UUID（移入垃圾桶，删除语义与 App 内一致，可撤销）
       meeting list [--query TEXT] [--limit N] [--offset N]
       meeting get --id UUID [--query TEXT]
       knowledge search --query TEXT
@@ -129,7 +131,7 @@ struct AutomationInvocation {
         for key in required where values[key]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
             throw AutomationFailure.argument("请提供非空 --\(key)。")
         }
-        if ["task.get", "task.update", "task.complete", "task.reopen", "note.get", "note.update", "note.append", "meeting.get", "operation.undo"].contains(operation) {
+        if ["task.get", "task.update", "task.complete", "task.reopen", "task.trash", "note.get", "note.update", "note.append", "meeting.get", "operation.undo"].contains(operation) {
             guard let id = values["id"], UUID(uuidString: id) != nil else { throw AutomationFailure.argument("请提供有效的 --id UUID。") }
         }
         if ["task.update", "task.complete", "task.reopen", "note.update", "note.append"].contains(operation), values["version"] == nil {
