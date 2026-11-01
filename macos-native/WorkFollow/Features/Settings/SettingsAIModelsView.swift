@@ -23,22 +23,28 @@ struct SettingsAIModelsView: View {
 
     private var speechBusy: Bool { store.recordingID != nil || store.transcribing || store.requestingPermission }
 
+    private var engineBinding: Binding<AITextEngine> {
+        Binding(get: { textEngine }, set: { engine in
+            guard engine != textEngine else { return }
+            do {
+                if engine == .langchain { try models.useLangchain() }
+                else { try models.usePi() }
+                textEngine = engine
+                configurationError = nil
+            } catch {
+                configurationError = error.localizedDescription
+            }
+        })
+    }
+
     var body: some View {
         SettingsPage {
-            WFFormSection {
-                WFFormRow("文字处理", showsDivider: true) {
-                    BusinessMenu(width: 220, title: "调用方式") {
-                        BusinessMenuOption("直接调用", selected: textEngine == .langchain) {
-                            do { try models.useLangchain(); textEngine = .langchain; configurationError = nil }
-                            catch { configurationError = error.localizedDescription }
-                        }
-                        BusinessMenuOption("Pi", selected: textEngine == .pi) {
-                            do { try models.usePi(); textEngine = .pi; configurationError = nil }
-                            catch { configurationError = error.localizedDescription }
-                        }
-                    } label: {
-                        HStack { Text(textEngine == .langchain ? "直接调用" : "Pi"); Image(systemName: "chevron.down").font(.system(size: 10)) }
-                    }.accessibilityLabel("文字处理调用方式")
+            SettingsGroup("文字处理") {
+                WFFormRow("调用方式") {
+                    WFSegmentedControl(selection: engineBinding,
+                                       options: [.init(AITextEngine.langchain, "直接调用"),
+                                                 .init(AITextEngine.pi, "Pi")])
+                        .frame(width: 180)
                 }
                 if textEngine == .langchain {
                     SettingsDirectAIModelView(models: models)
@@ -46,41 +52,66 @@ struct SettingsAIModelsView: View {
                     WFFormNote("独立对话和选区浮窗使用 Pi；其他文字处理使用上方的直接调用配置。")
                 }
                 else { modelRow(speech: false) }
-                if let configurationError { WFFormNote(configurationError) }
+                if let configurationError {
+                    Text(configurationError)
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.danger)
+                        .padding(.horizontal, WFSpace.md)
+                        .padding(.bottom, 10)
+                }
             }
-            WFFormSection {
+            SettingsGroup("语音转写") {
                 modelRow(speech: true)
                 if speechBusy { WFFormNote("正在录音或转写，结束后可以更换语音模型。") }
-                HStack(spacing: 8) {
-                    if catalog.loading {
-                        ProgressView().controlSize(.small)
-                        Text("正在读取模型…")
+                WFFormRow("模型列表", showsDivider: false) {
+                    HStack(spacing: 10) {
+                        if catalog.loading {
+                            ProgressView().controlSize(.small)
+                            Text("正在读取模型…").font(WFType.supporting)
+                                .foregroundStyle(WFColors.secondaryText)
+                        }
+                        Button("刷新 Pi 模型") { refresh += 1 }.disabled(catalog.loading)
                     }
-                    Spacer()
-                    Button("刷新 Pi 模型") { refresh += 1 }.disabled(catalog.loading)
-                }.font(WFType.supporting).padding(.horizontal, WFSpace.md)
+                }
                 if let error = catalog.error {
-                    Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger).padding(.horizontal, WFSpace.md)
+                    Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger)
+                        .padding(.horizontal, WFSpace.md).padding(.bottom, 10)
                 } else if !catalog.loading && catalog.models.isEmpty {
                     WFFormNote("请先按欢迎清单的“AI 配置说明”配置本机 Pi，再刷新模型列表。")
                 }
             }
-            DisclosureGroup("Pi 高级选项", isExpanded: $advanced) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("本机 Pi 程序")
-                    HStack {
-                        TextField("留空自动查找本机 Pi", text: $executableDraft).textFieldStyle(.roundedBorder)
-                            .onSubmit { applyExecutable() }
-                        Button("应用") { applyExecutable() }
-                            .disabled(executableDraft == store.configuration.executable)
+            SettingsGroup {
+                SettingsDisclosure("Pi 高级选项", isExpanded: $advanced) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("本机 Pi 程序").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                        HStack(spacing: 8) {
+                            TextField("留空自动查找本机 Pi", text: $executableDraft)
+                                .textFieldStyle(.plain)
+                                .padding(.horizontal, 8)
+                                .frame(height: 28)
+                                .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
+                                .onSubmit { applyExecutable() }
+                            Button("应用") { applyExecutable() }
+                                .disabled(executableDraft == store.configuration.executable)
+                        }
+                        Text("音频扩展").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                        TextField("留空使用内置转写通道", text: $store.configuration.audioExtension)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 8)
+                            .frame(height: 28)
+                            .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
+                        Text("Pi 和 Node.js 使用本机安装；模型列表读取本机 Pi 配置。安装命令与模型文件示例见欢迎清单中的「AI 配置说明」。")
+                            .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("音频扩展")
-                    TextField("留空使用内置转写通道", text: $store.configuration.audioExtension).textFieldStyle(.roundedBorder)
-                    Text("Pi 和 Node.js 使用本机安装；模型列表读取本机 Pi 配置。安装命令与模型文件示例见欢迎清单中的「AI 配置说明」。")
-                        .foregroundStyle(WFColors.secondaryText)
-                }.padding(.top, 10).disabled(speechBusy)
-            }.font(WFType.body).padding(.horizontal, WFSpace.md)
-            AIConfigurationCheckView()
+                    .disabled(speechBusy)
+                }
+            }
+            SettingsGroup("本机 AI 配置") {
+                AIConfigurationCheckView()
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+            }
         }
         .coordinateSpace(name: "ai-model-settings")
         .accessibilityElement(children: .contain)

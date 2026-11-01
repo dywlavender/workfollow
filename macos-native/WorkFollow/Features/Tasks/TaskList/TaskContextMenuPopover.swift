@@ -204,7 +204,6 @@ struct TaskContextMenuPopover: View {
                     perform { workspace.skip(task.id) }
                 } label: {
                     menuRow("跳过此周期", symbol: "forward.end")
-                        .padding(.horizontal, 16).frame(height: 34)
                 }
                 .buttonStyle(.plain)
                 .popupMenuRowBackground()

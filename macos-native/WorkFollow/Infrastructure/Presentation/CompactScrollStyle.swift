@@ -20,11 +20,23 @@ enum CompactScrollStyle {
                 frame: NSRect(x: 0, y: 0, width: 100, height: 12), isHorizontal: true)
         }
         if scroll.horizontalScroller?.controlSize != .small { scroll.horizontalScroller?.controlSize = .small }
+        // 探针会反复调用到这里，顺便补挂滚动监听：SwiftUI 常常在换完 scroller
+        // 之后才把 documentView 配好，第一次挂载时还找不到内容视口。
+        (scroll.verticalScroller as? CompactOverlayScroller)?.refreshScrollObservation()
+        (scroll.horizontalScroller as? CompactOverlayScroller)?.refreshScrollObservation()
     }
 }
 
 final class CompactOverlayScroller: NSScroller {
+    /// 停止滚动后停留一会儿再淡出，避免逐行滚动时闪烁。
+    static let fadeDelay: TimeInterval = 0.9
+    static let fadeOutDuration: TimeInterval = 0.35
+    static let fadeInDuration: TimeInterval = 0.12
+
     private let isHorizontal: Bool
+    private weak var observedContentView: NSView?
+    private var fadeWorkItem: DispatchWorkItem?
+    private var hoverArea: NSTrackingArea?
 
     init(frame: NSRect, isHorizontal: Bool = false) {
         self.isHorizontal = isHorizontal
@@ -38,16 +50,127 @@ final class CompactOverlayScroller: NSScroller {
 
     override class var isCompatibleWithOverlayScrollers: Bool { true }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else {
+            stopObservingScrollActivity()
+            return
+        }
+        refreshScrollObservation()
+        // 自绘滚条不参与 AppKit 的 overlay 淡出，挂上来先按“没在滚动”处理。
+        if alphaValue != 0 { alphaValue = 0 }
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        refreshScrollObservation()
+    }
+
+    override func layout() {
+        super.layout()
+        refreshScrollObservation()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: bounds,
+                                 options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                 owner: self, userInfo: nil)
+        hoverArea = area
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        fadeWorkItem?.cancel()
+        guard let scroll = owningScrollView,
+              Self.hasOverflow(scroll, horizontal: isHorizontal) else { return }
+        showKnob()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        scheduleFadeOut()
+    }
+
+    /// 监听内容视口的位移：滚轮、触控板惯性、键盘翻页和代码滚动都会走到这里。
+    /// SwiftUI 会在挂载之后才配好滚动视图，所以允许被反复调用。
+    func refreshScrollObservation() {
+        guard window != nil, let scroll = owningScrollView else { return }
+        let content = scroll.contentView
+        guard content !== observedContentView else { return }
+        stopObservingScrollActivity()
+        observedContentView = content
+        content.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(contentBoundsDidChange),
+                                              name: NSView.boundsDidChangeNotification,
+                                              object: content)
+    }
+
+    private func stopObservingScrollActivity() {
+        fadeWorkItem?.cancel()
+        fadeWorkItem = nil
+        if let observedContentView {
+            NotificationCenter.default.removeObserver(self,
+                                                    name: NSView.boundsDidChangeNotification,
+                                                    object: observedContentView)
+        }
+        observedContentView = nil
+    }
+
+    @objc private func contentBoundsDidChange() {
+        guard let scroll = owningScrollView,
+              Self.hasOverflow(scroll, horizontal: isHorizontal) else { return }
+        fadeWorkItem?.cancel()
+        showKnob()
+        scheduleFadeOut()
+    }
+
+    private func showKnob() {
+        if alphaValue == 1 { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.fadeInDuration
+            animator().alphaValue = 1
+        }
+    }
+
+    private func scheduleFadeOut() {
+        fadeWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.hideKnob() }
+        fadeWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.fadeDelay, execute: work)
+    }
+
+    private func hideKnob() {
+        if alphaValue == 0 { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.fadeOutDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animator().alphaValue = 0
+        }
+    }
+
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
 
     override func drawKnob() {
-        guard let scroll = enclosingScrollView,
+        guard let scroll = owningScrollView,
               Self.hasOverflow(scroll, horizontal: isHorizontal) else { return }
         let knob = rect(for: .knob)
         guard !knob.isEmpty else { return }
         let thumb = Self.thumbRect(in: knob, isHorizontal: isHorizontal)
         NSColor.labelColor.withAlphaComponent(0.30).setFill()
         NSBezierPath(roundedRect: thumb, xRadius: 1.5, yRadius: 1.5).fill()
+    }
+
+    /// SwiftUI 的 HostingScrollView 不会给替换进来的 scroller 设
+    /// `enclosingScrollView`，要沿父视图链自己找。
+    var owningScrollView: NSScrollView? {
+        if let enclosingScrollView { return enclosingScrollView }
+        var ancestor = superview
+        while let view = ancestor {
+            if let scroll = view as? NSScrollView { return scroll }
+            ancestor = view.superview
+        }
+        return nil
     }
 
     /// 内容装得下时不画滚条：否则短列表/短正文旁边会常驻一条满长的 3pt 细线。

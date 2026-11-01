@@ -8,7 +8,6 @@ struct FocusTaskScopePopover: View {
     let onDismiss: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     private var theme: FocusTheme { FocusTheme(colorScheme) }
 
     private let systemScopes: [FocusTaskPickerScope] = [.today, .tomorrow, .nextSevenDays, .inbox]
@@ -39,11 +38,6 @@ struct FocusTaskScopePopover: View {
         .scrollIndicators(.automatic)
         .padding(8)
         .frame(width: FocusTaskPickerMetrics.scopeWidth, height: panelHeight)
-        .background {
-            WFGlassSurface(shape: RoundedRectangle(cornerRadius: 12),
-                           fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.hairline, lineWidth: 1))
         .onKeyPress(.escape) {
             onDismiss()
             return .handled

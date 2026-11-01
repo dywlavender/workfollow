@@ -51,38 +51,58 @@ struct SettingsDirectAIModelView: View {
             }
             WFFormRow("模型名称") {
                 TextField("填写服务商的模型 ID", text: field(\.model))
-                    .textFieldStyle(.plain).frame(width: 300).accessibilityIdentifier("ai-model-name")
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .frame(width: 300, height: 28)
+                    .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
+                    .accessibilityIdentifier("ai-model-name")
             }
             WFFormRow("API URL") {
                 TextField(draft.protocolKind.defaultURL, text: urlBinding)
-                    .textFieldStyle(.plain).frame(width: 300).accessibilityIdentifier("ai-model-url")
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .frame(width: 300, height: 28)
+                    .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
+                    .accessibilityIdentifier("ai-model-url")
             }
             WFFormRow("API Key", showsDivider: false) {
                 HStack(spacing: 8) {
                     Group {
                         if revealKey { TextField(draft.requiresKey ? "API Key" : "本地服务可留空", text: keyBinding) }
                         else { SecureField(draft.requiresKey ? "API Key" : "本地服务可留空", text: keyBinding) }
-                    }.textFieldStyle(.plain).accessibilityIdentifier("ai-model-key")
+                    }
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .frame(height: 28)
+                    .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
+                    .accessibilityIdentifier("ai-model-key")
                     Button { revealKey.toggle() } label: { Image(systemName: revealKey ? "eye.slash" : "eye") }
                         .buttonStyle(.plain).hoverTip(revealKey ? "隐藏 API Key" : "显示 API Key")
                         .accessibilityLabel(revealKey ? "隐藏 API Key" : "显示 API Key")
                 }.frame(width: 300)
             }
-            DisclosureGroup("高级选项", isExpanded: $advanced) {
+            SettingsDisclosure("高级选项", isExpanded: $advanced, insetsContent: false) {
                 VStack(spacing: 0) {
                     WFFormRow("上下文窗口") {
                         TextField("32768", value: field(\.contextWindow), format: .number.grouping(.never))
-                            .textFieldStyle(.plain).frame(width: 110).multilineTextAlignment(.trailing)
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                            .padding(.horizontal, 8)
+                            .frame(width: 110, height: 26)
+                            .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
                         Text("tokens").foregroundStyle(WFColors.secondaryText)
                     }
                     WFFormRow("最大输出", showsDivider: false) {
                         TextField("2048", value: field(\.maxOutputTokens), format: .number.grouping(.never))
-                            .textFieldStyle(.plain).frame(width: 110).multilineTextAlignment(.trailing)
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                            .padding(.horizontal, 8)
+                            .frame(width: 110, height: 26)
+                            .background(WFColors.fieldFill, in: RoundedRectangle(cornerRadius: 7))
                         Text("tokens").foregroundStyle(WFColors.secondaryText)
                     }
-
                 }
-            }.font(WFType.supporting).padding(.horizontal, WFSpace.md).padding(.vertical, 8)
+            }
         }
         .disabled(testing)
         .accessibilityIdentifier("ai-direct-model-form")

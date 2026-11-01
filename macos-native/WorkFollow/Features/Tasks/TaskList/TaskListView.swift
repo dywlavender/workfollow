@@ -47,7 +47,7 @@ private struct TaskTimelineCreation: Identifiable {
 }
 
 struct TaskListView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment
@@ -56,27 +56,43 @@ struct TaskListView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @ObservedObject private var templateStore = TemplateStore.shared
     @State private var draft = ""
-    @State private var restoredCaptureDraft = false
+    @State private var restoredCaptureKey: String?
     @State private var scheduleSourceText = ""
-    private var captureStorageKey: String { "listQuickAddDraft.v1." + navigation.destination.rawValue }
+    private var captureStorageKey: String { "listQuickAddDraft.v2." + preferenceKey }
     private var capturePersistenceValue: GlobalQuickAddDraft.Snapshot {
         .init(text: draft, description: descriptionDraft, dismissedTokens: dismissedQuickAddTokens,
             schedule: quickAddScheduleOverride, priority: quickAddPriorityOverride,
             list: quickAddListOverride, tags: quickAddTagsOverride, attachments: quickAddAttachments)
     }
     private func saveCaptureDraft() {
-        guard restoredCaptureDraft else { return }
+        guard restoredCaptureKey == captureStorageKey else { return }
         GlobalQuickAddDraft(storageKey: captureStorageKey).replace(with: capturePersistenceValue)
     }
     private func restoreCaptureDraft() {
-        guard !restoredCaptureDraft else { return }
+        guard restoredCaptureKey != captureStorageKey else { return }
+        if let oldKey = restoredCaptureKey {
+            GlobalQuickAddDraft(storageKey: oldKey).replace(with: capturePersistenceValue)
+            completedPagesByScope[oldKey] = completedPageCounts
+        }
+        restoredCaptureKey = nil
+        // Adopt the old destination-wide draft once, into its first scope.
+        let legacy = GlobalQuickAddDraft(storageKey: "listQuickAddDraft.v1." + navigation.destination.rawValue)
+        if UserDefaults.standard.data(forKey: captureStorageKey) == nil, legacy.hasContent {
+            GlobalQuickAddDraft(storageKey: captureStorageKey).replace(with: legacy.snapshot)
+            legacy.clear()
+        }
         let saved = GlobalQuickAddDraft(storageKey: captureStorageKey)
         draft = saved.text; descriptionDraft = saved.description
         scheduleSourceText = saved.text
         quickAddScheduleOverride = saved.schedule; quickAddPriorityOverride = saved.priority
         quickAddListOverride = saved.list; quickAddTagsOverride = saved.tags
         dismissedQuickAddTokens = saved.dismissedTokens; quickAddAttachments = saved.attachments
-        restoredCaptureDraft = true
+        completedPageCounts = completedPagesByScope[captureStorageKey] ?? [:]
+        seenCompletedGroupIDs = []
+        candidate = QuickAddCandidateState()
+        inputSelection = nil; requestedInputSelection = nil
+        quickAddFocused = false
+        restoredCaptureKey = captureStorageKey
     }
     @State private var showNavigation = false
     @State private var showTemplatePicker = false
@@ -135,6 +151,7 @@ struct TaskListView: View {
     /// 已完成组的"已展开条数"（按 group.id）。缺省 = 第一页。
     /// 对齐滴答 `countToShowOfCompleted` + `didClickLoadMore`。
     @State private var completedPageCounts: [String: Int] = [:]
+    @State private var completedPagesByScope: [String: [String: Int]] = [:]
     /// 正在"加载"的已完成组（滴答 `TTListLoadMoreCell.startLoading` 的转圈态）。
     @State private var loadingCompletedGroupIDs: Set<String> = []
     /// 「倒数纪念日」小节的折叠状态。它与任务组的折叠是两套：任务组按 `id` 记，
@@ -246,7 +263,11 @@ struct TaskListView: View {
             restoreCaptureDraft()
             restoreGroupExpansion()
         }
-        .onChange(of: preferenceKey) { _, _ in restoreGroupExpansion() }
+        .onChange(of: preferenceKey) { _, _ in
+            restoreCaptureDraft()
+            restoreGroupExpansion()
+            dropFeedback.clear()
+        }
         .onChange(of: capturePersistenceValue) { _, _ in saveCaptureDraft() }
         .onChange(of: environment.quickAddRequest) { _, _ in quickAddFocused = true }
         .onChange(of: draft) { _, _ in
@@ -324,7 +345,7 @@ struct TaskListView: View {
         .onChange(of: showTemplatePicker) { _, presented in
             if presented { quickAddFocused = false; descriptionFocused = false }
         }
-        .onChange(of: workspace.selectedTaskID) { _, _ in revealSelectedClosedTask() }
+        .onReceive(workspace.$selectedTaskID.receive(on: RunLoop.main)) { _ in revealSelectedClosedTask() }
         .onChange(of: navigation.destination) { _, _ in dropFeedback.clear() }
         .onDisappear { dropFeedback.clear() }
         .onAppear {
@@ -1241,8 +1262,10 @@ struct TaskListView: View {
     }
 
     private func revealSelectedClosedTask() {
-        guard let scope, let task = workspace.selectedTask else { return }
-        groupExpansion.reveal(task, in: scope, calendar: workspace.calendar)
+        guard let scope, let task = workspace.selectedTask, task.isClosed else { return }
+        var expanded = groupExpansion
+        expanded.reveal(task, in: scope, calendar: workspace.calendar)
+        if expanded != groupExpansion { groupExpansion = expanded }
     }
 
     /// "已完成"分组默认折叠在列表底部（TickTick 行为）；只在每个分组第一次出现时折叠一次，
@@ -1375,7 +1398,7 @@ struct TaskListView: View {
                         && !node.task.tags.isEmpty
                     let layout = TaskOutlineRowLayout(hasPreview: preview != nil, hasTags: hasTags,
                         completed: node.task.status == .completed, depth: node.depth)
-                    rows.append(.init(id: rowIdentity(group: group, task: node.task), state: state,
+                    rows.append(.init(id: rowIdentity(group: group, task: node.task), taskID: node.task.id, state: state,
                                       layout: layout,
                                       height: TaskListMetrics.taskRowHeight(hasPreview: preview != nil,
                                                                             hasTags: hasTags)) {
@@ -1434,7 +1457,7 @@ struct TaskListView: View {
                         onSelect: { _ in navigation.destination = .countdown },
                         emptyActionTitle: emptyStateAction?.title,
                         emptyAction: emptyStateAction?.perform,
-                        rows: taskOutlineRows, scopeKey: preferenceKey, onKey: handleOutlineKey)
+                        rows: taskOutlineRows, scopeKey: preferenceKey, selectionSource: workspace, onKey: handleOutlineKey)
         .focusable(!editingRowTitle)
         .focused($listFocused)
         .focusEffectDisabled()
@@ -1761,6 +1784,7 @@ struct TaskRowView: View {
             SecondaryClickCapture { rowView, point in
                 guard !readOnly else { return }
                 guard let current = workspace.task(for: task.id) else { return }
+                selectForContextMenu()
                 TaskContextMenuPresenter.show(in: rowView, at: point,
                                               environment: environment,
                                               workspace: workspace, task: current,
@@ -1777,10 +1801,18 @@ struct TaskRowView: View {
         }
     }
 
+    /// 右键先选中目标再开菜单（Finder / 滴答口径）：目标已在多选中或是当前
+    /// 选中项就保留整组多选，否则清空多选并单选目标，让右侧详情与菜单一致。
+    private func selectForContextMenu() {
+        guard workspace.selectedTaskID != task.id,
+              !workspace.bulkSelection.contains(task.id) else { return }
+        workspace.clearBulkSelection()
+        workspace.select(task.id)
+    }
+
     /// Each recognizer owns the modifiers of its own click. Do not infer them
     /// from NSApp.currentEvent after SwiftUI has completed the gesture.
-    private var selectionGesture: some Gesture {
-        TapGesture().modifiers(.command).onEnded {
+    private var selectionGesture: some Gesture {        TapGesture().modifiers(.command).onEnded {
             if let onBulkToggle { onBulkToggle(task.id) } else { onSelect() }
         }
         .exclusively(before: TapGesture().modifiers(.shift).onEnded {
@@ -2314,6 +2346,7 @@ private struct TaskOutlineHost: View {
     var emptyAction: (() -> Void)? = nil
     let rows: [NativeTaskOutline.Row]
     let scopeKey: String
+    var selectionSource: TaskWorkspaceModel? = nil
     let onKey: (TaskOutlineKey) -> Bool
 
     var body: some View {
@@ -2342,7 +2375,7 @@ private struct TaskOutlineHost: View {
         // 默认 `.center` 对齐，于是插画+文案天然落在列表区正中。
         // 今天页多一个前提：倒数纪念日小节非空时优先显示小节，不显示空态
         // （原来这两支是 if/else if，合成 `!showsCountdown` 后语义不变）。
-        return NativeTaskOutline(rows: prefix + rows, scopeKey: scopeKey, onKey: onKey)
+        return NativeTaskOutline(rows: prefix + rows, scopeKey: scopeKey, selectionSource: selectionSource, onKey: onKey)
             .overlay {
                 if tasksAreEmpty && !showsCountdown {
                     TaskEmptyStateView(style: .list,

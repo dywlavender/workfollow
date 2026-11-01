@@ -92,7 +92,7 @@ struct FocusWorkspaceView: View {
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .workfollowPageSurface(0.86)
+        .workfollowPageSurface()
         .background {
             if store.phase != .idle {
                 Group {
@@ -326,8 +326,8 @@ struct FocusTheme {
             text2 = Color.white.opacity(0.52)
             text3 = Color.white.opacity(0.30)
             hairline = Color.white.opacity(0.075)
-            accent = Color(red: 0.545, green: 0.486, blue: 0.969)
-            accentSoft = Color(red: 0.757, green: 0.659, blue: 1.0)
+            accent = WFColors.accent
+            accentSoft = WFColors.accent.opacity(0.6)
             track = Color.white.opacity(0.09)
             chipBackground = Color.white.opacity(0.04)
             cardBackground = Color.white.opacity(0.06)

@@ -11,6 +11,8 @@ struct ChecklistRevealRequest: Equatable {
 /// every mutation through TaskActions and every list shape through projections.
 @MainActor
 final class TaskWorkspaceModel: ObservableObject {
+    lazy var dataObservation = TaskDataObservation(self)
+    lazy var layoutObservation = TaskLayoutObservation(self)
     static let inspectorLists = [
         TaskList.inbox,
         TaskList(name: "工作"),
@@ -1051,13 +1053,19 @@ final class TaskWorkspaceModel: ObservableObject {
                 if let timing { result = actions.saveSchedule(timing, to: .task(id)) }
                 if sectionID != nil || clearsSection { result = actions.setTaskSection(id, sectionID: sectionID) }
                 guard result.taskID != nil else { return }
-                if let title { result = actions.setTitle(id, title) }
-                if let document { result = actions.setDocument(id, document) }
+                if let title { applyTextStep(actions.setTitle(id, title), to: &result) }
+                if let document { applyTextStep(actions.setDocument(id, document), to: &result) }
             }
             return result
         }
         didMutate(result)
         return result
+    }
+
+    /// 组合编辑里，同值文本 no-op 不能盖掉此前属性改动上报的 .success；
+    /// 失败要照旧向上传播。
+    private func applyTextStep(_ step: TaskActionResult, to result: inout TaskActionResult) {
+        if step.didChangeStore || step.taskID == nil { result = step }
     }
 
     func createAutomationList(_ name: String, group: String?) -> Bool {
@@ -1348,7 +1356,11 @@ final class TaskWorkspaceModel: ObservableObject {
         var result: TaskActionResult = .failure(.missingTask)
         store.transaction {
             result = actions.materializeOccurrence(occurrence)
-            if let realID = result.taskID { result = mutation(realID) }
+            if let realID = result.taskID {
+                result = mutation(realID)
+                // 物化本身已改动 store：即便随后的文本编辑是同值 no-op，也要按已变更上报。
+                if case let .unchanged(id) = result { result = .success(id) }
+            }
         }
         return result
     }
@@ -2038,7 +2050,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     private func didMutate(_ result: TaskActionResult, scope: TaskListScope? = nil) {
-        guard result.taskID != nil else { return }
+        guard result.didChangeStore else { return }
         revision += 1
         if let scope, let selectedTaskID,
            !TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar)

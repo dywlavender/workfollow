@@ -89,6 +89,8 @@ final class EditorScrollRoutingTests: XCTestCase {
         XCTAssertEqual(thumb.midX, 7.5, accuracy: 0.01, "细条在命中轨道内居中")
         XCTAssertNotNil(scroller.target, "Keep the scroll view's native knob target")
         XCTAssertNotNil(scroller.action)
+        XCTAssertTrue(scroller.owningScrollView === scroll, "SwiftUI 宿主没有 enclosingScrollView，仍需找到所属滚动视图")
+        XCTAssertTrue(CompactOverlayScroller.hasOverflow(scroll, horizontal: false))
     }
 
     /// 选项面板的横向滚动同样要细：之前只处理竖向，横条会退回系统粗滚条。
@@ -110,6 +112,8 @@ final class EditorScrollRoutingTests: XCTestCase {
         XCTAssertEqual(thumb.midY, 7.5, accuracy: 0.01, "横条在命中轨道内居中")
         XCTAssertNotNil(scroller.target)
         XCTAssertNotNil(scroller.action)
+        XCTAssertTrue(scroller.owningScrollView === scroll)
+        XCTAssertTrue(CompactOverlayScroller.hasOverflow(scroll, horizontal: true))
     }
 
     /// 内容装得下时不画滚条，避免短列表/短正文旁常驻一条满长细线。
@@ -126,6 +130,36 @@ final class EditorScrollRoutingTests: XCTestCase {
         document.frame.size = NSSize(width: 600, height: 120)
         XCTAssertFalse(CompactOverlayScroller.hasOverflow(scroll, horizontal: false))
         XCTAssertTrue(CompactOverlayScroller.hasOverflow(scroll, horizontal: true))
+    }
+
+    func testSlimOverlayKnobDrawsOnlyWhenContentOverflows() throws {
+        func knobPixels(documentHeight: CGFloat) throws -> Int {
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 120))
+            scroll.scrollerStyle = .overlay
+            let scroller = CompactOverlayScroller(frame: NSRect(x: 0, y: 0, width: 12, height: 120))
+            scroller.knobProportion = 0.25
+            scroll.addSubview(scroller)
+            scroll.documentView = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: documentHeight))
+
+            let rep = try XCTUnwrap(scroller.bitmapImageRepForCachingDisplay(in: scroller.bounds))
+            let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            scroller.drawKnob()
+            NSGraphicsContext.restoreGraphicsState()
+
+            var count = 0
+            for x in 0..<rep.pixelsWide {
+                for y in 0..<rep.pixelsHigh
+                where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.02 {
+                    count += 1
+                }
+            }
+            return count
+        }
+
+        XCTAssertGreaterThan(try knobPixels(documentHeight: 600), 0)
+        XCTAssertEqual(try knobPixels(documentHeight: 60), 0)
     }
 
     /// 修饰器直接加在 ScrollView 外层（不再放进内容里）也要生效：

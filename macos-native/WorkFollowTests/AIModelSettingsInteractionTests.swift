@@ -29,7 +29,7 @@ final class AIModelSettingsInteractionTests: XCTestCase {
                 AnyView(content.coordinateSpace(name: "business-menu")
                     .onPreferenceChange(BusinessMenuRowFrames.self) { if !$0.isEmpty { probe.rows = $0 } })
             })
-        let window = InspectorPanelTestSupport.ownerWindow(for: NSHostingView(rootView: root), width: 560, height: 520)
+        let window = InspectorPanelTestSupport.ownerWindow(for: NSHostingView(rootView: root), width: 760, height: 580)
         window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         InspectorPanelTestSupport.settle(window)
         return window
@@ -51,10 +51,10 @@ final class AIModelSettingsInteractionTests: XCTestCase {
         ] }
         let window = host(environment: environment, catalog: catalog, probe: probe)
         defer { window.close() }
-        try InspectorPanelTestSupport.waitUntil(timeout: 3) { catalog.models.count == 3 && !catalog.loading && probe.triggers["文字处理模型"] != nil }
-        let frame = try XCTUnwrap(probe.triggers["文字处理模型"])
+        try InspectorPanelTestSupport.waitUntil(timeout: 3) { catalog.models.count == 3 && !catalog.loading && probe.triggers["Pi 文字模型"] != nil }
+        let frame = try XCTUnwrap(probe.triggers["Pi 文字模型"])
         try InspectorPanelTestSupport.click(frame, in: try XCTUnwrap(window.contentView), window: window)
-        let menu = try InspectorPanelTestSupport.panel(title: "文字处理模型", below: window)
+        let menu = try InspectorPanelTestSupport.panel(title: "Pi 文字模型", below: window)
         XCTAssertEqual(probe.rows.count, 3, "默认选项与两个文字模型，不混入纯语音模型")
         try InspectorPanelTestSupport.click(try XCTUnwrap(probe.rows.last?.rect), in: try XCTUnwrap(menu.contentView), window: menu)
         XCTAssertEqual(environment.meetingStore.configuration.resolvedMinutesModel, "B/text-beta")

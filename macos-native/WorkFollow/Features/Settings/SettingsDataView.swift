@@ -269,8 +269,8 @@ struct SettingsDataView: View {
 
     var body: some View {
         SettingsPage {
-            WFFormSection("导入与导出") {
-                HStack {
+            SettingsGroup("导入与导出", footnote: "导入和导出只处理本机数据；导入前会自动备份，完成后需重启应用。") {
+                HStack(spacing: 10) {
                     Button {
                         pickImportFile()
                     } label: {
@@ -287,48 +287,61 @@ struct SettingsDataView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(importBusy)
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, WFSpace.md)
+                .padding(.top, 12)
+                .padding(.bottom, pendingImport == nil ? 10 : 0)
                 if let pendingImport {
                     importPreview(pendingImport)
+                        .padding(.horizontal, WFSpace.md)
                 }
                 feedbackLine(.export)
                 feedbackLine(.importData)
             }
-            WFFormSection("备份") {
-                HStack {
+            SettingsGroup("备份", footnote: "每天首次修改时自动备份，保留最近 7 天。") {
+                HStack(spacing: 10) {
                     Button("立即备份") { runBackup() }
                         .buttonStyle(.bordered)
                         .disabled(importBusy)
                     Button("恢复备份…") { openRestoreSheet() }
                         .buttonStyle(.bordered)
                         .disabled(importBusy)
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, WFSpace.md)
+                .padding(.top, 12)
                 Text(backupSummaryText)
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
+                    .padding(.horizontal, WFSpace.md)
+                    .padding(.top, 6)
+                    .padding(.bottom, 10)
                     .help("每天首次修改时自动备份，保留最近 7 天")
                 feedbackLine(.backup)
                 feedbackLine(.restore)
             }
 
-            DisclosureGroup("文件与高级选项", isExpanded: $showFileDetails) {
-                VStack(alignment: .leading, spacing: 16) {
-                    directoryRow(title: "数据目录", url: dataDirectory)
-                    if attachmentDirectoryExists {
-                        directoryRow(title: "附件目录", url: attachmentDirectory)
+            SettingsGroup {
+                SettingsDisclosure("文件与高级选项", isExpanded: $showFileDetails) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        directoryRow(title: "数据目录", url: dataDirectory)
+                        if attachmentDirectoryExists {
+                            directoryRow(title: "附件目录", url: attachmentDirectory)
+                        }
+                        inventoryRows
+                        HStack {
+                            Button("刷新") { refresh() }
+                            Button("导出工作区快照…") { runExport() }
+                                .disabled(importBusy)
+                                .help("工作区及模块记录，不含附件")
+                        }
+                        .buttonStyle(.bordered).controlSize(.small)
+                        feedbackLine(.copiedPath)
                     }
-                    inventoryRows
-                    HStack {
-                        Button("刷新") { refresh() }
-                        Button("导出工作区快照…") { runExport() }
-                            .disabled(importBusy)
-                            .help("工作区及模块记录，不含附件")
-                    }
-                    .buttonStyle(.bordered).controlSize(.small)
-                    feedbackLine(.copiedPath)
-                }.padding(.top, 12)
+                    .padding(.top, 12)
+                }
             }
-            .font(WFType.body)
         }
         .sheet(isPresented: $showingRestoreSheet) {
             RestoreBackupSheet(dataDirectory: dataDirectory, onChoose: choose,
@@ -450,6 +463,10 @@ struct SettingsDataView: View {
             Text(feedbackText)
                 .font(WFType.supporting)
                 .foregroundStyle(feedbackIsError ? WFColors.danger : WFColors.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, WFSpace.md)
+                .padding(.top, 8)
+                .padding(.bottom, 10)
         }
     }
 

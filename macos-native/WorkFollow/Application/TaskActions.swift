@@ -575,11 +575,11 @@ final class TaskActions {
         // Only checklist tasks own item metadata. Inline checklists inside a
         // note/text body are plain content and must not grow completion dates.
         guard task.kind == .checklist else {
-            guard document != previous else { return .success(id) }
+            guard document != previous else { return .unchanged(id) }
             return editText(id, document: document)
         }
         let reconciled = Self.reconcilingChecklistMetadata(in: document, previous: previous, now: clock())
-        guard reconciled != previous else { return .success(id) }
+        guard reconciled != previous else { return .unchanged(id) }
         var result: TaskActionResult = .success(id)
         store.transaction {
             result = editText(id, document: reconciled)
@@ -889,8 +889,8 @@ final class TaskActions {
                           document: NativeDocument? = nil) -> TaskActionResult {
         guard let task = store.task(id) else { return .failure(.missingTask) }
         guard task.deletedAt == nil else { return .failure(.deletedTask) }
-        store.commitText(id, title: title, document: document, updatedAt: clock())
-        return .success(id)
+        let changed = store.commitText(id, title: title, document: document, updatedAt: clock())
+        return changed ? .success(id) : .unchanged(id)
     }
 
     @discardableResult

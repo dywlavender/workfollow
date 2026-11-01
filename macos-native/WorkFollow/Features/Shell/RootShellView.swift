@@ -18,6 +18,7 @@ struct RootShellView: View {
     @StateObject private var selectionMemory = WorkspaceSelectionMemory()
     private var pageKey: String {
         if navigation.destination.isNotes { return "notes" }
+        if TaskWorkspaceModel.scope(for: navigation.destination) != nil { return "tasks" }
         return navigation.destination.rawValue
     }
 
@@ -41,9 +42,9 @@ struct RootShellView: View {
         case .matrix: return AnyView(MatrixWorkspaceView(workspace: workspace))
         default:
             return AnyView(TaskWorkspaceView(workspace: workspace,
-                                             navigation: pageCache.navigation(for: destination.rawValue,
+                                             navigation: pageCache.navigation(for: "tasks",
                                                 appNavigation: navigation,
-                                                belongsToPage: { $0 == destination }),
+                                                belongsToPage: { TaskWorkspaceModel.scope(for: $0) != nil }),
                                              navigationVisible: navigationVisible))
         }
     }
@@ -56,6 +57,10 @@ struct RootShellView: View {
             .environment(\.taskFocusStore, environment.focusStore)
             .environment(\.mainWindowRailInset, railInset)
             .environment(\.colorScheme, colorScheme)
+            .environment(\.workfollowBackgroundTheme, environment.backgroundTheme)
+            .environment(\.workfollowBackgroundIntensity, environment.backgroundIntensity)
+            .environment(\.workfollowMaterial, environment.appearanceMaterial)
+            .environment(\.workfollowPageCanvasActive, environment.backgroundTheme.isThemed)
             .disabled(environment.storageNeedsReload)
             .hidesSystemFocusEffect()
         #if DEBUG
@@ -79,7 +84,8 @@ struct RootShellView: View {
             environment.storageNeedsReload ? "1" : "0",
             String(describing: colorScheme),
             environment.backgroundTheme.rawValue,
-            environment.backgroundIntensity.rawValue
+            environment.backgroundIntensity.rawValue,
+            environment.appearanceMaterial.rawValue
         ]
         #if DEBUG
         parts.append(popupObservation == nil ? "0" : "1")
@@ -282,7 +288,7 @@ private struct ShellColumnSeparator: View {
 }
 
 private struct TaskWorkspaceView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskLayoutObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     let navigationVisible: Bool
     @EnvironmentObject private var environment: AppEnvironment

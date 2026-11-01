@@ -236,9 +236,15 @@ struct ThemedPageSurface: View {
 }
 
 extension View {
-    func workfollowPageSurface(_ opacity: Double = 0.90) -> some View {
+    func workfollowPageSurface(_ opacity: Double = WFPageSurface.veilOpacity) -> some View {
         background { ThemedPageSurface(opacity: opacity) }
     }
+}
+
+/// 页面底纱（铺在墙纸之上、内容之下的一层）的统一不透明度令牌。
+/// 各工作区页面都继承这一档，避免页与页之间忽浓忽淡。
+enum WFPageSurface {
+    static let veilOpacity: Double = 0.90
 }
 
 /// 主窗口的整页底色：铺在墙纸之上、页面内容之下，整窗只有这一层。
@@ -369,7 +375,7 @@ extension View {
 /// 背景可以拆成两层用：底图（渐变/柔光）留在页面底纱下面，动态元素
 /// （气泡、云朵、贴纸、极光带与星点）叠在底纱上面。底纱原本会把动效一起
 /// 洗成近白，分层后动态才看得清，同时页面底色保持原来的浓度。
-enum WorkFollowBackgroundLayer {
+enum WorkFollowBackgroundLayer: Equatable {
     case full
     case base
     case motion
@@ -388,8 +394,7 @@ enum NativeBackgroundMotion {
     }
 }
 
-/// 四套背景共用的外壳：按外观取色、按浓度淡出、按系统设置静止。
-/// 20fps 足够慢速漂移，避免 60fps 下持续重绘整块窗口背景。
+/// 四套背景共用的外壳；静态图案只绘制一次，动效交给独立图层。
 struct WorkFollowBackgroundView: View {
     let theme: NativeBackgroundTheme
     var intensity: NativeBackgroundIntensity = .full
@@ -405,38 +410,28 @@ struct WorkFollowBackgroundView: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            Group {
-                if isMoving {
-                    TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-                        scene(size: size, time: timeline.date.timeIntervalSinceReferenceDate)
-                    }
-                } else {
-                    scene(size: size, time: 11.6)
-                }
-            }
-            .frame(width: size.width, height: size.height)
-            .opacity(intensity.opacity)
-        }
+        NativeBackgroundRenderer(theme: theme, dark: colorScheme == .dark,
+                                 animated: isMoving, backgroundLayer: layer)
+        .opacity(intensity.opacity)
         .clipped()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
     @ViewBuilder
-    private func scene(size: CGSize, time: TimeInterval) -> some View {
+    static func artwork(theme: NativeBackgroundTheme, dark: Bool, size: CGSize,
+                        time: TimeInterval, layer: WorkFollowBackgroundLayer) -> some View {
         switch theme {
         case .none:
             Color.clear
         case .peachSoda:
-            PeachSodaScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
+            PeachSodaScene(size: size, dark: dark, time: time, layer: layer)
         case .mintCloud:
-            MintCloudScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
+            MintCloudScene(size: size, dark: dark, time: time, layer: layer)
         case .creamSticker:
-            CreamStickerScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
+            CreamStickerScene(size: size, dark: dark, time: time, layer: layer)
         case .auroraJelly:
-            AuroraJellyScene(size: size, dark: colorScheme == .dark, time: time, layer: layer)
+            AuroraJellyScene(size: size, dark: dark, time: time, layer: layer)
         }
     }
 }
@@ -449,11 +444,7 @@ private struct PeachSodaScene: View {
     let time: TimeInterval
     let layer: WorkFollowBackgroundLayer
 
-    private var sodaTints: [Color] {
-        dark
-            ? [bgColor(0xE07A5C), bgColor(0xD9738F), bgColor(0xC79A48)]
-            : [bgColor(0xFF8F6B), bgColor(0xFF9FB8), bgColor(0xFFC15E)]
-    }
+
 
     var body: some View {
         let w = size.width
@@ -488,20 +479,7 @@ private struct PeachSodaScene: View {
                     .opacity(dark ? 0.55 : 0.9)
             }
 
-            if layer.showsMotion {
-                ForEach(0..<7, id: \.self) { index in
-                    let period = 20 + Double(index) * 3
-                    let progress = rise(time, period: period, phase: Double(index) * 0.14)
-                    let diameter = unit * (0.016 + CGFloat(index % 3) * 0.008)
-                    let wobble = CGFloat(sin(Double(progress) * .pi * 2))
-                    // 白泡泡在半透底纱上等于没有；换成珊瑚/玫瑰/琥珀色汽水泡，
-                    // 靠色相而不是亮度留在背景里。
-                    SodaBubble(diameter: diameter, dark: dark, tint: sodaTints[index % sodaTints.count])
-                        .position(x: w * (0.09 + CGFloat(index) * 0.125) + wobble * w * 0.008,
-                                  y: h * (1.10 - progress * 1.24))
-                        .opacity(progress > 0.04 && progress < 0.92 ? 1 : 0)
-                }
-            }
+
         }
         .frame(width: w, height: h)
         .clipped()
@@ -574,19 +552,7 @@ private struct MintCloudScene: View {
                     .position(x: w * 0.92, y: h * 0.02)
             }
 
-            if layer.showsMotion {
-                cloud(width: w * 0.20, height: w * 0.064, face: true)
-                    .position(x: w * 0.07 + drift(time, period: 52) * w * 0.035, y: h * 0.11)
-                cloud(width: w * 0.14, height: w * 0.045, face: false)
-                    .position(x: w * 0.87 + drift(time, period: 68, phase: 0.4) * -w * 0.028, y: h * 0.23)
-                cloud(width: w * 0.23, height: w * 0.074, face: true)
-                    .position(x: w * 0.31 + drift(time, period: 74, phase: 0.7) * w * 0.03, y: h * 0.94)
 
-                sparkle(x: 0.18, y: 0.25, side: 18, index: 0)
-                sparkle(x: 0.77, y: 0.15, side: 12, index: 1)
-                sparkle(x: 0.58, y: 0.41, side: 15, index: 2)
-                sparkle(x: 0.90, y: 0.45, side: 11, index: 3)
-            }
         }
         .frame(width: w, height: h)
         .clipped()
@@ -594,7 +560,7 @@ private struct MintCloudScene: View {
 
     /// 云不能再用纯白：底纱压过之后白云和白底没有区别。改成上白下蓝的
     /// 渐变云，再给两朵大云画上表情，靠蓝色轮廓和墨点在背景里留形。
-    private func cloud(width: CGFloat, height: CGFloat, face: Bool) -> some View {
+    fileprivate func cloud(width: CGFloat, height: CGFloat, face: Bool) -> some View {
         CuteCloudShape()
             .fill(LinearGradient(
                 colors: dark
@@ -614,17 +580,7 @@ private struct MintCloudScene: View {
                     radius: height * 0.28, y: height * 0.18)
     }
 
-    private func sparkle(x: CGFloat, y: CGFloat, side: CGFloat, index: Int) -> some View {
-        let pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin((time / 5.5 + Double(index) * 0.37) * .pi * 2))
-        let tint: Color = index.isMultiple(of: 2)
-            ? (dark ? bgColor(0x9FC1FF) : bgColor(0xF2B21F))
-            : (dark ? bgColor(0xFFE0A0) : bgColor(0x5F87F2))
-        return CuteSparkleShape()
-            .fill(tint.opacity(0.55 + 0.45 * pulse))
-            .frame(width: side, height: side)
-            .position(x: size.width * x, y: size.height * y)
-            .scaleEffect(0.82 + 0.18 * CGFloat(pulse))
-    }
+
 }
 
 struct CuteCloudShape: Shape {
@@ -686,47 +642,13 @@ private struct CreamStickerScene: View {
                     .position(x: w * 0.5, y: h * 0.18)
             }
 
-            if layer.showsMotion {
-                Group {
-                    SunSticker(size: unit * 0.13)
-                        .position(x: w * 0.90, y: h * 0.10)
-                        .rotationEffect(.degrees(Double(drift(time, period: 9)) * 5))
 
-                    FlowerSticker(size: unit * 0.075)
-                        .position(x: w * 0.08, y: h * 0.46)
-                        .rotationEffect(.degrees(Double(drift(time, period: 7, phase: 0.4)) * -6))
-
-                    StickerStar(size: unit * 0.06)
-                        .position(x: w * 0.20 + drift(time, period: 6, phase: 0.8) * w * 0.006,
-                                  y: h * 0.13 + drift(time, period: 5.5) * h * 0.008)
-
-                    CloudSticker(size: unit * 0.13)
-                        .position(x: w * 0.86, y: h * 0.82 + drift(time, period: 8, phase: 0.6) * h * 0.01)
-
-                    LeafSticker(size: unit * 0.055)
-                        .position(x: w * 0.12, y: h * 0.90)
-                        .rotationEffect(.degrees(Double(drift(time, period: 7.5, phase: 0.2)) * 7))
-
-                    HeartSticker(size: unit * 0.035)
-                        .position(x: w * 0.47, y: h * 0.09 + drift(time, period: 5.5, phase: 0.5) * h * 0.01)
-                }
-                .opacity(dark ? 0.72 : 1)
-
-                stickerDot(color: bgColor(0xFFC53D), x: 0.34, y: 0.22, side: 6)
-                stickerDot(color: bgColor(0x8FD9A8), x: 0.70, y: 0.30, side: 5)
-                stickerDot(color: bgColor(0x9EC5FF), x: 0.84, y: 0.62, side: 7)
-                stickerDot(color: bgColor(0xFF9FB2), x: 0.26, y: 0.70, side: 5)
-            }
         }
         .frame(width: w, height: h)
         .clipped()
     }
 
-    private func stickerDot(color: Color, x: CGFloat, y: CGFloat, side: CGFloat) -> some View {
-        Circle().fill(color.opacity(dark ? 0.4 : 0.55))
-            .frame(width: side, height: side)
-            .position(x: size.width * x, y: size.height * y)
-    }
+
 }
 
 private struct StickerFace: View {
@@ -921,58 +843,157 @@ private struct AuroraJellyScene: View {
                 (dark ? bgColor(0x080B12) : bgColor(0xEFF6FF))
             }
 
-            if layer.showsMotion {
-                aurora(color: dark ? bgColor(0x2FE0B5) : bgColor(0x3FCB9E),
-                        width: w * 0.86, height: h * 0.55, x: 0.10, y: 0.08,
-                        angle: -24, period: 34, phase: 0)
-                aurora(color: dark ? bgColor(0x6E8BFF) : bgColor(0x6A8DFF),
-                        width: w * 0.82, height: h * 0.52, x: 0.95, y: 0.28,
-                        angle: 20, period: 40, phase: 0.35)
-                aurora(color: dark ? bgColor(0xFF6FAE) : bgColor(0xFF7FBA),
-                        width: w * 0.88, height: h * 0.50, x: 0.56, y: 0.94,
-                        angle: -10, period: 30, phase: 0.7)
 
-                ForEach(0..<5, id: \.self) { index in
-                    let specs: [(CGFloat, CGFloat, CGFloat)] = [(0.28, 0.18, 13), (0.72, 0.32, 10),
-                                                                (0.86, 0.68, 15), (0.14, 0.62, 9),
-                                                                (0.48, 0.52, 11)]
-                    let spec = specs[index]
-                    let pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin((time / 6 + Double(index) * 0.31) * .pi * 2))
-                    let tint: Color = index.isMultiple(of: 2)
-                        ? (dark ? Color.white : bgColor(0x3F6FE0))
-                        : (dark ? bgColor(0x9FC1FF) : bgColor(0xE0A000))
-                    CuteSparkleShape()
-                        .fill(tint.opacity(0.6 + 0.4 * pulse))
-                        .frame(width: spec.2, height: spec.2)
-                        .shadow(color: tint.opacity(0.45), radius: 6)
-                        .position(x: w * spec.0, y: h * spec.1)
-                        .opacity(0.35 + 0.65 * pulse)
-                }
-            }
         }
         .frame(width: w, height: h)
         .clipped()
     }
 
-    private func aurora(color: Color, width: CGFloat, height: CGFloat,
-                        x: CGFloat, y: CGFloat, angle: Double,
-                        period: Double, phase: Double) -> some View {
-        let wobble = drift(time, period: period, phase: phase)
-        return Ellipse()
-            .fill(RadialGradient(
-                stops: [
-                    .init(color: color.opacity(dark ? 0.85 : 0.80), location: 0),
-                    .init(color: color.opacity(dark ? 0.38 : 0.38), location: 0.55),
-                    .init(color: color.opacity(0), location: 1)
-                ],
-                center: .center,
-                startRadius: 0,
-                endRadius: max(1, max(width, height) * 0.55)))
-            .frame(width: width, height: height)
-            .rotationEffect(.degrees(angle + Double(wobble) * 4))
-            .position(x: size.width * x + wobble * size.width * 0.03,
-                      y: size.height * y + drift(time, period: period * 1.3, phase: phase) * size.height * 0.02)
-            .blendMode(dark ? .plusLighter : .multiply)
+
+}
+
+/// Uses the same artwork as the SwiftUI scenes above, but keeps each moving
+/// element as a reusable bitmap. Positions and opacity animate independently.
+@MainActor
+enum BackgroundArtwork {
+    static func sprites(theme: NativeBackgroundTheme, dark: Bool, size: CGSize,
+                        scale: CGFloat, layer: WorkFollowBackgroundLayer) -> [BackgroundSprite] {
+        guard theme.isThemed else { return [] }
+        let w = size.width, h = size.height
+        let prefix = "\(theme.rawValue)|\(dark)"
+        var result: [BackgroundSprite] = []
+        func add<V: View>(_ name: String, _ view: V, width: CGFloat, height: CGFloat,
+                          x: CGFloat, y: CGFloat, padding: CGFloat = 0,
+                          opacity: Float = 1, blend: String? = nil,
+                          motions: [BackgroundLayerMotion] = [], rasterScale: CGFloat? = nil) {
+            let artworkSize = CGSize(width: width + padding * 2, height: height + padding * 2)
+            let content = AnyView(view.frame(width: width, height: height).padding(padding)
+                .environment(\.colorScheme, dark ? .dark : .light))
+            guard let image = BackgroundArtworkCache.image(key: "\(prefix)|\(name)", size: artworkSize,
+                scale: rasterScale ?? min(scale, 2), content: content) else { return }
+            result.append(BackgroundSprite(image: image, size: artworkSize,
+                position: CGPoint(x: w * x, y: h * y), opacity: opacity, blendFilter: blend, motions: motions))
+        }
+        func oscillate(_ key: String, base: CGFloat, amplitude: CGFloat,
+                       period: Double, phase: Double = 0) -> BackgroundLayerMotion {
+            BackgroundLayerMotion(keyPath: key, period: period) { time in
+                NSNumber(value: Double(base + amplitude * drift(time, period: period, phase: phase)))
+            }
+        }
+        if layer.showsBase {
+            add("base", WorkFollowBackgroundView.artwork(theme: theme, dark: dark, size: size,
+                time: 11.6, layer: .base), width: w, height: h, x: 0.5, y: 0.5, rasterScale: 1)
+        }
+        guard layer.showsMotion else { return result }
+        switch theme {
+        case .none: break
+        case .peachSoda:
+            let unit = max(w, h)
+            let tints = dark ? [bgColor(0xE07A5C), bgColor(0xD9738F), bgColor(0xC79A48)]
+                : [bgColor(0xFF8F6B), bgColor(0xFF9FB8), bgColor(0xFFC15E)]
+            for index in 0..<7 {
+                let period = 20 + Double(index) * 3
+                let phase = Double(index) * 0.14
+                let diameter = unit * (0.016 + CGFloat(index % 3) * 0.008)
+                let baseX = w * (0.09 + CGFloat(index) * 0.125)
+                add("bubble\(index)", SodaBubble(diameter: diameter, dark: dark, tint: tints[index % 3]),
+                    width: diameter, height: diameter, x: 0, y: 0, motions: [
+                        BackgroundLayerMotion(keyPath: "position.x", period: period) { t in
+                            NSNumber(value: Double(baseX + sin(rise(t, period: period, phase: phase) * .pi * 2) * w * 0.008))
+                        },
+                        BackgroundLayerMotion(keyPath: "position.y", period: period) { t in
+                            NSNumber(value: Double(h * (1.10 - rise(t, period: period, phase: phase) * 1.24)))
+                        },
+                        BackgroundLayerMotion(keyPath: "opacity", period: period) { t in
+                            let p = rise(t, period: period, phase: phase)
+                            return NSNumber(value: p > 0.04 && p < 0.92 ? 1.0 : 0.0)
+                        }
+                    ])
+            }
+        case .mintCloud:
+            let scene = MintCloudScene(size: size, dark: dark, time: 11.6, layer: .motion)
+            let clouds: [(CGFloat, CGFloat, CGFloat, CGFloat, Bool, Double, Double, CGFloat)] = [
+                (0.20, 0.064, 0.07, 0.11, true, 52, 0, 0.035),
+                (0.14, 0.045, 0.87, 0.23, false, 68, 0.4, -0.028),
+                (0.23, 0.074, 0.31, 0.94, true, 74, 0.7, 0.03)
+            ]
+            for (index, c) in clouds.enumerated() {
+                add("cloud\(index)", scene.cloud(width: w * c.0, height: w * c.1, face: c.4),
+                    width: w * c.0, height: w * c.1, x: c.2, y: c.3, padding: w * c.1 * 0.9,
+                    motions: [oscillate("position.x", base: w * c.2, amplitude: w * c.7, period: c.5, phase: c.6)])
+            }
+            let stars: [(CGFloat, CGFloat, CGFloat)] = [(0.18, 0.25, 18), (0.77, 0.15, 12), (0.58, 0.41, 15), (0.90, 0.45, 11)]
+            for (index, star) in stars.enumerated() {
+                let tint = index.isMultiple(of: 2) ? (dark ? bgColor(0x9FC1FF) : bgColor(0xF2B21F))
+                    : (dark ? bgColor(0xFFE0A0) : bgColor(0x5F87F2))
+                add("star\(index)", CuteSparkleShape().fill(tint), width: star.2, height: star.2,
+                    x: star.0, y: star.1, motions: [
+                        oscillate("opacity", base: 0.85375, amplitude: 0.14625, period: 5.5, phase: Double(index) * 0.37),
+                        oscillate("transform.scale", base: 0.9415, amplitude: 0.0585, period: 5.5, phase: Double(index) * 0.37)
+                    ])
+            }
+        case .creamSticker:
+            let unit = max(h, w * 0.5)
+            let opacity: Float = dark ? 0.72 : 1
+            add("sun", SunSticker(size: unit * 0.13), width: unit * 0.13, height: unit * 0.13,
+                x: 0.90, y: 0.10, opacity: opacity,
+                motions: [oscillate("transform.rotation.z", base: 0, amplitude: 5 * .pi / 180, period: 9)])
+            add("flower", FlowerSticker(size: unit * 0.075), width: unit * 0.075, height: unit * 0.075,
+                x: 0.08, y: 0.46, opacity: opacity,
+                motions: [oscillate("transform.rotation.z", base: 0, amplitude: -6 * .pi / 180, period: 7, phase: 0.4)])
+            add("star", StickerStar(size: unit * 0.06), width: unit * 0.06, height: unit * 0.06,
+                x: 0.20, y: 0.13, opacity: opacity, motions: [
+                    oscillate("position.x", base: w * 0.20, amplitude: w * 0.006, period: 6, phase: 0.8),
+                    oscillate("position.y", base: h * 0.13, amplitude: h * 0.008, period: 5.5)])
+            add("cloud", CloudSticker(size: unit * 0.13), width: unit * 0.13, height: unit * 0.13,
+                x: 0.86, y: 0.82, opacity: opacity,
+                motions: [oscillate("position.y", base: h * 0.82, amplitude: h * 0.01, period: 8, phase: 0.6)])
+            add("leaf", LeafSticker(size: unit * 0.055), width: unit * 0.055, height: unit * 0.055,
+                x: 0.12, y: 0.90, opacity: opacity,
+                motions: [oscillate("transform.rotation.z", base: 0, amplitude: 7 * .pi / 180, period: 7.5, phase: 0.2)])
+            add("heart", HeartSticker(size: unit * 0.035), width: unit * 0.035, height: unit * 0.035,
+                x: 0.47, y: 0.09, opacity: opacity,
+                motions: [oscillate("position.y", base: h * 0.09, amplitude: h * 0.01, period: 5.5, phase: 0.5)])
+            let dots: [(UInt32, CGFloat, CGFloat, CGFloat)] = [(0xFFC53D, 0.34, 0.22, 6), (0x8FD9A8, 0.70, 0.30, 5),
+                (0x9EC5FF, 0.84, 0.62, 7), (0xFF9FB2, 0.26, 0.70, 5)]
+            for (index, dot) in dots.enumerated() {
+                add("dot\(index)", Circle().fill(bgColor(dot.0).opacity(dark ? 0.4 : 0.55)),
+                    width: dot.3, height: dot.3, x: dot.1, y: dot.2)
+            }
+        case .auroraJelly:
+            let colors = dark ? [bgColor(0x2FE0B5), bgColor(0x6E8BFF), bgColor(0xFF6FAE)]
+                : [bgColor(0x3FCB9E), bgColor(0x6A8DFF), bgColor(0xFF7FBA)]
+            let bands: [(CGFloat, CGFloat, CGFloat, CGFloat, Double, Double, Double)] = [
+                (0.86, 0.55, 0.10, 0.08, -24, 34, 0), (0.82, 0.52, 0.95, 0.28, 20, 40, 0.35),
+                (0.88, 0.50, 0.56, 0.94, -10, 30, 0.7)]
+            for (index, b) in bands.enumerated() {
+                let width = w * b.0, height = h * b.1
+                let art = Ellipse().fill(RadialGradient(stops: [
+                    .init(color: colors[index].opacity(dark ? 0.85 : 0.80), location: 0),
+                    .init(color: colors[index].opacity(0.38), location: 0.55), .init(color: .clear, location: 1)
+                ], center: .center, startRadius: 0, endRadius: max(width, height) * 0.55))
+                add("band\(index)", art, width: width, height: height, x: b.2, y: b.3,
+                    blend: dark ? "plusL" : "multiplyBlendMode", motions: [
+                        oscillate("position.x", base: w * b.2, amplitude: w * 0.03, period: b.5, phase: b.6),
+                        oscillate("position.y", base: h * b.3, amplitude: h * 0.02, period: b.5 * 1.3, phase: b.6),
+                        oscillate("transform.rotation.z", base: CGFloat(b.4) * .pi / 180,
+                                  amplitude: 4 * .pi / 180, period: b.5, phase: b.6)
+                    ], rasterScale: 1)
+            }
+            let stars: [(CGFloat, CGFloat, CGFloat)] = [(0.28, 0.18, 13), (0.72, 0.32, 10), (0.86, 0.68, 15),
+                (0.14, 0.62, 9), (0.48, 0.52, 11)]
+            for (index, star) in stars.enumerated() {
+                let tint = index.isMultiple(of: 2) ? (dark ? Color.white : bgColor(0x3F6FE0))
+                    : (dark ? bgColor(0x9FC1FF) : bgColor(0xE0A000))
+                add("star\(index)", CuteSparkleShape().fill(tint).shadow(color: tint.opacity(0.45), radius: 6),
+                    width: star.2, height: star.2, x: star.0, y: star.1, padding: 16,
+                    motions: [BackgroundLayerMotion(keyPath: "opacity", period: 6) { time in
+                        let pulse = 0.675 + 0.325 * sin((time / 6 + Double(index) * 0.31) * .pi * 2)
+                        return NSNumber(value: (0.6 + 0.4 * pulse) * (0.35 + 0.65 * pulse))
+                    }])
+            }
+        }
+        return result
     }
 }
 

@@ -10,7 +10,7 @@ struct SettingsAppleRemindersView: View {
 
     var body: some View {
         SettingsPage {
-            WFFormSection {
+            SettingsGroup("提醒事项") {
                 WFFormToggleRow("同步任务到 Apple 提醒事项", isOn: Binding(
                     get: { integration.store.snapshot.enabled || integration.connecting },
                     set: { enabled in
@@ -22,13 +22,15 @@ struct SettingsAppleRemindersView: View {
                     Label("正在连接 iCloud 提醒事项…", systemImage: "arrow.triangle.2.circlepath")
                         .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.bottom, 10)
                 } else if integration.store.snapshot.enabled {
                     if integration.authorization == .fullAccess {
-                        syncStatus.padding(.horizontal, WFSpace.md)
+                        syncStatus.padding(.horizontal, WFSpace.md).padding(.bottom, 10)
                     } else {
                         WFFormNote("需要允许提醒事项访问，才能继续同步。")
                         Button("允许访问") { _Concurrency.Task { await integration.connect() } }
                             .padding(.horizontal, WFSpace.md)
+                            .padding(.bottom, 10)
                     }
                 } else if !integration.store.snapshot.bindings.isEmpty {
                     WFFormNote("同步已暂停，已同步到提醒事项的任务仍保留。")
@@ -39,10 +41,11 @@ struct SettingsAppleRemindersView: View {
                     Button("重试连接") { _Concurrency.Task { await integration.connect() } }
                         .disabled(integration.connecting)
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.bottom, 10)
                 }
             }
 
-            WFFormSection {
+            SettingsGroup("系统日历") {
                 WFFormToggleRow("在 WorkFollow 显示系统日程", isOn: Binding(
                     get: { calendarIntegration.store.snapshot.enabled || calendarIntegration.connecting },
                     set: { enabled in
@@ -54,15 +57,17 @@ struct SettingsAppleRemindersView: View {
                     Button("允许日历访问") { _Concurrency.Task { await calendarIntegration.connect() } }
                         .disabled(calendarIntegration.connecting)
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.bottom, 10)
                 }
                 if let message = calendarIntegration.message {
                     Text(message).font(WFType.supporting).foregroundStyle(WFColors.danger)
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.bottom, 10)
                 }
             }
 
             if !integration.conflicts.isEmpty {
-                WFFormSection("需要确认的修改") {
+                SettingsGroup("需要确认的修改") {
                     ForEach(integration.conflicts) { item in
                         AppleSyncConflictView(conflict: item) { integration.resolve(item, useReminder: $0) }
                     }
@@ -70,32 +75,33 @@ struct SettingsAppleRemindersView: View {
             }
 
             if calendarIntegration.legacyCopyCount > 0 || calendarIntegration.removedCopyCount > 0 || calendarIntegration.cleanupResult != nil {
-                DisclosureGroup("旧版日历副本", isExpanded: $showLegacyDetails) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if calendarIntegration.legacyCopyCount > 0 {
-                            Button("清理 \(calendarIntegration.legacyCopyCount) 条旧版关联…") { showLegacyCleanup = true }
-                                .disabled(calendarIntegration.cleaningUp || calendarIntegration.authorization != .fullAccess)
+                SettingsGroup {
+                    SettingsDisclosure("旧版日历副本", isExpanded: $showLegacyDetails) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if calendarIntegration.legacyCopyCount > 0 {
+                                Button("清理 \(calendarIntegration.legacyCopyCount) 条旧版关联…") { showLegacyCleanup = true }
+                                    .disabled(calendarIntegration.cleaningUp || calendarIntegration.authorization != .fullAccess)
+                            }
+                            if calendarIntegration.removedCopyCount > 0 {
+                                Button("撤销副本清理") { _Concurrency.Task { await calendarIntegration.undoLegacyCleanup() } }
+                                    .disabled(calendarIntegration.cleaningUp || calendarIntegration.authorization != .fullAccess)
+                            }
+                            if let result = calendarIntegration.cleanupResult { Text(result).foregroundStyle(WFColors.secondaryText) }
                         }
-                        if calendarIntegration.removedCopyCount > 0 {
-                            Button("撤销副本清理") { _Concurrency.Task { await calendarIntegration.undoLegacyCleanup() } }
-                                .disabled(calendarIntegration.cleaningUp || calendarIntegration.authorization != .fullAccess)
-                        }
-                        if let result = calendarIntegration.cleanupResult { Text(result).foregroundStyle(WFColors.secondaryText) }
-                    }.padding(.top, 10)
+                    }
                 }
-                .font(WFType.body).padding(.horizontal, WFSpace.md)
             }
 
-            DisclosureGroup("iPhone 同步说明", isExpanded: $showSyncHelp) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("使用同一 Apple 账户，并开启 iCloud 提醒事项和通知。")
-                    Text("任务在“提醒事项 → WorkFollow”中双向同步，有日期的任务也可显示在 Apple 日历中。")
-                    Text("系统日程来自 Apple 日历，在日历中编辑。")
+            SettingsGroup {
+                SettingsDisclosure("iPhone 同步说明", isExpanded: $showSyncHelp) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("使用同一 Apple 账户，并开启 iCloud 提醒事项和通知。")
+                        Text("任务在“提醒事项 → WorkFollow”中双向同步，有日期的任务也可显示在 Apple 日历中。")
+                        Text("系统日程来自 Apple 日历，在日历中编辑。")
+                    }
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 }
-                .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                .padding(.top, 10)
             }
-            .font(WFType.body).padding(.horizontal, WFSpace.md)
         }
         .onAppear { integration.refreshAccess(); calendarIntegration.refreshAccess() }
         .workfollowAlert(

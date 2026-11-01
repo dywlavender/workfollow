@@ -12,7 +12,7 @@ struct AIChatWorkspaceView: View {
         GeometryReader { geometry in
             let wide = geometry.size.width >= 760
             HStack(spacing: 0) {
-                if wide { history.frame(width: 224).workfollowPageSurface(0.85); Divider() }
+                if wide { history.frame(width: 224).workfollowPageSurface(); Divider() }
                 conversation(showHistoryButton: !wide)
             }
         }.accessibilityIdentifier("ai.chat.page").workflowActionAnchor("ai.chat.page")

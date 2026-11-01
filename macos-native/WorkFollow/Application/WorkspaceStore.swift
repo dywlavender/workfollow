@@ -212,16 +212,17 @@ final class WorkspaceStore {
 
     /// Text-only commands preserve task IDs, positions and parent membership.
     /// Publish one exact entry; outer transactions retain their aggregate diff.
+    @discardableResult
     func commitText(_ id: UUID, title: String? = nil, document: NativeDocument? = nil,
-                    updatedAt: Date) {
+                    updatedAt: Date) -> Bool {
         prepareReadIndex()
-        guard let index = taskOffsets?[id] else { return }
+        guard let index = taskOffsets?[id] else { return false }
         let before = tasks[index]
-        if document != nil, (try? before.document.materialized()) == nil { return }
+        if document != nil, (try? before.document.materialized()) == nil { return false }
         var after = before
         if let title { after.title = title; after.series?.template.title = title }
         if let document { after.document = document; after.series?.template.document = document }
-        guard before.title != after.title || before.document != after.document else { return }
+        guard before.title != after.title || before.document != after.document else { return false }
         after.updatedAt = updatedAt
         let previousTasks = transactionDepth == 0 && onTasksChanged != nil ? tasks : nil
         let byID = taskOffsets
@@ -237,6 +238,7 @@ final class WorkspaceStore {
             if let previousTasks { onTasksChanged?(previousTasks, tasks) }
             if let changes { onTaskChanges?(changes) }
         }
+        return true
     }
 
     private func rebaseTextHistory(_ changed: [UUID: Task]) {

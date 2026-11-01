@@ -31,9 +31,9 @@ final class WorkspaceSelectionMemory: ObservableObject {
                                               filter: workspace.activeFilterID)
             }
             let saved = self.tasks[destination]
-            workspace.activeList = saved?.list
-            workspace.activeTag = saved?.tag
-            workspace.openFilter(saved?.filter)
+            if workspace.activeList != saved?.list { workspace.activeList = saved?.list }
+            if workspace.activeTag != saved?.tag { workspace.activeTag = saved?.tag }
+            if workspace.activeFilterID != saved?.filter { workspace.openFilter(saved?.filter) }
             workspace.select(nil)
             if destination.isNotes { noteWorkspace.selectedID = nil }
         }.store(in: &subscriptions)

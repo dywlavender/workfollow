@@ -12,10 +12,21 @@ enum TaskActionError: Error, Equatable {
 
 enum TaskActionResult: Equatable {
     case success(UUID)
+    /// 目标已是该值，store 未发生任何改动（同值标题/正文回写）。仍带 taskID，
+    /// 让调用方按“非失败”处理，但 didMutate 不据此递增 revision 或重建投影。
+    case unchanged(UUID)
     case failure(TaskActionError)
 
     var taskID: UUID? {
-        if case let .success(id) = self { return id }
-        return nil
+        switch self {
+        case let .success(id), let .unchanged(id): return id
+        case .failure: return nil
+        }
+    }
+
+    /// 是否真正改动了 store —— revision 只在此基础上递增。
+    var didChangeStore: Bool {
+        if case .success = self { return true }
+        return false
     }
 }

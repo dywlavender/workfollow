@@ -79,6 +79,7 @@ struct WFFormToggleRow: View {
         WFFormRow(title, showsDivider: showsDivider) {
             Toggle("", isOn: $isOn).toggleStyle(.switch).labelsHidden()
                 .controlSize(.small)
+                .tint(WFColors.accent)
         }
     }
 }
@@ -92,5 +93,64 @@ struct WFFormNote: View {
     var body: some View {
         Text(text).font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
             .padding(.horizontal, WFSpace.md).padding(.bottom, 8)
+    }
+}
+
+/// 弹层与设置共用的分段控件：浅色轨道 + 白色选中胶囊。
+/// 系统 `.pickerStyle(.segmented)` 在非激活窗口会整块退成灰底，与自绘界面不一致。
+struct WFSegmentedControl<Value: Hashable>: View {
+    struct Option: Identifiable {
+        let value: Value
+        let title: String
+        var id: Value { value }
+
+        init(_ value: Value, _ title: String) {
+            self.value = value; self.title = title
+        }
+    }
+
+    @Binding var selection: Value
+    let options: [Option]
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var trackFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.09) : Color.primary.opacity(0.06)
+    }
+    private var thumbFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.14) : .white
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options) { option in
+                optionButton(option)
+            }
+        }
+        .padding(2)
+        .background(trackFill, in: RoundedRectangle(cornerRadius: 8))
+        .animation(.easeOut(duration: 0.14), value: selection)
+    }
+
+    private func optionButton(_ option: Option) -> some View {
+        let selected = option.value == selection
+        return Button { selection = option.value } label: {
+            Text(option.title)
+                .font(selected ? WFType.controlLabelStrong : WFType.controlLabel)
+                .foregroundStyle(selected ? WFColors.text : WFColors.secondaryText)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .frame(height: 24)
+                .background {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(thumbFill)
+                            .shadow(color: .black.opacity(0.08), radius: 1.5, y: 0.5)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityValue(selected ? "已选择" : "未选择")
     }
 }

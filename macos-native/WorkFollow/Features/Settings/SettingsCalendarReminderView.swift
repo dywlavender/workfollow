@@ -8,7 +8,7 @@ struct SettingsCalendarReminderView: View {
 
     var body: some View {
         SettingsPage {
-            WFFormSection {
+            SettingsGroup("通知") {
                 WFFormRow("系统通知") {
                     if notificationsAllowed {
                         Text("已开启").foregroundStyle(WFColors.secondaryText)
@@ -48,11 +48,12 @@ struct SettingsCalendarReminderView: View {
                 if let message = reminders.message {
                     Text(message).foregroundStyle(WFColors.danger).font(WFType.supporting)
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.bottom, 10)
                 }
             }
 
             if !reminders.missed.isEmpty {
-                WFFormSection("错过的提醒") {
+                SettingsGroup("错过的提醒") {
                     ForEach(Array(reminders.missed.suffix(10))) { item in
                         HStack {
                             Text(item.title).lineLimit(1)
@@ -63,23 +64,24 @@ struct SettingsCalendarReminderView: View {
                         }
                         .font(WFType.body)
                         .padding(.horizontal, WFSpace.md)
+                        .padding(.vertical, 8)
                     }
                 }
             }
 
-            DisclosureGroup("提醒测试与详情", isExpanded: $showDiagnostics) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Button("5 秒后测试提醒") { reminders.sendTest() }
-                        .disabled(!notificationsAllowed)
-                    if let end = reminders.coverageEnd {
-                        Text("已安排 \(reminders.pendingCount) 条提醒，最晚至 \(end.formatted(date: .abbreviated, time: .shortened))")
+            SettingsGroup {
+                SettingsDisclosure("提醒测试与详情", isExpanded: $showDiagnostics) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button("5 秒后测试提醒") { reminders.sendTest() }
+                            .disabled(!notificationsAllowed)
+                        if let end = reminders.coverageEnd {
+                            Text("已安排 \(reminders.pendingCount) 条提醒，最晚至 \(end.formatted(date: .abbreviated, time: .shortened))")
+                        }
+                        Text("应用退出后使用系统提示音。稍后提醒不改变任务日期。")
                     }
-                    Text("应用退出后使用系统提示音。稍后提醒不改变任务日期。")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 }
-                .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                .padding(.top, 10)
             }
-            .font(WFType.body).padding(.horizontal, WFSpace.md)
         }
         .onAppear { reminders.reconcile(workspace.tasksForLocalReminders, force: true) }
     }

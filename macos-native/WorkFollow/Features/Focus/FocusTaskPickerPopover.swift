@@ -32,7 +32,6 @@ private extension View {
 enum FocusTaskPickerMetrics {
     static let width: CGFloat = 312
     static let height: CGFloat = 460
-    static let cornerRadius: CGFloat = 14
     static let outerPadding: CGFloat = 16
     static let searchHeight: CGFloat = 34
     static let scopeRowHeight: CGFloat = 34
@@ -75,7 +74,6 @@ struct FocusTaskPickerPopover: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @FocusState private var searchFocused: Bool
     @State private var isScopeHovered = false
 
@@ -151,12 +149,6 @@ struct FocusTaskPickerPopover: View {
         .frame(width: FocusTaskPickerMetrics.width, height: FocusTaskPickerMetrics.height,
                alignment: .topLeading)
         .coordinateSpace(name: "focus-task-picker")
-        .background {
-            WFGlassSurface(shape: RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius),
-                           fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
-        }
-        .overlay(RoundedRectangle(cornerRadius: FocusTaskPickerMetrics.cornerRadius)
-            .stroke(theme.hairline, lineWidth: 1))
         .onAppear { DispatchQueue.main.async { searchFocused = true } }
     }
 

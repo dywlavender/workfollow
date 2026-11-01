@@ -134,6 +134,11 @@ private struct TaskKanbanTaskRow: View {
             SecondaryClickCapture { rowView, point in
                 guard !workspace.isListArchived(task.list.name) else { return }
                 guard let current = workspace.task(for: task.id) else { return }
+                // 右键先选中目标再开菜单（Finder / 滴答口径）；已在多选中则保留整组。
+                if workspace.selectedTaskID != task.id, !workspace.bulkSelection.contains(task.id) {
+                    workspace.clearBulkSelection()
+                    workspace.select(task.id)
+                }
                 TaskContextMenuPresenter.show(in: rowView, at: point,
                                               environment: environment,
                                               workspace: workspace, task: current,

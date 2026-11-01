@@ -266,7 +266,10 @@ final class TaskRowInteractionTests: XCTestCase {
                                     "真实列表行必须打开共享菜单，而不是文本系统菜单")
         let menu = try XCTUnwrap(session.coordinator.panel)
         XCTAssertEqual(menu.title, "任务右键菜单")
-        XCTAssertNil(workspace.selectedTaskID, "右键不能变成左键选择或编辑")
+        XCTAssertEqual(workspace.selectedTaskID, id,
+                       "右键应先选中目标行，让详情与菜单指向同一条任务")
+        XCTAssertNil(window.firstResponder as? NSTextView,
+                     "右键不能进入行内标题编辑")
 
         var actions: [TaskContextMenuAnchor: CGRect] = [:]
         var focus: [InspectorRenderAnchor: CGRect] = [:]
@@ -320,6 +323,61 @@ final class TaskRowInteractionTests: XCTestCase {
         XCTAssertTrue(menu.isVisible)
         XCTAssertEqual(environment.focusStore.phase, .idle)
         XCTAssertEqual(workspace.task(for: id)?.title, "列表右键入口验收")
+    }
+
+    func testRightClickSelectsTargetAndPreservesExistingMultiSelection() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let a = try XCTUnwrap(workspace.createTask(title: "甲", in: .inbox).taskID)
+        let b = try XCTUnwrap(workspace.createTask(title: "乙", in: .inbox).taskID)
+        let c = try XCTUnwrap(workspace.createTask(title: "丙", in: .inbox).taskID)
+        let navigation = AppNavigation()
+        navigation.destination = .inbox
+        let environment = AppEnvironment()
+        environment.focusStore.notifier = nil
+        let probe = Probe()
+        let root = TaskListView(workspace: workspace, navigation: navigation, navigationVisible: true)
+            .frame(width: 1000, height: 700)
+            .environment(\.recordsTaskTreeFrames, true)
+            .coordinateSpace(name: "task-tree-render")
+            .onPreferenceChange(TaskTreeFramesKey.self) { probe.frames = $0 }
+            .environmentObject(environment)
+        let host = NSHostingView(rootView: AnyView(root))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1000, height: 700)
+        defer { TaskContextMenuPresenter.activeSession?.close(); window.close() }
+
+        func rightClick(_ id: UUID) throws {
+            TaskContextMenuPresenter.activeSession?.close()
+            InspectorPanelTestSupport.settle(window)
+            let title = try XCTUnwrap(probe.frames[.init(taskID: id, part: .title)])
+            let local = NSPoint(x: title.midX,
+                y: host.isFlipped ? title.midY : host.bounds.height - title.midY)
+            let point = host.convert(local, to: nil)
+            let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: point,
+                modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil, eventNumber: 1,
+                clickCount: 1, pressure: 1))
+            NSApp.postEvent(event, atStart: true)
+            let down = try XCTUnwrap(NSApp.nextEvent(matching: .rightMouseDown, until: Date(),
+                                                    inMode: .default, dequeue: true))
+            NSApp.sendEvent(down)
+            InspectorPanelTestSupport.settle(window)
+        }
+
+        // 未选中时右键乙：单选乙、清空多选，并打开共享菜单。
+        try rightClick(b)
+        XCTAssertEqual(workspace.selectedTaskID, b)
+        XCTAssertTrue(workspace.bulkSelection.isEmpty)
+        XCTAssertNotNil(TaskContextMenuPresenter.activeSession)
+
+        // 建立多选 {甲, 乙}，右键集合内的乙：整组多选保留。
+        workspace.setBulkSelection(in: [a, b])
+        try rightClick(b)
+        XCTAssertEqual(workspace.bulkSelection, [a, b])
+
+        // 右键集合外的丙：清空多选并单选丙。
+        try rightClick(c)
+        XCTAssertEqual(workspace.selectedTaskID, c)
+        XCTAssertTrue(workspace.bulkSelection.isEmpty)
     }
 
     func testReorderHandleDoesNotShiftContentColumns() throws {

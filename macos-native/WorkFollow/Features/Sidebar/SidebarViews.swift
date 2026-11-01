@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct IconRailView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     let onNavigate: (NativeDestination) -> Void
     let onOpenQuickOpen: () -> Void
@@ -273,7 +273,7 @@ private struct SidebarGroupGap: View {
 /// 对齐滴答清单的侧栏：整栏一个滚动列表，智能清单、三个可折叠分组和底部清单
 /// 一起滚；分组头是列表里的普通行，不吸顶，也不画侧栏滚动条。
 struct NavigationColumnView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme

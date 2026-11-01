@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 enum TaskOutlineKey { case up, down, enter, space, escape }
@@ -26,6 +27,7 @@ struct NativeTaskOutline: NSViewRepresentable {
 #endif
     struct Row {
         let id: String
+        var taskID: UUID?
         let makeContent: () -> AnyView
         /// 行高由 `TaskListMetrics.taskRowHeight` 给出（预览行 / 标签行各一档）。
         var height: CGFloat = WFMetrics.rowHeight
@@ -39,10 +41,11 @@ struct NativeTaskOutline: NSViewRepresentable {
             makeContent = { AnyView(content()) }
         }
 
-        init<State: Equatable, Layout: Equatable, Content: View>(id: String,
+        init<State: Equatable, Layout: Equatable, Content: View>(id: String, taskID: UUID? = nil,
             state: State, layout: Layout, height: CGFloat = WFMetrics.rowHeight,
             @ViewBuilder content: @escaping () -> Content) {
             self.init(id: id, height: height, content: content)
+            self.taskID = taskID
             contentState = ComparisonValue(state)
             layoutState = ComparisonValue(layout)
         }
@@ -66,6 +69,7 @@ struct NativeTaskOutline: NSViewRepresentable {
 
     let rows: [Row]
     var scopeKey: String? = nil
+    var selectionSource: TaskWorkspaceModel? = nil
     var onKey: (TaskOutlineKey) -> Bool = { _ in false }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -76,6 +80,7 @@ struct NativeTaskOutline: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.onKey = onKey
+        context.coordinator.bindSelection(selectionSource)
         context.coordinator.update(rows, in: scroll, scopeKey: scopeKey)
     }
 
@@ -226,7 +231,46 @@ struct NativeTaskOutline: NSViewRepresentable {
         private(set) var items: [Item] = []
         var onKey: (TaskOutlineKey) -> Bool = { _ in false }
         private var scopeKey: String?
+        private struct ScrollPosition {
+            let rowID: String?
+            let offset: CGFloat
+            let absoluteY: CGFloat
+        }
+        private var scrollPositions: [String: ScrollPosition] = [:]
+        private weak var selectionSource: TaskWorkspaceModel?
+        private var selectionSubscription: AnyCancellable?
+        private var selectedTaskID: UUID?
         private let cellID = NSUserInterfaceItemIdentifier("task-row")
+        // NSOutlineView discards its reuse pool when a scope becomes empty.
+        // Retain a small set of row hosts, rather than rebuilding their SwiftUI
+        // graphs when returning from Today to Inbox.
+        private var cellCache: [String: Cell] = [:]
+        private var cellOrder: [String] = []
+
+        @MainActor func bindSelection(_ source: TaskWorkspaceModel?) {
+            guard selectionSource !== source else { return }
+            selectionSubscription?.cancel()
+            selectionSource = source
+            selectedTaskID = source?.selectedTaskID
+            selectionSubscription = source?.$selectedTaskID.removeDuplicates().dropFirst().sink { [weak self, weak source] _ in
+                // @Published sends before assignment; row builders read the
+                // committed selection, and rapid selections coalesce here.
+                DispatchQueue.main.async {
+                    guard let self, let source, self.selectionSource === source,
+                          self.selectedTaskID != source.selectedTaskID else { return }
+                    let affected = Set([self.selectedTaskID, source.selectedTaskID].compactMap { $0 })
+                    self.selectedTaskID = source.selectedTaskID
+                    guard let outline = self.outline else { return }
+                    let visible = outline.rows(in: outline.visibleRect)
+                    guard visible.location != NSNotFound else { return }
+                    for index in visible.location..<min(NSMaxRange(visible), self.items.count) {
+                        guard let id = self.items[index].row.taskID, affected.contains(id),
+                              let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell else { continue }
+                        cell.configure(self.items[index])
+                    }
+                }
+            }
+        }
 #if DEBUG
         // Test-only ablation: isolate hosting updates from row-height invalidation.
         var refreshContent = true
@@ -242,6 +286,7 @@ struct NativeTaskOutline: NSViewRepresentable {
 #endif
             guard let outline else { return }
             let scopeChanged = self.scopeKey != scopeKey
+            let previousScope = self.scopeKey
             self.scopeKey = scopeKey
             let structureChanged = scopeChanged || items.map(\.id) != rows.map(\.id)
             let previousY = scroll.contentView.bounds.minY
@@ -249,6 +294,9 @@ struct NativeTaskOutline: NSViewRepresentable {
             let anchorIndex = visible.location != NSNotFound ? visible.location : 0
             let anchor = previousY > 0 && items.indices.contains(anchorIndex) ? items[anchorIndex].id : nil
             let offset = anchor != nil ? scroll.contentView.bounds.minY - outline.rect(ofRow: anchorIndex).minY : 0
+            if scopeChanged, let previousScope {
+                scrollPositions[previousScope] = ScrollPosition(rowID: anchor, offset: offset, absoluteY: previousY)
+            }
             let oldItems = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
             var contentChanged = IndexSet()
             var layoutChanged = IndexSet()
@@ -276,7 +324,11 @@ struct NativeTaskOutline: NSViewRepresentable {
                 // every newly inserted task above the viewport. Preserve a
                 // reading anchor only after the person has scrolled down.
                 var targetY: CGFloat = 0
-                if !scopeChanged, previousY > 0 {
+                if scopeChanged, let scopeKey, let saved = scrollPositions[scopeKey] {
+                    if let id = saved.rowID, let index = items.firstIndex(where: { $0.id == id }) {
+                        targetY = outline.rect(ofRow: index).minY + saved.offset
+                    } else { targetY = saved.absoluteY }
+                } else if !scopeChanged, previousY > 0 {
                     if let anchor, let index = items.firstIndex(where: { $0.id == anchor }) {
                         targetY = outline.rect(ofRow: index).minY + offset
                     } else {
@@ -327,7 +379,13 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
             guard let item = item as? Item else { return nil }
-            let cell = outlineView.makeView(withIdentifier: cellID, owner: self) as? Cell ?? Cell()
+            let cell = cellCache[item.id] ?? Cell()
+            cellCache[item.id] = cell
+            cellOrder.removeAll { $0 == item.id }
+            cellOrder.append(item.id)
+            while cellOrder.count > 64 {
+                cellCache.removeValue(forKey: cellOrder.removeFirst())
+            }
             cell.identifier = cellID
             cell.configure(item)
             return cell

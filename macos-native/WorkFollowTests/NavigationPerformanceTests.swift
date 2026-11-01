@@ -37,7 +37,8 @@ final class NavigationPerformanceTests: XCTestCase {
                 print("FIRST_TASK_PAGE count=\(count) pass=\(pass) layout_ms=\((firstLayout-start)*1000) total_ms=\((end-start)*1000) containers=\(NativeTaskOutline.Diagnostics.containers) cells=\(NativeTaskOutline.Diagnostics.createdCells) configure=\(NativeTaskOutline.Diagnostics.configurations) configure_ms=\(NativeTaskOutline.Diagnostics.configurationTime*1000) update_ms=\(NativeTaskOutline.Diagnostics.updateTime*1000) reload_ms=\(NativeTaskOutline.Diagnostics.reloadTime*1000) sizing_ms=\(NativeTaskOutline.Diagnostics.sizingTime*1000) sizing_calls=\(NativeTaskOutline.Diagnostics.sizingCalls) row_layout_ms=\(NativeTaskOutline.Diagnostics.rowLayoutTime*1000) projections=\(workspace.projectionBuildCount-projectionCount)")
                 XCTAssertEqual(workspace.allTasks.count, count)
                 if pass == 0 {
-                    XCTAssertEqual(NativeTaskOutline.Diagnostics.containers, 1)
+                    XCTAssertEqual(NativeTaskOutline.Diagnostics.containers, 0,
+                                   "从今天进入收集箱应复用列表容器")
                     XCTAssertGreaterThan(NativeTaskOutline.Diagnostics.createdCells, 0)
                     XCTAssertLessThan(NativeTaskOutline.Diagnostics.createdCells, count,
                                       "The initial viewport must not instantiate every task")
@@ -98,7 +99,7 @@ final class NavigationPerformanceTests: XCTestCase {
         XCTAssertEqual(bridge.navigation.destination, .today)
     }
 
-    func testTaskPagesRemainMountedAcrossScopeSwitches() throws {
+    func testTaskScopesShareOneMountedPage() throws {
         let environment = AppEnvironment()
         environment.navigation.destination = .today
         let host = NSHostingView(rootView: RootShellView(workspace: environment.taskWorkspace,
@@ -116,29 +117,31 @@ final class NavigationPerformanceTests: XCTestCase {
         }
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(pageHosts().count, 1)
+        let original = try XCTUnwrap(pageHosts().first)
 
         environment.navigate(to: .inbox)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(pageHosts().count, 2, "任务清单之间切换应保留上一个页面宿主")
+        XCTAssertEqual(pageHosts().count, 1)
+        XCTAssertTrue(pageHosts().first === original)
         XCTAssertEqual(pageHosts().filter { !$0.isHidden }.count, 1)
 
         environment.navigate(to: .today)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(pageHosts().count, 2)
+        XCTAssertEqual(pageHosts().count, 1)
 
         for destination: NativeDestination in [.tomorrow, .allTasks, .nextSevenDays, .completed] {
             environment.navigate(to: destination)
             InspectorPanelTestSupport.settle(window)
         }
-        XCTAssertEqual(pageHosts().count, WorkspacePageCache.mountedPageLimit,
-                       "常驻页超限时淘汰最久未访问的页面，避免内存随清单数增长")
+        XCTAssertEqual(pageHosts().count, 1)
+        XCTAssertTrue(pageHosts().first === original, "首次进入任何任务清单也应复用同一个宿主")
         XCTAssertEqual(pageHosts().filter { !$0.isHidden }.count, 1)
 
         environment.navigate(to: .today)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(pageHosts().count, WorkspacePageCache.mountedPageLimit)
+        XCTAssertEqual(pageHosts().count, 1)
         XCTAssertEqual(pageHosts().filter { !$0.isHidden }.count, 1,
-                       "回访已淘汰的页面应重建并显示")
+                       "任务清单始终只有一个可见宿主")
 
         environment.navigate(to: .notes)
         InspectorPanelTestSupport.settle(window)
