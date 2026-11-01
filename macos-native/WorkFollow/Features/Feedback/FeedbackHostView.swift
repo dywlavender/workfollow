@@ -56,7 +56,7 @@ private struct FeedbackToastView: View {
     private static let messageWidthCap: CGFloat = 360
     private static let dangerColor = WFColors.danger
     /// 尾部撤销箭头：深色底上用琥珀橙拉开对比，和正文白色区分动作与结果。
-    private static let undoColor = Color(red: 1, green: 0.631, blue: 0)
+    private static let undoColor = WFColors.feedbackUndo
     private static let cornerRadius: CGFloat = 9
     private static let minHeight: CGFloat = 40
 

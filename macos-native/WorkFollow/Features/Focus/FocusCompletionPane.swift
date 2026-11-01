@@ -176,7 +176,7 @@ struct FocusCompletionPane: View {
     }
 
     private func actionButton(_ title: String, prominent: Bool = false, action: @escaping () -> Void) -> some View {
-        let completionAccent = Color(red: 0, green: 0.79, blue: 0.61)
+        let completionAccent = WFColors.focusCompletionAccent
         return Button(action: action) {
             Text(title).font(WFType.body)
                 .foregroundStyle(prominent ? WFColors.onAccent : completionAccent)

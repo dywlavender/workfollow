@@ -470,10 +470,10 @@ enum SummaryExportService {
         }
     }
 
-    private static let textColor = NSColor(red: 0.12, green: 0.13, blue: 0.16, alpha: 1)
-    private static let secondaryTextColor = NSColor(red: 0.42, green: 0.44, blue: 0.48, alpha: 1)
-    private static let accentColor = NSColor(red: 0.388, green: 0.537, blue: 0.961, alpha: 1)
-    private static let codeBackgroundColor = NSColor(red: 0.95, green: 0.955, blue: 0.965, alpha: 1)
+    private static let textColor = WFColors.exportInkText
+    private static let secondaryTextColor = WFColors.exportInkSecondaryText
+    private static let accentColor = WFColors.exportInkAccent
+    private static let codeBackgroundColor = WFColors.exportInkCodeBackground
 }
 
 private final class SummaryExportCanvasView: NSView {

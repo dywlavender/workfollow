@@ -239,6 +239,12 @@ private enum CompanionMascotArt {
     private static let pink = Color(red: 1.0, green: 0.702, blue: 0.769)
     private static let ink = Color(red: 0.290, green: 0.227, blue: 0.180)
     private static let headphone = Color(red: 0.357, green: 0.420, blue: 0.478)
+    // 以下原先是绘制函数里的字面色值，2026-11 归拢进来，作画色只留这一处。
+    private static let noseInk = Color(red: 0.851, green: 0.427, blue: 0.427)
+    private static let smileInk = Color(red: 0.478, green: 0.290, blue: 0.133)
+    private static let blanket = Color(red: 0.788, green: 0.929, blue: 0.863)
+    private static let sparkleGold = Color(red: 1.0, green: 0.847, blue: 0.420)
+    private static let sparkleBlue = Color(red: 0.663, green: 0.780, blue: 1.0)
 
     static func draw(context: inout GraphicsContext, character: CompanionCharacter,
                      phase: CompanionPhase, scene: CompanionScene?, prop: String?,
@@ -414,12 +420,12 @@ private enum CompanionMascotArt {
         nose.addLine(to: CGPoint(x: 50.5, y: 59))
         nose.addLine(to: CGPoint(x: 48, y: 62))
         nose.closeSubpath()
-        context.fill(nose, with: .color(Color(red: 0.851, green: 0.427, blue: 0.427)))
+        context.fill(nose, with: .color(noseInk))
 
         var smile = Path()
         smile.move(to: CGPoint(x: 44, y: 64))
         smile.addQuadCurve(to: CGPoint(x: 52, y: 64), control: CGPoint(x: 48, y: 67.5))
-        context.stroke(smile, with: .color(Color(red: 0.478, green: 0.290, blue: 0.133)),
+        context.stroke(smile, with: .color(smileInk),
                        style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
 
         context.fill(Path(ellipseIn: CGRect(x: 26, y: 58, width: 8, height: 6)), with: .color(pink.opacity(0.55)))
@@ -461,7 +467,7 @@ private enum CompanionMascotArt {
     private static func drawBlanket(_ context: inout GraphicsContext) {
         let rect = CGRect(x: 23, y: 73, width: 50, height: 21)
         context.fill(Path(roundedRect: rect, cornerRadius: 10),
-                     with: .color(Color(red: 0.788, green: 0.929, blue: 0.863)))
+                     with: .color(blanket))
         context.fill(Path(roundedRect: CGRect(x: 27, y: 76, width: 42, height: 5), cornerRadius: 2.5),
                      with: .color(.white.opacity(0.48)))
     }
@@ -478,9 +484,9 @@ private enum CompanionMascotArt {
 
     private static func drawSparkles(_ context: inout GraphicsContext, time: TimeInterval) {
         let specs: [(CGFloat, CGFloat, Color)] = [
-            (13, 23, Color(red: 1.0, green: 0.847, blue: 0.420)),
-            (82, 27, Color(red: 1.0, green: 0.702, blue: 0.769)),
-            (14, 45, Color(red: 0.663, green: 0.780, blue: 1.0))
+            (13, 23, sparkleGold),
+            (82, 27, pink),
+            (14, 45, sparkleBlue),
         ]
         for (index, spec) in specs.enumerated() {
             let pulse = 0.35 + 0.65 * (0.5 + 0.5 * sin(time * 4.2 + Double(index) * 1.3))

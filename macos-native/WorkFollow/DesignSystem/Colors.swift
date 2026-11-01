@@ -228,4 +228,46 @@ enum WFColors {
     static let overlayText = themed(rgb(0x20272C), rgb(0xF4F5F7))
     static let overlaySecondaryText = themed(rgb(0x5D6B75), rgb(0xB8BEC9))
     static let overlayTertiaryText = themed(rgb(0x7F8D92), rgb(0x858D9A))
+
+    // MARK: 专注工作台（2026-11 从 FocusWorkspaceView 的 FocusTheme 收口）
+    //
+    // 专注页的节奏绿与 `success` 族不同源：`success` 是滴答实测的**文字**语义绿
+    //（浅色压到 #237A57 才够读），这里的绿是专注面板自己的面板/图形色，明度
+    // 高一档。两套并存是刻意的——互相"统一"会把其中一边做坏。
+    /// 节奏达标、完成态的绿。
+    static let focusGood = themed(rgb(0x15AF6D), rgb(0x4ADE80))
+    /// 达标绿的柔色（浅底填充一档）。
+    static let focusGoodSoft = themed(rgb(0x38CE8D), rgb(0x8BEFB3))
+    /// 节奏越界提醒。浅色即 SwiftUI `.red` 的浅色取值——FocusTheme 按明暗
+    /// 分支取色，浅色支不会在深色环境渲染，静态值视觉不变。
+    static let focusWarn = themed(rgb(0xFF3B30), rgb(0xF87171))
+    /// 随机头像底：浅色是专注页自带的奶油黄，深色沿用 12% 白。
+    static let focusAvatarBackground = themed(rgb(0xFFF09E),
+                                              NSColor.white.withAlphaComponent(0.12))
+    /// 专注完成页的动作按钮：文字/描边/凸出底共用这一档青绿，凸出态的字走 `onAccent`。
+    static let focusCompletionAccent = themed(rgb(0x00C99C), rgb(0x00C99C))
+
+    // MARK: 摘要导出（2026-11 从 SummaryWorkspaceView / SummaryExportService 收口）
+    //
+    // 导出瓦片是"文件格式"的固定色板（PDF 红 / PNG 黄 / Markdown 墨 /
+    // 纯文本绿 / 邮件蓝），不随外观切换；导出画布同理，永远画在白纸上用
+    // 固定浅色墨。瓦片逐值平移成浮点表达式（PNG 的绿通道 178.5 正落在
+    // 8-bit 取整边界，写 hex 会引入半级误差），注释是 8-bit 概括。
+    /// 文件格式瓦片：PDF 与富文本同用一档红。
+    static let summaryTilePDF = Color(red: 0.93, green: 0.26, blue: 0.24)        // #ED423D
+    static let summaryTilePNG = Color(red: 0.98, green: 0.70, blue: 0.20)        // #FAB333
+    static let summaryTileMarkdown = Color(red: 0.18, green: 0.20, blue: 0.26)   // #2E3342
+    static let summaryTilePlainText = Color(red: 0.24, green: 0.74, blue: 0.48)  // #3DBD7A
+    static let summaryTileMail = Color(red: 0.23, green: 0.51, blue: 0.96)       // #3B82F5
+    /// 导出画布的固定墨色（AppKit）：正文、次级文字、强调与代码底。强调即
+    /// `nsAccent` 的浅色值、次级即 `nsOutOfMonthText` 的深色值——导出不跟随
+    /// 外观，所以取静态值而不是动态色。
+    static let exportInkText = NSColor(red: 0.12, green: 0.13, blue: 0.16, alpha: 1)
+    static let exportInkSecondaryText = NSColor(red: 0.42, green: 0.44, blue: 0.48, alpha: 1)
+    static let exportInkAccent = NSColor(red: 0.388, green: 0.537, blue: 0.961, alpha: 1)
+    static let exportInkCodeBackground = NSColor(red: 0.95, green: 0.955, blue: 0.965, alpha: 1)
+
+    // MARK: 反馈（2026-11 从 FeedbackHostView 收口）
+    /// 撤销动作的琥珀色（撤销提示上的可点文字）。
+    static let feedbackUndo = themed(rgb(0xFFA100), rgb(0xFFA100))
 }

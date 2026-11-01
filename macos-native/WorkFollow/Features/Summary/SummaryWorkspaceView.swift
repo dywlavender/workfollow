@@ -705,12 +705,12 @@ private struct SummaryMenuLabel: View {
         case file(String, Color)
         case symbol(String, Color)
 
-        static let pdf = Self.file("PDF", Color(red: 0.93, green: 0.26, blue: 0.24))
-        static let png = Self.file("PNG", Color(red: 0.98, green: 0.70, blue: 0.20))
-        static let markdown = Self.file("M↓", Color(red: 0.18, green: 0.20, blue: 0.26))
-        static let richText = Self.file("R", Color(red: 0.93, green: 0.26, blue: 0.24))
-        static let plainText = Self.file("T", Color(red: 0.24, green: 0.74, blue: 0.48))
-        static let mail = Self.symbol("envelope.fill", Color(red: 0.23, green: 0.51, blue: 0.96))
+        static let pdf = Self.file("PDF", WFColors.summaryTilePDF)
+        static let png = Self.file("PNG", WFColors.summaryTilePNG)
+        static let markdown = Self.file("M↓", WFColors.summaryTileMarkdown)
+        static let richText = Self.file("R", WFColors.summaryTilePDF)
+        static let plainText = Self.file("T", WFColors.summaryTilePlainText)
+        static let mail = Self.symbol("envelope.fill", WFColors.summaryTileMail)
     }
 
     let title: String

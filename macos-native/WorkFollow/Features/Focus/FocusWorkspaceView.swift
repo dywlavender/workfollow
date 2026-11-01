@@ -333,9 +333,9 @@ struct FocusTheme {
             cardBackground = Color.white.opacity(0.06)
             segmentActive = Color.white.opacity(0.14)
             avatarBackground = Color.white.opacity(0.12)
-            good = Color(red: 0.290, green: 0.871, blue: 0.502)
-            goodSoft = Color(red: 0.545, green: 0.937, blue: 0.702)
-            warn = Color(red: 0.973, green: 0.443, blue: 0.443)
+            good = WFColors.focusGood
+            goodSoft = WFColors.focusGoodSoft
+            warn = WFColors.focusWarn
         } else {
             text = WFColors.text
             text2 = WFColors.secondaryText
@@ -347,10 +347,10 @@ struct FocusTheme {
             chipBackground = Color.primary.opacity(0.04)
             cardBackground = Color.primary.opacity(0.045)
             segmentActive = .white
-            avatarBackground = Color(red: 1.0, green: 0.94, blue: 0.62)
-            good = Color(red: 0.082, green: 0.686, blue: 0.427)
-            goodSoft = Color(red: 0.220, green: 0.808, blue: 0.553)
-            warn = .red
+            avatarBackground = WFColors.focusAvatarBackground
+            good = WFColors.focusGood
+            goodSoft = WFColors.focusGoodSoft
+            warn = WFColors.focusWarn
         }
     }
 }
