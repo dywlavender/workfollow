@@ -17,6 +17,15 @@ extension EnvironmentValues {
 
 enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu, schedule, dropdown, cursor }
 
+/// 弹层动效常量。XCTest 宿主里保持旧行为（瞬现瞬失），交互测试的时序不因动画抖动。
+private enum PanelAnimation {
+    static let enabled = NSClassFromString("XCTestCase") == nil
+    static let slide: CGFloat = 5
+    static let presentDuration = 0.16
+    static let resizeDuration = 0.15
+    static let dismissDuration = 0.12
+}
+
 private struct PropertyPanelContentSizeKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
@@ -85,6 +94,9 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
         var material: WFAppearanceMaterial = .classic
         private var lastContentSize: CGSize = .zero
         private var contentResizeQueued = false
+        /// 呈现动画进行中：此间的内容 resize 改为对动画目标帧的重定向，避免两次
+        /// setFrame 互相打架（打开后 1-2 帧内容高度才量准，这是常见路径）。
+        private var openingAnimationPending = false
 
         func update() {
             guard presented, let anchor, let owner = anchor.window, owner.isVisible else {
@@ -241,8 +253,69 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                 frame = AnchoredPropertyPanelGeometry.frame(row: row, size: size,
                     screen: rootOwner.frame.intersection(screen), prefersAbove: prefersAbove)
             }
-            panel?.setFrame(frame, display: true)
-            if isOpening { panel?.orderFront(nil) }
+            let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            if isOpening {
+                if PanelAnimation.enabled, !reduceMotion {
+                    // 从触发行方向滑入 5pt：下挂面板向下落，上挂面板向上顶，
+                    // 子菜单从行侧滑出。终点尺寸此刻就位，内容高度随后到达时
+                    // 由 resize 路径对动画目标帧重定向。
+                    var start = frame
+                    switch placement {
+                    case .submenu:
+                        start.origin.x += frame.minX >= row.maxX ? -PanelAnimation.slide : PanelAnimation.slide
+                    default:
+                        start.origin.y += row.midY > frame.midY ? PanelAnimation.slide : -PanelAnimation.slide
+                    }
+                    panel?.setFrame(start, display: false)
+                    panel?.alphaValue = 0
+                    panel?.orderFront(nil)
+                    openingAnimationPending = true
+                    NSAnimationContext.runAnimationGroup({ context in
+                        context.duration = PanelAnimation.presentDuration
+                        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                        panel?.animator().alphaValue = 1
+                        panel?.animator().setFrame(frame, display: true)
+                    }, completionHandler: { [weak self] in
+                        self?.openingAnimationPending = false
+                        self?.panel?.invalidateShadow()
+                    })
+                } else {
+                    panel?.setFrame(frame, display: true)
+                    panel?.orderFront(nil)
+                }
+            } else {
+                let sizeChanged = abs(panel!.frame.width - frame.width) > 0.5
+                    || abs(panel!.frame.height - frame.height) > 0.5
+                if openingAnimationPending {
+                    // 呈现动画未完：尺寸真的变了就把动画目标帧换掉，仅位置微调则让滑动继续。
+                    if sizeChanged, PanelAnimation.enabled, !reduceMotion {
+                        NSAnimationContext.runAnimationGroup({ context in
+                            context.duration = PanelAnimation.resizeDuration
+                            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                            panel?.animator().setFrame(frame, display: true)
+                        }, completionHandler: { [weak self] in
+                            self?.openingAnimationPending = false
+                            self?.panel?.invalidateShadow()
+                        })
+                    } else if !sizeChanged {
+                        panel?.invalidateShadow()
+                        return
+                    } else {
+                        panel?.setFrame(frame, display: true)
+                        openingAnimationPending = false
+                    }
+                } else if sizeChanged, PanelAnimation.enabled, !reduceMotion {
+                    // 内容增减：面板长高/收起，而不是跳到新尺寸。
+                    NSAnimationContext.runAnimationGroup({ context in
+                        context.duration = PanelAnimation.resizeDuration
+                        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                        panel?.animator().setFrame(frame, display: true)
+                    }, completionHandler: { [weak panel] in panel?.invalidateShadow() })
+                } else {
+                    panel?.setFrame(frame, display: true)
+                    panel?.invalidateShadow()
+                }
+            }
             if isOpening, focusPolicy != .preservePresenter {
                 panel?.makeKey()
                 host.layoutSubtreeIfNeeded()
@@ -294,7 +367,19 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                     owner.makeKey()
                 }
                 panel.parent?.removeChildWindow(panel)
-                panel.close()
+                if PanelAnimation.enabled,
+                   !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                    // 淡出收尾：期间忽略鼠标（交互注册已注销，不能吞掉下层的点击）。
+                    // 闭包持有 panel 直到动画结束，window 的 isReleasedWhenClosed 为 false。
+                    panel.ignoresMouseEvents = true
+                    NSAnimationContext.runAnimationGroup({ context in
+                        context.duration = PanelAnimation.dismissDuration
+                        context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                        panel.animator().alphaValue = 0
+                    }, completionHandler: { panel.close() })
+                } else {
+                    panel.close()
+                }
             }
             panel = nil; host = nil
         }
