@@ -1169,6 +1169,9 @@ struct TaskListView: View {
                         .font(WFType.groupCount)
                         .padding(.leading, 5)
                         .foregroundStyle(group.kind == .completed ? WFColors.taskCompletedCount : WFColors.taskMetaText)
+                        // 新增/完成任务时计数从旧值滚到新值，与侧栏徽标同一口吻。
+                        .contentTransition(.numericText())
+                        .animation(.snappy(duration: 0.3), value: group.tasks.count)
                 }
                 .frame(height: headerHeight)
                 .contentShape(Rectangle())
