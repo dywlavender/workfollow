@@ -1171,7 +1171,7 @@ struct TaskListView: View {
                         .foregroundStyle(group.kind == .completed ? WFColors.taskCompletedCount : WFColors.taskMetaText)
                         // 新增/完成任务时计数从旧值滚到新值，与侧栏徽标同一口吻。
                         .contentTransition(.numericText())
-                        .animation(.snappy(duration: 0.3), value: group.tasks.count)
+                        .animation(WFMotion.noneIfDisabled, value: group.tasks.count)
                 }
                 .frame(height: headerHeight)
                 .contentShape(Rectangle())
@@ -1769,9 +1769,9 @@ struct TaskRowView: View {
             TaskCompletionFeedback.play()
             strikeSweep = 0
             strikeOpacity = 1
-            withAnimation(.easeOut(duration: 0.26)) { strikeSweep = 1 }
+            withAnimation(WFMotion.enabled ? .easeOut(duration: 0.26) : nil) { strikeSweep = 1 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
-                withAnimation(.easeIn(duration: 0.25)) { strikeOpacity = 0 }
+                withAnimation(WFMotion.enabled ? .easeIn(duration: 0.25) : nil) { strikeOpacity = 0 }
             }
         }
         .taskTreeRenderAnchor(task.id, .row)

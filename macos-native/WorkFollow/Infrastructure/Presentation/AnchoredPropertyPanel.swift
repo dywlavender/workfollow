@@ -18,8 +18,9 @@ extension EnvironmentValues {
 enum AnchoredPropertyPanelPlacement { case vertical, verticalInOwner, submenu, schedule, dropdown, cursor }
 
 /// 弹层动效常量。XCTest 宿主里保持旧行为（瞬现瞬失），交互测试的时序不因动画抖动。
+@MainActor
 private enum PanelAnimation {
-    static let enabled = NSClassFromString("XCTestCase") == nil
+    static let enabled = WFMotion.enabled
     static let slide: CGFloat = 5
     static let presentDuration = 0.16
     static let resizeDuration = 0.15

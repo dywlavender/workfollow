@@ -414,9 +414,9 @@ struct NavigationColumnView: View {
                 if count > 0 {
                     Text("\(count)").font(WFType.sidebarBadge)
                         .foregroundStyle(WFColors.taskMetaText)
-                        // 新建/完成任务时徽标从旧值滚到新值，不跳变。
+                        // 新建/完成任务时徽标从旧值滚到新值，不跳变；减弱动态效果时瞬时。
                         .contentTransition(.numericText())
-                        .animation(.snappy(duration: 0.3), value: count)
+                        .animation(WFMotion.noneIfDisabled, value: count)
                 }
             }
             .font(WFType.navigation)
@@ -503,7 +503,7 @@ private struct NotesNavigationSection: View {
                 if count > 0 {
                     Text("\(count)").font(WFType.sidebarBadge).foregroundStyle(WFColors.taskMetaText)
                         .contentTransition(.numericText())
-                        .animation(.snappy(duration: 0.3), value: count)
+                        .animation(WFMotion.noneIfDisabled, value: count)
                 }
             }
             .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: NavigationMetrics.rowHeight)
