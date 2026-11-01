@@ -228,7 +228,8 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         try InspectorPanelTestSupport.sendEscape(to: popup)
         fixture.settle()
         let copied = try fixture.waitForSummary(containing: "<工作>")
-        XCTAssertTrue(copied.contains("<工作>"))
+        // 摘要正文 P0 起走 document：清单段渲染为「图标回退 + 清单名」（▤ 工作）。
+        XCTAssertTrue(copied.contains("▤ 工作"))
         XCTAssertTrue(copied.contains("[10月21日]"),
                       "完成时间样式改为日期+时间后仍按任务事实重建")
         try fixture.screenshot("summary-content-adopted", view: fixture.window.contentView)
