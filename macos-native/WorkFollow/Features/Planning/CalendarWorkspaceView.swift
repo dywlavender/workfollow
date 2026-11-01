@@ -170,10 +170,14 @@ struct CalendarWorkspaceView: View {
         }
     }
     private var toolbar: some View {
-        HStack(spacing: 8) {
-            Text(CalendarDayLabels.monthTitle(month, calendar: calendar)).font(WFType.pageTitle).foregroundStyle(WFColors.text).lineLimit(1)
-            if mode == .day { Text(String(calendar.component(.day, from: selectedDay)) + "日").font(WFType.pageTitle) }
-            Spacer(minLength: 0)
+        WorkspacePageHeader(title: CalendarDayLabels.monthTitle(month, calendar: calendar),
+                            accessory: {
+            if mode == .day {
+                Text(String(calendar.component(.day, from: selectedDay)) + "日")
+                    .font(WFType.pageTitle).foregroundStyle(WFColors.text).lineLimit(1)
+            }
+        }, trailing: {
+            HStack(spacing: 8) {
             WFGlassControlGroup(spacing: 2) {
                 Button {
                     anchorSink.rect = addAnchor.rect; presentComposer(on: selectedDay)
@@ -207,9 +211,8 @@ struct CalendarWorkspaceView: View {
                 } label: { Image(systemName: "ellipsis").frame(width: 30, height: 30) }
                 .fixedSize().hoverTip("日历设置")
             }
-        }
-        .padding(.horizontal, WFSpace.pageHorizontal)
-        .frame(height: WFCalendarMetrics.toolbarHeight)
+            }
+        })
     }
     private func preference(_ path: WritableKeyPath<CalendarPreferences, Bool>) -> Binding<Bool> {
         Binding(get: { settings.calendar[keyPath: path] }, set: { value in settings.updateCalendar { $0[keyPath: path] = value } })

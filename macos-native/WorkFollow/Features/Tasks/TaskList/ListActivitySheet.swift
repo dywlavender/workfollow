@@ -23,22 +23,23 @@ struct ListActivitySheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 头部与全站弹框同口径：标题用 DialogTitle 令牌、内边距取 formInset。
+            // 原来这里用 .headline + 16 内边距，字号与标题位置都和别的弹框对不齐。
             HStack {
-                Text("清单动态 · \(listName)").font(.headline)
-                Spacer()
+                DialogTitle(text: "清单动态 · \(listName)")
                 Button(action: onClose) { Image(systemName: "xmark") }
                     .buttonStyle(.plain)
                     .hoverTip("关闭清单动态")
                     .accessibilityLabel("关闭清单动态")
             }
-            .padding(16)
+            .padding(PopupMetrics.formInset)
             Divider()
             if events.isEmpty {
                 if !history.isLoading && history.error == nil {
                     VStack(spacing: 8) {
                         Text("暂无清单动态").foregroundStyle(WFColors.text)
                         Text("仅记录启用后的任务变更，不补造历史记录。")
-                            .font(.caption).foregroundStyle(WFColors.secondaryText)
+                            .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                     }
                     .padding(24)
                 }
@@ -53,15 +54,15 @@ struct ListActivitySheet: View {
                                 Text(workspace.task(for: event.taskID)?.title ?? "该任务")
                                     .foregroundStyle(WFColors.text)
                                     .lineLimit(1)
-                                Text(event.title).font(.callout)
+                                Text(event.title).font(WFType.body)
                                     .foregroundStyle(WFColors.secondaryText)
                                 if let detail = event.detail {
-                                    Text(detail).font(.caption)
+                                    Text(detail).font(WFType.supporting)
                                         .foregroundStyle(WFColors.secondaryText)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Text(event.occurredAt, format: .dateTime.month().day().hour().minute())
-                                    .font(.caption).foregroundStyle(WFColors.tertiaryText)
+                                    .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }

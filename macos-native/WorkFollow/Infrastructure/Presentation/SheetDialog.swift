@@ -1,0 +1,123 @@
+import SwiftUI
+
+/// 表单类 sheet 的统一外壳：标题 + 分隔线 + 可滚动内容 + 底部操作栏。
+///
+/// 37 个 sheet 里原来至少有 5 套头部（`DialogHeader` 18 semibold、`WFType.section` 13、
+/// `.title3` 20、`.headline`、以及页内自绘模态）和 3 套底部（`DialogFooter`、
+/// 裸 HStack、只有关闭 ×），内边距从 16 到 24 都有。结果同一批表单弹出来
+/// 标题字号、分割线有无、主按钮是否强调色全不一致。
+///
+/// 这个外壳只固定**结构**，表单内容仍由各页自己给；宽度与高度由调用方决定，
+/// 但会用 `screenHeightLimit` 按屏幕高度收紧，避免小屏上底部按钮被推出屏幕。
+struct SheetDialog<Content: View, Status: View>: View {
+    let title: String
+    var width: CGFloat = SheetDialogMetrics.regularWidth
+    /// 内容区的自然高度；`nil` 表示由内容撑开（不强制滚动）。
+    var contentHeight: CGFloat? = nil
+    var cancelTitle = "取消"
+    var primaryTitle = "保存"
+    var canSubmit = true
+    var cancelIdentifier = ""
+    var primaryIdentifier = ""
+    /// 给底部两个按钮补测试锚点等装饰；不传则原样。
+    var cancelDecoration: (AnyView) -> AnyView = { $0 }
+    var primaryDecoration: (AnyView) -> AnyView = { $0 }
+    let onCancel: () -> Void
+    let onSubmit: () -> Void
+    @ViewBuilder let content: () -> Content
+    @ViewBuilder let status: () -> Status
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DialogHeader(title: title)
+            Divider()
+            if let contentHeight {
+                ScrollView { content().padding(PopupMetrics.formInset) }
+                    .compactScrollbars()
+                    .frame(height: contentHeight)
+            } else {
+                ScrollView { content().padding(PopupMetrics.formInset) }
+                    .compactScrollbars()
+            }
+            // DialogFooter 是 memberwise init，参数必须按声明顺序：
+            // buttonWidth 在 cancelIdentifier 之前。
+            DialogFooter(cancelTitle: cancelTitle, primaryTitle: primaryTitle,
+                         canSubmit: canSubmit, buttonWidth: 72,
+                         cancelIdentifier: cancelIdentifier,
+                         primaryIdentifier: primaryIdentifier,
+                         cancelDecoration: cancelDecoration,
+                         primaryDecoration: primaryDecoration,
+                         onCancel: onCancel, onSubmit: onSubmit, status: status)
+        }
+        .frame(width: width)
+        .frame(maxHeight: SheetDialogMetrics.heightLimit)
+        .workfollowPopupSurface()
+    }
+}
+
+extension SheetDialog where Status == EmptyView {
+    init(title: String, width: CGFloat = SheetDialogMetrics.regularWidth,
+         contentHeight: CGFloat? = nil,
+         cancelTitle: String = "取消", primaryTitle: String = "保存", canSubmit: Bool = true,
+         cancelIdentifier: String = "", primaryIdentifier: String = "",
+         onCancel: @escaping () -> Void, onSubmit: @escaping () -> Void,
+         @ViewBuilder content: @escaping () -> Content) {
+        self.init(title: title, width: width, contentHeight: contentHeight,
+                  cancelTitle: cancelTitle, primaryTitle: primaryTitle, canSubmit: canSubmit,
+                  cancelIdentifier: cancelIdentifier, primaryIdentifier: primaryIdentifier,
+                  onCancel: onCancel, onSubmit: onSubmit,
+                  content: content, status: { EmptyView() })
+    }
+}
+
+enum SheetDialogMetrics {
+    /// 紧凑档：单列短表单（清单编辑、标签编辑）。
+    static let compactWidth: CGFloat = 400
+    /// 常规档：带分组与说明的表单。
+    static let regularWidth: CGFloat = 480
+    /// 宽档：双列或多区块（模板库、规则编辑）。
+    static let wideWidth: CGFloat = 640
+    /// 按屏幕高度收紧：留出标题栏与 Dock 的余量，避免底部按钮落到屏幕外。
+    static let heightLimit: CGFloat = 640
+}
+
+/// 设置类面板：改动即时生效，底部只有一个「完成」。
+/// 和 `SheetDialog` 共用标题/滚动区/底栏结构，但不提供「保存」语义——
+/// 这类面板没有取消回滚，画一个取消按钮会让人以为可以撤销。
+struct SheetSettingsPanel<Content: View>: View {
+    let title: String
+    var width: CGFloat = SheetDialogMetrics.regularWidth
+    var contentHeight: CGFloat? = nil
+    var doneTitle = "完成"
+    let onDone: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DialogHeader(title: title)
+            Divider()
+            if let contentHeight {
+                ScrollView { content().padding(PopupMetrics.formInset) }
+                    .compactScrollbars().frame(height: contentHeight)
+            } else {
+                ScrollView { content().padding(PopupMetrics.formInset) }
+                    .compactScrollbars()
+            }
+            VStack(spacing: 0) {
+                Divider()
+                HStack {
+                    Spacer()
+                    Button(doneTitle, action: onDone)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, PopupMetrics.formInset)
+                .padding(.vertical, PopupMetrics.formFooterInset)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(width: width)
+        .frame(maxHeight: SheetDialogMetrics.heightLimit)
+        .workfollowPopupSurface()
+    }
+}

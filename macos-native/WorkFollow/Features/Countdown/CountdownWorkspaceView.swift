@@ -113,15 +113,13 @@ struct CountdownWorkspaceView: View {
     // MARK: 页头
 
     private var header: some View {
-        HStack(spacing: WFSpace.sm) {
-            Text(NativeDestination.countdown.title)
-                .font(WFType.pageTitle)
-            // 参考图标题后有一个下拉小箭头（原版用它切换模块）。这里只做视觉对齐：
-            // 模块切换已经由左侧图标栏承担，再造一个入口是重复的导航。
+        // 参考图标题后有一个下拉小箭头（原版用它切换模块）。这里只做视觉对齐：
+        // 模块切换已经由左侧图标栏承担，再造一个入口是重复的导航。
+        WorkspacePageHeader(title: NativeDestination.countdown.title, accessory: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(WFColors.secondaryText)
-            Spacer(minLength: WFSpace.sm)
+        }, trailing: {
             // 原版的 `+` 不是直接开面板，而是先弹一个「纪念日 / 倒数日 / 生日 / 节日」
             // 菜单，选中哪个就开哪个类型的面板（参考图 4 的四张面板正是这么来的）。
             WFGlassControlGroup(spacing: 4) {
@@ -150,7 +148,7 @@ struct CountdownWorkspaceView: View {
                 .hoverTip("更多")
                 .accessibilityLabel("更多")
             }
-        }
+        })
         .foregroundStyle(WFColors.text)
     }
 

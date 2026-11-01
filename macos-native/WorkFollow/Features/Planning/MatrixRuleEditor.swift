@@ -16,14 +16,17 @@ struct MatrixRuleEditor: View {
 
     private var matches: Int { tasks.filter { PlanningProjection.appearsOnCalendar($0) && value.rule.matches($0, now: now, calendar: calendar) }.count }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("象限名称与规则").font(.title3.weight(.semibold))
-                Spacer()
-                Text("匹配 \(matches) 项任务").foregroundStyle(WFColors.secondaryText)
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: WFSpace.lg) {
+        SheetDialog(title: "象限名称与规则",
+                    width: SheetDialogMetrics.wideWidth,
+                    contentHeight: 520,
+                    canSubmit: !value.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !invalidRange,
+                    onCancel: onCancel,
+                    onSubmit: {
+            var result = value
+            result.title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            onSave(result)
+        }) {
+            VStack(alignment: .leading, spacing: WFSpace.lg) {
                     WFFormSection {
                         WFFormRow("名称") {
                             TextField("名称", text: $value.title)
@@ -100,25 +103,11 @@ struct MatrixRuleEditor: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .compactScrollbars()
             Text("同一任务命中多条规则时，按 I → II → III → IV 归属；移动象限位置不改变匹配顺序。")
-                .font(.caption).foregroundStyle(WFColors.secondaryText)
-            HStack {
-                Spacer()
-                Button("取消", action: onCancel).keyboardShortcut(.cancelAction)
-                Button("保存") {
-                    var result = value
-                    result.title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    onSave(result)
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(value.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || invalidRange)
-            }
+                .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+        } status: {
+            Text("匹配 \(matches) 项任务").foregroundStyle(WFColors.secondaryText)
         }
-        .padding(20)
-        .frame(width: 520, height: 660)
-        .workfollowPopupSurface(fallback: WFColors.canvas)
         .onChange(of: value.rule.date.kind) { _, kind in
             if kind == .dateRange {
                 if value.rule.date.rangeStart == nil { value.rule.date.rangeStart = calendar.startOfDay(for: now) }

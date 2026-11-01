@@ -30,8 +30,20 @@ struct TaskTagEditorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.lg) {
-            Text(tagID == nil ? "新建标签" : "编辑标签").font(WFType.detailTitle)
+        SheetDialog(title: tagID == nil ? "新建标签" : "编辑标签",
+                    width: SheetDialogMetrics.compactWidth,
+                    primaryTitle: tagID == nil ? "添加" : "确定",
+                    canSubmit: TaskTag.normalizedName(name) != nil,
+                    cancelDecoration: { AnyView($0.taskTagEditorFrame(.cancel)) },
+                    primaryDecoration: { AnyView($0.taskTagEditorFrame(.save)) },
+                    onCancel: onDismiss,
+                    onSubmit: {
+            guard workspace.saveTag(tagID, name: name, colorARGB: color, parentID: parentID) != nil else {
+                invalid = true; return
+            }
+            onSaved(parentID); onDismiss()
+        }) {
+            VStack(alignment: .leading, spacing: WFSpace.lg) {
             WFFormSection {
                 WFFormRow("名称", showsDivider: false) {
                     TextField("标签名称", text: $name).textFieldStyle(.roundedBorder)
@@ -54,29 +66,10 @@ struct TaskTagEditorView: View {
                     .labelsHidden().accessibilityIdentifier("tag.editor.parent")
                 }
             }
-            if invalid {
-                Text("名称为空、已存在，或父标签不可用")
-                    .font(WFType.supporting).foregroundStyle(WFColors.danger)
-                    .padding(.horizontal, WFSpace.md)
             }
-            Divider()
-            HStack {
-                Spacer()
-                Button("取消", action: onDismiss).keyboardShortcut(.cancelAction)
-                    .taskTagEditorFrame(.cancel)
-                Button(tagID == nil ? "添加" : "确定") {
-                    guard workspace.saveTag(tagID, name: name, colorARGB: color, parentID: parentID) != nil else {
-                        invalid = true; return
-                    }
-                    onSaved(parentID); onDismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(TaskTag.normalizedName(name) == nil)
-                .taskTagEditorFrame(.save)
-            }
+        } status: {
+            Text(invalid ? "名称为空、已存在，或父标签不可用" : "").foregroundStyle(WFColors.danger)
         }
-        .padding(WFSpace.xxl).frame(width: PopupMetrics.settingsSheetWidth)
-        .workfollowPopupSurface(fallback: WFColors.canvas)
         .coordinateSpace(name: TaskTagEditorFrames.coordinateSpace)
         .onAppear { DispatchQueue.main.async { nameFocused = true } }
         .onChange(of: name) { _, _ in invalid = false }

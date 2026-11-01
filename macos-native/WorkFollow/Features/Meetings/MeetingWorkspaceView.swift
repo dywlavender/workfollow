@@ -178,13 +178,12 @@ struct MeetingWorkspaceView: View {
 
     private func list(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: WFSpace.sm) {
-            HStack(spacing: WFSpace.sm) {
+            WorkspacePageHeader(title: "会议纪要", leading: {
                 if compact, store.selected != nil {
                     Button { detailOnly = false } label: { Image(systemName: "chevron.left") }
                         .buttonStyle(.plain).hoverTip("返回会议列表")
                 }
-                Text("会议纪要").font(WFType.pageTitle)
-                Spacer(minLength: WFSpace.sm)
+            }, trailing: {
                 // 与笔记页的「新建」同一个样式：28×28、白字、accent 底、圆角 6。
                 Button { store.create() } label: {
                     Image(systemName: "plus").frame(width: 28, height: 28)
@@ -192,8 +191,7 @@ struct MeetingWorkspaceView: View {
                 .buttonStyle(.plain).foregroundStyle(WFColors.onAccent)
                 .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6))
                 .hoverTip("新建会议").accessibilityLabel("新建会议")
-            }
-            .frame(height: 44)
+            })
 
             ScrollView {
                 // 行距 0：与任务列表、笔记列表同口径（分割线画在行内底边，不占行距）。

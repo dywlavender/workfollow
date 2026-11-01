@@ -45,8 +45,16 @@ struct TaskListEditorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text(originalName == nil ? "新建清单" : "编辑清单").font(WFType.section)
+        SheetDialog(title: originalName == nil ? "新建清单" : "编辑清单",
+                    width: SheetDialogMetrics.compactWidth,
+                    primaryTitle: originalName == nil ? "创建" : "保存",
+                    canSubmit: !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    cancelIdentifier: "list-editor-cancel", primaryIdentifier: "list-editor-save",
+                    // 测试与拖拽锚点仍挂在底部按钮上，不能因为换外壳就丢。
+                    cancelDecoration: { AnyView($0.listManagementAnchor(.cancel)) },
+                    primaryDecoration: { AnyView($0.listManagementAnchor(.save)) },
+                    onCancel: { dismiss() }, onSubmit: save) {
+            VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
                 TaskListIconPicker(icon: $draft.icon, color: previewColor)
                 TextField("清单名称", text: $draft.name)
@@ -121,18 +129,10 @@ struct TaskListEditorView: View {
                 }.padding(.top, 8)
             }.font(WFType.body).listManagementAnchor(.more)
             if let error { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                    .listManagementAnchor(.cancel)
-                Button(originalName == nil ? "创建" : "保存", action: save)
-                    .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
-                    .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .listManagementAnchor(.save)
             }
+        } status: {
+            Text(error ?? "").foregroundStyle(WFColors.danger)
         }
-        .padding(24).frame(width: 464)
-        .workfollowPopupSurface()
         .coordinateSpace(name: "list-management")
         .onAppear { nameFocused = true }
         .onChange(of: draft.name) { _, _ in error = nil }

@@ -91,14 +91,10 @@ struct MatrixWorkspaceView: View {
     /// 页头只有标题与页面设置：象限本身的开关（新建、显示已完成、展开折叠）挂在
     /// 每个象限自己的 hover 动作里，因为它们各管一个象限。
     private var pageHeader: some View {
-        HStack(spacing: 0) {
-            Text("四象限")
-                .font(WFType.pageTitle)
-                .foregroundStyle(WFColors.text)
-            Spacer(minLength: 0)
-            // 页头「…」只管一件事：整页的已完成任务显隐。
-            // 撤销/重做、展开/折叠分组都不在这里——拖拽与规则编辑本身可以 ⌘Z，
-            // 展开折叠是每个分组的局部动作（点分组标题）。
+        // 页头「…」只管一件事：整页的已完成任务显隐。
+        // 撤销/重做、展开/折叠分组都不在这里——拖拽与规则编辑本身可以 ⌘Z，
+        // 展开折叠是每个分组的局部动作（点分组标题）。
+        WorkspacePageHeader(title: "四象限") {
             WFGlassControlGroup(spacing: 0) {
                 BusinessMenu {
                     Button(showCompleted ? "隐藏已完成" : "显示已完成") {
@@ -106,18 +102,14 @@ struct MatrixWorkspaceView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .frame(width: 32, height: 32)
+                        .frame(width: WorkspacePageHeaderMetrics.controlSize,
+                               height: WorkspacePageHeaderMetrics.controlSize)
                         .contentShape(Rectangle())
                 }
                 .fixedSize()
                 .hoverTip("四象限设置")
             }
         }
-        .padding(.leading, WFSpace.relaxed)
-        .padding(.top, WFSpace.cardInset)
-        .padding(.trailing, WFSpace.md)
-        .padding(.bottom, WFSpace.xs)
-        .frame(height: WFMatrixMetrics.pageHeaderHeight, alignment: .bottom)
     }
 
     // MARK: - 交互

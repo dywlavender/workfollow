@@ -6,9 +6,10 @@ struct CalendarDisplayOptions: View {
     let tags: [String]
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("日历显示设置").font(.title3.weight(.semibold))
-            ScrollView {
+        SheetSettingsPanel(title: "日历显示设置",
+                           width: SheetDialogMetrics.regularWidth,
+                           contentHeight: 520,
+                           onDone: { dismiss() }) {
                 VStack(alignment: .leading, spacing: WFSpace.lg) {
                     WFFormSection {
                         WFFormToggleRow("显示已完成任务", isOn: value(\.showCompleted))
@@ -48,11 +49,7 @@ struct CalendarDisplayOptions: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .compactScrollbars()
-            HStack { Spacer(); Button("完成") { dismiss() }.keyboardShortcut(.defaultAction) }
-        }.padding(20).frame(width: 440, height: 600)
-            .workfollowPopupSurface(fallback: WFColors.canvas)
+        }
     }
     private func value<T>(_ path: WritableKeyPath<CalendarPreferences, T>) -> Binding<T> {
         Binding(get: { settings.calendar[keyPath: path] }, set: { value in settings.updateCalendar { $0[keyPath: path] = value } })

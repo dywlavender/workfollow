@@ -85,22 +85,24 @@ struct AIChatWorkspaceView: View {
     private func conversation(showHistoryButton: Bool) -> some View {
         let current = store.current
         return VStack(spacing: 0) {
-            HStack(spacing: 16) {
+            // AI 对话页头要避开窗口红绿灯，顶部内边距单独给（其余页面为 0）。
+            WorkspacePageHeader(title: "AI 对话",
+                                topInset: 36,
+                                leading: {
                 if showHistoryButton {
                     WFGlassControlGroup(spacing: 0) {
                         Button("历史对话", systemImage: "clock.arrow.circlepath") { historyPresented = true }
                             .propertyPanelTrigger("ai.chat.history")
                     }
                 }
-                Text("AI 对话").font(WFType.detailTitle)
-                Spacer()
+            }, trailing: {
                 WFGlassControlGroup(spacing: 16) {
                     Button("引用资料", systemImage: "paperclip") { referencesPresented = true }
                         .workflowActionAnchor("ai.chat.reference")
                         .propertyPanelTrigger("ai.chat.references")
                 }
-            }
-            .buttonStyle(.plain).padding(.horizontal, 24).padding(.top, 36).padding(.bottom, 14)
+            })
+            .buttonStyle(.plain).padding(.bottom, 14)
             .anchoredPropertyPanel(isPresented: $historyPresented, trigger: "ai.chat.history",
                                    width: 250, placement: .vertical, title: "历史对话") {
                 history.frame(height: 420)

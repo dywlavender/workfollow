@@ -86,6 +86,9 @@ struct DialogFooter<Status: View>: View {
     var buttonWidth: CGFloat = 72
     var cancelIdentifier = ""
     var primaryIdentifier = ""
+    /// 给按钮补测试锚点等装饰。默认原样返回，不影响既有调用。
+    var cancelDecoration: (AnyView) -> AnyView = { $0 }
+    var primaryDecoration: (AnyView) -> AnyView = { $0 }
     let onCancel: () -> Void
     let onSubmit: () -> Void
     @ViewBuilder let status: () -> Status
@@ -98,18 +101,22 @@ struct DialogFooter<Status: View>: View {
                     Color.clear.frame(height: 32).accessibilityHidden(true)
                     status().font(WFType.supporting).lineLimit(2)
                 }.frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                Button(action: onCancel) {
-                    Text(cancelTitle).frame(minWidth: buttonWidth - 24)
-                }
-                .buttonStyle(.bordered).keyboardShortcut(.cancelAction)
-                .accessibilityIdentifier(cancelIdentifier).workflowActionAnchor(cancelIdentifier)
-                .dialogActionAnchor(false)
-                Button(action: onSubmit) {
-                    Text(primaryTitle).frame(minWidth: buttonWidth - 24)
-                }
-                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                .disabled(!canSubmit).accessibilityIdentifier(primaryIdentifier).workflowActionAnchor(primaryIdentifier)
-                .dialogActionAnchor(true)
+                cancelDecoration(AnyView(
+                    Button(action: onCancel) {
+                        Text(cancelTitle).frame(minWidth: buttonWidth - 24)
+                    }
+                    .buttonStyle(.bordered).keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier(cancelIdentifier).workflowActionAnchor(cancelIdentifier)
+                    .dialogActionAnchor(false)
+                ))
+                primaryDecoration(AnyView(
+                    Button(action: onSubmit) {
+                        Text(primaryTitle).frame(minWidth: buttonWidth - 24)
+                    }
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .disabled(!canSubmit).accessibilityIdentifier(primaryIdentifier).workflowActionAnchor(primaryIdentifier)
+                    .dialogActionAnchor(true)
+                ))
             }
             .controlSize(.regular)
             .padding(.horizontal, PopupMetrics.formInset)
