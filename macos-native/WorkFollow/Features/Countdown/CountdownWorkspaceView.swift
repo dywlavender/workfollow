@@ -84,7 +84,8 @@ struct CountdownWorkspaceView: View {
                 content(availableWidth: proxy.size.width)
             }
             .padding(.horizontal, WFSpace.lg)
-            .padding(.top, WFSpace.lg)
+            // 顶部内边距由页头自己给（WorkspacePageHeader 带固定高度），
+            // 这里再加一层会让标题比日历/会议低 16pt。
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .workfollowPageSurface()
         }

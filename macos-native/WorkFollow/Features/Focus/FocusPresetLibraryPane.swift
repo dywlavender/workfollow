@@ -43,7 +43,9 @@ struct FocusPresetLibraryPane: View {
     private var libraryHeader: some View {
         ZStack {
             HStack(spacing: 6) {
-                Text("番茄专注").font(WFType.detailTitle).foregroundStyle(theme.text)
+                // 标题用与独立页一致的 pageTitle（20pt），原来是 detailTitle（18pt），
+                // 切到专注页会看到标题比日历/会议小一号。
+                Text("番茄专注").font(WFType.pageTitle).foregroundStyle(theme.text)
                 Spacer()
                 Button(action: onAddTimer) {
                     Image(systemName: "plus").font(.system(size: 17)).frame(width: 28, height: 28)
@@ -74,7 +76,10 @@ struct FocusPresetLibraryPane: View {
                 }
             }.padding(3).background(theme.chipBackground, in: Capsule())
         }
-        .padding(.horizontal, 20).frame(height: FocusLayoutMetrics.libraryHeaderHeight)
+        // 高度与 WorkspacePageHeader 对齐（44）；原来是 58，比别的页低 14pt。
+        // 这一页保留 ZStack：标题左右是「＋ / …」与分段控件，塞不进统一页头。
+        .padding(.horizontal, WorkspacePageHeaderMetrics.horizontalInset)
+        .frame(height: WorkspacePageHeaderMetrics.height)
         .foregroundStyle(theme.text2)
     }
 

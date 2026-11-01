@@ -816,7 +816,7 @@ private struct RestoreBackupSheet: View {
             .compactScrollbars()
             DialogCloseFooter(title: "关闭", onClose: onClose)
         }
-        .frame(width: 420, height: 380)
+        .frame(width: SheetDialogMetrics.compactWidth, height: 380)
         .workfollowPopupSurface()
         .onAppear { entries = Self.loadEntries(in: dataDirectory) }
     }

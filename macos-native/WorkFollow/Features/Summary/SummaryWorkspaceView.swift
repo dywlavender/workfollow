@@ -185,7 +185,7 @@ struct SummaryWorkspaceView: View {
                 Divider()
                 sources(report: report)
                 DialogCloseFooter { showsSources = false }
-            }.frame(width: 380, height: 560)
+            }.frame(width: SheetDialogMetrics.compactWidth, height: 560)
                 .workfollowPopupSurface(fallback: WFColors.canvas)
         }
         .sheet(isPresented: $showsConfiguration, onDismiss: {
@@ -198,7 +198,7 @@ struct SummaryWorkspaceView: View {
                 Divider()
                 configuration
                 DialogCloseFooter { showsConfiguration = false }
-            }.frame(width: 400, height: 690)
+            }.frame(width: SheetDialogMetrics.compactWidth, height: 690)
                 .workfollowPopupSurface(fallback: WFColors.canvas)
         }
         .workfollowAlert(

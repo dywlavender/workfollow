@@ -265,7 +265,12 @@ struct BusinessMenuOption: View {
     }
     private var optionLabel: some View {
         HStack(spacing: 8) {
-            if let symbol { Image(systemName: symbol).frame(width: 16).foregroundStyle(color ?? WFColors.secondaryText) }
+            if let symbol {
+                Image(systemName: symbol)
+                    .font(.system(size: PopupMetrics.menuIconSize))
+                    .frame(width: PopupMetrics.menuIconSize + 2)
+                    .foregroundStyle(color ?? WFColors.secondaryText)
+            }
             // 文字优先于右侧 Spacer/勾选列拿宽度：紧凑菜单里也不能把
             // 「有内容时显示」截成「有内…显示」。
             Text(title).lineLimit(1).truncationMode(.middle).layoutPriority(1)

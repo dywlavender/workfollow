@@ -484,16 +484,18 @@ struct TaskContextMenuPopover: View {
 
     private func menuRow(_ title: String, symbol: String,
                          trailing: String? = nil, destructive: Bool = false) -> some View {
-        // 滴答右键菜单：文本行 34pt、图标 20pt、文字 13pt。
+        // 与通用 BusinessMenu 同一口径：行高 30、图标 15、文字 14。
+        // 原先这里是 20pt 图标 + 13pt 字，两套菜单并排看会明显跳字号。
         HStack(spacing: 8) {
-            TaskContextMenuSymbol(name: symbol).frame(width: 20, height: 20)
+            TaskContextMenuSymbol(name: symbol)
+                .frame(width: PopupMetrics.menuIconSize + 1, height: PopupMetrics.menuIconSize + 1)
             Text(title).frame(maxWidth: .infinity, alignment: .leading)
             if let trailing {
                 Image(systemName: trailing).font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(WFColors.secondaryText)
             }
         }
-        .font(WFType.controlLabel)
+        .font(WFType.body)
         .foregroundStyle(destructive ? WFColors.danger : WFColors.text)
         .frame(minHeight: PopupMetrics.menuRowHeight)
         .padding(.horizontal, 8)
@@ -557,7 +559,7 @@ private struct TaskContextMenuSymbol: View {
             TaskContextMenuGlyph(name: name)
                 .stroke(style: StrokeStyle(lineWidth: 1.35, lineCap: .round, lineJoin: .round))
         } else {
-            Image(systemName: name).font(.system(size: 16, weight: .regular))
+            Image(systemName: name).font(.system(size: PopupMetrics.menuIconSize, weight: .regular))
         }
     }
 }

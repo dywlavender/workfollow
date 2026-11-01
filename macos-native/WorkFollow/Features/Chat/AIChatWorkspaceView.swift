@@ -85,9 +85,9 @@ struct AIChatWorkspaceView: View {
     private func conversation(showHistoryButton: Bool) -> some View {
         let current = store.current
         return VStack(spacing: 0) {
-            // AI 对话页头要避开窗口红绿灯，顶部内边距单独给（其余页面为 0）。
+            // 页头高度统一 44；原来这里用 topInset 36 让红绿灯，结果标题比
+            // 其他页低 36pt。红绿灯避让交给窗口本身，页头不再单独抬。
             WorkspacePageHeader(title: "AI 对话",
-                                topInset: 36,
                                 leading: {
                 if showHistoryButton {
                     WFGlassControlGroup(spacing: 0) {

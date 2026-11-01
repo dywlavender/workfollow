@@ -230,27 +230,27 @@ struct TaskListCommands: View {
     private var meta: TaskListMeta? { workspace.listMeta(for: name) }
     var body: some View {
         if !workspace.isListArchived(name) {
-            Button("编辑清单…", systemImage: "pencil", action: onEdit)
-            Button(meta?.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") {
+            Button("编辑清单…", action: onEdit)
+            Button(meta?.isPinned == true ? "取消置顶" : "置顶") {
                 _ = workspace.setListPinned(name, meta?.isPinned != true)
             }
-            Button(meta?.isDefault == true ? "取消默认清单" : "设为默认清单", systemImage: "tray") {
+            Button(meta?.isDefault == true ? "取消默认清单" : "设为默认清单") {
                 _ = workspace.setDefaultList(meta?.isDefault == true ? nil : name)
             }
         }
-        Button("复制清单…", systemImage: "doc.on.doc", action: onCopy)
-        if let onActivity { Button("清单动态", systemImage: "clock.arrow.circlepath", action: onActivity) }
+        Button("复制清单…", action: onCopy)
+        if let onActivity { Button("清单动态", action: onActivity) }
         Divider()
         if workspace.isListArchived(name) {
-            Button("取消归档", systemImage: "archivebox") { _ = workspace.setListArchived(name, false) }
+            Button("取消归档") { _ = workspace.setListArchived(name, false) }
         } else {
-            Button("归档清单…", systemImage: "archivebox") {
+            Button("归档清单…") {
                 if TaskNamePrompt.confirm("归档清单“\(name)”？", message: "归档后不在智能清单中显示，到期不提醒。可以随时取消归档。", action: "归档") {
                     _ = workspace.setListArchived(name, true)
                 }
             }.disabled(meta?.isDefault == true)
         }
-        Button("删除清单…", systemImage: "trash", role: .destructive) {
+        Button("删除清单…", role: .destructive) {
             if TaskNamePrompt.confirm("删除清单“\(name)”？", message: "清单中的任务和子任务将移入垃圾桶。可以撤销。", action: "删除") {
                 _ = workspace.deleteList(name)
             }

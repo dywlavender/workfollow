@@ -24,12 +24,21 @@ enum PopupMetrics {
     static let menuWidthCompact: CGFloat = 160
     /// 显示状态（有内容时显示 / 显示 / 隐藏）一类短菜单：160 会把长项截成
     /// 「有内…显示」，176 刚好放下且比 224 明显收窄（滴答实测 ≈160–190）。
-    static let menuWidthNarrow: CGFloat = 176
+    static let menuWidthNarrow = priorityMenuWidth
     /// 全站菜单行共用行高。原按滴答右键菜单实测 34（图标 20 + 上下留白）取值，
     /// 现与摘要弹层口径统一为 40，整站菜单疏密一致。
-    static let menuRowHeight: CGFloat = 40
+    /// 菜单行高。40 配 14pt 字（比例 2.86）在 6 项菜单上会撑到 322pt，
+    /// 占 764pt 窗口的 42%，比滴答桌面版明显偏大；30 配 14pt 字（比例 2.14）
+    /// 降到 242pt，点击区仍远高于 macOS HIG 的 22pt 下限。
+    static let menuRowHeight: CGFloat = 30
+    /// 菜单行图标边长。跟着行高一起收：行高 40 时图标约 17，
+    /// 行高 30 后同步降到 15，保持图标与文字视觉平衡。
+    static let menuIconSize: CGFloat = 15
     static let menuInset: CGFloat = 6
-    static let menuMaximumHeight: CGFloat = 384
+    /// 菜单最大高度。行高从 40 降到 30 后，384 能放 12 行；
+    /// 任务右键菜单常有 18~22 项，频繁触发滚动。放到 480 能容 16 行，
+    /// 仍不超过 764pt 窗口的 63%，不会盖满屏幕。
+    static let menuMaximumHeight: CGFloat = 480
 
     /// 短菜单（任务类型 / 时间快捷项）：只放 2~3 个词条。
     ///
@@ -41,7 +50,7 @@ enum PopupMetrics {
     static let priorityMenuWidth: CGFloat = 176
     /// 「⋯ 更多操作」菜单：实测内容最右墨迹 152pt，208 空出 56pt 显得太宽；
     /// 收到 176，保留约 24pt 右侧余量，且仍容得下「开始专注」行尾箭头。
-    static let taskActionsWidth: CGFloat = 176
+    static let taskActionsWidth = priorityMenuWidth
     static let noteInfoWidth: CGFloat = 220
     /// 标签选择器。实测真实结构（输入行 + 列表行 + 底部两个按钮）自然宽 127pt，
     /// 原 264 空出 137pt。底部按钮是 `maxWidth: .infinity` 的并排布局，
@@ -51,7 +60,7 @@ enum PopupMetrics {
     /// 与 `menuWidth` 分开：那个是「图标 + 长词条 + 子菜单箭头」的口径。
     static let listPickerWidth: CGFloat = 172
     static let parentPickerWidth: CGFloat = 280
-    static let focusEstimateWidth: CGFloat = 280
+    static let focusEstimateWidth = parentPickerWidth
     static let relationPickerWidth: CGFloat = 320
     static let quickAddPropertiesWidth: CGFloat = 270
     /// 排序/筛选选项菜单。滴答 `TTSortOptionPickerViewController` 实测 192；
@@ -62,10 +71,10 @@ enum PopupMetrics {
     static let rhythmPopoverWidth: CGFloat = 360
     /// 每日目标：内容只有「标题 + 一行 Stepper」，实测 119pt 就够。
     /// 原 190 右侧空 71pt，收到 160 留 40 余量。
-    static let goalPopoverWidth: CGFloat = 160
+    static let goalPopoverWidth = menuWidthCompact
     static let symbolPickerWidth: CGFloat = 240
     /// Sheet 类宽度（原先都是裸字面量，散在各视图里）。
-    static let settingsSheetWidth: CGFloat = 320
+    static let settingsSheetWidth = relationPickerWidth
     /// 清单动态：列表型 Sheet，行内 `maxWidth: .infinity` 会撑满，
     /// 再窄任务名与时间就挤。原 360 收到 300（实测墨迹贴边 = 已到紧的下限）。
     static let activitySheetWidth: CGFloat = 300
@@ -76,17 +85,17 @@ enum PopupMetrics {
     /// 链接悬停菜单：三个图标按钮 + 内边距。
     static let linkHoverMenuWidth: CGFloat = 226
     /// `#` / `~` 候选面板：与 Slash compact 同宽。
-    static let completionWidth: CGFloat = 160
+    static let completionWidth = menuWidthCompact
     /// 拖拽落点选择卡。
     static let moveTargetWidth: CGFloat = 230
     /// 快速添加属性子面板（清单 / 显示模式）。
     static let quickAddChildWidth: CGFloat = 250
     /// Countdown 编辑器各区（色板 / 样式 / 显示）。
-    static let countdownPaletteWidth: CGFloat = 240
+    static let countdownPaletteWidth = symbolPickerWidth
     /// 350 = 左右内边距各 20 + 预览卡 310（与真卡片同宽，1:1）。
     static let countdownPreviewWidth: CGFloat = 350
-    static let countdownStyleWidth: CGFloat = 360
-    static let countdownDisplayWidth: CGFloat = 380
+    static let countdownStyleWidth = rhythmPopoverWidth
+    static let countdownDisplayWidth = templateNoteWidth
     /// Focus 记录详情（表单型 Sheet）。
     static let focusRecordWidth: CGFloat = 440
 
