@@ -86,7 +86,7 @@ private struct CompanionBubble: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(message)
-                .font(.system(size: 11.5))
+                .font(WFType.caption)
                 .foregroundStyle(WFColors.text)
                 // 带操作按钮的气泡必须保持一行（逾期文案已压缩）；普通提示最多两行。
                 .lineLimit(actionTitle == nil ? 2 : 1)
@@ -95,7 +95,7 @@ private struct CompanionBubble: View {
             if let actionTitle {
                 Button(action: onAction) {
                     Text(actionTitle)
-                        .font(.system(size: 10.5, weight: .medium))
+                        .font(WFType.compactStrong)
                         .foregroundStyle(WFColors.accent)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)

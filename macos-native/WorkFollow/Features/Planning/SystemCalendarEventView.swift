@@ -22,6 +22,7 @@ struct SystemCalendarEventDetails: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // 系统日历事件详情：标题跟随系统字号缩放，与日历原生样式一致。
             Label(event.fields.title, systemImage: "calendar").font(.title3)
             Text(event.calendarTitle).foregroundStyle(.secondary)
             if event.fields.allDay {

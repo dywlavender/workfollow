@@ -53,7 +53,7 @@ struct FocusStatisticsPane: View {
                     statistic("记录", value: "\(filtered.count)")
                 }
                 Divider()
-                Text("每日投入").font(.headline)
+                Text("每日投入").font(WFType.sectionSemibold)
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(dayTotals, id: \.day) { day in
                         HStack(spacing: 12) {
@@ -68,7 +68,7 @@ struct FocusStatisticsPane: View {
                     }
                 }
                 Divider()
-                Text("任务分布").font(.headline)
+                Text("任务分布").font(WFType.sectionSemibold)
                 ForEach(Array(taskTotals.enumerated()), id: \.offset) { _, item in
                     HStack {
                         Text(item.taskID.flatMap { workspace?.task(for: $0)?.title } ?? "未关联任务")

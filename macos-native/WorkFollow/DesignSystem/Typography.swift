@@ -49,7 +49,9 @@ enum WFType {
     /// 专注笔记等分栏面板标题。
     static let paneTitle = Font.system(size: 17, weight: .semibold)
     /// AI 面板紧凑操作文字。
-    static let compact = Font.system(size: 10.5)
+    /// 紧凑字号的数值，供需要同尺寸不同字重的地方复用（避免再写裸 10.5）。
+    static let compactSize: CGFloat = 10.5
+    static let compact = Font.system(size: compactSize)
     /// AI 面板最小说明与来源。
     static let compactCaption = Font.system(size: 9.5)
     /// AI 面板最小注释文字。

@@ -271,7 +271,7 @@ private struct NoteAITaskExchangeView: View {
                         for index in session.drafts.indices { session.drafts[index].selected = next }
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 10.5))
+                    .font(WFType.compact)
                     .foregroundStyle(WFColors.accent)
                     .disabled(exchange.isApplied)
                 }

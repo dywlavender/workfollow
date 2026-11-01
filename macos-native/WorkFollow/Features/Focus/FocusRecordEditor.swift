@@ -101,12 +101,12 @@ struct FocusRecordDetail: View {
         VStack(alignment: .leading, spacing: 18) {
             if let record = store.record(id: recordID) {
                 HStack {
-                    Text("专注记录").font(.title3.weight(.semibold))
+                    Text("专注记录").font(WFType.detailTitle)
                     Spacer()
                     Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
                 }
                 Label(record.mode.title, systemImage: record.mode == .stopwatch ? "stopwatch" : "timer")
-                    .font(.headline)
+                    .font(WFType.section)
                 Text(duration(record.activeSeconds)).font(.system(size: 36)).monospacedDigit()
                 Text(FocusViewLogic.dateTimeLabel(for: record.startedAt, calendar: store.presentationCalendar))
                     .foregroundStyle(theme.text2)
@@ -123,10 +123,10 @@ struct FocusRecordDetail: View {
                 } else { Text("未关联任务").foregroundStyle(theme.text3) }
                 if let details = record.details, details.pausedSeconds > 0 {
                     Text("暂停 \(duration(details.pausedSeconds)) · \(details.pauseRanges.count) 段")
-                        .font(.caption).foregroundStyle(theme.text2)
+                        .font(WFType.supporting).foregroundStyle(theme.text2)
                 }
                 Divider()
-                Text("专注笔记").font(.headline)
+                Text("专注笔记").font(WFType.section)
                 ScrollView { Text(record.note ?? "暂无笔记").frame(maxWidth: .infinity, alignment: .leading) }
                     .frame(minHeight: 60, maxHeight: 180)
                 .compactScrollbars()

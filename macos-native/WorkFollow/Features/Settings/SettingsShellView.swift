@@ -464,7 +464,9 @@ private struct BackgroundThemePreview: View {
                                           lineWidth: selection == theme ? 1.8 : 1)
                     }
                 Text(theme.title)
-                    .font(.system(size: 10.5, weight: selection == theme ? .semibold : .regular))
+                    .font(selection == theme
+                          ? Font.system(size: WFType.compactSize, weight: .semibold)
+                          : WFType.compact)
                     .foregroundStyle(selection == theme ? WFColors.text : WFColors.secondaryText)
                     .lineLimit(1)
             }

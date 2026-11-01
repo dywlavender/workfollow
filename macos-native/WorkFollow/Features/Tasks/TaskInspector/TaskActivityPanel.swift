@@ -9,7 +9,7 @@ struct TaskActivityPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("任务动态").font(.headline)
+                Text("任务动态").font(WFType.paneTitle)
                 Spacer()
                 Button(action: onClose) { Image(systemName: "xmark") }
                     .buttonStyle(.plain)

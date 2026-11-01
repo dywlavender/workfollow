@@ -63,6 +63,7 @@ private struct TaskReminderPanel: View {
     @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // 通知横幅属于系统语义环境：跟随系统字号缩放，不用 WFType 固定值。
             Label(delivery.title, systemImage: "bell.badge").font(.headline).lineLimit(2)
             Text(delivery.body).font(.subheadline).foregroundStyle(.secondary)
             HStack {

@@ -39,6 +39,8 @@ struct AppleSyncStatusButton: View {
 
     private var panelContent: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // 保留系统 text style：同步面板跟随系统无障碍字号缩放，
+            // 换成固定 pt 的 WFType 会让大字号用户看不清状态。
             Text(status.title).font(.headline)
             if status == .syncing || status == .connecting {
                 ProgressView().controlSize(.small)
@@ -89,7 +91,7 @@ struct AppleSyncConflictView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(conflict.title).font(.headline)
+            Text(conflict.title).font(WFType.sectionSemibold)
             Text("WorkFollow：" + summary(conflict.task))
             Text("提醒事项：" + summary(conflict.reminder))
             HStack {

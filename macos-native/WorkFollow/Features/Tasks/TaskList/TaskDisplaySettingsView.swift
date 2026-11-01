@@ -72,6 +72,10 @@ struct TaskDisplaySettingsView: View {
         .onExitCommand { dismiss() }
     }
 
+    /// 白名单例外，**不要**并入统一页头：
+    /// 标题居中 + 左上角红色圆点（关闭）是滴答清单「显示设置」的既有样式，
+    /// 本项目的目标是与之对齐。统一页头是「左对齐标题 + 右侧控件」，
+    /// 照搬会把居中标题改掉，反而偏离参考实现。
     private var titleBar: some View {
         ZStack {
             Text(TaskDisplaySettingsText.title).font(WFType.pageTitleStrong)
