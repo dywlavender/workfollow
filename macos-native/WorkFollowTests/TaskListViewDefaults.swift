@@ -74,9 +74,11 @@ final class TaskListViewDefaultsTests: XCTestCase {
             now: now, calendar: calendar, dateDisplay: .countdown), "逾期1天")
     }
 
-    func testRowDateColorsAreBlueUntilOverdueAndNeutralWhenClosed() {
+    /// 0b2ad64 起「未来日期」从强调蓝改回滴答灰阶（元信息一档），
+    /// 只剩今天用强调色、过期用红；测试名随之更新。
+    func testRowDateColorsAreAccentOnlyForTodayAndRedWhenOverdue() {
         XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .today), WFColors.accent)
-        XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .scheduled), WFColors.accent)
+        XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .scheduled), WFColors.taskMetaText)
         XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .overdue), Color.red)
         XCTAssertEqual(TaskListViewDefaults.rowDateColor(for: .none), WFColors.taskCompletedMetadata)
     }

@@ -10,9 +10,7 @@ enum WFType {
     /// 表单弹框标题。原用 `detailTitle` 18pt，实测在 400pt 宽的弹框里
     /// 标题占掉过多视觉重量（用户反馈「标题太大」）。16pt 与正文 14pt
     /// 只差两档，层次仍在，但不再压住内容。
-    static let dialogTitle = Font.system(size: 16, weight: .semibold)
-    /// 任务详情标题输入框（滴答富文本导出 `\fs38` = 19pt Medium，2026-10-16）。
-    static let taskTitle = Font.system(size: 19, weight: .medium)
+    static let dialogTitle = Font.system(size: 14, weight: .semibold)
     static let navigation = Font.system(size: 14)
     static let listTitle = Font.system(size: 14)
     static let body = Font.system(size: 14)
@@ -38,8 +36,6 @@ enum WFType {
     static let controlLabelStrong = Font.system(size: 13, weight: .semibold)
     /// 紧凑标题：显示设置卡片、AI 面板待办计数。
     static let captionStrong = Font.system(size: 12, weight: .semibold)
-    /// 数字角标：评论数、同步问题数、菜单偏移量。
-    static let badgeStrong = Font.system(size: 10, weight: .semibold)
     /// 极小计数角标：评论数、同步问题数。
     static let badgeSmall = Font.system(size: 9, weight: .semibold)
     /// 设置页与统计页的强调页面标题。

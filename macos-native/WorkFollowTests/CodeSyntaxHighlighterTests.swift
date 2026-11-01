@@ -134,7 +134,9 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         let document = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "// 不是代码")])])
         let rendered = DocumentTextCodec.render(document)
         let color = rendered.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
-        XCTAssertEqual(color?.usingColorSpace(.sRGB), NSColor.labelColor.usingColorSpace(.sRGB))
+        // 基色是编辑区墨色令牌（documentText，滴答 AX 实测 #191919），不是语法着色。
+        XCTAssertEqual(color?.usingColorSpace(.sRGB),
+                       NSColor(WFColors.documentText).usingColorSpace(.sRGB))
     }
 
     // MARK: - 编辑期重排
