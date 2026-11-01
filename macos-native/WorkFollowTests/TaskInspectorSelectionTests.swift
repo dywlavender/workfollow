@@ -31,7 +31,7 @@ final class TaskInspectorSelectionTests: XCTestCase {
             return view.subviews.lazy.compactMap { editor($0) }.first
         }
         let list = try XCTUnwrap(outline(host))
-        XCTAssertEqual(list.frame.width, 390, accuracy: 1)
+        XCTAssertEqual(try XCTUnwrap(list.enclosingScrollView).frame.width, 390, accuracy: 1)
         var editorHost: NativeTextView?
         for id in [first, second, first, second] {
             workspace.select(id)
@@ -43,12 +43,12 @@ final class TaskInspectorSelectionTests: XCTestCase {
             if let editorHost { XCTAssertTrue(current === editorHost) }
             else { editorHost = current }
             XCTAssertTrue(outline(host) === list)
-            XCTAssertEqual(list.frame.width, 390, accuracy: 1)
+            XCTAssertEqual(try XCTUnwrap(list.enclosingScrollView).frame.width, 390, accuracy: 1)
         }
         workspace.select(nil)
         InspectorPanelTestSupport.settle(window)
         XCTAssertTrue(outline(host) === list)
-        XCTAssertEqual(list.frame.width, 390, accuracy: 1)
+        XCTAssertEqual(try XCTUnwrap(list.enclosingScrollView).frame.width, 390, accuracy: 1)
         XCTAssertEqual(workspace.task(for: first)?.title, seed.task(for: first)?.title)
         XCTAssertEqual(workspace.task(for: second)?.title, seed.task(for: second)?.title)
     }

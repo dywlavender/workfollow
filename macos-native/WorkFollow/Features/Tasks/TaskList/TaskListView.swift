@@ -1346,7 +1346,10 @@ struct TaskListView: View {
     private func rowIdentity(group: TaskListGroup, task: Task) -> String {
         let status = task.status == .completed ? "completed" : "active"
         let abandoned = task.isAbandoned ? "abandoned" : "normal"
-        return group.id + ":" + task.id.uuidString + ":" + status + ":" + abandoned
+        let identity = task.id.uuidString + ":" + status + ":" + abandoned
+        // Tag grouping can show one task in multiple groups. Other scopes
+        // retain the task's row host when only its heading changes.
+        return grouping == .byTag ? group.id + ":" + identity : identity
     }
 
     private var taskOutlineRows: [NativeTaskOutline.Row] {

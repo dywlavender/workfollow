@@ -164,7 +164,7 @@ final class NativeTaskOutlineTests: XCTestCase {
         let item = coordinator.items[0]
         XCTAssertEqual(outline.rect(ofRow: 0).height, 50, accuracy: 1)
         XCTAssertEqual(outline.rect(ofRow: 1).height, 82, accuracy: 1)
-        XCTAssertEqual(cell.host.frame.minX, WFSpace.md, accuracy: 1)
+        XCTAssertEqual(cell.host.frame.minX, TaskListMetrics.outlineLeadingInset, accuracy: 1)
 
         coordinator.update([.init(id: "short", height: 50) { Text("Selected task").frame(height: 50) }, rows[1]], in: scroll)
         settle(scroll)

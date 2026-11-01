@@ -18,10 +18,12 @@ struct NativeTaskOutline: NSViewRepresentable {
         static var sizingTime: Double = 0
         static var sizingCalls = 0
         static var rowLayoutTime: Double = 0
+        static var selectionRefreshes = 0
         static func reset() {
             containers = 0; createdCells = 0; configurations = 0
             configurationTime = 0; updateTime = 0; reloadTime = 0
             sizingTime = 0; sizingCalls = 0; rowLayoutTime = 0
+            selectionRefreshes = 0
         }
     }
 #endif
@@ -186,8 +188,27 @@ struct NativeTaskOutline: NSViewRepresentable {
     typealias RowHostingView = NSHostingView<AnyView>
 #endif
 
+    @MainActor final class RowSelectionRefresh: ObservableObject {
+        @Published var revision = 0
+    }
+
+    private struct SelectionObservedRow: View {
+        @ObservedObject var selection: RowSelectionRefresh
+        let contentRevision: Int
+        let content: () -> AnyView
+        var body: some View {
+            let _ = (selection.revision, contentRevision)
+            content()
+        }
+    }
+
     final class Cell: NSTableCellView {
         let host = RowHostingView(rootView: AnyView(EmptyView()))
+        private let selection = RowSelectionRefresh()
+        private var currentItem: Item?
+        private var previousRow: Row?
+        private var displayedSelectionID: UUID?
+        private var contentRevision = 0
         var itemID: String?
 #if DEBUG
         private(set) var configurationCount = 0
@@ -213,16 +234,38 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-        func configure(_ item: Item) {
+        func configure(_ item: Item, selectedTaskID: UUID? = nil) {
+            currentItem = item
+            let changed = itemID != item.id || previousRow?.hasSameContent(as: item.row) != true
+                || previousRow?.hasSameLayout(as: item.row) != true
+            previousRow = item.row
+            itemID = item.id
+            let selectionChanged = displayedSelectionID != selectedTaskID
+            displayedSelectionID = selectedTaskID
+            guard changed else {
+                if selectionChanged { refreshSelection(selectedTaskID) }
+                return
+            }
 #if DEBUG
             let started = ProcessInfo.processInfo.systemUptime
             defer { Diagnostics.configurationTime += ProcessInfo.processInfo.systemUptime - started }
             Diagnostics.configurations += 1
             configurationCount += 1
 #endif
-            itemID = item.id
             // A reused cell resets SwiftUI state only when it hosts another row.
-            host.rootView = AnyView(item.row.makeContent().hidesSystemFocusEffect().id(item.id))
+            contentRevision += 1
+            host.rootView = AnyView(SelectionObservedRow(selection: selection, contentRevision: contentRevision, content: { [weak self] in
+                self?.currentItem?.row.makeContent() ?? AnyView(EmptyView())
+            })
+                .hidesSystemFocusEffect().id(item.id))
+        }
+
+        func refreshSelection(_ id: UUID?) {
+            displayedSelectionID = id
+#if DEBUG
+            Diagnostics.selectionRefreshes += 1
+#endif
+            selection.revision += 1
         }
     }
 
@@ -266,7 +309,7 @@ struct NativeTaskOutline: NSViewRepresentable {
                     for index in visible.location..<min(NSMaxRange(visible), self.items.count) {
                         guard let id = self.items[index].row.taskID, affected.contains(id),
                               let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell else { continue }
-                        cell.configure(self.items[index])
+                        cell.refreshSelection(source.selectedTaskID)
                     }
                 }
             }
@@ -288,7 +331,7 @@ struct NativeTaskOutline: NSViewRepresentable {
             let scopeChanged = self.scopeKey != scopeKey
             let previousScope = self.scopeKey
             self.scopeKey = scopeKey
-            let structureChanged = scopeChanged || items.map(\.id) != rows.map(\.id)
+            let structureChanged = items.map(\.id) != rows.map(\.id)
             let previousY = scroll.contentView.bounds.minY
             let visible = outline.rows(in: outline.visibleRect)
             let anchorIndex = visible.location != NSNotFound ? visible.location : 0
@@ -319,6 +362,29 @@ struct NativeTaskOutline: NSViewRepresentable {
 #if DEBUG
                 Diagnostics.reloadTime += ProcessInfo.processInfo.systemUptime - reloadStart
 #endif
+            } else if visible.location != NSNotFound {
+                let end = min(NSMaxRange(visible), items.count)
+                for index in visible.location..<end where contentChanged.contains(index) || layoutChanged.contains(index) {
+#if DEBUG
+                    guard refreshContent else { continue }
+#endif
+                    if let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell {
+                        cell.configure(items[index], selectedTaskID: selectionSource?.selectedTaskID)
+#if DEBUG
+                        configuredCellCount += 1
+#endif
+                    }
+                }
+            }
+            if !structureChanged && !layoutChanged.isEmpty {
+#if DEBUG
+                guard refreshHeights else { return }
+                heightInvalidationCount += layoutChanged.count
+#endif
+                outline.noteHeightOfRows(withIndexesChanged: layoutChanged)
+            }
+
+            if structureChanged || scopeChanged {
                 // Stay at the top while adding to an empty/top-aligned list.
                 // Otherwise its bottom spacer can become an anchor and scroll
                 // every newly inserted task above the viewport. Preserve a
@@ -338,26 +404,6 @@ struct NativeTaskOutline: NSViewRepresentable {
                 let maximumY = max(0, outline.frame.height - scroll.contentView.bounds.height)
                 scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, targetY), maximumY)))
                 scroll.reflectScrolledClipView(scroll.contentView)
-            } else if visible.location != NSNotFound {
-                let end = min(NSMaxRange(visible), items.count)
-                for index in visible.location..<end where contentChanged.contains(index) || layoutChanged.contains(index) {
-#if DEBUG
-                    guard refreshContent else { continue }
-#endif
-                    if let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell {
-                        cell.configure(items[index])
-#if DEBUG
-                        configuredCellCount += 1
-#endif
-                    }
-                }
-            }
-            if !structureChanged && !layoutChanged.isEmpty {
-#if DEBUG
-                guard refreshHeights else { return }
-                heightInvalidationCount += layoutChanged.count
-#endif
-                outline.noteHeightOfRows(withIndexesChanged: layoutChanged)
             }
         }
 
@@ -379,15 +425,18 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
             guard let item = item as? Item else { return nil }
-            let cell = cellCache[item.id] ?? Cell()
-            cellCache[item.id] = cell
-            cellOrder.removeAll { $0 == item.id }
-            cellOrder.append(item.id)
+            // A task's badges differ by scope. Cache those row presentations,
+            // while keeping only one outline and one inspector in the window.
+            let cacheKey = (scopeKey ?? "") + "|" + item.id
+            let cell = cellCache[cacheKey] ?? Cell()
+            cellCache[cacheKey] = cell
+            cellOrder.removeAll { $0 == cacheKey }
+            cellOrder.append(cacheKey)
             while cellOrder.count > 64 {
                 cellCache.removeValue(forKey: cellOrder.removeFirst())
             }
             cell.identifier = cellID
-            cell.configure(item)
+            cell.configure(item, selectedTaskID: selectionSource?.selectedTaskID)
             return cell
         }
     }

@@ -92,7 +92,19 @@ final class TaskWorkspaceReuseTests: XCTestCase {
         }
         XCTAssertEqual(workspace.projectionBuildCount, builds)
         XCTAssertEqual(NativeTaskOutline.Diagnostics.createdCells, 0)
-        XCTAssertEqual(NativeTaskOutline.Diagnostics.configurations, 6)
+        XCTAssertEqual(NativeTaskOutline.Diagnostics.configurations, 0)
+        XCTAssertEqual(NativeTaskOutline.Diagnostics.selectionRefreshes, 6)
         XCTAssertEqual(NativeTaskOutline.Diagnostics.updateTime, 0, "选择不应重新构建整个列表的行描述")
+        navigation.destination = .today
+        InspectorPanelTestSupport.settle(window)
+        navigation.destination = .inbox
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertNil(workspace.selectedTaskID)
+        let outline = try XCTUnwrap(find(NativeTaskOutline.OutlineView.self, in: host))
+        func highlights(_ view: NSView) -> [CGFloat] {
+            let own: [CGFloat] = view is RowHoverView ? [view.layer?.backgroundColor?.alpha ?? 0] : []
+            return own + view.subviews.flatMap { highlights($0) }
+        }
+        XCTAssertLessThan(highlights(outline).max() ?? 0, 0.5, "返回清单时不能残留上次选中任务的底色")
     }
 }

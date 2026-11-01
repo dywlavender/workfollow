@@ -1653,8 +1653,9 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setTitle(_ id: UUID, _ title: String) -> TaskActionResult {
+        let previous = store.readRevision
         let result = withMaterializedTask(id) { actions.setTitle($0, title) }
-        didMutate(result)
+        if store.readRevision != previous { didMutate(result) }
         return result
     }
 
@@ -1667,8 +1668,9 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
+        let previous = store.readRevision
         let result = withMaterializedTask(id) { actions.setDocument($0, document) }
-        didMutate(result)
+        if store.readRevision != previous { didMutate(result) }
         return result
     }
 
