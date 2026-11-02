@@ -102,15 +102,19 @@ struct WFSegmentedControl<Value: Hashable>: View {
     struct Option: Identifiable {
         let value: Value
         let title: String
+        /// 可选前置图标。默认 nil，设置页那些纯文字分段不受影响。
+        var symbol: String?
         var id: Value { value }
 
-        init(_ value: Value, _ title: String) {
-            self.value = value; self.title = title
+        init(_ value: Value, _ title: String, symbol: String? = nil) {
+            self.value = value; self.title = title; self.symbol = symbol
         }
     }
 
     @Binding var selection: Value
     let options: [Option]
+    /// 给每个选项补测试锚点等装饰。默认原样返回。
+    var optionDecoration: (Value, AnyView) -> AnyView = { _, view in view }
     @Environment(\.colorScheme) private var colorScheme
 
     private var trackFill: Color {
@@ -131,13 +135,23 @@ struct WFSegmentedControl<Value: Hashable>: View {
         .animation(.easeOut(duration: 0.14), value: selection)
     }
 
-    private func optionButton(_ option: Option) -> some View {
+    @ViewBuilder private func optionButton(_ option: Option) -> some View {
         let selected = option.value == selection
-        return Button { selection = option.value } label: {
-            Text(option.title)
-                .font(selected ? WFType.controlLabelStrong : WFType.controlLabel)
-                .foregroundStyle(selected ? WFColors.text : WFColors.secondaryText)
-                .lineLimit(1)
+        optionDecoration(option.value, AnyView(button(option, selected: selected)))
+    }
+
+    private func button(_ option: Option, selected: Bool) -> some View {
+        Button { selection = option.value } label: {
+            HStack(spacing: 5) {
+                if let symbol = option.symbol {
+                    Image(systemName: symbol).font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
+                }
+                Text(option.title)
+                    .font(selected ? WFType.controlLabelStrong : WFType.controlLabel)
+                    .foregroundStyle(selected ? WFColors.text : WFColors.secondaryText)
+                    .lineLimit(1)
+            }
                 .frame(maxWidth: .infinity)
                 .frame(height: 24)
                 .background {

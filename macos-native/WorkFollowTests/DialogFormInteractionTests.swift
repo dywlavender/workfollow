@@ -133,7 +133,10 @@ final class DialogFormInteractionTests: XCTestCase {
                 for frame in frames.values.values { XCTAssertTrue(bounds.contains(frame), "\(name) 操作栏超出窗口") }
                 XCTAssertNotNil(frames.values[.primary])
                 XCTAssertGreaterThan(try XCTUnwrap(frames.values[.primary]).minY, size.height / 2)
-                XCTAssertEqual(try XCTUnwrap(frames.values[.primary]).maxX, size.width - 24, accuracy: 1,
+                // 右缘跟 `formInset` 走，不写死数字：2026-11 内边距 24→18 时
+                // 这条断言还是 `- 24`，于是四张表单一起报红，而界面其实是对的。
+                XCTAssertEqual(try XCTUnwrap(frames.values[.primary]).maxX,
+                               size.width - PopupMetrics.formInset, accuracy: 1,
                                "\(name) 主动作始终右对齐，包括没有状态文字时")
                 if let path = ProcessInfo.processInfo.environment["WORKFOLLOW_POPUP_RENDER_DIR"] {
                     let url = URL(fileURLWithPath: path, isDirectory: true)

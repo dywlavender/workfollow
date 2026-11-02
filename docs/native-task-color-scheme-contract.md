@@ -293,3 +293,29 @@ return Int(hash % UInt64(chromaticSlotCount))         // % 11
   恰好是 3:1，与两档的 1:3 同构，故未动。
 - **象限四色**（`WFPlanningPalette.quadrant`）：是 macOS 系统语义色，与本色板无关，
   不受本方案约束。
+
+---
+
+## COLOR-007：清单色只染图标块，强调色永远不跟清单走（2026-11-02）
+
+「编辑清单」弹框重做时定下的一条**分工**，因为它同时约束 UI 与取色，写进本契约。
+
+| | 清单色 | 强调色 |
+| --- | --- | --- |
+| 语义 | **数据**——「这个清单是谁」 | **交互**——「这里能点 / 这里已选」 |
+| 事实源 | `WFListPalette.argb[colorIndex]` / `colorARGB` | `WFColors.accent`（`#6389F5`） |
+| 允许出现的位置 | **只有**名称行左端的身份块（`ListIdentityTile`）与色板里代表它自己的那一格 | 光标、分段控件选中段、开关、保存按钮 |
+
+反例与理由（不是审美判断，是对比度算不出来）：
+
+- 黄色清单 `#FFB703` 下，保存按钮会变成 **1.75:1** 的黄底白字，肉眼基本看不见；
+- 浅灰清单 `#8A909B` 下，开关轨道与「关闭」状态同色，**开关语义消失**；
+- 14 色里 11 个配白字不到 3:1（见 COLOR-002 的对比度表），而按钮文字只有 12.5pt。
+
+**实现约束**：`ListColorPalette` / `ListIdentityTile` 只接受 ARGB，不接收 `Color`；
+`TaskListEditorView` 里除这两处外**不得**出现由 `colorIndex` 派生的着色。
+图标块内的字形色走 `WFListPalette.checkmarkOn(_:)`（黄/绿/青配墨字，蓝/紫配白字）。
+
+**取色盘（第 16 格）**：写入 `colorARGB`，与 14 色索引互斥；面板是 `NSColorPanel.shared`
+这个全局单例，用 `WFColorPanelPicker` 接线，弹框 `onDisappear` 必须 `dismiss()`——
+否则关掉编辑器后别处打开取色盘，颜色会写回已经消失的弹框。

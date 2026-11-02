@@ -9,7 +9,18 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         weak var view: NSView?
         init(_ view: NSView) { self.view = view }
     }
-    private final class Probe { var actions: [String: WeakView] = [:] }
+    private final class Probe {
+        var actions: [String: [WeakView]] = [:]
+        /// 本轮渲染真正在屏幕上的那个锚点。
+        ///
+        /// 同一 identifier 会有多个实例：`ViewThatFits` 为量测会实例化未选中的分支，
+        /// 换页/换状态时 SwiftUI 也会先建新的再拆旧的。取**最后注册且挂在窗口上**
+        /// 的那个＝本轮渲染真正在屏幕上的锚点；取第一个会点到待拆除的旧副本
+        /// （尤其摘要页这类反复重建的分栏）。
+        func attachedView(_ identifier: String) -> NSView? {
+            actions[identifier]?.lazy.reversed().compactMap(\.view).first { $0.window != nil }
+        }
+    }
     @MainActor private final class Fixture {
         let probe: Probe
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ux-window-" + UUID().uuidString)
@@ -23,7 +34,9 @@ final class UXWorkflowSurfaceTests: XCTestCase {
             let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 12))!
             environment = AppEnvironment(clock: { now }, calendar: calendar, directory: directory)
             environment.navigation.destination = destination
-            let observation: (String, NSView) -> Void = { [weak probe] name, view in probe?.actions[name] = WeakView(view) }
+            let observation: (String, NSView) -> Void = { [weak probe] name, view in
+                probe?.actions[name, default: []].append(WeakView(view))
+            }
             host = NSHostingView(rootView: AnyView(RootShellView(workspace: environment.taskWorkspace,
                 navigation: environment.navigation).environmentObject(environment)
                 .environment(\.workflowActionObservation, observation)
@@ -33,16 +46,21 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         func click(_ identifier: String) throws {
             let view = try waitForAction(identifier)
             let window = try XCTUnwrap(view.window)
+            // 锚点刚注册时所在分支可能还没完成布局：`layout()` 里上报的那一次
+            // frame 是 (0,0)，等下一拍才是真位置。先强制布局再取坐标，
+            // 否则点击会落到窗口左上角——表现为「点了没反应」，而 anchor 已找到。
+            window.contentView?.layoutSubtreeIfNeeded()
+            settle()
             let frame = window.convertToScreen(view.convert(view.bounds, to: nil))
             try InspectorPanelTestSupport.click(screenFrame: frame, in: window)
         }
         func waitForAction(_ identifier: String, timeout: TimeInterval = 1) throws -> NSView {
             let deadline = Date().addingTimeInterval(timeout)
-            while probe.actions[identifier]?.view?.window == nil && Date() < deadline { settle() }
-            let view = try XCTUnwrap(probe.actions[identifier]?.view, "Missing production action anchor: " + identifier)
-            XCTAssertNotNil(view.window, "Anchor is not attached to a window: " + identifier)
+            while probe.attachedView(identifier) == nil && Date() < deadline { settle() }
+            let view = try XCTUnwrap(probe.attachedView(identifier), "Missing production action anchor: " + identifier)
             return view
         }
+
         func copySummaryText() throws -> String {
             NSPasteboard.general.clearContents()
             try click("summary.footer.复制")
@@ -150,13 +168,13 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         var menuItemView: NSView?
         let deadline = Date().addingTimeInterval(1.5)
         while Date() < deadline {
-            menuItemView = fixture.probe.actions["summary.copy.plainText"]?.view
+            menuItemView = fixture.probe.attachedView("summary.copy.plainText")
             if menuItemView?.window != nil { break }
             fixture.settle()
         }
         let menuItem = try XCTUnwrap(menuItemView, "Missing copy menu item")
         let popup = try XCTUnwrap(menuItem.window)
-        let trigger = try XCTUnwrap(fixture.probe.actions["summary.footer.复制"]?.view)
+        let trigger = try XCTUnwrap(fixture.probe.attachedView("summary.footer.复制"))
         let triggerWindow = try XCTUnwrap(trigger.window)
         let triggerFrame = triggerWindow.convertToScreen(trigger.convert(trigger.bounds, to: nil))
         XCTAssertGreaterThan(popup.frame.midY, triggerFrame.midY, "复制菜单应向上展开")
@@ -174,7 +192,7 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         var emailItemView: NSView?
         let emailDeadline = Date().addingTimeInterval(1.5)
         while Date() < emailDeadline {
-            emailItemView = fixture.probe.actions["summary.export.email"]?.view
+            emailItemView = fixture.probe.attachedView("summary.export.email")
             if emailItemView?.window != nil { break }
             fixture.settle()
         }
@@ -185,8 +203,9 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         fixture.settle()
     }
 
-    /// 清单编辑弹框的滴答复刻样张：直接宿主弹框内容，出图到
+    /// 清单编辑弹框样张：直接宿主弹框内容，出图到
     /// /private/tmp/ux-flow-list-editor.png 供肉眼比对（无动画路径，XCTest 安全）。
+    /// 尺寸跟 `SheetDialogMetrics.compactWidth` 走，改版后不要各写各的。
     fileprivate func deepDescendant(in root: NSView, where predicate: (NSView) -> Bool) -> NSView? {
         var stack: [NSView] = [root]
         while let view = stack.popLast() {
@@ -208,8 +227,12 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         let host = NSHostingView(rootView: TaskListEditorView(
                 workspace: workspace, preferences: environment.viewPreferences, name: "工作")
             .environmentObject(environment)
-            .frame(width: 396, height: 560))
-        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 396, height: 560)
+            // 快照要拍「激活态」：测试宿主拿不到 key window，不设的话
+            // 开关、按钮会按系统未激活外观出图（灰底），看起来像改坏了。
+            .environment(\.controlActiveState, .key)
+            .frame(width: SheetDialogMetrics.compactWidth, height: 560))
+        let window = InspectorPanelTestSupport.ownerWindow(
+            for: host, width: SheetDialogMetrics.compactWidth, height: 560)
         defer { window.close() }
         InspectorPanelTestSupport.settle(window)
         host.layoutSubtreeIfNeeded()
@@ -233,10 +256,10 @@ final class UXWorkflowSurfaceTests: XCTestCase {
 
         try fixture.click("summary.setting.content")
         _ = try fixture.waitForAction("summary.content.field.taskName", timeout: 2)
-        let field = try XCTUnwrap(fixture.probe.actions["summary.content.field.taskName"]?.view)
+        let field = try XCTUnwrap(fixture.probe.attachedView("summary.content.field.taskName"))
         let popup = try XCTUnwrap(field.window)
         XCTAssertEqual(popup.frame.width, 252, accuracy: 0.5)
-        XCTAssertNotNil(fixture.probe.actions["summary.content.field.detail"]?.view?.window,
+        XCTAssertNotNil(fixture.probe.attachedView("summary.content.field.detail")?.window,
                         "详细内容应作为固定槽位显示")
 
         try fixture.click("summary.content.style.completedTime")
@@ -244,9 +267,9 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         try fixture.screenshot("summary-content-style", view: try XCTUnwrap(popup.contentView))
         try fixture.click("summary.content.style.completedTime.dateTime")
         fixture.settle()
-        XCTAssertNil(fixture.probe.actions["summary.content.style.completedTime.dateTime"]?.view?.window,
+        XCTAssertNil(fixture.probe.attachedView("summary.content.style.completedTime.dateTime")?.window,
                      "选择样式后内嵌样式菜单应收起")
-        XCTAssertNotNil(fixture.probe.actions["summary.content.field.taskName"]?.view?.window,
+        XCTAssertNotNil(fixture.probe.attachedView("summary.content.field.taskName")?.window,
                         "选择完成时间样式后内容弹层应保持打开")
 
         // 所属清单默认未勾选；选择样式应当直接启用它，而不是只改样式。
@@ -254,7 +277,7 @@ final class UXWorkflowSurfaceTests: XCTestCase {
         _ = try fixture.waitForAction("summary.content.style.list.listGroup", timeout: 2)
         try fixture.click("summary.content.style.list.listGroup")
         fixture.settle()
-        XCTAssertNotNil(fixture.probe.actions["summary.content.field.taskName"]?.view?.window,
+        XCTAssertNotNil(fixture.probe.attachedView("summary.content.field.taskName")?.window,
                         "选择所属清单样式后内容弹层应保持打开")
         try fixture.screenshot("summary-content-popover", view: try XCTUnwrap(popup.contentView))
         try fixture.screenshot("summary-content-config", view: fixture.window.contentView)

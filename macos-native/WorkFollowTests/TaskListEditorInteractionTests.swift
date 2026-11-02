@@ -108,3 +108,42 @@ final class TaskListEditorInteractionTests: XCTestCase {
         return view.subviews.lazy.compactMap { self.findField(in: $0) }.first
     }
 }
+
+@MainActor
+final class TaskListColorPaletteTests: XCTestCase {
+    private final class Storage: ObservableObject, @unchecked Sendable {
+        @Published var colorIndex: Int? = 3
+        @Published var colorARGB: UInt32?
+    }
+    private struct Host: View {
+        @ObservedObject var storage: Storage
+        var body: some View {
+            ListColorPalette(colorIndex: $storage.colorIndex, colorARGB: $storage.colorARGB,
+                             autoARGB: 0xFF27C264)
+                .frame(width: 256)
+                .padding(20)
+        }
+    }
+
+    /// 16 格必须一行排完且不溢出：色板本来就是为「不再横向滚动」重做的。
+    func testPaletteFitsSixteenSlotsInOneRow() throws {
+        let storage = Storage()
+        let host = NSHostingView(rootView: Host(storage: storage))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 296, height: 80)
+        defer { window.close() }
+        InspectorPanelTestSupport.settle(window)
+        host.layoutSubtreeIfNeeded()
+        var swatches = 0
+        func walk(_ view: NSView) {
+            // 每颗色点的悬停区就是它的点击热区（含「自动」与取色盘）。
+            if String(describing: type(of: view)).contains("HoverTipTrackingView") {
+                swatches += 1
+            }
+            for s in view.subviews { walk(s) }
+        }
+        walk(host)
+        XCTAssertEqual(swatches, 16, "自动 + 14 色 + 取色盘应一行铺满")
+        // fittingSize 含外层 padding 20×2，扣掉后应正好是单档位 16pt。
+        XCTAssertEqual(host.fittingSize.height - 40, 16, accuracy: 1, "色板行高应为单档位 16pt")
+    }
+}

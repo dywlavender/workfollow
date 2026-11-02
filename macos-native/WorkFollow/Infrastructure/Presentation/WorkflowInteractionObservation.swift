@@ -16,7 +16,14 @@ private struct WorkflowActionAnchor: NSViewRepresentable {
     @Environment(\.workflowActionObservation) private var observation
     func makeNSView(context: Context) -> Anchor { Anchor() }
     func updateNSView(_ view: Anchor, context: Context) {
-        view.report = { [weak view] in if let view { observation?(identifier, view) } }
+        view.report = { [weak view] in
+            // 只上报**挂在窗口上**的锚点。`ViewThatFits` 会同时实例化两个候选，
+            // 被丢弃的那个分支里的 NSViewRepresentable 也会跑 updateNSView 并
+            // 异步上报，而它永远没有 window——后到的 nil-window 记录会覆盖掉
+            // 真正在屏幕上的那个，测试随后读到「Anchor is not attached to a window」。
+            guard let view, view.window != nil else { return }
+            observation?(identifier, view)
+        }
         DispatchQueue.main.async { [weak view] in view?.report?() }
     }
     final class Anchor: NSView {
