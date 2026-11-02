@@ -85,7 +85,12 @@ final class AppEnvironment: ObservableObject {
     @Published var settingsSection: SettingsSection = .general
     @Published private(set) var quickAddRequest = 0
     @Published var appearance: NativeAppearance {
-        didSet { preferences.set(appearance.rawValue, forKey: "appearance") }
+        didSet {
+            preferences.set(appearance.rawValue, forKey: "appearance")
+            // 必须同时落到 AppKit：SwiftUI 的 preferredColorScheme 传 nil
+            // 表示「不覆盖」而非「跟随系统」，切回跟随系统时不会自己刷新。
+            AppearanceRuntime.apply(appearance)
+        }
     }
     @Published var backgroundTheme: NativeBackgroundTheme {
         didSet {
@@ -210,6 +215,8 @@ final class AppEnvironment: ObservableObject {
         NativeThemeBridge.theme = backgroundTheme
         NativeThemeBridge.intensity = backgroundIntensity
         NativeThemeBridge.material = appearanceMaterial
+        // 冷启动时 didSet 不会跑，外观要在这里落一次 AppKit。
+        AppearanceRuntime.apply(appearance)
         AISelectionWindowController.shared.makeClient = { [weak self] in self?.conversationClient() }
         AISelectionWindowController.shared.undoAction = { [weak self] in self?.undoAIAction($0) }
         AISelectionWindowController.shared.canUndoAction = { [weak self] in self?.taskWorkspace.automationUndoID == $0.undoID }

@@ -44,7 +44,6 @@ struct WorkFollowApp: App {
         Settings {
             SettingsShellView()
                 .environmentObject(environment)
-                .preferredColorScheme(environment.appearance.colorScheme)
                 .tint(WFColors.accent)
         }
         .handlesExternalEvents(matching: [])
@@ -73,7 +72,6 @@ struct WorkFollowApp: App {
                           navigation: environment.navigation)
                 .environmentObject(environment)
                 .environment(\.mainWindowRailInset, mainWindowRailInset)
-                .preferredColorScheme(environment.appearance.colorScheme)
                 .tint(WFColors.accent)
                 .frame(minWidth: WFMetrics.minimumWindow.width,
                        minHeight: WFMetrics.minimumWindow.height)
