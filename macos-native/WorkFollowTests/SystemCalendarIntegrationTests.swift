@@ -1,5 +1,6 @@
 import XCTest
 import EventKit
+import Combine
 @testable import WorkFollow
 
 @MainActor
@@ -31,6 +32,58 @@ final class SystemCalendarIntegrationTests: XCTestCase {
         XCTAssertEqual(value.externalEvents, [meeting])
         XCTAssertTrue(client.removedIDs.isEmpty); XCTAssertEqual(client.restores, 0)
         XCTAssertEqual(client.values[meeting.id], meeting)
+    }
+
+    func testRepeatedPageVisitsOnlyPublishChangedCalendarResults() {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemCalendarClient()
+        let meeting = event()
+        client.values[meeting.id] = meeting
+        let value = coordinator(folder, client)
+        value.showEvents(in: range)
+        var changes = 0
+        let subscription = value.objectWillChange.sink { changes += 1 }
+        defer { subscription.cancel() }
+        value.showEvents(in: range)
+        value.refreshAccess()
+        XCTAssertEqual(changes, 0, "回访日历而数据未变，不应通知整个 App 刷新")
+        var changed = meeting
+        changed.fields.title = "外部日历已更新"
+        client.values[meeting.id] = changed
+        value.refreshAccess()
+        XCTAssertEqual(changes, 1)
+        XCTAssertEqual(value.externalEvents, [changed])
+        value.store.configure { $0.enabled = false }
+        let disabledChanges = changes
+        value.showEvents(in: range)
+        XCTAssertEqual(changes, disabledChanges)
+        XCTAssertTrue(value.externalEvents.isEmpty)
+    }
+
+    func testSameViewportReusesSnapshotAndSystemChangesRefreshIt() {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemCalendarClient()
+        client.values["meeting"] = event()
+        let value = coordinator(folder, client)
+        value.showEvents(in: range)
+        let calendarReads = client.calendarReads
+        let eventReads = client.eventReads
+        value.showEvents(in: range)
+        value.showEvents(in: range)
+        XCTAssertEqual(client.calendarReads, calendarReads)
+        XCTAssertEqual(client.eventReads, eventReads)
+        var changed = event()
+        changed.fields.title = "系统日历变更后的会议"
+        client.values["meeting"] = changed
+        client.onChange?()
+        XCTAssertEqual(value.externalEvents, [changed])
+        XCTAssertEqual(client.eventReads, eventReads + 1)
+        value.showEvents(in: DateInterval(start: range.start, end: range.end.addingTimeInterval(86400)))
+        XCTAssertEqual(client.eventReads, eventReads + 2)
+        client.authorization = .denied
+        value.showEvents(in: DateInterval(start: range.start, end: range.end.addingTimeInterval(86400)))
+        XCTAssertEqual(value.authorization, .denied)
+        XCTAssertTrue(value.externalEvents.isEmpty)
     }
 
     func testOldExportConfigurationLoadsAsReadOnlyAndKeepsLegacyBindings() async throws {
@@ -161,13 +214,17 @@ final class FakeSystemCalendarClient: SystemCalendarClient {
     var removedIDs: [String] = []
     var restores = 0
     var failNextRemoval = false
+    var calendarReads = 0
+    var eventReads = 0
     func requestAccess() async throws -> Bool { authorization == .fullAccess }
     func calendars() -> [SystemCalendarInfo] {
-        [.init(id: "calendar", title: "工作", colorARGB: 0xff0000ff, writable: true),
+        calendarReads += 1
+        return [.init(id: "calendar", title: "工作", colorARGB: 0xff0000ff, writable: true),
          .init(id: "readonly", title: "订阅", colorARGB: 0xffff0000, writable: false)]
     }
     func events(in range: DateInterval, calendarIDs: [String]) -> [SystemCalendarEvent] {
-        values.values.filter { calendarIDs.contains($0.calendarID) && $0.fields.start < range.end && $0.fields.end > range.start }
+        eventReads += 1
+        return values.values.filter { calendarIDs.contains($0.calendarID) && $0.fields.start < range.end && $0.fields.end > range.start }
     }
     func event(id: String) -> SystemCalendarEvent? { values[id] }
     func removeLegacyCopy(id: String) throws {

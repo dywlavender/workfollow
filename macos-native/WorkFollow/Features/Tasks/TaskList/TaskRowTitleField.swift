@@ -21,7 +21,11 @@ struct TaskRowTitleField: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     func makeNSView(context: Context) -> Field {
-        let field = Field(string: title)
+        Self.makeField(parent: self, coordinator: context.coordinator)
+    }
+
+    static func makeField(parent: TaskRowTitleField, coordinator: Coordinator) -> Field {
+        let field = Field(string: parent.title)
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
@@ -31,13 +35,13 @@ struct TaskRowTitleField: NSViewRepresentable {
         field.placeholderString = "无标题"
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setAccessibilityLabel("行内任务标题")
-        field.delegate = context.coordinator
-        field.onEditingRequested = { [weak coordinator = context.coordinator] in coordinator?.parent.onEditingRequested() }
-        field.onFinish = { [weak coordinator = context.coordinator, weak field] cancel in
+        field.delegate = coordinator
+        field.onEditingRequested = { [weak coordinator] in coordinator?.parent.onEditingRequested() }
+        field.onFinish = { [weak coordinator, weak field] cancel in
             guard let field else { return }
             coordinator?.finish(field, cancel: cancel)
         }
-        handle?.field = field
+        parent.handle?.field = field
         return field
     }
 

@@ -44,7 +44,8 @@ struct AIChatWorkspaceView: View {
                 Label("新对话", systemImage: "square.and.pencil")
                     .font(WFType.control)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                    .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
+                    // 侧栏里常驻的整宽按钮：主题页上不跟主题就是一块浮起的白。
+                    .workfollowCardSurface(in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WFColors.border))
                     .contentShape(Rectangle())
             }.buttonStyle(.plain)
@@ -104,11 +105,12 @@ struct AIChatWorkspaceView: View {
             })
             .buttonStyle(.plain).padding(.bottom, 14)
             .anchoredPropertyPanel(isPresented: $historyPresented, trigger: "ai.chat.history",
-                                   width: 250, placement: .vertical, title: "历史对话") {
+                                   width: PopupMetrics.aiChatHistoryWidth, placement: .vertical,
+                                   title: "历史对话") {
                 history.frame(height: 420)
             }
             .anchoredPropertyPanel(isPresented: $referencesPresented, trigger: "ai.chat.references",
-                                   width: 340, placement: .dropdown,
+                                   width: PopupMetrics.aiReferencePickerWidth, placement: .dropdown,
                                    focusPolicy: .panel, title: "引用资料") {
                 AIReferencePicker { reference in
                     var values = store.current.record.references ?? []

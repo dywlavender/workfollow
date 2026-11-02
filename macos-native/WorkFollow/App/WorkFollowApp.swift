@@ -112,6 +112,9 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowLaunch?.didFinishLaunching()
         _Concurrency.Task { await AIBackendBridge.shared.prewarm() }
+        #if DEBUG
+        ScrollProbeDebug.schedule()
+        #endif
     }
 
     func applicationWillTerminate(_ notification: Notification) {

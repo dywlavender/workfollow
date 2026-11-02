@@ -76,7 +76,14 @@ final class WorkspaceContinuityTests: XCTestCase {
         XCTAssertNil(workspace.selectedTaskID)
         navigation.destination = .today
         XCTAssertNil(workspace.selectedTaskID, "返回清单只恢复筛选上下文，不恢复详情")
-        XCTAssertEqual(workspace.activeList, "工作")
+        XCTAssertNil(workspace.activeList, "清单与智能清单同级互斥：回到今天不再恢复清单上下文")
+
+        navigation.destination = .allTasks
+        workspace.activeList = "工作"
+        navigation.destination = .tomorrow
+        XCTAssertNil(workspace.activeList, "去智能清单清空清单选中态")
+        navigation.destination = .allTasks
+        XCTAssertEqual(workspace.activeList, "工作", "清单上下文在「所有任务」内仍逐页恢复")
 
         navigation.destination = .notes
         notes.create()

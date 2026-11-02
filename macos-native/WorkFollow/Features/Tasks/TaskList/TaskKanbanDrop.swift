@@ -51,10 +51,20 @@ struct TaskKanbanColumnDropHost<Content: View>: NSViewRepresentable {
 }
 
 final class TaskKanbanColumnDropView: NSView {
+    #if DEBUG
+    static var rootAssignments = 0
+    private(set) var rootAssignmentCount = 0
+    #endif
     private let hostingView: NSHostingView<AnyView>
     var rootView: AnyView {
         get { hostingView.rootView }
-        set { hostingView.rootView = AnyView(newValue.hidesSystemFocusEffect()) }
+        set {
+            #if DEBUG
+            Self.rootAssignments += 1
+            rootAssignmentCount += 1
+            #endif
+            hostingView.rootView = AnyView(newValue.hidesSystemFocusEffect())
+        }
     }
     override var isFlipped: Bool { true }
     var workspace: TaskWorkspaceModel?

@@ -59,6 +59,15 @@ EXTRA_BUILD_ARGS=()
 if [[ -n "${WORKFOLLOW_DISABLE_SWIFT_SANDBOX:-}" ]]; then
   EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox')
 fi
+if [[ "${WORKFOLLOW_TEST_OPTIMIZE:-}" == "1" ]]; then
+  # Keep Xcode's debug-dylib layout for the standalone XCTest loader while
+  # the Swift compiler optimizes the same application and test source.
+  if [[ -n "${WORKFOLLOW_DISABLE_SWIFT_SANDBOX:-}" ]]; then
+    EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox -O')
+  else
+    EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -O')
+  fi
+fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/workfollow-tests.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT

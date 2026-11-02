@@ -165,6 +165,8 @@ struct QuickAddTextField: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.parent = self
+        if field.font != font { field.font = font }
+        (field as? QuickAddFocusReportingField)?.applyPlaceholder(placeholder, color: QuickAddBarStyle.placeholderNSColor)
         syncTextAndStyling(field)
         if let requested = requestedSelection?.wrappedValue,
            let editor = field.currentEditor() as? NSTextView, !editor.hasMarkedText() {
@@ -384,10 +386,11 @@ final class QuickAddFocusReportingField: NSTextField {
     /// `placeholderAttributedString` 覆盖（macOS 上 NSTextField 没有
     /// 可重写的占位符绘制方法，这是官方通道）。
     func applyPlaceholder(_ text: String, color: NSColor) {
-        placeholderAttributedString = NSAttributedString(string: text, attributes: [
+        let value = NSAttributedString(string: text, attributes: [
             .foregroundColor: color,
             .font: font ?? NSFont.systemFont(ofSize: 13)
         ])
+        if placeholderAttributedString?.isEqual(to: value) != true { placeholderAttributedString = value }
     }
 }
 

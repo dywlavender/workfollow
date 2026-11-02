@@ -57,8 +57,13 @@ final class GlobalQuickAddDraft: ObservableObject {
 
     private func persist() {
         guard !restoring else { return }
-        guard hasContent else { defaults.removeObject(forKey: key); return }
-        if let data = try? JSONEncoder().encode(snapshot) { defaults.set(data, forKey: key) }
+        guard hasContent else {
+            if defaults.object(forKey: key) != nil { defaults.removeObject(forKey: key) }
+            return
+        }
+        if let data = try? JSONEncoder().encode(snapshot), defaults.data(forKey: key) != data {
+            defaults.set(data, forKey: key)
+        }
     }
 
     var hasContent: Bool {

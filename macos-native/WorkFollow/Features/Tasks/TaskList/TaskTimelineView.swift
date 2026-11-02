@@ -315,7 +315,9 @@ struct TaskTimelineView: View {
             }
             .compactScrollbars()
         }
-        .frame(maxHeight: .infinity).background(WFColors.secondarySurface)
+        .frame(maxHeight: .infinity)
+        // 待办池是整块不透明栏：跟主题走，否则主题页上它是一整条系统灰。
+        .workfollowCardSurface(WFColors.secondarySurface)
         .accessibilityIdentifier("tasks.timeline.pool")
     }
 

@@ -564,26 +564,18 @@ final class NativeTextView: NSTextView {
     }
 
     private func attachmentHover(at point: NSPoint) -> (title: String, rect: NSRect)? {
-        guard let storage = textStorage, storage.length > 0,
-              let layoutManager, let textContainer else { return nil }
-        let origin = textContainerOrigin
-        let containerPoint = NSPoint(x: point.x - origin.x, y: point.y - origin.y)
-        var fraction: CGFloat = 0
-        let glyph = layoutManager.glyphIndex(for: containerPoint, in: textContainer,
-                                             fractionOfDistanceThroughGlyph: &fraction)
-        let character = layoutManager.characterIndexForGlyph(at: glyph)
-        guard character < storage.length,
-              storage.attribute(.attachment, at: character, effectiveRange: nil) != nil,
-              let title = storage.attribute(DocumentTextCodec.hoverTitleKey, at: character,
-                                            effectiveRange: nil) as? String
-        else { return nil }
-        let glyphRange = layoutManager.glyphRange(
-            forCharacterRange: NSRange(location: character, length: 1),
-            actualCharacterRange: nil)
-        var rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-        rect.origin.x += origin.x
-        rect.origin.y += origin.y
-        return (title, rect)
+        guard let storage = textStorage, storage.length > 0 else { return nil }
+        // Accessing NSTextView.layoutManager switches this TextKit 2 editor to
+        // TextKit 1. The host then loses its content-height measurement.
+        let insertion = characterIndexForInsertion(at: point)
+        for character in [insertion, insertion - 1] where character >= 0 && character < storage.length {
+            guard storage.attribute(.attachment, at: character, effectiveRange: nil) != nil,
+                  let title = storage.attribute(DocumentTextCodec.hoverTitleKey, at: character,
+                                                effectiveRange: nil) as? String,
+                  let rect = viewRect(forCharacterAt: character), rect.contains(point) else { continue }
+            return (title, rect)
+        }
+        return nil
     }
 
     /// 悬停行的铃铛/删除是行级控件，不改变光标；只在清单任务里启用。

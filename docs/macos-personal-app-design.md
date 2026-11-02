@@ -308,6 +308,64 @@ Component
 - 菜单用于短命令；popover 用于日期和属性编辑；对话框只用于阻断性决策。
 - 浮层出现位置必须与触发控件有空间关系，关闭后焦点返回触发点。
 
+#### 8.5.1 浮层宽度
+
+浮层宽度**只能有一个来源**，并且必须是具名常量。原因是 `AnchoredPropertyPanel` 内部是
+`root.frame(width: width)`：挂载点决定窗口宽，内容自己的 `.frame(width:)` 决定内容宽，
+两者不一致就会出现「面板 250 / 内容 189，右侧空 61pt 白」或「内容 246 / 面板 220，最右一列被裁掉」。
+
+| 规则 | 要求 |
+| --- | --- |
+| 宽度来源 | 挂载点写 `width: PopupMetrics.xxx`；内容根节点**不再**重复写 `.frame(width:)` |
+| 禁止裸数字 | `AnchoredPropertyPanel(... width: 220 ...)` 这类写法不允许，一律进 `PopupMetrics` |
+| 禁止临时量 | 宽度不能是当前作用域的临时变量（`footerPanelWidth`、`insertWidth`）；确属"由外层容器决定"的，在契约测试白名单里注明理由 |
+| 子面板 ≤ 父面板 | 子面板不得宽于其父面板，否则视觉上"子比父胖" |
+| 内容 ≤ 面板 | 内容自然宽不得超过面板宽，否则被 `clipShape` 裁掉 |
+
+取值方法：先量内容自然宽（`fixedSize(horizontal: true)`），再按用途夹到合理区间；
+不要凭感觉拍数字，也不要用"墨迹到右缘的余量"判断——带 `Divider()` 的浮层右缘恒等于
+`面板宽 − 内边距`，**余量恒定，量不出宽窄**。
+
+**判据是 `required <= available`，不是高度差。** `lineLimit(1)` 的行宽度不足时
+**高度不变、只是文字被截**，所以 `fittingSize.height` 完全量不出截断。
+且弹层内容常自带 `.frame(width: X)`，外层再套 `.frame(width: Y)` 时内层会忽略外部提案——
+量两次得到同一份布局。必须用「去掉内层定宽 frame 的同构复刻」才能让宽度提案生效。
+
+**网格**：宽度尽量取 4pt 的整数倍，但**内容算术结果优先**。已知不能上网格的三个值
+（`tagColorPickerWidth` 246、`moveTargetWidth` 230、`countdownPreviewWidth` 350）
+各有硬约束，已在常量注释里写明理由，不要当成遗漏去"修正"。
+特别注意 `tagColorPickerWidth`：实测余量精确为 0，减 1pt 就会裁掉最右一列色块。
+
+这些规则由 `WorkFollowTests/PopupWidthContractTests.swift`（5 条）强制执行，改宽度时先跑它。
+
+#### 8.5.2 为什么不给浮层做「按内容自然宽自动推导」
+
+2026-11-01 评估过把 `AnchoredPropertyPanel.width` 改成 `CGFloat?`（nil 时用内容
+`fittingSize.width` 定窗口宽），**否决**。两条硬理由：
+
+**① 这个代码库里撑满宽度是主流写法，不是特例。** 全仓库 49 处挂载点，只有 12 处内容
+能自撑，其余 37 处结构性不可自撑：
+
+| 组件 | 位置 | 行为 |
+| --- | --- | --- |
+| `PopupMenuRow` | `PopupMenuRow.swift:16` | `.frame(maxWidth: .infinity)` |
+| `BusinessMenuContent` | `BusinessMenu.swift:449` / `:507` / `:281` | 三处撑满（含 `Spacer`） |
+| `PopupActionButton` | `PopupActions.swift:39` | `.frame(maxWidth: .infinity)` |
+| 无定宽 `TextField` | 各处搜索/输入行 | 理想宽极小，会塌缩 |
+
+量这些内容的自然宽会得到很小甚至 0 的值，浮层会缩成一条。
+
+**② 「打开后再量宽度」会触发已知回归。** `BusinessMenu.swift:7-12` 已记录：
+面板宿主设了 `sizingOptions = [.intrinsicContentSize]`，**开面板后改宽度会让 SwiftUI
+重建整棵子树、行的 `onAppear` 重跑，把键盘高亮抢走**。`BusinessMenu` 之所以在
+「打开前」用离屏 `NSHostingView` 量一次宽，就是为了绕开这个副作用。
+
+所以宽度**仍由调用方显式给出**，「挂载宽 == 内容宽」靠契约测试保证，不靠运行期量测。
+
+> 如果将来要重新考虑这个方案，前提是先把 `PopupMenuRow` / `BusinessMenuContent` /
+> `PopupActionButton` 三个通用组件改成「不吃满、按需撑开」，并且采用
+> 「打开前离屏量一次」而不是「打开后改宽」。
+
 ### 8.6 图标控件与悬停名称
 
 适用范围：所有只有图标、没有可见文字的控件，包括 rail、页头、详情顶栏与底栏、列表头与任务行、侧栏、日历与日期面板、浮窗和设置。图标按钮、只有图标的菜单入口、可点击图标，以及提醒/重复/备注/子任务/附件/置顶/优先级等状态图标都算。

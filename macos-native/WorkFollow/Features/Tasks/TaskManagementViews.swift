@@ -37,7 +37,7 @@ struct TaskCollectionsView: View {
     @State private var showListEditor = false
     @State private var archivedCopy: String?
     @State private var folderEditor: TaskFolderEditingRequest?
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
     var collapsed: Bool = false
@@ -150,6 +150,7 @@ struct TaskCollectionsView: View {
                         .contentShape(Rectangle())
                         .rowHoverBackground(selected: workspace.activeList == name)
                     }
+                    .firstMouseAction { openList(name) }
                     .padding(.leading, Self.folderIndent)
                     .accessibilityLabel("已归档清单：" + name)
                     .businessContextMenu {
@@ -178,9 +179,10 @@ struct TaskCollectionsView: View {
     private func folderRow(_ folder: String, count: Int,
                            insertion: SidebarListInsertion? = nil) -> some View {
         let collapsed = collapsedFolders.contains(folder)
-        return Button {
+        let toggle = {
             if collapsed { collapsedFolders.remove(folder) } else { collapsedFolders.insert(folder) }
-        } label: {
+        }
+        return Button(action: toggle) {
             HStack(spacing: WFSpace.xs) {
                 Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
@@ -203,6 +205,7 @@ struct TaskCollectionsView: View {
             .rowHoverBackground(selected: targetedFolder == folder)
         }
         .buttonStyle(.plain)
+        .firstMouseAction(toggle)
         .dropDestination(for: String.self) { values, location in
             guard let raw = values.first, case .list(let name)? = SidebarDragPayload.decode(raw) else { return false }
             if let insertion, location.y < SidebarListInsertion.edgeHeight {
@@ -237,9 +240,8 @@ struct TaskCollectionsView: View {
     }
 
     private func openList(_ name: String) {
-        workspace.openFilter(nil)
-        navigation.destination = .allTasks; workspace.activeList = name; workspace.activeTag = nil
-        workspace.select(nil); workspace.clearBulkSelection(); onNavigate()
+        navigation.openTaskList(name, in: workspace)
+        onNavigate()
     }
 }
 
@@ -249,7 +251,7 @@ private struct SidebarListRowView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var showEditor = false
     @State private var showCopy = false
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     let name: String
     let openCount: Int
     var insertion: SidebarListInsertion? = nil
@@ -300,9 +302,13 @@ private struct SidebarListRowView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: NavigationMetrics.rowHeight)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // 窗口未激活时的首击直达（SwiftUI 按钮首击只激活窗口，见 FirstMouseAction）。
+            .firstMouseAction(onOpen)
+            .workflowActionAnchor("sidebar.list." + name)
             // "⋯"常驻占位（对齐 Flutter 的 AnimatedOpacity）：行宽不因 hover 抖动。
             BusinessMenu(isPresented: $menuPresented) { menuItems } label: {
                 Image(systemName: "ellipsis")
@@ -348,8 +354,10 @@ private struct SidebarListRowView: View {
         }
         .sheet(isPresented: $showCopy) {
             TaskListCopyView(workspace: workspace, source: name) { copied in
-                workspace.openFilter(nil); workspace.activeList = copied; workspace.activeTag = nil
+                // 先切页再写上下文：切页触发的逐页记忆恢复不能盖掉“打开副本”，
+                // 也不能把清单上下文记进来源智能清单名下（清单只属于所有任务）。
                 environment.navigation.destination = .allTasks
+                workspace.openFilter(nil); workspace.activeList = copied; workspace.activeTag = nil
                 environment.viewPreferences.copyScope(
                     from: TaskViewScopeKey.key(destination: .allTasks, activeList: name, activeTag: nil),
                     to: TaskViewScopeKey.key(destination: .allTasks, activeList: copied, activeTag: nil))

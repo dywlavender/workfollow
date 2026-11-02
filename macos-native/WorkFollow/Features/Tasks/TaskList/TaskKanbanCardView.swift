@@ -2,7 +2,7 @@ import SwiftUI
 
 struct TaskKanbanCardView: View {
     let task: Task
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     var showsListBadge = true
     var hidesCompleted = false
     var hidesDetails = false
@@ -22,6 +22,9 @@ struct TaskKanbanCardView: View {
             }
         }
         .background {
+            // 卡片保持实色：它坐在**已经压平过**的看板列上（列走
+            // `workfollowCardSurface`），再叠一层压平只会变成白卡套白卡。
+            // 层级靠描边与 4% 阴影表达。
             RoundedRectangle(cornerRadius: WFMetrics.corner)
                 .fill(WFColors.content)
                 .shadow(color: .black.opacity(0.04), radius: 1, x: 0, y: 1)

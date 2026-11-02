@@ -291,8 +291,11 @@ struct SummaryWorkspaceView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }
             }
-            .background(WFColors.content, in: RoundedRectangle(cornerRadius: 8))
-            .overlay { RoundedRectangle(cornerRadius: 8).stroke(WFColors.border, lineWidth: 1) }
+            // 正文区与笔记页 / 任务详情页统一：铺同一层正文阅读面
+            // （`WorkfollowReadingSurface`，58%），不再自带圆角卡片与描边。
+            // 三个编辑区因此在主题下呈现同一种「透法」——底色透出底图，
+            // 靠阅读面把动效洗淡，而不是靠一块不透明的白卡片把背景盖住。
+            .background { WorkfollowReadingSurface() }
             if let error = store.lastError { Text(error).font(WFType.supporting).foregroundStyle(WFColors.danger) }
             HStack(spacing: 16) {
                 footerAction("在日历中查看", symbol: "calendar", compact: compact) { openPlan(at: range.start) }
@@ -538,9 +541,18 @@ struct SummaryWorkspaceView: View {
     private var journalPane: some View {
         VStack(alignment: .leading, spacing: 16) {
             DatePicker("日期", selection: $journalDay, displayedComponents: .date).datePickerStyle(.field)
+            // `TextEditor` 底层是 NSTextView：`drawsBackground` 默认 true、
+            // `backgroundColor` 默认 `textBackgroundColor`（浅色纯白）。不关掉的话
+            // 它会在主题页上画一块没有圆角也没有描边的纯白矩形，比正文区还突兀。
+            // 关掉之后由下面的正文阅读面提供底色。
             TextEditor(text: $journalText).font(WFType.body)
+                .scrollContentBackground(.hidden)
+                .padding(10)
                 .compactTextEditorScrollbars()
-        }.padding(24)
+        }
+        .padding(24)
+        // 与周回顾正文、笔记页、任务详情页同一个透法。
+        .background { WorkfollowReadingSurface() }
     }
 
     private func previewSheet(_ draft: DraftPreview) -> some View {

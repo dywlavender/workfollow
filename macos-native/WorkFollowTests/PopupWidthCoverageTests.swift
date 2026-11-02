@@ -127,12 +127,12 @@ final class PopupWidthCoverageTests: XCTestCase {
         }
     }
 
-    // MARK: - 快速添加的两个 250
+    // MARK: - 快速添加的清单子面板（宽度已收编到 quickAddChildWidth）
 
     func testQuickAddListPicker() throws {
         let (environment, _) = try environment()
-        try add("快速添加·清单选择", source: "字面量 250（未收编）",
-                width: 250) {
+        try add("快速添加·清单选择", source: "PopupMetrics.quickAddChildWidth",
+                width: PopupMetrics.quickAddChildWidth) {
             VStack(alignment: .leading, spacing: 0) {
                 MenuRowProbe(title: "个人成长与长期学习计划", symbol: "list.bullet")
                 MenuRowProbe(title: "本周待办", symbol: "list.bullet")
@@ -281,7 +281,7 @@ final class PopupWidthSecondPassTests: XCTestCase {
     }
 
     func testQuickAddListPickerRows() throws {
-        try add("快速添加·清单候选", width: 250) {
+        try add("快速添加·清单候选", width: PopupMetrics.quickAddChildWidth) {
             VStack(alignment: .leading, spacing: 0) {
                 MenuRowProbe(title: "个人成长与长期学习计划", symbol: "list.bullet")
                 MenuRowProbe(title: "本周待办", symbol: "list.bullet")

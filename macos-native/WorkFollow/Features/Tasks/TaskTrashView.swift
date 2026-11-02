@@ -151,7 +151,8 @@ private struct TrashTaskRow: View {
 
     var body: some View {
         HStack(spacing: WFSpace.md) {
-            Button { workspace.select(task.id) } label: {
+            let selectRow = { workspace.select(task.id) }
+            Button(action: selectRow) {
                 HStack(spacing: WFSpace.md) {
                     Image(systemName: task.isAbandoned ? "circle.slash"
                                      : task.isClosed ? "checkmark.square.fill" : "square")
@@ -171,6 +172,8 @@ private struct TrashTaskRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // 窗口未激活时的首击直达（见 FirstMouseAction）。
+            .firstMouseAction(selectRow)
             Button { workspace.restoreDeleted(task.id) } label: {
                 Image(systemName: "arrow.uturn.backward")
             }.buttonStyle(.plain).hoverTip("恢复任务")

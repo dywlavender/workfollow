@@ -29,7 +29,7 @@ extension TaskWorkspaceModel {
 }
 
 struct TaskTagsSectionView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
     var onNavigate: () -> Void = {}
     var sectionCollapsed: Bool = false
@@ -109,11 +109,12 @@ struct TaskTagsSectionView: View {
                 .hoverTip(collapsed.contains(tag.id) ? "展开" : "收起")
                 .accessibilityLabel((collapsed.contains(tag.id) ? "展开" : "收起") + tag.name)
             }
-            Button {
+            let activate = {
                 navigation.destination = .allTasks
                 workspace.activeList = nil; workspace.activeFilterID = nil; workspace.activeTag = tag.name
                 onNavigate()
-            } label: {
+            }
+            Button(action: activate) {
                 HStack(spacing: 6) {
                     Image(systemName: "tag").font(.system(size: 12)).frame(width: 22)
                         .foregroundStyle(workspace.tagColor(tag.name))
@@ -128,6 +129,7 @@ struct TaskTagsSectionView: View {
                 }
                 .frame(height: NavigationMetrics.rowHeight).contentShape(Rectangle())
             }
+            .firstMouseAction(activate)
             .accessibilityLabel("标签：" + tag.name)
         }
         // 滴答实测：标签图标起于行内 19、文字 47，与智能清单同一列。
@@ -150,7 +152,7 @@ struct TaskTagsSectionView: View {
         .background {
             AnchoredPropertyPanel(
                 isPresented: Binding(get: { colorTag == tag.id }, set: { if !$0 { colorTag = nil } }),
-                width: 220, placement: .verticalInOwner,
+                width: PopupMetrics.tagColorPickerWidth, placement: .verticalInOwner,
                 focusPolicy: .preservePresenter) {
                 TaskTagColorPicker(workspace: workspace, tagID: tag.id) { colorTag = nil }
             }
@@ -181,7 +183,7 @@ struct TaskTagsSectionView: View {
 }
 
 private struct TaskTagColorPicker: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     let tagID: UUID
     let onDismiss: () -> Void
 

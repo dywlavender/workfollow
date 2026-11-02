@@ -59,6 +59,29 @@ final class TaskListMoreMenuTests: XCTestCase {
                        "再次执行同一行应恢复显示详细")
     }
 
+    func testMenuActionsFollowTheListAfterSwitchingScopes() throws {
+        let (environment, window, host, probe) = try makeWindow()
+        defer { window.close() }
+        let workspace = environment.taskWorkspace
+        let keyA = TaskViewScopeKey.key(destination: .allTasks, activeList: "工作", activeTag: nil)
+        let keyB = TaskViewScopeKey.key(destination: .allTasks, activeList: "虚构菜单清单", activeTag: nil)
+        environment.viewPreferences.setHidesDetails(false, for: keyA)
+        environment.viewPreferences.setHidesDetails(false, for: keyB)
+        _ = workspace.createDraft(title: "虚构条目", list: "虚构菜单清单", schedule: TaskSchedule(),
+                                  priority: .none, tags: [], reminder: nil, repeatFrequency: .never)
+        for name in ["虚构菜单清单", "工作"] {
+            environment.navigation.openTaskList(name, in: workspace)
+            InspectorPanelTestSupport.settle(window)
+            try openMoreMenu(in: window, host: host, probe: probe)
+            try sendKey(125, to: window)
+            try sendKey(125, to: window)
+            try sendKey(36, to: window)
+            XCTAssertTrue(environment.viewPreferences.hidesDetails(for: name == "工作" ? keyA : keyB))
+        }
+        XCTAssertTrue(environment.viewPreferences.hidesDetails(for: keyA))
+        XCTAssertTrue(environment.viewPreferences.hidesDetails(for: keyB))
+    }
+
     func testDisplaySettingsSheetOpensFromMenuAndCloses() throws {
         let (_, window, host, probe) = try makeWindow()
         defer { window.close() }

@@ -106,7 +106,7 @@ struct NotesWorkspaceView: View {
             syncFolderAutoHidden()
         }
         .onChange(of: aiExpansion.expandedWidth) { _, width in
-            if width == 0 { environment.notesAIFrozenWindowWidth = nil }
+            if width == 0 { clearFrozenWindowWidth() }
             syncFolderAutoHidden()
         }
         .onChange(of: windowWidth) { _, _ in
@@ -129,7 +129,7 @@ struct NotesWorkspaceView: View {
         }
         .onDisappear {
             aiExpansion.collapse()
-            environment.notesAIFrozenWindowWidth = nil
+            clearFrozenWindowWidth()
         }
         .workfollowAlert(
             "清空笔记垃圾桶",
@@ -175,7 +175,7 @@ struct NotesWorkspaceView: View {
                 // 先冻结扩展前的壳层宽度，窗口变宽的同一帧里导航列不会跳出来。
                 environment.notesAIFrozenWindowWidth = window.frame.width
                 if !aiExpansion.expand(window, by: CGFloat(aiPaneWidth)) {
-                    environment.notesAIFrozenWindowWidth = nil
+                    clearFrozenWindowWidth()
                 }
             }
             notes.aiPaneVisible = true
@@ -183,8 +183,14 @@ struct NotesWorkspaceView: View {
             notes.aiPaneVisible = false
             aiDraftEdit = nil
             aiExpansion.collapse()
-            environment.notesAIFrozenWindowWidth = nil
+            clearFrozenWindowWidth()
         }
+    }
+
+    private func clearFrozenWindowWidth() {
+        // This is global shell state. Leaving an ordinary note must not
+        // invalidate every cached page by publishing nil again.
+        if environment.notesAIFrozenWindowWidth != nil { environment.notesAIFrozenWindowWidth = nil }
     }
 
     /// AI 被别处关掉、当前笔记消失或进入垃圾桶时，不再保留右扩的窗口宽度。
@@ -405,7 +411,8 @@ struct NotesWorkspaceView: View {
                     if rows.isEmpty { Text(query.isEmpty ? (trash ? "笔记垃圾桶是空的" : "从一条新笔记开始") : "没有找到相关笔记").foregroundStyle(.secondary).padding() }
                     ForEach(rows) { note in
                         HStack(spacing: 4) {
-                        Button { notes.selectedID = note.id; detailOnly = true } label: {
+                        let openNote = { notes.selectedID = note.id; detailOnly = true }
+                        Button(action: openNote) {
                             HStack(alignment: .top, spacing: 12) {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
@@ -449,11 +456,15 @@ struct NotesWorkspaceView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .contentShape(Rectangle())
                         }.buttonStyle(.plain)
+                        // 窗口未激活时的首击直达（同侧栏行，见 FirstMouseAction）。
+                        .firstMouseAction(openNote)
                         if trash {
                             Button { notes.restore(note.id) } label: { Image(systemName: "arrow.uturn.backward").frame(width: 28, height: 28).contentShape(Rectangle()) }
                                 .buttonStyle(.plain).hoverTip("恢复笔记：\(note.title)")
+                                .firstMouseAction { notes.restore(note.id) }
                             Button { purgeID = note.id } label: { Image(systemName: "trash.slash").frame(width: 28, height: 28).contentShape(Rectangle()) }
                                 .buttonStyle(.plain).hoverTip("永久删除笔记：\(note.title)")
+                                .firstMouseAction { purgeID = note.id }
                         }
                         }
                         // 行分割线：与任务列表同一条（`ListRowDivider`），画在行内底边

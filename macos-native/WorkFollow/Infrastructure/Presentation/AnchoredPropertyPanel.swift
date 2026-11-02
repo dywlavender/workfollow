@@ -42,6 +42,21 @@ enum AnchoredPropertyPanelFocusPolicy {
 /// contributing to the parent's fitting size. The row is the positioning anchor.
 struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
     @Binding var isPresented: Bool
+    /// 面板宽度，必须显式给出。
+    ///
+    /// **为什么不改成「按内容自然宽自动推导」**（2026-11-01 评估后否决）：
+    /// 全仓库 49 处挂载点里只有 12 处的内容能自撑，其余 37 处是结构性的——
+    /// `PopupMenuRow`（`maxWidth: .infinity`）、`BusinessMenuContent`（三处撑满）、
+    /// `PopupActionButton`（`maxWidth: .infinity`）、无定宽 `TextField`、
+    /// `HStack` 内的 `Spacer()`。这些组件撑满宽度是**内建行为**，量出来的
+    /// 自然宽会塌成很小甚至 0。
+    ///
+    /// 而且「打开后再量 `fittingSize` 设宽」会触发已知回归（见 `BusinessMenu.swift:7-12`）：
+    /// 面板宿主设了 `sizingOptions = [.intrinsicContentSize]`，开面板后改宽度会让
+    /// SwiftUI 重建整棵子树、行的 `onAppear` 重跑，把键盘高亮抢走。
+    ///
+    /// 所以宽度仍由调用方显式给出；**「挂载宽 == 内容宽」由
+    /// `PopupWidthContractTests` 强制**，而不是靠运行期量测。
     let width: CGFloat
     var horizontalOutset: CGFloat = 0
     var prefersAbove: Bool = false

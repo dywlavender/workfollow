@@ -37,7 +37,7 @@ final class TaskContextRoutingTests: XCTestCase {
             environment.navigate(to: destination)
             InspectorPanelTestSupport.settle(window)
             let row = try XCTUnwrap(descendants(host)
-                .compactMap { $0 as? SecondaryClickCapture.SecondaryClickView }
+                .filter { $0 is NativeTaskRowView || $0 is SecondaryClickCapture.SecondaryClickView }
                 .first { !$0.bounds.intersection($0.visibleRect).isEmpty })
             let point = row.convert(NSPoint(x: row.bounds.midX, y: row.bounds.midY), to: nil)
             try rightClick(point, in: window)

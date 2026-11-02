@@ -92,6 +92,26 @@ enum NativeBackgroundTheme: String, CaseIterable, Identifiable {
         }
     }
 
+    /// 主题页面上**结构性内容区**（看板列、时间线栏、横幅）的压平强度。
+    ///
+    /// 问题不在「卡片比页面亮」——卡片本就该抬起来；问题在这个亮度差**不稳定**。
+    /// 页面是「底图 + 底纱 + 动效」三层叠的，动效经过处与空白处能差单通道 0.31
+    /// （浓档最狠）。于是同一块内容，压在空白处时边界几乎看不见（差 0.003），
+    /// 压在动效上时立刻跳出来（差 0.24）——用户读到的就是「这块白和背景不在
+    /// 同一层」。
+    ///
+    /// 实测三种「给卡片调色」的做法都不成立：不透明纯白摆幅 0.31、稀释 86% 是
+    /// 0.27、稀释 60% 是 0.19。固定色永远追不上会变的页面。
+    ///
+    /// 取 0.86：先把内容区背后的底图与动效洗淡，页面变化被压到 0.044。
+    ///
+    /// ⚠️ **正文编辑区不用这个值**。摘要正文、每日手记、会议纪要、笔记正文、
+    /// 任务详情统一用 `WorkfollowReadingSurface`（0.58）——那是「阅读面」，
+    /// 更透、无圆角无描边，五个编辑区呈现同一种透法。这个 0.86 只留给
+    /// 看板列 / 时间线栏这类**结构性色块**：它们需要在页面上定出分区边界，
+    /// 太透就分不出列了。
+    var cardSurfaceFlattening: Double { isThemed ? 0.86 : 1 }
+
     /// 主页面底纱的颜色。整窗画布与各页面的 `ThemedPageSurface` 共用同一个值，
     /// 后者在画布生效时会让出底色，两层不会叠成近白。
     func pageVeil(for scheme: ColorScheme) -> Color {
@@ -212,8 +232,11 @@ extension View {
 
 /// 主页面内容面的半透明底：主题开启时让窗口底图透上来，正文墨色不动。
 /// 0.90 ≈ 只透 10% 背景；贴纸/云朵会变成很淡的色块，不会抢文字。
-/// `opacity` 越小，主题越明显。浮层、弹窗和卡片用 `workfollowPopupSurface`
-/// 或各自的不透明底色，避免叠出两层内容面。
+/// `opacity` 越小，主题越明显。
+///
+/// ⚠️ 页面内的**实体块**（编辑卡、看板列、纪要框）不要再用 `WFColors.content`
+/// 当底色——那是系统纯白，压在半透明纱上会浮成另一层。用
+/// `workfollowCardSurface()` / `backgroundTheme.cardSurfaceFlattening`。
 struct ThemedPageSurface: View {
     var opacity: Double = 0.90
 
@@ -238,6 +261,51 @@ struct ThemedPageSurface: View {
 extension View {
     func workfollowPageSurface(_ opacity: Double = WFPageSurface.veilOpacity) -> some View {
         background { ThemedPageSurface(opacity: opacity) }
+    }
+
+    /// 主题页面的**内容区**底：把这一整块背后的底图与动效压平。
+    ///
+    /// 为什么不是「给卡片调个色」：页面底色随位置在 0.31 的范围内变化（动效经过处
+    /// 最深），而卡片是固定色。实测三种做法都不成立——不透明纯白摆幅 0.31、
+    /// 稀释 86% 是 0.27、稀释 60% 是 0.19，全都远高于可接受值。任何固定色都会
+    /// 在动效经过时与页面拉开距离，用户读到的就是「这块白和背景不在同一层」。
+    ///
+    /// 所以做法与笔记页 / 任务详情页一致：**先把内容区压平**（86% 内容色薄纱，
+    /// 页面变化被压到 0.044），内容直接坐在压平层上，不再有浮起的白卡片。
+    /// 主题关闭时原样返回 `fallback`，视觉逐像素不变。
+    ///
+    /// 用在**结构性边界**上（整块内容区、看板列、时间线栏），不要用在浮在内容
+    /// 中间的小卡片上——那种地方该用描边表达层级，而不是再叠一块面。
+    func workfollowCardSurface(_ fallback: Color = WFColors.content) -> some View {
+        background { ThemedCardSurface(fallback: fallback) }
+    }
+
+    /// 带形状的版本：只把**背景层**裁进形状，内容不裁——与原来的
+    /// `.background(WFColors.content, in: RoundedRectangle(...))` 语义逐条对齐，
+    /// 焦点环、滚动条不会被切掉。
+    func workfollowCardSurface<S: SwiftUI.Shape>(_ fallback: Color = WFColors.content,
+                                                 in shape: S) -> some View {
+        background {
+            ThemedCardSurface(fallback: fallback).clipShape(shape)
+        }
+    }
+}
+
+/// 内容区的主题底：主题开启时铺一层 86% 的内容色薄纱，把底下的底图与动效压平，
+/// 内容直接坐在上面（没有额外的实色卡片层）。
+///
+/// 主题关闭时原样返回 `fallback`（默认 `WFColors.content`），即修复前的不透明
+/// 底色，视觉逐像素不变。
+struct ThemedCardSurface: View {
+    var fallback: Color = WFColors.content
+
+    @Environment(\.workfollowBackgroundTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        theme.isThemed
+            ? fallback.opacity(theme.cardSurfaceFlattening)
+            : fallback
     }
 }
 

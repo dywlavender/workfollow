@@ -35,6 +35,7 @@ struct AIReferencePicker: View {
                 }
             }
             .compactScrollbars()
-        }.font(WFType.body).padding(16).frame(width: 340, height: 390)
+        }.font(WFType.body).padding(16)
+            .frame(width: PopupMetrics.aiReferencePickerWidth, height: 390)
     }
 }

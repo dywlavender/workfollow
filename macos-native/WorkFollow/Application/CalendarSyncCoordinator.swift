@@ -31,8 +31,10 @@ final class CalendarSyncCoordinator: ObservableObject, ModuleStoreFlushable {
     var removedCopyCount: Int { store.snapshot.removedTaskCopies?.count ?? 0 }
 
     func refreshAccess() {
-        authorization = client.authorization
-        calendars = client.calendars()
+        let nextAuthorization = client.authorization
+        if authorization != nextAuthorization { authorization = nextAuthorization }
+        let nextCalendars = client.calendars()
+        if calendars != nextCalendars { calendars = nextCalendars }
         reloadDisplayedEvents()
     }
     func connect() async {
@@ -49,16 +51,21 @@ final class CalendarSyncCoordinator: ObservableObject, ModuleStoreFlushable {
         } catch { message = error.localizedDescription }
     }
     func showEvents(in range: DateInterval) {
+        // EventKit's change callback keeps this snapshot current while the
+        // page is away. Revisiting the same viewport need not query it again.
+        guard displayRange != range || authorization != client.authorization else { return }
         displayRange = range
         refreshAccess()
     }
     private func reloadDisplayedEvents() {
         guard store.snapshot.enabled, authorization == .fullAccess, let range = displayRange else {
-            externalEvents = []; return
+            if !externalEvents.isEmpty { externalEvents = [] }
+            return
         }
-        externalEvents = client.events(in: range, calendarIDs: calendars.map(\.id)).filter { value in
+        let next = client.events(in: range, calendarIDs: calendars.map(\.id)).filter { value in
             !store.snapshot.bindings.contains { !$0.detached && ($0.eventID == value.id || $0.reference.url == value.sourceURL) }
-        }.sorted { $0.fields.start < $1.fields.start }
+        }.sorted { $0.fields.start == $1.fields.start ? $0.id < $1.id : $0.fields.start < $1.fields.start }
+        if externalEvents != next { externalEvents = next }
     }
     private func existingCopy(_ binding: CalendarTaskBinding) -> SystemCalendarEvent? {
         client.event(id: binding.eventID) ?? client.events(in: lookupRange(binding.lastSynced), calendarIDs: [binding.calendarID])

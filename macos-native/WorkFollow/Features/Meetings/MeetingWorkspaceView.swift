@@ -775,7 +775,9 @@ struct MeetingWorkspaceView: View {
             font: .systemFont(ofSize: 14),
             accessibilityLabel: "会议纪要",
             onLiveTextIsEmptyChange: { minutesEditorIsEmpty = $0 })
-            .background(WFColors.content)
+            // 与同页的转写区、笔记页、任务详情页、摘要正文统一：铺同一层正文
+            // 阅读面。原来这里是不透明底，同一页里会出现两种白。
+            .background { WorkfollowReadingSurface() }
             if meeting.minutes.isEmpty && minutesEditorIsEmpty {
                 Text("有定稿文字后，点击“AI 编写纪要”；录音中每 5 分钟自动编写，也可以直接在这里写。")
                     .font(WFType.body).foregroundStyle(WFColors.tertiaryText)

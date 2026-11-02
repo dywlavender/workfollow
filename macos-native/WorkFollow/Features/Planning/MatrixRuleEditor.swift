@@ -146,7 +146,7 @@ struct MatrixRuleEditor: View {
             AnchoredPropertyPanel(isPresented: Binding(
                 get: { activeDateField == field },
                 set: { if !$0, activeDateField == field { activeDateField = nil } }),
-                width: 260, placement: .vertical,
+                width: ScheduleMetrics.panelWidth, placement: .vertical,
                 focusPolicy: .preservePresenter, title: "日期") {
                     AppKitMonthGridView(calendar: calendar,
                         displayedMonth: $dateFieldMonth,

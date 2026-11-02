@@ -31,7 +31,8 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
                 Button("更多属性") { state.showsProperties = true }
                     .buttonStyle(.plain)
                     .frame(width: 100, height: 32)
-                    .background(AnchoredPropertyPanel(isPresented: $state.showsProperties, width: 270) {
+                    .background(AnchoredPropertyPanel(isPresented: $state.showsProperties,
+                                                      width: PopupMetrics.quickAddPropertiesWidth) {
                         QuickAddPropertiesPopover(
                             workspace: workspace,
                             selectedPriority: .none,
@@ -78,7 +79,7 @@ final class QuickAddArrowlessFlowTests: XCTestCase {
         settle(fixture)
 
         let child = try XCTUnwrap(childPanel(in: parent))
-        XCTAssertEqual(child.frame.width, 250, accuracy: 0.5)
+        XCTAssertEqual(child.frame.width, PopupMetrics.quickAddChildWidth, accuracy: 0.5)
         XCTAssertEqual(parent.frame, originalFrame)
 
         let editor = try XCTUnwrap(child.firstResponder as? NSTextView,

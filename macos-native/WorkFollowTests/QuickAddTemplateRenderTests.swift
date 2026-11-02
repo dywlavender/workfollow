@@ -18,7 +18,7 @@ final class QuickAddTemplateRenderTests: XCTestCase {
             .coordinateSpace(name: "quick-add-render")
             .onPreferenceChange(QuickAddFramesKey.self) { frames = $0 }
         let host = NSHostingView(rootView: root)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 270, height: 235),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: PopupMetrics.quickAddPropertiesWidth, height: 235),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = host
         window.orderFront(nil)
@@ -26,7 +26,9 @@ final class QuickAddTemplateRenderTests: XCTestCase {
         settle(host)
         // 4 优先级 + 清单 + 标签 + 附件 + 从模板添加 + 输入框设置 + properties。
         XCTAssertEqual(frames.count, 10)
-        XCTAssertEqual(try XCTUnwrap(frames[.properties]).width, 270, accuracy: 0.5)
+        // 断言跟着常量走，不钉死数字：宽度常量改了，契约测试应该跟着常量变。
+        XCTAssertEqual(try XCTUnwrap(frames[.properties]).width,
+                       PopupMetrics.quickAddPropertiesWidth, accuracy: 0.5)
         let list = try XCTUnwrap(frames[.list])
         let tags = try XCTUnwrap(frames[.tags])
         let attachment = try XCTUnwrap(frames[.attachment])

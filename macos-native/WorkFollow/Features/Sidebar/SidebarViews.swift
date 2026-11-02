@@ -109,9 +109,8 @@ struct IconRailView: View {
 
     private func railButton(_ destination: NativeDestination, symbol: String,
                             title: String, selected: Bool) -> some View {
-        Button {
-            activate(destination, eventType: NSApp.currentEvent?.type)
-        } label: {
+        let activateRail = { activate(destination, eventType: NSApp.currentEvent?.type) }
+        return Button(action: activateRail) {
             railIcon(symbol, selected: selected)
                 .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
                 .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
@@ -121,6 +120,8 @@ struct IconRailView: View {
                 .contentShape(Rectangle())
                 .focusRenderAnchor(.railSelectedHitArea)
         }
+        // 窗口未激活时的首击直达（同侧栏行，见 FirstMouseAction）。
+        .firstMouseAction(activateRail)
         .focused($focusedDestination, equals: destination)
         .onKeyPress(.return) {
             activate(destination, eventType: .keyDown)
@@ -397,11 +398,24 @@ struct NavigationColumnView: View {
             options: SmartListVisibility.menuOrder.map { BusinessChoice($0, $0.title) })
     }
 
+    /// 「所有任务」是清单/标签/过滤器的宿主：激活了其中之一时它自己不再算
+    /// 选中（用户要求：选中清单时「所有任务」不亮，三者同级、一次一个）。
+    /// 其余目的地照常按当前页面判断。
+    static func isRowSelected(_ destination: NativeDestination, current: NativeDestination,
+                              activeList: String?, activeTag: String?, activeFilterID: UUID?) -> Bool {
+        guard current == destination else { return false }
+        if destination == .allTasks {
+            return activeList == nil && activeTag == nil && activeFilterID == nil
+        }
+        return true
+    }
+
     private func destinationRow(_ destination: NativeDestination) -> some View {
-        Button {
+        let activate = {
             environment.navigate(to: destination)
             onNavigate()
-        } label: {
+        }
+        return Button(action: activate) {
             // 图标列与文字位置按滴答 AX 实测（2026-10-17）：图标框 22pt 起于行内 19pt，
             // 图标右缘到文字 6pt —— 得到图标 `@81`、文字 `@109`（行从 62 起）。
             HStack(spacing: 6) {
@@ -428,9 +442,14 @@ struct NavigationColumnView: View {
             .padding(.trailing, WFSpace.sm)
             .frame(height: NavigationMetrics.rowHeight)
             .contentShape(Rectangle())
-            .rowHoverBackground(selected: navigation.destination == destination)
+            .rowHoverBackground(selected: Self.isRowSelected(destination,
+                current: navigation.destination,
+                activeList: workspace.activeList, activeTag: workspace.activeTag,
+                activeFilterID: workspace.activeFilterID))
         }
         .buttonStyle(.plain)
+        // 窗口未激活时的首击直达（SwiftUI 按钮首击只激活窗口，见 FirstMouseAction）。
+        .firstMouseAction(activate)
         .accessibilityLabel(destination.title)
         .guideTourAnchor("nav." + destination.title)
     }
@@ -490,12 +509,13 @@ private struct NotesNavigationSection: View {
         let selected = trash ? navigation.destination == .notesTrash :
             navigation.destination == .notes && notes.folderFilter == folder && notes.favoritesOnly == favorites
         let count = notes.rows(trash: trash, query: "", folder: folder, favorites: favorites).count
-        return Button {
+        let activate = {
             notes.folderFilter = folder
             notes.favoritesOnly = favorites
             environment.navigate(to: trash ? .notesTrash : .notes)
             onNavigate()
-        } label: {
+        }
+        return Button(action: activate) {
             HStack(spacing: WFSpace.sm) {
                 Image(systemName: symbol).frame(width: 18)
                 Text(title).lineLimit(1)
@@ -510,7 +530,10 @@ private struct NotesNavigationSection: View {
             .foregroundStyle(WFColors.text)
             .contentShape(Rectangle())
             .rowHoverBackground(selected: selected)
-        }.buttonStyle(.plain)
+        }
+        .buttonStyle(.plain)
+        // 窗口未激活时的首击直达（同任务侧栏，见 FirstMouseAction）。
+        .firstMouseAction(activate)
     }
 }
 
@@ -569,7 +592,7 @@ private struct TaskFiltersSectionView: View {
 
     private func filterRow(_ filter: SavedFilter) -> some View {
         let selected = navigation.destination == .allTasks && workspace.activeFilterID == filter.id
-        return Button {
+        let activate = {
             if selected {
                 workspace.openFilter(nil)
             } else {
@@ -577,7 +600,8 @@ private struct TaskFiltersSectionView: View {
                 workspace.openFilter(filter.id)
                 onNavigate()
             }
-        } label: {
+        }
+        return Button(action: activate) {
             HStack(spacing: 6) {
                 Image(systemName: "line.3.horizontal.decrease")
                     .font(.system(size: 13))
@@ -592,6 +616,8 @@ private struct TaskFiltersSectionView: View {
             .contentShape(Rectangle())
             .rowHoverBackground(selected: selected)
         }
+        .buttonStyle(.plain)
+        .firstMouseAction(activate)
         .businessContextMenu {
             Button("编辑") {
                 editorRequest = FilterEditorRequest(filter: filter)

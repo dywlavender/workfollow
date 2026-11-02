@@ -61,4 +61,13 @@ final class AppNavigation: ObservableObject {
     init(destination: NativeDestination = .today) { self.destination = destination }
 
     var taskSelectionToPreserveOnNextNavigation: UUID?
+
+    func openTaskList(_ name: String, in workspace: TaskWorkspaceModel) {
+        workspace.openFilter(nil)
+        if destination != .allTasks { destination = .allTasks }
+        if workspace.activeList != name { workspace.activeList = name }
+        if workspace.activeTag != nil { workspace.activeTag = nil }
+        workspace.select(nil)
+        workspace.clearBulkSelection()
+    }
 }

@@ -566,6 +566,7 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     func openFilter(_ id: UUID?) {
+        guard activeFilterID != id else { return }
         activeFilterID = id
     }
 

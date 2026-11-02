@@ -19,11 +19,15 @@ struct NativeTaskOutline: NSViewRepresentable {
         static var sizingCalls = 0
         static var rowLayoutTime: Double = 0
         static var selectionRefreshes = 0
+        static var createdHostingViews = 0
+        static var createdNativeRows = 0
+        static var usesNativeRows = true
         static func reset() {
             containers = 0; createdCells = 0; configurations = 0
             configurationTime = 0; updateTime = 0; reloadTime = 0
             sizingTime = 0; sizingCalls = 0; rowLayoutTime = 0
             selectionRefreshes = 0
+            createdHostingViews = 0; createdNativeRows = 0
         }
     }
 #endif
@@ -31,6 +35,7 @@ struct NativeTaskOutline: NSViewRepresentable {
         let id: String
         var taskID: UUID?
         let makeContent: () -> AnyView
+        var makeNativeContent: (() -> NativeTaskRowConfiguration)?
         /// 行高由 `TaskListMetrics.taskRowHeight` 给出（预览行 / 标签行各一档）。
         var height: CGFloat = WFMetrics.rowHeight
         private var contentState: ComparisonValue?
@@ -45,9 +50,11 @@ struct NativeTaskOutline: NSViewRepresentable {
 
         init<State: Equatable, Layout: Equatable, Content: View>(id: String, taskID: UUID? = nil,
             state: State, layout: Layout, height: CGFloat = WFMetrics.rowHeight,
+            native: (() -> NativeTaskRowConfiguration)? = nil,
             @ViewBuilder content: @escaping () -> Content) {
             self.init(id: id, height: height, content: content)
             self.taskID = taskID
+            makeNativeContent = native
             contentState = ComparisonValue(state)
             layoutState = ComparisonValue(layout)
         }
@@ -73,6 +80,7 @@ struct NativeTaskOutline: NSViewRepresentable {
     var scopeKey: String? = nil
     var selectionSource: TaskWorkspaceModel? = nil
     var onKey: (TaskOutlineKey) -> Bool = { _ in false }
+    var onFrames: (([TaskTreeRenderAnchor: CGRect]) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -82,15 +90,19 @@ struct NativeTaskOutline: NSViewRepresentable {
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         context.coordinator.onKey = onKey
+        context.coordinator.environmentValues = context.environment
+        context.coordinator.onFrames = onFrames
         context.coordinator.bindSelection(selectionSource)
         context.coordinator.update(rows, in: scroll, scopeKey: scopeKey)
+        context.coordinator.updateNativeAppearance()
     }
 
     static func makeScrollView(coordinator: Coordinator) -> NSScrollView {
 #if DEBUG
         Diagnostics.containers += 1
 #endif
-        let scroll = NSScrollView()
+        let scroll = ScrollView()
+        scroll.didLayout = { [weak coordinator] in coordinator?.queueFrameReport() }
         scroll.borderType = .noBorder
         scroll.drawsBackground = false
         scroll.contentView.drawsBackground = false
@@ -136,6 +148,11 @@ struct NativeTaskOutline: NSViewRepresentable {
         coordinator.outline = outline
         scroll.documentView = outline
         return scroll
+    }
+
+    final class ScrollView: NSScrollView {
+        var didLayout: (() -> Void)?
+        override func layout() { super.layout(); didLayout?() }
     }
 
     final class OutlineView: NSOutlineView {
@@ -203,7 +220,18 @@ struct NativeTaskOutline: NSViewRepresentable {
     }
 
     final class Cell: NSTableCellView {
-        let host = RowHostingView(rootView: AnyView(EmptyView()))
+        lazy var host: RowHostingView = {
+#if DEBUG
+            Diagnostics.createdHostingViews += 1
+#endif
+            let host = RowHostingView(rootView: AnyView(EmptyView()))
+            host.sizingOptions = []
+            host.safeAreaRegions = []
+            return host
+        }()
+        private(set) var nativeRow: NativeTaskRowView?
+        private var installedContent: NSView?
+        var framesDidChange: (() -> Void)?
         private let selection = RowSelectionRefresh()
         private var currentItem: Item?
         private var previousRow: Row?
@@ -220,24 +248,26 @@ struct NativeTaskOutline: NSViewRepresentable {
 #if DEBUG
             Diagnostics.createdCells += 1
 #endif
-            host.translatesAutoresizingMaskIntoConstraints = false
-            // The outline supplies row height and these four constraints supply
-            // width/height; intrinsic SwiftUI measurement is redundant here.
-            host.sizingOptions = []
-            addSubview(host)
-            NSLayoutConstraint.activate([
-                host.leadingAnchor.constraint(equalTo: leadingAnchor,
-                                              constant: TaskListMetrics.outlineLeadingInset),
-                host.trailingAnchor.constraint(equalTo: trailingAnchor,
-                                               constant: -TaskListMetrics.outlineTrailingInset),
-                host.topAnchor.constraint(equalTo: topAnchor),
-                host.bottomAnchor.constraint(equalTo: bottomAnchor)
-            ])
         }
 
         required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-        func configure(_ item: Item, selectedTaskID: UUID? = nil, context: String? = nil) {
+        override func layout() {
+            super.layout()
+            installedContent?.frame = CGRect(x: TaskListMetrics.outlineLeadingInset, y: 0,
+                width: max(0, bounds.width - TaskListMetrics.outlineLeadingInset - TaskListMetrics.outlineTrailingInset), height: bounds.height)
+        }
+
+        private func install(_ view: NSView) {
+            if installedContent !== view {
+                installedContent?.removeFromSuperview()
+                addSubview(view); installedContent = view
+            }
+            needsLayout = true
+        }
+
+        func configure(_ item: Item, selectedTaskID: UUID? = nil, context: String? = nil,
+                       values: EnvironmentValues = EnvironmentValues()) {
             currentItem = item
             let changed = itemID != item.id || previousRow?.hasSameContent(as: item.row) != true
                 || previousRow?.hasSameLayout(as: item.row) != true || contentContext != context
@@ -247,6 +277,7 @@ struct NativeTaskOutline: NSViewRepresentable {
             let selectionChanged = displayedSelectionID != selectedTaskID
             displayedSelectionID = selectedTaskID
             guard changed else {
+                nativeRow?.updateAppearance(values)
                 if selectionChanged { refreshSelection(selectedTaskID) }
                 return
             }
@@ -256,6 +287,24 @@ struct NativeTaskOutline: NSViewRepresentable {
             Diagnostics.configurations += 1
             configurationCount += 1
 #endif
+            var nativeBuilder = item.row.makeNativeContent
+#if DEBUG
+            if !Diagnostics.usesNativeRows { nativeBuilder = nil }
+#endif
+            if let nativeBuilder {
+                if nativeRow == nil {
+                    nativeRow = NativeTaskRowView()
+#if DEBUG
+                    Diagnostics.createdNativeRows += 1
+#endif
+                }
+                guard let nativeRow else { return }
+                install(nativeRow)
+                nativeRow.framesDidChange = { [weak self] in self?.framesDidChange?() }
+                nativeRow.configure(nativeBuilder(), selectedTaskID: selectedTaskID, values: values)
+                return
+            }
+            install(host)
             // A reused cell resets SwiftUI state only when it hosts another row.
             contentRevision += 1
             host.rootView = AnyView(SelectionObservedRow(selection: selection, contentRevision: contentRevision, content: { [weak self] in
@@ -269,7 +318,8 @@ struct NativeTaskOutline: NSViewRepresentable {
 #if DEBUG
             Diagnostics.selectionRefreshes += 1
 #endif
-            selection.revision += 1
+            if let nativeRow { nativeRow.setSelection(id) }
+            else { selection.revision += 1 }
         }
     }
 
@@ -277,6 +327,48 @@ struct NativeTaskOutline: NSViewRepresentable {
         weak var outline: OutlineView?
         private(set) var items: [Item] = []
         var onKey: (TaskOutlineKey) -> Bool = { _ in false }
+        var environmentValues = EnvironmentValues()
+        var onFrames: (([TaskTreeRenderAnchor: CGRect]) -> Void)?
+        private var frameReportQueued = false
+
+        private func visibleIndices(in outline: NSOutlineView) -> Range<Int> {
+            let range = outline.rows(in: outline.visibleRect)
+            guard range.location != NSNotFound else { return 0..<0 }
+            let end = min(NSMaxRange(range), min(items.count, outline.numberOfRows))
+            return min(range.location, end)..<end
+        }
+
+        func updateNativeAppearance() {
+            guard let outline else { return }
+            for index in visibleIndices(in: outline) {
+                (outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell)?.nativeRow?.updateAppearance(environmentValues)
+            }
+        }
+
+        func queueFrameReport() {
+#if DEBUG
+            guard onFrames != nil, !frameReportQueued else { return }
+            frameReportQueued = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.frameReportQueued = false
+                guard let outline = self.outline, let scroll = outline.enclosingScrollView else { return }
+                var frames: [TaskTreeRenderAnchor: CGRect] = [:]
+                do {
+                    for index in self.visibleIndices(in: outline) {
+                        guard let native = (outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell)?.nativeRow else { continue }
+                        for (key, rect) in native.renderFrames {
+                            let converted = native.convert(rect, to: scroll)
+                            frames[key] = CGRect(x: converted.minX,
+                                y: scroll.isFlipped ? converted.minY : scroll.bounds.height - converted.maxY,
+                                width: converted.width, height: converted.height)
+                        }
+                    }
+                }
+                self.onFrames?(frames)
+            }
+#endif
+        }
         private var scopeKey: String?
         private struct ScrollPosition {
             let rowID: String?
@@ -308,9 +400,7 @@ struct NativeTaskOutline: NSViewRepresentable {
                     let affected = Set([self.selectedTaskID, source.selectedTaskID].compactMap { $0 })
                     self.selectedTaskID = source.selectedTaskID
                     guard let outline = self.outline else { return }
-                    let visible = outline.rows(in: outline.visibleRect)
-                    guard visible.location != NSNotFound else { return }
-                    for index in visible.location..<min(NSMaxRange(visible), self.items.count) {
+                    for index in self.visibleIndices(in: outline) {
                         guard let id = self.items[index].row.taskID, affected.contains(id),
                               let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell else { continue }
                         cell.refreshSelection(source.selectedTaskID)
@@ -338,6 +428,9 @@ struct NativeTaskOutline: NSViewRepresentable {
             let oldIDs = items.map(\.id)
             let structureChanged = oldIDs != rows.map(\.id)
             let previousY = scroll.contentView.bounds.minY
+            let contentHeight = rows.reduce(CGFloat(0)) { $0 + $1.height }
+            let mayAnimateRows = WFMotion.enabled && !oldIDs.isEmpty && !scopeChanged
+                && !(previousY > 0 && contentHeight <= scroll.contentView.bounds.height)
             let visible = outline.rows(in: outline.visibleRect)
             let anchorIndex = visible.location != NSNotFound ? visible.location : 0
             let anchor = previousY > 0 && items.indices.contains(anchorIndex) ? items[anchorIndex].id : nil
@@ -359,9 +452,9 @@ struct NativeTaskOutline: NSViewRepresentable {
             }
 
             // 结构变化分两条路：**单边**增/删（快速添加落行、删除任务、分组折叠
-            // 展开）走 AppKit 的行动画，新行从上方滑入、下方行让位，与滚动锚位
-            // 逻辑兼容（endUpdates 后 rect 即终态几何）；换页（两侧同时增删）、
-            // 完成态身份变化与行移动仍是混合变动，继续整表重载。
+            // 展开）与单行成对变动（完成任务 / 日期移动：一行离场一行进场）走
+            // AppKit 的行动画，新行从上方滑入、下方行让位，与滚动锚位逻辑兼容
+            // （endUpdates 后 rect 即终态几何）；换页等更大的混合变动仍整表重载。
             var animatedStructure = false
             var insertedIndexes = IndexSet()
             if structureChanged {
@@ -370,14 +463,22 @@ struct NativeTaskOutline: NSViewRepresentable {
                 let newSet = Set(newIDs)
                 insertedIndexes = IndexSet(newIDs.enumerated().compactMap { oldSet.contains($1) ? nil : $0 })
                 let removedIndexes = IndexSet(oldIDs.enumerated().compactMap { newSet.contains($1) ? nil : $0 })
-                if removedIndexes.isEmpty, !insertedIndexes.isEmpty {
+                if mayAnimateRows, removedIndexes.isEmpty, !insertedIndexes.isEmpty {
                     outline.beginUpdates()
                     outline.insertItems(at: insertedIndexes, inParent: nil, withAnimation: .slideDown)
                     outline.endUpdates()
                     animatedStructure = true
-                } else if insertedIndexes.isEmpty, !removedIndexes.isEmpty {
+                } else if mayAnimateRows, insertedIndexes.isEmpty, !removedIndexes.isEmpty {
                     outline.beginUpdates()
                     outline.removeItems(at: removedIndexes, inParent: nil, withAnimation: .slideUp)
+                    outline.endUpdates()
+                    animatedStructure = true
+                } else if mayAnimateRows, insertedIndexes.count == 1, removedIndexes.count == 1 {
+                    // 完成任务 / 日期移动：一行离场、一行进场。旧位淡去、新位滑入，
+                    // 余下行由 AppKit 平滑收拢——不再整表瞬跳。
+                    outline.beginUpdates()
+                    outline.removeItems(at: removedIndexes, inParent: nil, withAnimation: .effectFade)
+                    outline.insertItems(at: insertedIndexes, inParent: nil, withAnimation: .slideDown)
                     outline.endUpdates()
                     animatedStructure = true
                 }
@@ -395,15 +496,14 @@ struct NativeTaskOutline: NSViewRepresentable {
             // 动画插入后既有行的内容/高度照样要刷新（分组头的计数徽标、
             // 邻行让位后的复检），否则只有新行是对的。
             if !structureChanged || animatedStructure {
-                if visible.location != NSNotFound {
-                    let end = min(NSMaxRange(visible), items.count)
-                    for index in visible.location..<end where scopeChanged || contentChanged.contains(index) || layoutChanged.contains(index) {
+                do {
+                    for index in visibleIndices(in: outline) where scopeChanged || contentChanged.contains(index) || layoutChanged.contains(index) {
 #if DEBUG
                         guard refreshContent else { continue }
 #endif
                         if let cell = outline.view(atColumn: 0, row: index, makeIfNecessary: false) as? Cell {
-                            cell.configure(items[index], selectedTaskID: selectionSource?.selectedTaskID,
-                                           context: items[index].row.taskID == nil ? scopeKey : nil)
+                        cell.configure(items[index], selectedTaskID: selectionSource?.selectedTaskID,
+                                       context: items[index].row.taskID == nil ? scopeKey : nil, values: environmentValues)
 #if DEBUG
                             configuredCellCount += 1
 #endif
@@ -437,10 +537,11 @@ struct NativeTaskOutline: NSViewRepresentable {
                         targetY = previousY
                     }
                 }
-                let maximumY = max(0, outline.frame.height - scroll.contentView.bounds.height)
+                let maximumY = max(0, min(outline.frame.height, contentHeight) - scroll.contentView.bounds.height)
                 scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, targetY), maximumY)))
                 scroll.reflectScrolledClipView(scroll.contentView)
             }
+            queueFrameReport()
         }
 
         func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
@@ -473,8 +574,9 @@ struct NativeTaskOutline: NSViewRepresentable {
                 cellCache.removeValue(forKey: cellOrder.removeFirst())
             }
             cell.identifier = cellID
+            cell.framesDidChange = { [weak self] in self?.queueFrameReport() }
             cell.configure(item, selectedTaskID: selectionSource?.selectedTaskID,
-                           context: item.row.taskID == nil ? scopeKey : nil)
+                           context: item.row.taskID == nil ? scopeKey : nil, values: environmentValues)
             return cell
         }
     }

@@ -38,8 +38,13 @@ struct TaskDataObserved: DynamicProperty {
 final class TaskLayoutObservation: ObservableObject {
     private var subscriptions: Set<AnyCancellable> = []
     init(_ workspace: TaskWorkspaceModel) {
-        workspace.dataObservation.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &subscriptions)
+        let context: [AnyPublisher<Void, Never>] = [
+            workspace.$activeList.removeDuplicates().dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            workspace.$activeTag.removeDuplicates().dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            workspace.$activeFilterID.removeDuplicates().dropFirst().map { _ in () }.eraseToAnyPublisher(),
+            workspace.$bulkSelection.map { !$0.isEmpty }.removeDuplicates().dropFirst().map { _ in () }.eraseToAnyPublisher()
+        ]
+        Publishers.MergeMany(context).sink { [weak self] in self?.objectWillChange.send() }.store(in: &subscriptions)
         workspace.$selectedTaskID.map { $0 != nil }.removeDuplicates().dropFirst()
             .sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &subscriptions)
         workspace.$taskListPaneWidth.removeDuplicates().dropFirst()

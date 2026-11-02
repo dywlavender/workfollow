@@ -13,10 +13,14 @@ enum QuickAddDisplayMode: String, CaseIterable {
         }
     }
 
+    /// 子面板收窄到 189 后，文案要跟着短：
+    /// 原「单行输入，属性在菜单」(12pt 宽 119.3) 在 189 里会折成两行，
+    /// 换成「属性收进菜单」(71.5) 后单行放得下；「详细」同理
+    /// 「常显日期与属性图标」(107.3) → 「常显日期与属性」(83.4)。
     var detail: String {
         switch self {
-        case .compact: "单行输入，属性在菜单"
-        case .detailed: "常显日期与属性图标"
+        case .compact: "属性收进菜单"
+        case .detailed: "常显日期与属性"
         }
     }
 }
@@ -121,7 +125,8 @@ struct QuickAddPropertiesPopover: View {
                 propertyRow(icon: "gearshape", title: "输入框设置：\(displayMode.title)")
             }
             .quickAddRenderAnchor(.displayMode)
-            .background(AnchoredPropertyPanel(isPresented: presented(.displayMode), width: 250,
+            .background(AnchoredPropertyPanel(isPresented: presented(.displayMode),
+                                              width: PopupMetrics.quickAddChildWidth,
                                               placement: .submenu, focusPolicy: .panel) {
                 QuickAddDisplayModePopover(selected: displayMode,
                     onCancel: { activeChild = nil },
@@ -181,7 +186,10 @@ struct QuickAddPropertiesPopover: View {
     }
 
     private func propertyRow(icon: String, title: String, hasChild: Bool = true) -> some View {
-        HStack(spacing: WFSpace.md) {
+        // 图标与文字间距 12→10：弹框收窄到 189 后，最长一行
+        // 「输入框设置：简洁」在 12 间距下需要 191pt（超出 2pt 被截成「输入框设置：…」），
+        // 收到 10 后需要 187pt，留 2pt 余量。行内边距仍是 8，视觉重心不变。
+        HStack(spacing: WFSpace.control) {
             Image(systemName: icon).foregroundStyle(WFColors.secondaryText)
             Text(title).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right").font(.caption2).foregroundStyle(WFColors.secondaryText)
@@ -257,7 +265,9 @@ private struct QuickAddListPickerPopover: View {
                             HStack(spacing: WFSpace.md) {
                                 Image(systemName: name == TaskList.inbox.name ? "tray" : "list.bullet")
                                     .foregroundStyle(WFColors.secondaryText)
-                                Text(name).frame(maxWidth: .infinity, alignment: .leading)
+                                // 面板收到 189 后长清单名（如「个人成长与长期学习计划」152.8pt）
+                                // 会撑破行宽，行高固定 34 时会被裁成两半。截断成「…」。
+                                Text(name).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                                 if name == selectedList {
                                     Image(systemName: "checkmark").foregroundStyle(WFColors.accent)
                                 }
@@ -272,7 +282,7 @@ private struct QuickAddListPickerPopover: View {
                 .compactScrollbars()
             }
         }
-        .frame(width: 250, height: 300)
+        .frame(width: PopupMetrics.quickAddChildWidth, height: 300)
         .onAppear {
             DispatchQueue.main.async { searchFocused = true }
         }

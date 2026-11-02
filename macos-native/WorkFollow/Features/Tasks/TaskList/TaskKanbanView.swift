@@ -7,7 +7,7 @@ import SwiftUI
 /// 看板按同一分组规则归列，关闭任务留在所属列的可折叠小节。
 struct TaskKanbanView: View {
     let groups: [TaskListGroup]
-    @ObservedObject var workspace: TaskWorkspaceModel
+    @TaskDataObserved var workspace: TaskWorkspaceModel
     let onSelect: (UUID) -> Void
     var sortMode: TaskListSortMode = .manual
     var sortDescending = false
@@ -147,7 +147,8 @@ struct TaskKanbanView: View {
             }
             .frame(width: columnWidth, alignment: .topLeading)
             .frame(maxHeight: .infinity, alignment: .topLeading)
-            .background(WFColors.content)
+            // 列是整块不透明面：必须跟主题走，否则主题页上整列会从动效上浮起来。
+            .workfollowCardSurface()
             .contentShape(Rectangle())
             .overlay {
                 if targetedColumnID == group.id {

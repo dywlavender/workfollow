@@ -82,12 +82,16 @@ struct BusinessMenu<Label: View, Content: View>: View {
                     }
                 }
             } else {
-                Button {
+                let toggle = {
                     showing.wrappedValue.toggle()
                     if showing.wrappedValue { prepareOpening() }
-                } label: { label.contentShape(Rectangle()) }
+                }
+                Button(action: toggle) { label.contentShape(Rectangle()) }
                     .buttonStyle(.plain)
                     .hidesSystemFocusEffect()
+                    // 窗口未激活时的首击直达：SwiftUI 按钮首击只激活窗口
+                    // （见 FirstMouseAction），头部「排序 / 更多」这类触发同受影响。
+                    .firstMouseAction(toggle)
             }
         }
         .background(PopupPresentingWindowReader(owner: presenter))

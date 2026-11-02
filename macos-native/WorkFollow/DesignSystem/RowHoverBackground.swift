@@ -52,7 +52,7 @@ struct RowHoverBackground: NSViewRepresentable {
 
 final class RowHoverView: NSView {
     private var pointerArea: NSTrackingArea?
-    private var selected = false
+    private(set) var selected = false
     private(set) var hovered = false
     var onHover: ((Bool) -> Void)?
     /// 用 mask 把可视底色内缩，但 view（以及它的追踪区域）仍覆盖整行：

@@ -34,6 +34,18 @@ final class WorkspaceNavigationBridge: ObservableObject {
 /// controls and view state while keeping it outside window layout and focus.
 @MainActor
 final class WorkspacePageCache: ObservableObject {
+    #if DEBUG
+    enum Diagnostics {
+        static var createdHosts = 0
+        static var rootAssignments = 0
+        static var attachments = 0
+        static var detachments = 0
+        static var showTime: TimeInterval = 0
+        static func reset() {
+            createdHosts = 0; rootAssignments = 0; attachments = 0; detachments = 0; showTime = 0
+        }
+    }
+    #endif
     /// 任务页常驻后每页约占 13–18MB（实测 7 个清单页 RSS 66MB → 约 190MB）。
     /// 只保留最近访问的几页，回访淘汰页时按首次进入重建。
     static let mountedPageLimit = 4
@@ -66,14 +78,23 @@ final class WorkspacePageCache: ObservableObject {
     func host(for key: String, signature: String?, content: AnyView) -> NSHostingView<AnyView> {
         if let host = hosts[key] {
             if let signature, signatures[key] != signature {
+                #if DEBUG
+                Diagnostics.rootAssignments += 1
+                #endif
                 host.rootView = content
                 signatures[key] = signature
             } else if signature == nil {
+                #if DEBUG
+                Diagnostics.rootAssignments += 1
+                #endif
                 host.rootView = content
             }
             return host
         }
         let host = NSHostingView(rootView: content)
+        #if DEBUG
+        Diagnostics.createdHosts += 1
+        #endif
         // The outer shell owns window safe areas and the traffic-light inset.
         // A nested host would otherwise add the titlebar inset again.
         host.safeAreaRegions = []
@@ -131,6 +152,10 @@ struct WorkspacePageHost: NSViewRepresentable {
         }
 
         func show(_ host: NSHostingView<AnyView>, key: String = "", keepsMounted: Bool = false) {
+            #if DEBUG
+            let started = ProcessInfo.processInfo.systemUptime
+            defer { WorkspacePageCache.Diagnostics.showTime += ProcessInfo.processInfo.systemUptime - started }
+            #endif
             if keepsMounted {
                 if currentHost === host, currentIsMounted, !host.isHidden {
                     touch(key)
@@ -139,7 +164,7 @@ struct WorkspacePageHost: NSViewRepresentable {
                 resignFirstResponderIfNeeded()
                 if let currentHost, currentHost !== host {
                     if currentIsMounted { currentHost.isHidden = true }
-                    else { currentHost.removeFromSuperview() }
+                    else { remove(currentHost) }
                 }
                 attachIfNeeded(host)
                 for mounted in mountedHosts.values where mounted !== host { mounted.isHidden = true }
@@ -155,7 +180,7 @@ struct WorkspacePageHost: NSViewRepresentable {
             // 离开任务列：把常驻的任务页宿主全部卸下，让各自的生命周期回调生效。
             if !mountedHosts.isEmpty {
                 resignFirstResponderIfNeeded()
-                for mounted in mountedHosts.values { mounted.removeFromSuperview() }
+                for mounted in mountedHosts.values { remove(mounted) }
                 let stale = mountOrder.dropLast(WorkspacePageCache.mountedPageLimit)
                 mountedHosts.removeAll()
                 mountOrder.removeAll()
@@ -169,7 +194,7 @@ struct WorkspacePageHost: NSViewRepresentable {
                 return
             }
             resignFirstResponderIfNeeded()
-            currentHost?.removeFromSuperview()
+            if let currentHost { remove(currentHost) }
             attachIfNeeded(host)
             currentHost = host
             currentIsMounted = false
@@ -191,6 +216,9 @@ struct WorkspacePageHost: NSViewRepresentable {
 
         private func attachIfNeeded(_ host: NSHostingView<AnyView>) {
             guard host.superview !== self else { return }
+            #if DEBUG
+            WorkspacePageCache.Diagnostics.attachments += 1
+            #endif
             host.translatesAutoresizingMaskIntoConstraints = false
             addSubview(host)
             NSLayoutConstraint.activate([
@@ -199,6 +227,13 @@ struct WorkspacePageHost: NSViewRepresentable {
                 host.topAnchor.constraint(equalTo: topAnchor),
                 host.bottomAnchor.constraint(equalTo: bottomAnchor)
             ])
+        }
+
+        private func remove(_ host: NSHostingView<AnyView>) {
+            #if DEBUG
+            if host.superview != nil { WorkspacePageCache.Diagnostics.detachments += 1 }
+            #endif
+            host.removeFromSuperview()
         }
 
         /// 隐藏/卸载前必须交还键盘焦点，否则输入会继续落到看不见的页面上。

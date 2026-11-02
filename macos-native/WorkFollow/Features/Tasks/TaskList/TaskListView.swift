@@ -6,7 +6,7 @@ private struct TaskOutlineRowState: Equatable {
     let depth: Int
     let hasChildren: Bool
     let expanded: Bool
-    let selected: Bool
+    let bulkSelected: Bool
     let recentlyCreated: Bool
     let showsListBadge: Bool
     let hidesDetails: Bool
@@ -15,6 +15,7 @@ private struct TaskOutlineRowState: Equatable {
     let progress: String?
     let day: Date
     let dateRevision: Int
+    let dateDisplay: TaskDateDisplayMode
 }
 
 private struct TaskOutlineRowLayout: Equatable {
@@ -121,6 +122,7 @@ struct TaskListView: View {
     @State private var quickAddAttachments: [NativeAttachment] = []
     /// 输入框显示模式（滴答「输入框设置」的简洁 / 详细）。
     @AppStorage(QuickAddDisplayMode.defaultsKey) private var quickAddDisplayModeRaw = QuickAddDisplayMode.compact.rawValue
+    @AppStorage(TaskDateDisplayMode.defaultsKey) private var rowDateDisplayRaw = TaskDateDisplayMode.taskTime.rawValue
     @State private var dismissedQuickAddTokens: Set<String> = []
     @State private var quickAddEscapePrimed = false
     /// Tab 进入的任务描述草稿（对齐滴答「敲击 Tab 添加任务描述」）。只在创建
@@ -216,7 +218,8 @@ struct TaskListView: View {
                 }
                 .foregroundStyle(WFColors.secondaryText)
                 .padding(.horizontal, WFSpace.xl).padding(.vertical, WFSpace.sm)
-                .background(WFColors.secondarySurface)
+                // 整条横幅横跨列表页：不跟主题的话会在主题页上切出一条系统灰。
+                .workfollowCardSurface(WFColors.secondarySurface)
             }
             // 候选列表挂在快速添加条的 overlay 上，会画到任务列表上方；提升层级
             // 才能盖住后面那个兄弟视图（SwiftUI 默认后者在上）。
@@ -229,11 +232,6 @@ struct TaskListView: View {
             } else if canAdd, let scope, viewMode != .kanban || environment.viewPreferences.kanbanOptions(for: preferenceKey).showsInput {
                 quickAddBar(in: scope)
                     .zIndex(1)
-                    // 占位文案实测过"清单已经是学习、却仍写着收集箱"：内容按 activeList
-                    // 过滤是对的（看板只有一列即证），所以问题是这条 bar 没有随目标变化
-                    // 重建。`.id` 绑到**落点名字**上，目标一变就换一个身份重建
-                    // （这是刻意为之的钝器：根因是这条子树的失效边界，不是取值逻辑）。
-                    .id(quickAddTargetName)
             }
             if viewMode == .kanban {
                 // 看板：列 = 投影分组（清单内有自定义分组时即分组本身）。
@@ -474,7 +472,6 @@ struct TaskListView: View {
         }
         .fixedSize()
         .hoverTip("分组与排序")
-        .id(preferenceKey)
     }
 
 
@@ -569,7 +566,6 @@ struct TaskListView: View {
         }
         .fixedSize()
         .hoverTip("列表操作")
-        .id(preferenceKey)
     }
 
     // MARK: - 快速添加：浅灰圆角条，聚焦后展开解析预览
@@ -1391,15 +1387,16 @@ struct TaskListView: View {
                     let preview = TaskListViewDefaults.bodyPreview(of: node.task.document)
                     let state = TaskOutlineRowState(task: node.task, depth: node.depth,
                         hasChildren: node.hasChildren, expanded: node.expanded,
-                        selected: workspace.selectedTaskID == node.task.id || workspace.bulkSelection.contains(node.task.id),
+                        bulkSelected: workspace.bulkSelection.contains(node.task.id),
                         recentlyCreated: workspace.recentlyCreatedTaskIDs.contains(node.task.id),
-                        showsListBadge: showsListBadge,
+                        showsListBadge: showsListBadge && node.task.list.name != TaskList.inbox.name,
                         hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                         hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
                         allowsReordering: sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name),
                         progress: workspace.checklistProgress(for: node.task)
                             ?? workspace.subtaskProgress(for: node.task.id),
-                        day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision)
+                        day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision,
+                        dateDisplay: TaskDateDisplayMode(rawValue: rowDateDisplayRaw) ?? .taskTime)
                     let hasTags = !state.hidesDetails && !state.hiddenFields.contains(.tags)
                         && !node.task.tags.isEmpty
                     let layout = TaskOutlineRowLayout(hasPreview: preview != nil, hasTags: hasTags,
@@ -1407,8 +1404,11 @@ struct TaskListView: View {
                     rows.append(.init(id: rowIdentity(group: group, task: node.task), taskID: node.task.id, state: state,
                                       layout: layout,
                                       height: TaskListMetrics.taskRowHeight(hasPreview: preview != nil,
-                                                                            hasTags: hasTags)) {
-                        taskRow(group: group, node: node).environmentObject(environment)
+                                                                            hasTags: hasTags),
+                                      native: { nativeTaskRow(node: node) }) {
+                        taskRow(group: group, node: node,
+                                rowHeight: TaskListMetrics.taskRowHeight(hasPreview: preview != nil, hasTags: hasTags))
+                            .environmentObject(environment)
                     })
                 }
                 if allNodes.count > nodes.count {
@@ -1496,7 +1496,7 @@ struct TaskListView: View {
     }
 
     @ViewBuilder
-    private func taskRow(group: TaskListGroup, node: TaskTreeNode) -> some View {
+    private func taskRow(group: TaskListGroup, node: TaskTreeNode, rowHeight: CGFloat) -> some View {
         let isSelected = workspace.selectedTaskID == node.task.id
             || workspace.bulkSelection.contains(node.task.id)
         let row = TaskRowView(
@@ -1507,7 +1507,7 @@ struct TaskListView: View {
                 expanded: node.expanded,
                 selected: isSelected,
                 recentlyCreated: workspace.recentlyCreatedTaskIDs.contains(node.task.id),
-                showsListBadge: showsListBadge,
+                showsListBadge: showsListBadge && node.task.list.name != TaskList.inbox.name,
                 hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
                 hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
                 allowsReordering: sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name),
@@ -1560,11 +1560,42 @@ struct TaskListView: View {
         if sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name) {
             row
                 .modifier(TaskReorderDropModifier(workspace: workspace, targetID: node.task.id,
-                                                  depth: node.depth, feedback: dropFeedback))
+                                                  depth: node.depth, rowHeight: rowHeight, feedback: dropFeedback))
                 .id(rowIdentity(group: group, task: node.task))
         } else {
             row.id(rowIdentity(group: group, task: node.task))
         }
+    }
+
+    private func nativeTaskRow(node: TaskTreeNode) -> NativeTaskRowConfiguration {
+        .init(task: node.task, workspace: workspace, environment: environment,
+            depth: node.depth, hasChildren: node.hasChildren, expanded: node.expanded,
+            bulkSelected: workspace.bulkSelection.contains(node.task.id),
+            recentlyCreated: workspace.recentlyCreatedTaskIDs.contains(node.task.id),
+            showsListBadge: showsListBadge && node.task.list.name != TaskList.inbox.name,
+            hidesDetails: environment.viewPreferences.hidesDetails(for: preferenceKey),
+            hiddenFields: environment.viewPreferences.hiddenDetailFields(for: preferenceKey),
+            allowsReordering: sortMode == .manual && !node.task.isClosed && !workspace.isListArchived(node.task.list.name),
+            dateDisplay: TaskDateDisplayMode(rawValue: rowDateDisplayRaw) ?? .taskTime,
+            feedback: dropFeedback,
+            onEditingRequested: {
+                editingRowTitle = true; quickAddFocused = false
+                descriptionFocused = false; listFocused = false
+                workspace.clearBulkSelection(); workspace.select(node.task.id)
+            },
+            onEditingBegan: { editingRowTitle = true }, onEditingEnded: { editingRowTitle = false },
+            onSelect: { workspace.clearBulkSelection(); workspace.select(node.task.id) },
+            onBulkToggle: {
+                listFocused = true; workspace.toggleBulkSelection(node.task.id, carryingSelection: true)
+            },
+            onRangeSelect: {
+                listFocused = true
+                if workspace.bulkSelection.isEmpty { workspace.select(node.task.id) }
+                else { workspace.extendBulkSelection(to: node.task.id, in: visibleRowOrder()) }
+            },
+            onComplete: { _ = workspace.complete(node.task.id, in: scope) },
+            onRestore: { _ = workspace.restore(node.task.id, in: scope) },
+            onToggleExpanded: { workspace.toggleExpanded(node.task.id) })
     }
 
     private var quickAddResult: QuickAddParseResult {
@@ -1937,8 +1968,8 @@ private struct TaskReorderDropModifier: ViewModifier {
     let workspace: TaskWorkspaceModel
     let targetID: UUID
     let depth: Int
+    let rowHeight: CGFloat
     @ObservedObject var feedback: TaskDropFeedback
-    @State private var rowHeight: CGFloat = WFMetrics.rowHeight
 
     private var placement: TaskDropPlacement? {
         feedback.target?.rowID == targetID ? feedback.target?.placement : nil
@@ -1946,10 +1977,6 @@ private struct TaskReorderDropModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(GeometryReader { geometry in
-                Color.clear.onAppear { rowHeight = geometry.size.height }
-                    .onChange(of: geometry.size.height) { _, height in rowHeight = height }
-            })
             .onDrop(of: [UTType.utf8PlainText], delegate: TaskReorderDropDelegate(
                 workspace: workspace, targetID: targetID, depth: depth,
                 rowHeight: rowHeight, feedback: feedback))
@@ -2338,6 +2365,10 @@ private struct TaskListMenuViewModeGlyph: View {
 }
 
 private struct TaskOutlineHost: View {
+    #if DEBUG
+    @Environment(\.recordsTaskTreeFrames) private var recordsFrames
+    @State private var nativeFrames: [TaskTreeRenderAnchor: CGRect] = [:]
+    #endif
     @ObservedObject var store: CountdownStore
     let clock: () -> Date
     let calendar: Calendar
@@ -2381,7 +2412,19 @@ private struct TaskOutlineHost: View {
         // 默认 `.center` 对齐，于是插画+文案天然落在列表区正中。
         // 今天页多一个前提：倒数纪念日小节非空时优先显示小节，不显示空态
         // （原来这两支是 if/else if，合成 `!showsCountdown` 后语义不变）。
-        return NativeTaskOutline(rows: prefix + rows, scopeKey: scopeKey, selectionSource: selectionSource, onKey: onKey)
+        return NativeTaskOutline(rows: prefix + rows, scopeKey: scopeKey, selectionSource: selectionSource, onKey: onKey,
+                                 onFrames: nativeFrameCallback)
+            .background {
+                #if DEBUG
+                if recordsFrames {
+                    GeometryReader { geometry in
+                        let origin = geometry.frame(in: .named("task-tree-render")).origin
+                        Color.clear.preference(key: TaskTreeFramesKey.self, value:
+                            nativeFrames.mapValues { $0.offsetBy(dx: origin.x, dy: origin.y) })
+                    }
+                }
+                #endif
+            }
             .overlay {
                 if tasksAreEmpty && !showsCountdown {
                     TaskEmptyStateView(style: .list,
@@ -2389,5 +2432,14 @@ private struct TaskOutlineHost: View {
                                        actionTitle: emptyActionTitle, action: emptyAction)
                 }
             }
+    }
+
+    private var nativeFrameCallback: (([TaskTreeRenderAnchor: CGRect]) -> Void)? {
+        #if DEBUG
+        guard recordsFrames else { return nil }
+        return { frames in if nativeFrames != frames { nativeFrames = frames } }
+        #else
+        return nil
+        #endif
     }
 }
