@@ -59,6 +59,9 @@ release/
 
 # Local tools and IDE
 .workbuddy/
+.workbuddy-ai/
+.pi/
+.zcode/
 
 .vscode/
 
