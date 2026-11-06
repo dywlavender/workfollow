@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import WorkFollow
 
@@ -114,6 +115,44 @@ final class NoteAIConversationTests: XCTestCase {
         model.input = "普通提问"
         XCTAssertTrue(model.canSend)
     }
+    func testSelectionAskOnlySendsSelectedTextAndNeverProjectsRewriteCard() async throws {
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        editor.string = "开头。原来的文字。结尾。"
+        editor.setSelectedRange((editor.string as NSString).range(of: "原来的文字"))
+        let target = try XCTUnwrap(AISelectionTarget(editor: editor))
+
+        let model = NoteAIConversationModel()
+        var captured: AIConversationSource?
+        model.askSelection(.polish, target: target) { _, scene, _, _, _ in
+            captured = model.conversation.submittedSource
+            XCTAssertEqual(scene, .note)
+            return "润色后的文字"
+        }
+        try await wait { !model.isRunning }
+        XCTAssertEqual(captured?.kind, "selection")
+        XCTAssertNil(captured?.id)
+        XCTAssertEqual(captured?.content, "原来的文字", "整篇笔记不能混进选区请求的载荷")
+        XCTAssertEqual(model.conversation.latestWritingResult, "润色后的文字")
+        XCTAssertTrue(model.exchanges.isEmpty, "选区结果不能被投影成替换整篇正文的卡片")
+        XCTAssertTrue(model.selectionTarget === target)
+        let reply = try XCTUnwrap(model.conversation.record.messages.last)
+        XCTAssertTrue(model.isSelectionResult(reply))
+
+        // 回写靠快照：选区早就挪走了，仍能写回原来那一段。
+        editor.setSelectedRange(NSRange(location: 0, length: 0))
+        let adopted = await target.applyAsync("润色后的文字", inserting: false)
+        XCTAssertTrue(adopted)
+        XCTAssertEqual(editor.string, "开头。润色后的文字。结尾。")
+        model.clearSelectionTarget()
+        XCTAssertNil(model.selectionTarget)
+    }
+
     func testNativeAdoptionFeedsActualSavedIDsIntoNextQuestion() async throws {
         let model = NoteAIConversationModel(), source = context()
         model.ask(.extract, context: source) { _, _, _, _, _ in

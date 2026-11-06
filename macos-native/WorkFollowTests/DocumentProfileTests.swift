@@ -69,6 +69,77 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(workspace.allTasks.count, 2, "The editor delegates; it does not mutate business models itself")
     }
 
+    func testMentionScannerExtractsResourceLinksInOrderAndSkipsForeignLinks() {
+        let taskID = UUID(), noteID = UUID(), meetingID = UUID()
+        let document = NativeDocument(blocks: [
+            DocumentBlock(kind: .paragraph, runs: [
+                DocumentRun(text: "前缀 ", marks: []),
+                DocumentRun(text: "@核对成本", marks: [.link("workfollow://task/\(taskID.uuidString)")]),
+                DocumentRun(text: " 和 ", marks: []),
+                DocumentRun(text: "@评审纪要", marks: [.link("workfollow://note/\(noteID.uuidString)")]),
+                DocumentRun(text: " 外链 ", marks: [.link("https://example.com/a")]),
+                DocumentRun(text: " 重复", marks: [.link("workfollow://task/\(taskID.uuidString)")]),
+            ]),
+            DocumentBlock(kind: .quote, runs: [
+                DocumentRun(text: "@会议", marks: [.link("workfollow://meeting/\(meetingID.uuidString)")]),
+            ]),
+        ])
+        let links = DocumentMentionScanner.resourceLinks(in: document)
+        XCTAssertEqual(links, [.task(taskID), .note(noteID), .meeting(meetingID)],
+                       "按出现顺序收集 workfollow 资源链接；外链与重复提及忽略")
+    }
+
+    func testNoteHostMentionCandidatesExcludeSelfAndEmptyTitlesAndPutRecentTasksFirst() throws {
+        let tasks = TaskWorkspaceModel(seedDemoData: false)
+        let notes = NotesWorkspaceModel(taskWorkspace: tasks)
+        let selfNoteID = notes.create()
+        let otherNoteID = notes.create() // 另一篇笔记
+        notes.edit(otherNoteID) { $0.title = "评审纪要" }
+        _ = try XCTUnwrap(tasks.createTask(title: "旧任务", in: .inbox).taskID)
+        _ = try XCTUnwrap(tasks.createTask(title: "新任务", in: .inbox).taskID)
+        _ = tasks.createTask(title: "   ", in: .inbox) // 空标题任务跳过
+        let host = NoteEditorHostActions.make(noteID: selfNoteID, tasks: tasks, notes: notes)
+        let profile = NoteDocumentProfile.make(host: host)
+        let mentions = profile.mentionCandidates()
+        XCTAssertEqual(mentions.first?.title, "新任务", "最近更新的任务排最前")
+        XCTAssertFalse(mentions.contains { $0.id == selfNoteID }, "不提供本笔记自身")
+        XCTAssertEqual(mentions.filter { $0.kind == .note }.count, 1, "空标题与自身之外的笔记入选")
+        XCTAssertFalse(mentions.contains { $0.title.trimmingCharacters(in: .whitespaces).isEmpty })
+    }
+
+    func testNoteSlashAICommandsRouteToHostHook() {
+        var invoked: [NoteAIAction] = []
+        let host = NoteEditorHostActions(createTaskFromSelection: { _ in },
+                                         runAIAction: { invoked.append($0) })
+        let profile = NoteDocumentProfile.make(host: host)
+        XCTAssertEqual(profile.slashCommands.filter { $0.group == "AI 助手" }.map(\.id),
+                       ["note.ai.tasks", "note.ai.organize", "note.ai.polish"])
+        profile.slashCommands.first { $0.id == "note.ai.tasks" }?.performWeb?()
+        profile.slashCommands.first { $0.id == "note.ai.organize" }?.performWeb?()
+        profile.slashCommands.first { $0.id == "note.ai.polish" }?.performWeb?()
+        XCTAssertEqual(invoked, [.extract, .organize, .polish])
+        // 原生编辑器路径同样路由到宿主钩子
+        profile.slashCommands.first { $0.id == "note.ai.polish" }?.perform(NativeTextView(frame: .zero, textContainer: nil))
+        XCTAssertEqual(invoked, [.extract, .organize, .polish, .polish])
+    }
+
+    func testNoteHostChecklistReminderRoutesIntoNoteDocument() throws {
+        let notes = NotesWorkspaceModel()
+        notes.create(document: NativeDocument(plainText: "周五前提交方案"))
+        let noteID = try XCTUnwrap(notes.selectedID)
+        let profile = NoteDocumentProfile.make(host: .make(noteID: noteID,
+            tasks: TaskWorkspaceModel(seedDemoData: false), notes: notes,
+            checklistReminderNotice: { "未授权通知" }))
+        XCTAssertEqual(profile.checklistReminderNotice(), "未授权通知")
+        let date = Date(timeIntervalSince1970: 1_900_000_000)
+        profile.setChecklistReminder(0, date)
+        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.document.blocks.first?.checklist?.reminderAt, date,
+                       "行内日期提醒写入笔记文档的检查项元数据")
+        profile.setChecklistReminder(0, nil)
+        XCTAssertNil(notes.notes.first { $0.id == noteID }?.document.blocks.first?.checklist?.reminderAt,
+                     "再次选择可清空提醒")
+    }
+
     func testNoteHostSelectionCreatesTrimmedInboxTaskAndPreservesLinks() throws {
         let tasks = TaskWorkspaceModel(seedDemoData: false)
         let notes = NotesWorkspaceModel()
@@ -81,15 +152,22 @@ final class DocumentProfileTests: XCTestCase {
         XCTAssertEqual(action.title, "用所选文字创建任务")
         XCTAssertEqual(action.displayTitle, "创建任务")
         XCTAssertTrue(profile.supportsSelectionToolbar)
-        XCTAssertEqual(profile.slashCommands.map(\.id), DocumentProfile(noteSlash: true).slashCommands.map(\.id))
+        XCTAssertEqual(profile.slashCommands.map(\.id),
+                       ["format.heading1", "format.heading2", "format.heading3", "format.bullet",
+                        "format.ordered", "format.checklist", "format.quote",
+                        "shared.divider", "shared.attachment", "shared.drawio",
+                        "note.ai.tasks", "note.ai.organize", "note.ai.polish"],
+                       "笔记斜杠菜单 = 紧凑格式命令 + 三个 AI 助手命令")
         action.perform(" \n 行动项 \n ")
         let task = try XCTUnwrap(tasks.allTasks.first)
         XCTAssertEqual(task.title, "行动项")
         XCTAssertEqual(task.list, .inbox)
-        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.linkedTaskIDs, [existingLink, task.id])
+        XCTAssertEqual(task.sourceNoteID, noteID, "回链走任务侧 sourceNoteID（与 AI 提取待办同语义）")
+        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.linkedTaskIDs, [existingLink],
+                       "笔记侧 linkedTaskIDs 不再追加，既有链接保持原样")
         action.perform(" \n ")
         XCTAssertEqual(tasks.allTasks.count, 1)
-        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.linkedTaskIDs, [existingLink, task.id])
+        XCTAssertEqual(notes.notes.first { $0.id == noteID }?.linkedTaskIDs, [existingLink])
     }
 
     func testSelectionShortTitleIsMetadataNotBusinessIdentity() {

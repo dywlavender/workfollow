@@ -22,18 +22,16 @@ struct NotesWorkspaceView: View {
     @Environment(\.workfollowBackgroundTheme) private var backgroundTheme
     @Environment(\.workfollowMaterial) private var material
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @FocusState private var focusedTitle: UUID?
-    @State private var showNavigation = false
+    /// 空标题的笔记自动聚焦标题；回车后由组件自己收起编辑态。
+    @State private var titleEditing = false
     @State private var dragOrigin: CGFloat?
     @State private var query = ""
-    private var folder: String? { notes.folderFilter }
     private var favorites: Bool { notes.favoritesOnly }
     private var glassActive: Bool {
         WFGlassSupport.isActive(material,
                                 reduceTransparency: reduceTransparency || WFGlassSupport.systemReduceTransparency)
     }
     @State private var detailOnly = false
-    @State private var confirmClear = false
     @State private var purgeID: UUID?
     @AppStorage("notes.ai.paneWidth") private var aiPaneWidth = Double(NoteAIPaneMetrics.defaultWidth)
     @State private var aiDragOrigin: CGFloat?
@@ -46,15 +44,8 @@ struct NotesWorkspaceView: View {
     @State private var previewDocumentID = UUID()
     @ObservedObject private var floatingNotes = FloatingNoteWindowController.shared
     private var trash: Bool { navigation.destination == .notesTrash }
-    private var rows: [Note] { notes.rows(trash: trash, query: query, folder: folder, favorites: favorites) }
+    private var rows: [Note] { notes.rows(trash: trash, query: query, folder: nil, favorites: favorites) }
     private var visibleNote: Note? { rows.first { $0.id == notes.selectedID } ?? rows.first }
-    private func createNote() {
-        query = ""
-        notes.favoritesOnly = false
-        notes.create(folder: folder)
-        detailOnly = true
-    }
-
     /// 命令面板打开笔记后，等编辑器换好文档再把光标落到命中词。
     private func revealPendingSearchMatch() {
         guard !trash, let note = visibleNote,
@@ -91,31 +82,24 @@ struct NotesWorkspaceView: View {
         .onChange(of: navigation.destination) { _, _ in
             detailOnly = false; query = ""; aiDraftEdit = nil
             syncAIExpansion()
-            syncFolderAutoHidden()
         }
         .onChange(of: notes.folderFilter) { _, _ in detailOnly = false; query = "" }
         .onChange(of: notes.favoritesOnly) { _, _ in detailOnly = false; query = "" }
-        .onChange(of: visibleNote?.id) { _, _ in
+        .onChange(of: visibleNote?.id) { oldID, _ in
             aiDraftEdit = nil
+            // 换笔记后旧笔记的选区事务已经写不回去了，别让「替换」留在它的 AI 栏里。
+            if let oldID { aiConversations.model(for: oldID).clearSelectionTarget() }
+            // AI 会话窗只由 RootShellView 的切页钩子隐藏/恢复；换笔记不在这里关，
+            // 应用结果时 AISelectionTarget 会校验文档 ID 与 epoch。
             syncAIExpansion()
-            syncFolderAutoHidden()
         }
         .onChange(of: notes.aiPaneVisible) { _, visible in
             if !visible { aiDraftEdit = nil }
             syncAIExpansion()
-            syncFolderAutoHidden()
         }
         .onChange(of: aiExpansion.expandedWidth) { _, width in
             if width == 0 { clearFrozenWindowWidth() }
-            syncFolderAutoHidden()
         }
-        .onChange(of: windowWidth) { _, _ in
-            syncFolderAutoHidden()
-            if folderColumnInline { showNavigation = false }
-        }
-        .onChange(of: tasks.taskListPaneWidth) { _, _ in syncFolderAutoHidden() }
-        .onChange(of: aiPaneWidth) { _, _ in syncFolderAutoHidden() }
-        .onChange(of: environment.sidebarVisible) { _, _ in syncFolderAutoHidden() }
         .onChange(of: notes.revealRequest) { _, _ in query = ""; detailOnly = true }
         .onChange(of: notes.searchRevealRequest) { _, _ in
             query = ""
@@ -125,20 +109,11 @@ struct NotesWorkspaceView: View {
         .onAppear {
             if notes.revealRequest != nil { query = ""; detailOnly = true }
             if notes.searchRevealRequest != nil { query = ""; detailOnly = true; revealPendingSearchMatch() }
-            syncFolderAutoHidden()
         }
         .onDisappear {
             aiExpansion.collapse()
             clearFrozenWindowWidth()
         }
-        .workfollowAlert(
-            "清空笔记垃圾桶",
-            message: "垃圾桶中的笔记将被永久删除，无法恢复。任务不受影响。",
-            isPresented: $confirmClear,
-            actions: [
-                .cancel(),
-                .destructive("全部删除") { notes.emptyTrash() }
-            ])
         .workfollowAlert(
             "永久删除笔记？",
             isPresented: Binding(get: { purgeID != nil }, set: { if !$0 { purgeID = nil } }),
@@ -199,63 +174,6 @@ struct NotesWorkspaceView: View {
         if !notes.aiPaneVisible || visibleNote == nil || trash {
             aiExpansion.collapse()
         }
-    }
-
-    // MARK: - 文件夹列显隐
-
-    /// 文件夹列当前是否内联显示：壳层可见、二级导航可见、没有被手动收起或自动收起。
-    private var folderColumnInline: Bool {
-        navigationVisible && environment.sidebarVisible
-            && !environment.notesFolderPaneHidden
-            && !environment.notesFolderPaneAutoHidden
-    }
-
-    /// 五栏（图标栏 + 文件夹 + 列表 + 正文 + AI）并排所需的窗口宽度。
-    private var requiredFiveColumnWidth: CGFloat {
-        NotesFolderColumnMetrics.requiredWindowWidth(listWidth: tasks.taskListPaneWidth,
-                                                     aiWidth: CGFloat(aiPaneWidth))
-    }
-
-    /// AI 打开后，窗口放不下五栏就让文件夹列自动收起；但只在“收起文件夹能保住列表”时
-    /// 才收，否则列表本来就要让位，收起文件夹只会丢掉导航入口。
-    /// 只在有真实窗口宽度（挂进壳层）时生效，单独渲染的测试宿主不受影响。
-    private func syncFolderAutoHidden() {
-        // 右扩模式下窗口宽度是 AI 加出来的，原有列的让位关系保持不变。
-        guard !aiExpansion.isExpanded else { return }
-        let shouldHide: Bool = {
-            guard windowWidth > 0, navigationVisible, environment.sidebarVisible,
-                  !environment.notesFolderPaneHidden,
-                  notes.aiPaneVisible, visibleNote != nil, !trash else { return false }
-            guard windowWidth < requiredFiveColumnWidth else { return false }
-            return windowWidth >= NotesFolderColumnMetrics.requiredWindowWidthForList(
-                listWidth: tasks.taskListPaneWidth)
-        }()
-        if environment.notesFolderPaneAutoHidden != shouldHide {
-            environment.notesFolderPaneAutoHidden = shouldHide
-        }
-        if !shouldHide, folderColumnInline { showNavigation = false }
-    }
-
-    private func toggleFolderColumn() {
-        if folderColumnInline {
-            environment.notesFolderPaneHidden = true
-            showNavigation = false
-            return
-        }
-        guard navigationVisible, environment.sidebarVisible else {
-            // 壳层没给二级导航列位置，用浮层临时展开。
-            showNavigation.toggle()
-            return
-        }
-        if notes.aiPaneVisible, visibleNote != nil, !trash,
-           windowWidth > 0, windowWidth < requiredFiveColumnWidth {
-            // 内联展开会立刻被自动收起，改为浮层，避免按钮点了没反应。
-            showNavigation.toggle()
-            return
-        }
-        environment.notesFolderPaneHidden = false
-        environment.notesFolderPaneAutoHidden = false
-        showNavigation = false
     }
 
     @ViewBuilder
@@ -332,166 +250,10 @@ struct NotesWorkspaceView: View {
         }
     }
 
-    /// 列表栏上方的文件夹列开关：内联可见时点击收起；窗口放不下五栏时改用浮层。
-    private var folderColumnButton: some View {
-        Button(action: toggleFolderColumn) {
-            Image(systemName: "sidebar.left")
-                .frame(width: 24, height: 24)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(folderColumnInline ? WFColors.secondaryText : WFColors.accent)
-        .hoverTip(folderButtonTitle)
-        .accessibilityLabel(folderButtonTitle)
-        .accessibilityIdentifier("note.folder")
-        .background(AnchoredPropertyPanel(isPresented: $showNavigation,
-                                          width: WFMetrics.navigationWidth) {
-            NavigationColumnView(workspace: tasks, navigation: navigation,
-                                 filterStore: environment.filterStore,
-                                 onNavigate: { showNavigation = false })
-                .frame(width: WFMetrics.navigationWidth, height: 480)
-        })
-    }
-
-    private var folderButtonTitle: String {
-        if folderColumnInline { return "隐藏文件夹栏" }
-        if navigationVisible, environment.sidebarVisible,
-           !(notes.aiPaneVisible && windowWidth > 0 && windowWidth < requiredFiveColumnWidth) {
-            return "显示文件夹栏"
-        }
-        return "文件夹导航"
-    }
-
     private var list: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                folderColumnButton
-                Text(trash ? "垃圾桶" : favorites ? "收藏笔记" : "笔记").font(WFType.pageTitle)
-                Spacer()
-                if trash {
-                    Button("全部删除") { confirmClear = true }.disabled(!notes.notes.contains { $0.deletedAt != nil })
-                } else {
-                    Button(action: createNote) { Image(systemName: "plus").frame(width: 28, height: 28) }
-                        .buttonStyle(.plain).foregroundStyle(WFColors.onAccent)
-                        .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6)).hoverTip("新建笔记")
-                }
-            }
-            .frame(height: 44)
-            if !trash { HStack(spacing: 4) {
-                if backgroundTheme.isThemed || glassActive {
-                    TextField("搜索笔记", text: $query)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 8)
-                        .frame(height: 28)
-                        .background {
-                            WFGlassSurface(shape: RoundedRectangle(cornerRadius: 6),
-                                           fallback: backgroundTheme.inputFill)
-                        }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6).strokeBorder(WFColors.border, lineWidth: 1)
-                        }
-                } else {
-                    TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
-                }
-                if !trash {
-                    WFGlassControlGroup(spacing: 0) {
-                        BusinessMenu {
-                            Button("按标题排序") { notes.sort(.title) }
-                            Button("按最近编辑排序") { notes.sort(.recentlyEdited) }
-                        } label: { Image(systemName: "arrow.up.arrow.down") }
-                        .fixedSize().hoverTip("笔记排序")
-                    }
-                }
-            }.frame(height: 34) }
-            ScrollView {
-                // 行距 0：与任务列表同口径，也与滴答一致（它的相邻行顶边 = 上一行底边）。
-                // 原来是 `spacing: 4`，再叠一条独立的 `Divider()`，于是带分割线的行
-                // pitch 变成 61+4+1+4 = 70、选中行（不画线）变成 65——同一栏两种行距。
-                LazyVStack(spacing: 0) {
-                    if rows.isEmpty { Text(query.isEmpty ? (trash ? "笔记垃圾桶是空的" : "从一条新笔记开始") : "没有找到相关笔记").foregroundStyle(.secondary).padding() }
-                    ForEach(rows) { note in
-                        HStack(spacing: 4) {
-                        let openNote = { notes.selectedID = note.id; detailOnly = true }
-                        Button(action: openNote) {
-                            HStack(alignment: .top, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    if note.favorite { Image(systemName: "star.fill") }
-                                    if floatingNotes.isOpen(note.id) {
-                                        Image(systemName: "rectangle.on.rectangle")
-                                            .font(.caption2)
-                                            .foregroundStyle(WFColors.accent)
-                                            .hoverTip("正在浮窗中编辑")
-                                    }
-                                    Text(note.title.isEmpty ? "未命名笔记" : note.title)
-                                        .font(WFType.listTitle)
-                                        .lineLimit(1).strikethrough(trash)
-                                    Spacer()
-                                }
-                                Text(note.document.isEmpty ? "还没有内容" : note.document.previewText.replacingOccurrences(of: "\n", with: " "))
-                                    .font(WFType.taskPreview)
-                                    .foregroundStyle(WFColors.taskPreviewText)
-                                    .lineLimit(1)
-                                    // 标题用正文字号、预览用 caption，小字号的字形左侧留白更少，
-                                    // 视觉上会比标题靠左。补一点内缩，和任务列表的「标题 / 正文」对齐。
-                                    .padding(.leading, 4)
-                                    // 与任务列表的正文同口径：占满左侧列，右侧留给元数据，
-                                    // 超出按可用宽度截断，而不是按文字固有宽度。
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }.frame(maxWidth: .infinity, alignment: .leading)
-                            // 内容列优先吃宽度：预览要尽量铺到日期前，而不是被右列按上限挤窄。
-                            .layoutPriority(1)
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text(note.folder)
-                                Text((note.deletedAt ?? note.updatedAt).formatted(.dateTime.month().day().locale(.appDate)) + (trash ? "删除" : ""))
-                            }.font(WFType.taskMeta).foregroundStyle(WFColors.taskMetaText).lineLimit(1)
-                                // 右列按内容固定宽度，避免被左侧的 layoutPriority 压没。
-                                .fixedSize(horizontal: true, vertical: false)
-                                .frame(minWidth: 56, maxWidth: 96, alignment: .trailing)
-                            // 行几何与任务列表共用同一套常量（原来这里写死 10 / 61）：
-                            // 上下内边距 11、最小行高 50，内容超出时按内容长高。
-                            }.padding(.horizontal, 12).padding(.vertical, WFMetrics.rowVerticalPadding)
-                                .frame(minHeight: WFMetrics.rowHeight)
-                                // 行本身要撑满列表宽度，否则内部的 maxWidth: .infinity 拿不到额外空间。
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                        // 窗口未激活时的首击直达（同侧栏行，见 FirstMouseAction）。
-                        .firstMouseAction(openNote)
-                        if trash {
-                            Button { notes.restore(note.id) } label: { Image(systemName: "arrow.uturn.backward").frame(width: 28, height: 28).contentShape(Rectangle()) }
-                                .buttonStyle(.plain).hoverTip("恢复笔记：\(note.title)")
-                                .firstMouseAction { notes.restore(note.id) }
-                            Button { purgeID = note.id } label: { Image(systemName: "trash.slash").frame(width: 28, height: 28).contentShape(Rectangle()) }
-                                .buttonStyle(.plain).hoverTip("永久删除笔记：\(note.title)")
-                                .firstMouseAction { purgeID = note.id }
-                        }
-                        }
-                        // 行分割线：与任务列表同一条（`ListRowDivider`），画在行内底边
-                        // 所以不占行距。原来这里用系统 `Divider()`，比任务列表那条重一档，
-                        // 而且选中行不画——两栏切来切去看到的是两种线。
-                        //
-                        // 但「选中行不画」这条保留：选中行有自己的圆角底色，`.overlay`
-                        // 画在 `.background` 之上，线会横穿底边（任务列表那边就是因此
-                        // 露出「下半截不是同一个蓝」）。
-                        .overlay(alignment: .bottom) {
-                            if visibleNote?.id != note.id {
-                                ListRowDivider(leading: ListRowMetrics.notesDividerLeading,
-                                               trailing: ListRowMetrics.notesDividerLeading)
-                            }
-                        }
-                        .rowHoverBackground(selected: visibleNote?.id == note.id, cornerRadius: 8)
-                        // 右键先选中目标行（Finder / 滴答口径），再弹常用操作；
-                        // 垃圾桶行不可拖，只有恢复/永久删除。
-                        .modifier(NoteDragSource(note: note, enabled: !trash))
-                        .businessContextMenu(onOpen: { notes.selectedID = note.id }) {
-                            noteRowMenu(note)
-                        }
-                    }
-                }
-            }
-            .compactScrollbars()
-        }.padding(.horizontal, 10).padding(.bottom, 16)
+        NotesFolderTreeListView(notes: notes, navigation: navigation,
+                                query: $query, detailOnly: $detailOnly,
+                                trash: trash, selectedNoteID: visibleNote?.id)
     }
 
     @ViewBuilder private func inspector(compact: Bool) -> some View {
@@ -502,11 +264,15 @@ struct NotesWorkspaceView: View {
                     if trash {
                         Label("已删除的笔记", systemImage: "trash").foregroundStyle(.secondary)
                     } else {
-                        // 滴答口径：笔记顶栏是相对日期行（蓝色"今天，10月24日"），
-                        // 文件夹/收藏/操作全部下沉到底部操作栏。
-                        Text(NoteDateLabel.tickStyle(note.updatedAt))
-                            .font(WFType.body.weight(.medium))
-                            .foregroundStyle(WFColors.accent)
+                        HStack(spacing: 8) {
+                            Text(NoteDateLabel.tickStyle(note.updatedAt))
+                                .font(WFType.body.weight(.medium))
+                                .foregroundStyle(WFColors.accent)
+                            Text(notes.folderPath(named: note.folder).joined(separator: " › "))
+                                .font(WFType.supporting)
+                                .foregroundStyle(WFColors.tertiaryText)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer()
                     if trash {
@@ -561,10 +327,18 @@ struct NotesWorkspaceView: View {
                             }
                             .padding(.leading, -DocumentEditorPresentationMetrics.textContainerFragmentPadding)
                     } else {
-                        TextField("笔记标题", text: Binding(get: { notes.notes.first { $0.id == note.id }?.title ?? "" }, set: { value in notes.edit(note.id) { $0.title = value } }), axis: .vertical)
-                            .textFieldStyle(.plain).font(WFType.detailTitle)
-                            .lineLimit(1...3).focused($focusedTitle, equals: note.id)
-                            .task(id: note.id) { if note.title.isEmpty { focusedTitle = note.id } }
+                        // 与任务详情/浮窗同一套标题控件：Return 接力给正文第一行，
+                        // 不用再拿鼠标点一次正文。
+                        AppKitTaskTitleField(
+                            text: Binding(get: { notes.notes.first { $0.id == note.id }?.title ?? "" },
+                                         set: { value in notes.edit(note.id) { $0.title = value } }),
+                            isEditing: $titleEditing,
+                            placeholder: "笔记标题",
+                            font: .systemFont(ofSize: 18, weight: .semibold),
+                            accessibilityLabel: "笔记标题",
+                            onSubmit: { editorHandle.focusFirstLine() })
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .task(id: note.id) { titleEditing = note.title.isEmpty }
                         if note.hasPreservedRichContent {
                             HStack(spacing: 8) {
                                 Image(systemName: "lock.shield")
@@ -579,7 +353,16 @@ struct NotesWorkspaceView: View {
                                        onEscape: { .endEditing },
                                        onEditingChanged: { _ in },
                                        profile: NoteDocumentProfile.make(host: NoteEditorHostActions.make(
-                                           noteID: note.id, tasks: tasks, notes: notes)),
+                                           noteID: note.id, tasks: tasks, notes: notes,
+                                           runAIAction: { runNoteAIAction($0, noteID: note.id) },
+                                           runSelectionAI: { runSelectionAI($0, $1, noteID: note.id) },
+                                           openLink: { raw in
+                                               guard let url = URL(string: raw),
+                                                     let link = NativeResourceLink(url: url) else { return false }
+                                               return NativeResourceLinkRouter.open(link, tasks: tasks,
+                                                                                    notes: notes, navigation: navigation)
+                                           },
+                                           checklistReminderNotice: { environment.reminders.checklistReminderNotice })),
                                        contentSized: true, handle: editorHandle)
                             .overlay(alignment: .topLeading) {
                                 if DocumentEditorPlaceholder.isVisible(for: note.document, handle: editorHandle) {
@@ -678,12 +461,25 @@ struct NotesWorkspaceView: View {
         notes.moveNoteToFolder(note.id, named: value)
     }
 
+    /// 仿 TaskInspectorShell.saveAsTemplate：同名模板先确认替换，再按 kind = "note" 落盘。
+    private func saveAsNoteTemplate(_ note: Note) {
+        guard let name = TaskNamePrompt.ask("保存为笔记模板", value: note.title, confirm: "保存"),
+              !name.isEmpty else { return }
+        if TemplateStore.shared.contains(name: name) {
+            guard TaskNamePrompt.confirm("模板“\(name)”已存在",
+                                         message: "是否用当前笔记替换这个模板？",
+                                         action: "替换") else { return }
+        }
+        _ = TemplateStore.shared.saveNoteTemplate(name: name, from: note, forceReplace: true)
+    }
+
     private func noteActionsMenu(_ note: Note) -> some View {
         BusinessMenu(title: "笔记操作", prefersAbove: true) {
             Button(note.favorite ? "取消收藏" : "收藏") {
                 notes.edit(note.id) { $0.favorite.toggle() }
             }
             Button("复制笔记正文") { copyPlainText(note) }
+            Button("保存为笔记模板") { saveAsNoteTemplate(note) }
             if note.hasPreservedRichContent {
                 Button("创建纯文本副本") { _ = notes.createPlainTextCopy(note.id) }
             }
@@ -760,6 +556,42 @@ struct NotesWorkspaceView: View {
                              }.map(\.title))
     }
 
+    /// 斜杠 AI 命令入口：与 AI 栏按钮同一条 ask 管线，结果同样展示在 AI 栏。
+    /// 空笔记的可用性与 AI 栏按钮的 isAllowed 保持一致（extract 允许只有标题）。
+    private func runNoteAIAction(_ action: NoteAIAction, noteID: UUID) {
+        guard let note = notes.notes.first(where: { $0.id == noteID && $0.deletedAt == nil }) else { return }
+        let contentEmpty = note.document.plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let titleEmpty = note.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        switch action {
+        case .extract: guard !contentEmpty || !titleEmpty else { return }
+        case .organize, .polish: guard !contentEmpty else { return }
+        }
+        let model = aiConversations.model(for: noteID)
+        guard !model.isRunning, !model.attachments.isImporting else { return }
+        editorHandle.prepareForDocumentChange()
+        model.ask(action, context: noteAIContext(noteID: noteID),
+                  using: environment.conversationClient().generator(for: model.conversation))
+        setAIOpen(true)
+    }
+
+    /// 选中文字的「AI 润色 / 翻译 / 总结」：不再开独立浮窗，交给右侧 AI 栏输出。
+    /// 生成完成后 AI 栏给出「替换 / 插入」，由 AISelectionTarget 把结果写回原选区，
+    /// 走编辑器原生撤销链（⌘Z）。
+    private func runSelectionAI(_ target: AISelectionTarget, _ preset: AIConversationPreset,
+                                noteID: UUID) -> Bool {
+        guard !trash, visibleNote?.id == noteID,
+              notes.notes.contains(where: { $0.id == noteID && $0.deletedAt == nil }) else { return false }
+        let model = aiConversations.model(for: noteID)
+        guard !model.isRunning, !model.attachments.isImporting else { return false }
+        // 刻意不调用 prepareForDocumentChange()：这一路不改动文档，而
+        // flush/commit 可能推进 revision 或改写 editor.string，让选区快照
+        // 在回写校验时失配。快照由编辑器在焦点离开前捕获。
+        model.askSelection(preset, target: target,
+                           using: environment.conversationClient().generator(for: model.conversation))
+        setAIOpen(true)
+        return true
+    }
+
     private func replaceNoteBody(_ text: String, noteID: UUID) {
         guard notes.notes.contains(where: { $0.id == noteID && $0.deletedAt == nil }) else { return }
         editorHandle.prepareForDocumentChange()
@@ -801,7 +633,8 @@ struct NotesWorkspaceView: View {
         }
     }
 
-    /// Flutter tasksLinkedToNote 的原生并集：笔记侧 linkedTaskIDs + 任务侧 sourceNoteID。
+    /// Flutter tasksLinkedToNote 的原生并集：笔记侧 linkedTaskIDs + 任务侧 sourceNoteID
+    /// + 正文 `@` 提及的文档链接。
     private func linkedTasks(for note: Note) -> [Task] {
         var seen = Set<UUID>()
         var result: [Task] = []
@@ -814,6 +647,12 @@ struct NotesWorkspaceView: View {
             ?? tasks.allTasks.filter { $0.sourceNoteID == note.id && $0.deletedAt == nil }
         for task in bySource where seen.insert(task.id).inserted {
             result.append(task)
+        }
+        for link in DocumentMentionScanner.resourceLinks(in: note.document) {
+            if case let .task(id) = link, let task = tasks.task(for: id),
+               task.deletedAt == nil, seen.insert(task.id).inserted {
+                result.append(task)
+            }
         }
         return result
     }

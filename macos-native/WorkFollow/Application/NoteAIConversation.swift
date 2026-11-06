@@ -152,6 +152,10 @@ final class NoteAIConversationStore: ObservableObject {
 final class NoteAIConversationModel: ObservableObject {
     @Published private(set) var conversation: AIConversationModel
     @Published private(set) var exchanges: [NoteAIExchange] = []
+    /// 选中文字的 AI 事务快照。挂在「每篇笔记的会话模型」上：主窗口 AI 栏和
+    /// 浮窗笔记 AI 栏读同一份，宿主不需要各自再存一份 @State。
+    /// 回写靠这段快照重建选区，不依赖点击「替换」时选区是否还在。
+    @Published private(set) var selectionTarget: AISelectionTarget?
     private let directory: URL
     private var observation: AnyCancellable?
 
@@ -166,10 +170,31 @@ final class NoteAIConversationModel: ObservableObject {
     var canSend: Bool { conversation.canSend }
 
     func ask(_ action: NoteAIAction, context: NoteAIContext, using generate: @escaping AIConversationModel.Generate) {
+        selectionTarget = nil
         conversation.ask(action.preset, source: context.source, using: generate)
     }
     func send(context: NoteAIContext, using generate: @escaping AIConversationModel.Generate) {
+        selectionTarget = nil
         conversation.send(source: context.source, using: generate)
+    }
+
+    /// 选中级 AI 走右侧 AI 栏：source 只带选中文字，不带整篇笔记。
+    /// 刻意不给 `id`：`project(_:)` 只应把「整篇笔记」的文稿投影成
+    /// 可另存/替换正文的结果卡，选区结果不该出现「替换正文」按钮。
+    func askSelection(_ preset: AIConversationPreset, target: AISelectionTarget,
+                      using generate: @escaping AIConversationModel.Generate) {
+        selectionTarget = target
+        conversation.ask(preset,
+                         source: .init(kind: "selection", title: "选中文字", content: target.text),
+                         using: generate)
+    }
+    func clearSelectionTarget() { selectionTarget = nil }
+
+    /// 这条回复是否来自选区会话。右栏对选区结果改用通用结果视图，
+    /// 不投影成 `NoteAIExchange`（那是整篇笔记改写/提取待办专用的）。
+    func isSelectionResult(_ message: AIConversationMessage) -> Bool {
+        guard let index = conversation.record.messages.firstIndex(where: { $0.id == message.id }) else { return false }
+        return conversation.record.messages[..<index].last(where: { $0.role == .user })?.source?.kind == "selection"
     }
     func retry(messageID: UUID, using generate: @escaping AIConversationModel.Generate) {
         conversation.retry(messageID, using: generate)
@@ -180,7 +205,7 @@ final class NoteAIConversationModel: ObservableObject {
         conversation.attachments.discard()
         AIConversationAttachmentFiles.remove(conversation.record.messages.flatMap { $0.attachments ?? [] })
         conversation = AIConversationModel(scene: .note, directory: directory)
-        exchanges = []; connect()
+        exchanges = []; selectionTarget = nil; connect()
     }
     func exchange(id: UUID) -> NoteAIExchange? { exchanges.first { $0.id == id } }
     func results(for message: AIConversationMessage) -> [NoteAIExchange] { exchanges.filter { $0.messageID == message.id } }
@@ -190,7 +215,8 @@ final class NoteAIConversationModel: ObservableObject {
     }
     private func project(_ record: AIConversationRecord) {
         for (index, message) in record.messages.enumerated() where message.role == .assistant && message.state == .complete {
-            guard let question = record.messages[..<index].last(where: { $0.role == .user }), let source = question.source, let id = source.id else { continue }
+            guard let question = record.messages[..<index].last(where: { $0.role == .user }),
+                  let source = question.source, source.kind == "note", let id = source.id else { continue }
             let context = NoteAIContext(noteID: id, title: source.title, content: source.content, referenceDate: Date(), existingTitles: [])
             for artifact in message.artifacts ?? [] where !exchanges.contains(where: { $0.id == artifact.id }) {
                 exchanges.append(NoteAIExchange(artifact: artifact, message: message, question: question, context: context,

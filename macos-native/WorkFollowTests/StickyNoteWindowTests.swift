@@ -18,15 +18,11 @@ final class StickyNoteWindowTests: XCTestCase {
         return id
     }
 
-    private func open(_ id: UUID, in workspace: TaskWorkspaceModel) throws -> (FloatingEditorPanel, NativeTextView) {
+    private func open(_ id: UUID, in workspace: TaskWorkspaceModel) throws -> (FloatingEditorPanel, MilkdownWebView) {
         controller.attach(workspace: workspace)
         controller.open(taskID: id)
         let panel = try XCTUnwrap(windows.panel(for: .task(id)))
-        InspectorPanelTestSupport.settle(panel)
-        try InspectorPanelTestSupport.waitUntil("Floating native editor did not load") {
-            panel.editorHandle.textView?.window === panel
-        }
-        return (panel, try XCTUnwrap(panel.editorHandle.textView))
+        return (panel, try MilkdownTestSupport.editor(in: try XCTUnwrap(panel.contentView), id: id))
     }
 
     func testOpenRegistersSingleInstancePerTask() throws {
@@ -44,7 +40,7 @@ final class StickyNoteWindowTests: XCTestCase {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try create("便签", in: workspace)
         let (_, editor) = try open(id, in: workspace)
-        editor.insertText("便签里改的内容", replacementRange: editor.selectedRange())
+        try MilkdownTestSupport.command(editor, "insertText", ["text": "便签里改的内容"])
         XCTAssertEqual(workspace.task(for: id)?.document.plainText, "便签里改的内容")
     }
 
@@ -54,7 +50,7 @@ final class StickyNoteWindowTests: XCTestCase {
         let (panel, editor) = try open(id, in: workspace)
         _ = workspace.setDocument(id, NativeDocument(plainText: "主窗口改的"))
         InspectorPanelTestSupport.settle(panel)
-        XCTAssertEqual(editor.string, "主窗口改的")
+        try MilkdownTestSupport.wait("外部正文未同步到浮窗") { editor.document.plainText == "主窗口改的" }
         XCTAssertEqual(editor.documentIdentity, id)
     }
 
@@ -67,17 +63,16 @@ final class StickyNoteWindowTests: XCTestCase {
         ])
         let id = try create("富文本", in: workspace, document: document)
         let (panel, editor) = try open(id, in: workspace)
-        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-        editor.insertText("追加", replacementRange: editor.selectedRange())
+        try MilkdownTestSupport.command(editor, "focusEnd")
+        try MilkdownTestSupport.command(editor, "insertText", ["text": "追加"])
         InspectorPanelTestSupport.settle(panel)
         let updated = try XCTUnwrap(workspace.task(for: id)?.document)
         XCTAssertEqual(updated.blocks[0].kind, .heading(1))
         XCTAssertTrue(updated.blocks[0].runs[0].marks.contains(.bold))
         XCTAssertEqual(updated.blocks[2].indentLevel, 1)
         XCTAssertTrue(updated.plainText.hasSuffix("子项追加"))
-        let undo = try XCTUnwrap(editor.undoManager)
-        XCTAssertTrue(undo.canUndo)
-        editor.undo(nil)
+        XCTAssertTrue(editor.canUndo)
+        try MilkdownTestSupport.command(editor, "undo")
         XCTAssertEqual(workspace.task(for: id)?.document.plainText, document.plainText)
     }
 
@@ -85,12 +80,11 @@ final class StickyNoteWindowTests: XCTestCase {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try create("关闭保存", in: workspace, document: NativeDocument(plainText: "甲"))
         let (_, editor) = try open(id, in: workspace)
-        editor.setSelectedRange(NSRange(location: 1, length: 0))
-        editor.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0),
-                             replacementRange: editor.selectedRange())
-        XCTAssertTrue(editor.hasMarkedText())
+        try MilkdownTestSupport.select(editor, NSRange(location: 1, length: 0))
+        let client = try MilkdownTestSupport.inputClient(editor)
+        client.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0), replacementRange: client.selectedRange())
         controller.close(taskID: id)
-        XCTAssertEqual(workspace.task(for: id)?.document.plainText, "甲组合输入")
+        try MilkdownTestSupport.wait("关闭浮窗未提交正文") { workspace.task(for: id)?.document.plainText == "甲组合输入" }
         XCTAssertFalse(controller.isOpen(id))
     }
 
@@ -109,7 +103,7 @@ final class StickyNoteWindowTests: XCTestCase {
         let (_, first) = try open(a, in: workspace)
         controller.open(taskID: b)
         workspace.select(b)
-        first.insertText("只写入 A", replacementRange: first.selectedRange())
+        try MilkdownTestSupport.command(first, "insertText", ["text": "只写入 A"])
         XCTAssertEqual(first.documentIdentity, a)
         XCTAssertEqual(workspace.task(for: a)?.document.plainText, "只写入 A")
         XCTAssertEqual(workspace.task(for: b)?.document.plainText, "")

@@ -1,7 +1,13 @@
 import SwiftUI
 
 struct TemplateEducationView: View {
+    var kind: TemplateKind
     var onDismiss: () -> Void
+
+    init(kind: TemplateKind = .task, onDismiss: @escaping () -> Void) {
+        self.kind = kind
+        self.onDismiss = onDismiss
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -15,7 +21,7 @@ struct TemplateEducationView: View {
                 .font(WFType.detailTitle)
                 .foregroundStyle(WFColors.text)
 
-            Text("在任务详情页中先编辑好内容，再点击右下角“…”，选择“保存为模板”，输入标题即可将任务创建为模板")
+            Text(kind.educationText)
                 .font(.system(size: 16))
                 .foregroundStyle(WFColors.text)
                 .fixedSize(horizontal: false, vertical: true)

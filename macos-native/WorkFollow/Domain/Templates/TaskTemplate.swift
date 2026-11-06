@@ -1,5 +1,38 @@
 import Foundation
 
+/// 模板种类。`kind` 在档案里是 additive 的 String（旧数据为 nil），这里收敛成
+/// 可精确过滤的枚举，避免任务 / 摘要 / 笔记模板在选择器里互相串味。
+enum TemplateKind: String {
+    case task, summary, note
+
+    init(of template: TaskTemplate) {
+        self = TemplateKind(rawValue: template.kind ?? "task") ?? .task
+    }
+
+    var emptyTitleLabel: String {
+        switch self {
+        case .task: return "暂无任务标题"
+        case .summary, .note: return "暂无标题"
+        }
+    }
+
+    var affectedItemLabel: String {
+        switch self {
+        case .task: return "任务"
+        case .summary: return "摘要"
+        case .note: return "笔记"
+        }
+    }
+
+    var educationText: String {
+        switch self {
+        case .task: return "在任务详情页中先编辑好内容，再点击右下角“…”，选择“保存为模板”，输入标题即可将任务创建为模板"
+        case .summary: return "在摘要页中配置好筛选与显示选项后，选择“保存为模板”即可"
+        case .note: return "在笔记详情页中先编辑好内容，再点击右下角“…”，选择“保存为笔记模板”，输入标题即可将笔记创建为模板"
+        }
+    }
+}
+
 /// Where a templated task lands on the calendar. Offsets are resolved against
 /// the day the template is applied, never stored as absolute dates.
 enum TaskTemplateScheduleOffset: String, Codable, Equatable, CaseIterable {
@@ -61,13 +94,16 @@ struct TaskTemplate: Identifiable, Codable, Equatable {
     var childTitles: [String]
     var createdAt: Date
     /// 模板种类标记。`nil` / `"task"` = 任务模板（旧数据都落在这里）；
-    /// `"summary"` = 摘要模板，只出现在摘要页的模板菜单里。
+    /// `"summary"` = 摘要模板，只出现在摘要页的模板菜单里；
+    /// `"note"` = 笔记模板，只出现在笔记页的模板菜单里。
     var kind: String? = nil
     /// 摘要模板保存的是筛选与显示配置；正文在套用时按当时任务重新生成。
     /// 旧摘要模板没有该字段，套用时回落到标准配置。
     var summaryOptions: SummaryDocumentOptions? = nil
 
     var isSummaryTemplate: Bool { kind == "summary" }
+    var isNoteTemplate: Bool { kind == "note" }
+    var templateKind: TemplateKind { TemplateKind(of: self) }
 
     init(id: UUID = UUID(), name: String, title: String,
          document: NativeDocument = .empty, tags: [String] = [],

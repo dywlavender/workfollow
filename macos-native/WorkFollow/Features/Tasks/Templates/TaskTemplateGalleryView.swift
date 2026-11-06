@@ -2,8 +2,11 @@ import AppKit
 import SwiftUI
 
 struct TaskTemplateGalleryView: View {
-    @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var templateStore: TemplateStore
+    var apply: (TaskTemplate) -> UUID?
+    var title: String
+    var kind: TemplateKind
+    var builtIns: [TaskTemplate]
     var onDismiss: () -> Void
     var onApplied: ((UUID) -> Void)? = nil
 
@@ -14,16 +17,37 @@ struct TaskTemplateGalleryView: View {
 
     private static let preferredSize = CGSize(width: 720, height: 520)
 
+    init(templateStore: TemplateStore,
+         apply: @escaping (TaskTemplate) -> UUID?,
+         title: String,
+         kind: TemplateKind = .task,
+         builtIns: [TaskTemplate] = BuiltInTaskTemplates.all,
+         onDismiss: @escaping () -> Void,
+         onApplied: ((UUID) -> Void)? = nil,
+         initialSearchText: String = "") {
+        self.templateStore = templateStore
+        self.apply = apply
+        self.title = title
+        self.kind = kind
+        self.builtIns = builtIns
+        self.onDismiss = onDismiss
+        self.onApplied = onApplied
+        _searchText = State(initialValue: initialSearchText)
+    }
+
+    /// 任务侧入口：把 workspace 的 createFromTemplate 包装成注入的 apply 闭包，
+    /// 保留原有 `workspace:` 调用方式（UI 渲染测试依赖该签名）。
     init(workspace: TaskWorkspaceModel,
          templateStore: TemplateStore,
          onDismiss: @escaping () -> Void,
          onApplied: ((UUID) -> Void)? = nil,
          initialSearchText: String = "") {
-        self.workspace = workspace
-        self.templateStore = templateStore
-        self.onDismiss = onDismiss
-        self.onApplied = onApplied
-        _searchText = State(initialValue: initialSearchText)
+        self.init(templateStore: templateStore,
+                  apply: { TemplateApplier.apply($0, to: workspace) },
+                  title: "任务模板",
+                  onDismiss: onDismiss,
+                  onApplied: onApplied,
+                  initialSearchText: initialSearchText)
     }
 
     private var contentSize: CGSize {
@@ -35,14 +59,14 @@ struct TaskTemplateGalleryView: View {
     }
 
     private var templates: [TaskTemplateCatalogItem] {
-        TaskTemplateCatalog.items(userTemplates: templateStore.templates.filter { !$0.isSummaryTemplate },
-                                   query: searchText)
+        TaskTemplateCatalog.items(userTemplates: templateStore.templates,
+                                  builtIns: builtIns, kind: kind, query: searchText)
     }
 
     var body: some View {
         ZStack {
-            if showingManagement && templateStore.templates.contains(where: { !$0.isSummaryTemplate }) {
-                TemplateManagementView(templateStore: templateStore) {
+            if showingManagement && templateStore.templates.contains(where: { $0.templateKind == kind }) {
+                TemplateManagementView(templateStore: templateStore, kind: kind) {
                     showingManagement = false
                 }
             } else {
@@ -50,7 +74,7 @@ struct TaskTemplateGalleryView: View {
                 if showingManagement {
                     Color.black.opacity(0.12)
                         .overlay {
-                            TemplateEducationView {
+                            TemplateEducationView(kind: kind) {
                                 showingManagement = false
                             }
                             .background {
@@ -101,7 +125,7 @@ struct TaskTemplateGalleryView: View {
                         ForEach(templates, id: \.template.id) { item in
                             Button {
                                 guard applicationGate.begin() else { return }
-                                guard let taskID = TemplateApplier.apply(item.template, to: workspace) else {
+                                guard let taskID = apply(item.template) else {
                                     applicationGate.finish(succeeded: false)
                                     return
                                 }
@@ -159,7 +183,7 @@ struct TaskTemplateGalleryView: View {
         return HStack(spacing: 0) {
             Color.clear.frame(width: slotWidth, height: 40)
             Spacer(minLength: 0)
-            Text("任务模板")
+            Text(title)
                 .font(WFType.detailTitle)
                 .lineLimit(1)
                 .fixedSize()

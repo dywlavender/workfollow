@@ -31,22 +31,43 @@ struct NoteAIPaneView: View {
 
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.workfollowPageCanvasActive) private var pageCanvasActive
+    @State private var selectionAdoptError: String?
 
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
-            AIConversationView(model: model.conversation, generate: generate,
-                undoAction: { environment.undoAIAction($0) },
-                canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
-                compact: true, identifierPrefix: "note.ai",
-                leadingContent: AnyView(VStack(alignment: .leading, spacing: 14) { greeting; actionCards }),
-                artifactContent: { message in AnyView(resultCards(message)) },
-                submit: sendMessage)
-                .id(model.conversation.record.id)
-                .environment(\.openURL, OpenURLAction { url in
-                    environment.openResourceLink(url) ? .handled : .systemAction
-                })
+            VStack(spacing: 0) {
+                AIConversationView(model: model.conversation, generate: generate,
+                    adopt: model.selectionTarget == nil ? nil : { text, inserting in
+                        guard let target = model.selectionTarget else { return }
+                        _Concurrency.Task { @MainActor in
+                            if await target.applyAsync(text, inserting: inserting) {
+                                model.clearSelectionTarget()
+                                selectionAdoptError = nil
+                            } else {
+                                selectionAdoptError = "原文已改变或已切换笔记，请重新选择文字后生成。"
+                            }
+                        }
+                    },
+                    undoAction: { environment.undoAIAction($0) },
+                    canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
+                    compact: true, identifierPrefix: "note.ai",
+                    leadingContent: AnyView(VStack(alignment: .leading, spacing: 14) { greeting; actionCards }),
+                    artifactContent: { message in AnyView(resultCards(message)) },
+                    submit: sendMessage)
+                    .id(model.conversation.record.id)
+                    .environment(\.openURL, OpenURLAction { url in
+                        environment.openResourceLink(url) ? .handled : .systemAction
+                    })
+                if let selectionAdoptError {
+                    Text(selectionAdoptError)
+                        .font(WFType.caption)
+                        .foregroundStyle(WFColors.danger)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).padding(.bottom, 8)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // 它是笔记页的一栏，不是浮层：整窗画布生效时让出灰底，
@@ -71,14 +92,18 @@ struct NoteAIPaneView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
-            Button { model.reset() } label: {
+            Button { model.reset(); selectionAdoptError = nil } label: {
                 Image(systemName: "plus").frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
             .hoverTip("新对话")
             .disabled(model.isRunning || model.conversation.record.messages.isEmpty)
             .opacity(model.isRunning || model.conversation.record.messages.isEmpty ? 0.35 : 1)
-            Button(action: onClose) {
+            Button {
+                model.clearSelectionTarget()
+                selectionAdoptError = nil
+                onClose()
+            } label: {
                 Image(systemName: "xmark").frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
@@ -159,17 +184,25 @@ struct NoteAIPaneView: View {
 
     @ViewBuilder
     private func resultCards(_ message: AIConversationMessage) -> some View {
-        ForEach(model.results(for: message)) { exchange in
-            if let session = exchange.taskSession {
-                NoteAITaskExchangeView(exchange: exchange, session: session,
-                    destination: $destination, sectionID: $sectionID, tasks: tasks,
-                    onEditDraft: { draftID, rect in onEditDraft(exchange.id, draftID, rect) },
-                    onReveal: onRevealTasks,
-                    onRetry: { model.retry(messageID: message.id, using: generate) })
-            } else if let session = exchange.rewriteSession {
-                NoteAIRewriteExchangeView(exchange: exchange, session: session,
-                    canReplaceBody: canReplaceBody, onReplaceBody: onReplaceBody, onOpenNote: onOpenNote,
-                    onRetry: { model.retry(messageID: message.id, using: generate) })
+        if model.results(for: message).isEmpty {
+            // 选区会话的文稿不是「整篇笔记改写」：不投影成可替换正文的结果卡，
+            // 只展示可采用的正文，回写交给 AIConversationView 的「替换 / 插入」。
+            if model.isSelectionResult(message) {
+                AIConversationArtifactsView(artifacts: message.artifacts ?? [])
+            }
+        } else {
+            ForEach(model.results(for: message)) { exchange in
+                if let session = exchange.taskSession {
+                    NoteAITaskExchangeView(exchange: exchange, session: session,
+                        destination: $destination, sectionID: $sectionID, tasks: tasks,
+                        onEditDraft: { draftID, rect in onEditDraft(exchange.id, draftID, rect) },
+                        onReveal: onRevealTasks,
+                        onRetry: { model.retry(messageID: message.id, using: generate) })
+                } else if let session = exchange.rewriteSession {
+                    NoteAIRewriteExchangeView(exchange: exchange, session: session,
+                        canReplaceBody: canReplaceBody, onReplaceBody: onReplaceBody, onOpenNote: onOpenNote,
+                        onRetry: { model.retry(messageID: message.id, using: generate) })
+                }
             }
         }
     }

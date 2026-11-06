@@ -30,6 +30,7 @@ final class NotesWorkspaceModel: ObservableObject {
     private let clock: () -> Date
     private let layoutDefaults: UserDefaults?
     private static let aiPaneVisibleDefaultsKey = "notes.ai.paneVisible"
+    private static let expandedFoldersDefaultsKey = "notes.expandedFolders"
     private var savedFolders: [String]
     private var folderRecords: [NoteFolderMeta]
     private var taskSubscription: AnyCancellable?
@@ -39,6 +40,33 @@ final class NotesWorkspaceModel: ObservableObject {
         didSet {
             layoutDefaults?.set(aiPaneVisible, forKey: Self.aiPaneVisibleDefaultsKey)
         }
+    }
+
+    /// 树里展开的文件夹 ID。纯界面状态，单独持久化，绝不复用 `revision`：
+    /// AppEnvironment 订阅 `$revision` 写盘，折叠一次触发一次 SQLite 写太重。
+    @Published var expandedFolderIDs: Set<String> = [] {
+        didSet {
+            layoutDefaults?.set(Array(expandedFolderIDs).sorted(),
+                                forKey: Self.expandedFoldersDefaultsKey)
+        }
+    }
+
+    func isFolderExpanded(_ id: String) -> Bool { expandedFolderIDs.contains(id) }
+
+    func setFolderExpanded(_ id: String, _ expanded: Bool) {
+        if expanded { expandedFolderIDs.insert(id) } else { expandedFolderIDs.remove(id) }
+    }
+
+    /// 打开某一篇笔记时，把它的父文件夹链全部展开（单击文件夹本身不改正文）。
+    func expandAncestors(ofFolderNamed name: String) {
+        guard let record = folderRecords.first(where: { $0.name == name }) else { return }
+        var seen = Set<String>()
+        var cursor = record.parentID
+        while let current = cursor, seen.insert(current).inserted {
+            expandedFolderIDs.insert(current)
+            cursor = folderRecords.first(where: { $0.id == current })?.parentID
+        }
+        expandedFolderIDs.insert(record.id)
     }
 
     /// Standalone initializer used by notes-only tests and previews. The app
@@ -55,6 +83,12 @@ final class NotesWorkspaceModel: ObservableObject {
         bootstrapFolders(initialNotes: initialNotes)
         bindTaskWorkspace()
         aiPaneVisible = layoutDefaults?.object(forKey: Self.aiPaneVisibleDefaultsKey) as? Bool ?? false
+        if let stored = layoutDefaults?.stringArray(forKey: Self.expandedFoldersDefaultsKey) {
+            expandedFolderIDs = Set(stored)
+        } else {
+            // 新笔记默认落在「未归档」，首次进入必须展开，否则刚建的笔记看不见。
+            expandedFolderIDs = [NoteFolderTree.unfiledNodeID]
+        }
     }
 
     init(taskWorkspace: TaskWorkspaceModel, folders: [String] = [],
@@ -68,6 +102,12 @@ final class NotesWorkspaceModel: ObservableObject {
         bootstrapFolders(initialNotes: taskWorkspace.noteTasks.map(Note.init(task:)))
         bindTaskWorkspace()
         aiPaneVisible = layoutDefaults?.object(forKey: Self.aiPaneVisibleDefaultsKey) as? Bool ?? false
+        if let stored = layoutDefaults?.stringArray(forKey: Self.expandedFoldersDefaultsKey) {
+            expandedFolderIDs = Set(stored)
+        } else {
+            // 新笔记默认落在「未归档」，首次进入必须展开，否则刚建的笔记看不见。
+            expandedFolderIDs = [NoteFolderTree.unfiledNodeID]
+        }
     }
 
     private func bootstrapFolders(initialNotes: [Note]) {
@@ -78,6 +118,9 @@ final class NotesWorkspaceModel: ObservableObject {
                                                 name: name, sortOrder: folderRecords.count,
                                                 createdAt: nil, updatedAt: nil))
         }
+        // 迁移快照里的 parentId 可能悬空或成环；读档后统一清洗一次，
+        // 后面所有树遍历与展开操作都能假定父链无环。
+        folderRecords = NoteFolderTree.sanitized(folderRecords)
     }
 
     private func bindTaskWorkspace() {
@@ -105,28 +148,71 @@ final class NotesWorkspaceModel: ObservableObject {
     var folderMetadataForPersistence: [NoteFolderMeta] {
         let recordsByName = Dictionary(folderRecords.map { ($0.name, $0) },
                                        uniquingKeysWith: { current, _ in current })
-        return folders.enumerated().map { index, name in
+        let ordered = folders.enumerated().map { index, name in
             var record = recordsByName[name]
                 ?? NoteFolderMeta(id: UUID().uuidString, parentID: nil, name: name,
                                   sortOrder: index, createdAt: nil, updatedAt: nil)
             record.sortOrder = index
             return record
         }
+        return NoteFolderTree.sanitized(ordered)
     }
 
     func folderID(named name: String) -> String? {
         folderRecords.first { $0.name == name }?.id
     }
 
-    @discardableResult func addFolder(_ rawName: String) -> Bool {
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name != "未归档", !folders.contains(name) else { return false }
-        savedFolders = folders + [name]
-        folderRecords.append(NoteFolderMeta(id: UUID().uuidString, parentID: nil,
-                                            name: name, sortOrder: folderRecords.count,
-                                            createdAt: nil, updatedAt: nil))
+    // MARK: - 文件夹层级
+
+    /// 树视图用的深度优先节点序列。
+    var folderNodes: [NoteFolderNode] { NoteFolderTree.nodes(from: folderRecords) }
+
+    var folderRecordsForTree: [NoteFolderMeta] { folderRecords }
+
+    func folderName(forNodeID id: String) -> String? {
+        folderRecords.first { $0.id == id }?.name
+    }
+
+    /// 正文面包屑：从根到当前文件夹的完整路径（含自己）。
+    func folderPath(named name: String) -> [String] {
+        guard name != NoteFolderTree.unfiledName,
+              let record = folderRecords.first(where: { $0.name == name }) else { return [name] }
+        return NoteFolderTree.path(toID: record.id, in: folderRecords) + [name]
+    }
+
+    /// 树里某个文件夹直属的笔记；搜索与收藏作用域沿用 `rows` 的口径。
+    func notes(inFolderNamed name: String, query: String, favorites: Bool) -> [Note] {
+        rows(trash: false, query: query, folder: name, favorites: favorites)
+    }
+
+    /// 把文件夹挂到另一个文件夹下（nil = 根目录）。禁止挂到自己或自己的后代。
+    @discardableResult
+    func moveFolder(id: String, under parentID: String?) -> Bool {
+        guard let index = folderRecords.firstIndex(where: { $0.id == id }),
+              NoteFolderTree.canMove(folderID: id, under: parentID, in: folderRecords) else { return false }
+        let resolved = folderRecords.contains { $0.id == parentID } ? parentID : nil
+        folderRecords[index].parentID = resolved
         revision += 1
         return true
+    }
+
+    /// 在指定父节点下新建子文件夹，返回新 ID；名字仍要求全局唯一。
+    @discardableResult func addFolder(_ rawName: String, parentID: String?) -> String? {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name != NoteFolderTree.unfiledName, !folders.contains(name) else { return nil }
+        let resolved = folderRecords.contains { $0.id == parentID } ? parentID : nil
+        let record = NoteFolderMeta(id: UUID().uuidString, parentID: resolved,
+                                    name: name, sortOrder: folderRecords.count,
+                                    createdAt: nil, updatedAt: nil)
+        savedFolders = folders + [name]
+        folderRecords.append(record)
+        if let resolved { expandedFolderIDs.insert(resolved) }
+        revision += 1
+        return record.id
+    }
+
+    @discardableResult func addFolder(_ rawName: String) -> Bool {
+        addFolder(rawName, parentID: nil) != nil
     }
 
     @discardableResult func renameFolder(_ old: String, to rawName: String) -> Bool {
@@ -151,6 +237,7 @@ final class NotesWorkspaceModel: ObservableObject {
     }
 
     func removeFolder(_ name: String) {
+        let removedID = folderRecords.first { $0.name == name }?.id
         savedFolders = folders.filter { $0 != name }
         for note in notes where note.folder == name {
             taskWorkspace.editNote(note.id, allowDeleted: true) { task in
@@ -161,6 +248,12 @@ final class NotesWorkspaceModel: ObservableObject {
             }
         }
         folderRecords.removeAll { $0.name == name }
+        // 子文件夹提升为根：笔记仍留在子文件夹里，不跟着回落到未归档。
+        if let removedID {
+            for index in folderRecords.indices where folderRecords[index].parentID == removedID {
+                folderRecords[index].parentID = nil
+            }
+        }
         if folderFilter == name { folderFilter = "未归档" }
         revision += 1
     }
@@ -188,9 +281,11 @@ final class NotesWorkspaceModel: ObservableObject {
     }
 
     @discardableResult
-    func create(folder: String? = nil, select: Bool = true) -> UUID {
+    func create(folder: String? = nil, title: String = "", document: NativeDocument = .empty,
+                select: Bool = true) -> UUID {
         let name = folder ?? "未归档"
-        let id = taskWorkspace.createNote(folder: name, folderID: folderID(named: name)) ?? UUID()
+        let id = taskWorkspace.createNote(title: title, document: document,
+                                          folder: name, folderID: folderID(named: name)) ?? UUID()
         if select { selectedID = id }
         revision += 1
         return id
@@ -266,6 +361,14 @@ final class NotesWorkspaceModel: ObservableObject {
             mutation(&note)
             Self.apply(note: note, to: &task)
         }
+    }
+
+    /// 笔记正文的检查项/行内日期提醒写入。笔记即任务实体，落盘与通知排程
+    /// 复用任务存储的同一条事务路径（`TaskReminderPlan` 扫描正文里带提醒的
+    /// 检查项与普通段落，笔记任务同样在扫描范围内）。
+    @discardableResult
+    func setChecklistItemReminder(_ id: UUID, line: Int, at date: Date?) -> TaskActionResult {
+        taskWorkspace.setChecklistItemReminder(id, line: line, at: date)
     }
 
     private static func apply(note: Note, to task: inout Task) {

@@ -2,7 +2,19 @@ import SwiftUI
 
 struct TemplateManagementView: View {
     @ObservedObject var templateStore: TemplateStore
+    var kind: TemplateKind
     var onDismiss: () -> Void
+
+    init(templateStore: TemplateStore, kind: TemplateKind = .task,
+         onDismiss: @escaping () -> Void) {
+        self.templateStore = templateStore
+        self.kind = kind
+        self.onDismiss = onDismiss
+    }
+
+    private var visibleTemplates: [TaskTemplate] {
+        templateStore.templates.filter { $0.templateKind == kind }
+    }
 
     var body: some View {
         managementList
@@ -29,9 +41,9 @@ struct TemplateManagementView: View {
 
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(templateStore.templates.filter { !$0.isSummaryTemplate }) { template in
+                    ForEach(visibleTemplates) { template in
                         templateRow(template)
-                        if template.id != templateStore.templates.filter({ !$0.isSummaryTemplate }).last?.id {
+                        if template.id != visibleTemplates.last?.id {
                             Divider().padding(.leading, 22)
                         }
                     }
@@ -50,7 +62,7 @@ struct TemplateManagementView: View {
                     .font(WFType.listTitleMedium)
                     .foregroundStyle(WFColors.text)
                     .lineLimit(1)
-                Text(template.title.isEmpty ? "暂无任务标题" : template.title)
+                Text(template.title.isEmpty ? kind.emptyTitleLabel : template.title)
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
                     .lineLimit(1)
@@ -90,7 +102,7 @@ struct TemplateManagementView: View {
     private func remove(_ template: TaskTemplate) {
         guard TaskNamePrompt.confirm(
             "删除模板“\(template.name)”？",
-            message: "删除后不可恢复，已创建的任务不受影响。",
+            message: "删除后不可恢复，已创建的\(kind.affectedItemLabel)不受影响。",
             action: "删除"
         ) else { return }
         _ = templateStore.delete(template.id)

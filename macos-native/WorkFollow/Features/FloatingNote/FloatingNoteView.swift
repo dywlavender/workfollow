@@ -67,7 +67,9 @@ struct FloatingNoteView: View {
             document: note.document,
             onDocumentChange: { document in notes.edit(noteID) { $0.document = document } },
             profile: NoteDocumentProfile.make(host: NoteEditorHostActions.make(
-                noteID: noteID, tasks: tasks, notes: notes)),
+                noteID: noteID, tasks: tasks, notes: notes,
+                runSelectionAI: { requestSelectionAI($0, $1) },
+                checklistReminderNotice: { environment.reminders.checklistReminderNotice })),
             editorHandle: editorHandle, focusAtEnd: focusAtEnd,
             onClose: closePanel, actions: EmptyView(),
             topBar: { topBar(note) })
@@ -117,12 +119,28 @@ struct FloatingNoteView: View {
     private func closeAI() {
         aiOpen = false
         aiDraftEdit = nil
+        NoteAIConversationStore.shared.model(for: noteID).clearSelectionTarget()
         aiExpansion.collapse()
     }
 
     private func closePanel() {
+        NoteAIConversationStore.shared.model(for: noteID).clearSelectionTarget()
         aiExpansion.collapse()
         onClose()
+    }
+
+    /// 浮窗笔记的选区 AI 与主页一致：结果直接落在这一栏，替换/插入写回原选区。
+    private func requestSelectionAI(_ target: AISelectionTarget,
+                                    _ preset: AIConversationPreset) -> Bool {
+        let model = NoteAIConversationStore.shared.model(for: noteID)
+        guard !model.isRunning, !model.attachments.isImporting else { return false }
+        model.askSelection(preset, target: target,
+                           using: environment.conversationClient().generator(for: model.conversation))
+        if !aiOpen {
+            if let panel { _ = aiExpansion.expand(panel, by: CGFloat(aiPaneWidth)) }
+            aiOpen = true
+        }
+        return true
     }
 
     private func aiPane(note: Note) -> some View {

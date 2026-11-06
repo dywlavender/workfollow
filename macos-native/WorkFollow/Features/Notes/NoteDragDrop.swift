@@ -68,3 +68,30 @@ struct NoteFolderDropTarget: ViewModifier {
             }
     }
 }
+
+/// 文件夹节点的拖拽负载。前缀与笔记（`wf-note:`）、任务清单（`wf-list:`）隔离：
+/// 三处落点都收 String，靠前缀区分，互不误收。
+enum NoteFolderDragPayload {
+    static let prefix = "wf-note-folder:"
+
+    static func encode(_ id: String) -> String { prefix + id }
+
+    static func decode(_ raw: String?) -> String? {
+        guard let raw, raw.hasPrefix(prefix) else { return nil }
+        let id = String(raw.dropFirst(prefix.count))
+        return id.isEmpty ? nil : id
+    }
+}
+
+/// 文件夹行作为拖动源：拖到另一个文件夹节点下即改父级，
+/// 环与自挂由 `NoteFolderTree.canMove` 挡住。
+struct NoteFolderDragSource: ViewModifier {
+    let id: String
+
+    func body(content: Content) -> some View {
+        content.draggable(NoteFolderDragPayload.encode(id)) {
+            Label("文件夹", systemImage: "folder")
+                .padding(.horizontal, 8).padding(.vertical, 5)
+        }
+    }
+}

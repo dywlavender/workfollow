@@ -81,6 +81,25 @@ final class TemplateStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
+    /// 笔记模板（kind = "note"）：把笔记标题与正文（NativeDocument）原样保存为
+    /// 可复用模板，不会出现在任务或摘要模板选择器里。
+    @discardableResult
+    func saveNoteTemplate(name: String, from note: Note, forceReplace: Bool = false) -> Bool {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return false }
+        let template = TaskTemplate(name: cleaned, title: note.title, document: note.document,
+                                    createdAt: clock(), kind: "note")
+        if let index = templates.firstIndex(where: { Self.isSameName($0.name, cleaned) }) {
+            guard forceReplace else { return false }
+            templates[index] = template
+        } else {
+            templates.append(template)
+        }
+        templates = Self.sorted(templates)
+        persist()
+        return true
+    }
+
     /// Returns a user blueprint, or nil when missing. Actual task creation is
     /// owned by TaskWorkspaceModel.createFromTemplate / TaskActions.
     func apply(name: String) -> TaskTemplate? {

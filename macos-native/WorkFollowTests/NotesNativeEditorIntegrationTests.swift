@@ -35,10 +35,7 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
             .onPreferenceChange(DocumentFormattingToolbarBoundsKey.self, perform: onToolbarBounds))
     }
 
-    private func editor(in view: NSView) -> NativeTextView? {
-        if let editor = view as? NativeTextView { return editor }
-        return view.subviews.lazy.compactMap { self.editor(in: $0) }.first
-    }
+    private func editor(in view: NSView) throws -> MilkdownWebView { try MilkdownTestSupport.editor(in: view) }
 
     func testNoteUsesTaskEditorAndRealFormattingControls() throws {
         let environment = fixture()
@@ -52,11 +49,11 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
                         onToolbarBounds: { toolbarBounds = $0 })
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
         defer { window.close() }
-        let editor = try XCTUnwrap(editor(in: host))
+        let editor = try editor(in: host)
         XCTAssertEqual(editor.documentIdentity, id)
-        XCTAssertEqual(editor.font?.pointSize, EditorPreferences.bodyFontSize)
-        XCTAssertTrue(editor.usesHostScrollView)
-        editor.setSelectedRange(NSRange(location: 0, length: 2))
+        XCTAssertEqual(try MilkdownTestSupport.script(editor, "parseFloat(getComputedStyle(document.querySelector('.ProseMirror')).fontSize)") as? CGFloat, EditorPreferences.bodyFontSize)
+        XCTAssertTrue(editor.usesContentHeight)
+        try MilkdownTestSupport.select(editor, NSRange(location: 0, length: 2))
         // 格式工具条常驻在正文上方，不再依赖底栏 A 开关。
         try InspectorPanelTestSupport.waitUntil("Formatting toolbar did not render") {
             toolbarFrames["format.bold"] != nil && toolbarBounds.width > 0
@@ -65,10 +62,10 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(toolbarBounds.width, 0)
         let boldInHost = bold.offsetBy(dx: toolbarBounds.minX, dy: toolbarBounds.minY)
         try InspectorPanelTestSupport.click(boldInHost, in: host, window: window)
-        InspectorPanelTestSupport.settle(window)
+        try MilkdownTestSupport.wait("工具条加粗未提交") { notes.notes.first { $0.id == id }?.document.blocks[0].runs[0].marks.contains(.bold) == true }
         let document = try XCTUnwrap(notes.notes.first { $0.id == id }?.document)
         XCTAssertTrue(document.blocks[0].runs[0].marks.contains(.bold))
-        XCTAssertTrue(window.firstResponder === editor)
+        XCTAssertTrue((window.firstResponder as? NSView)?.isDescendant(of: editor.webView) == true || window.firstResponder === editor.webView)
     }
 
     func testSwitchingNotesFlushesOutgoingCompositionAndPersistsEachDocument() throws {
@@ -84,22 +81,23 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         let host = host(environment)
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
         defer { window.close() }
-        let editor = try XCTUnwrap(editor(in: host))
-        window.makeFirstResponder(editor)
-        editor.setSelectedRange(NSRange(location: 1, length: 0))
-        editor.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0),
-                             replacementRange: editor.selectedRange())
-        XCTAssertTrue(editor.hasMarkedText())
+        let editor = try editor(in: host)
+        try MilkdownTestSupport.select(editor, NSRange(location: 1, length: 0))
+        let client = try MilkdownTestSupport.inputClient(editor)
+        client.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0), replacementRange: client.selectedRange())
+        InspectorPanelTestSupport.settle(window)
+        // WebKit's input proxy does not synchronously report its marked range.
+        // Verify the actual body before switching and the persisted value below.
+        try MilkdownTestSupport.wait("WebKit 输入未进入正文") { editor.document.plainText == "甲组合输入" }
         notes.selectedID = second
         InspectorPanelTestSupport.settle(window)
-        let rebound = try XCTUnwrap(self.editor(in: host))
+        let rebound = try MilkdownTestSupport.editor(in: host, id: second)
         XCTAssertTrue(rebound === editor, "The shared editor rebinds its document rather than replacing its host")
         XCTAssertEqual(rebound.documentIdentity, second)
-        XCTAssertEqual(rebound.string, "乙")
+        XCTAssertEqual(rebound.document.plainText, "乙")
         XCTAssertEqual(notes.notes.first { $0.id == first }?.document.plainText, "甲组合输入")
-        XCTAssertFalse(rebound.hasMarkedText())
-        rebound.setSelectedRange(NSRange(location: 1, length: 0))
-        rebound.insertText("续写", replacementRange: rebound.selectedRange())
+        try MilkdownTestSupport.select(rebound, NSRange(location: 1, length: 0))
+        try MilkdownTestSupport.command(rebound, "insertText", ["text": "续写"])
         InspectorPanelTestSupport.settle(window)
         let saved = expectation(description: "notes saved")
         environment.flush { error in XCTAssertNil(error); saved.fulfill() }
@@ -137,11 +135,12 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         XCTAssertEqual(environment.taskWorkspace.tasksInActiveLists.map(\.id), [id])
     }
 
-    /// 列表首行：页头 44 + 间距 8 + 搜索栏 34 + 间距 8 + 行高约 52，取行中心。
-    /// SwiftUI 列表行不暴露 AX 元素，这里按固定的列布局定位。
+    /// 树化后首行位置：页头 44 + 间距 8 + 搜索 34 + 间距 8 + 作用域 26 + 间距 8
+    /// + 「未归档」文件夹行 30 + 笔记行 28 的中心 ≈ 距顶 174。
+    /// SwiftUI 树节点不暴露 AX 元素，这里按固定列布局定位。
     private func rightClickFirstNoteRow(in window: NSWindow) throws {
         let height = try XCTUnwrap(window.contentView).bounds.height
-        let point = NSPoint(x: 96, y: height - 120)
+        let point = NSPoint(x: 96, y: height - 174)
         let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: point,
             modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil,
@@ -165,7 +164,7 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         defer { window.close() }
 
         // 行上挂 .draggable 后，普通点击仍要能选中并打开详情。
-        try InspectorPanelTestSupport.click(CGRect(x: 96, y: 112, width: 12, height: 12),
+        try InspectorPanelTestSupport.click(CGRect(x: 96, y: 168, width: 12, height: 12),
                                             in: host, window: window)
         XCTAssertEqual(notes.selectedID, first)
         notes.selectedID = other
@@ -217,14 +216,14 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         let host = host(environment)
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
         defer { window.close() }
-        let editor = try XCTUnwrap(editor(in: host))
+        let editor = try editor(in: host)
         let scroll = try XCTUnwrap(editor.enclosingScrollView)
         XCTAssertFalse(scroll.documentView === editor)
         XCTAssertEqual(scroll.scrollerStyle, .overlay)
-        editor.scrollRangeToVisible(NSRange(location: (body as NSString).length - 1, length: 1))
+        try MilkdownTestSupport.command(editor, "focusEnd")
         InspectorPanelTestSupport.settle(window)
         XCTAssertGreaterThan(scroll.contentView.bounds.minY, 0)
-        XCTAssertEqual(editor.string, body)
+        XCTAssertEqual(editor.document.plainText, body)
     }
 
     func testPlainPlaceholderDoesNotCoverAnEmptyFormattedBlock() {
