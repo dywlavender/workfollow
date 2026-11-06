@@ -15,6 +15,59 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
     private var committedTrailingListStart: Int?
     private var committedTrailingAlign: DocumentAlignment?
     private(set) var decodeCount = 0
+    private struct ContentLayoutState: Equatable {
+        let documentID: UUID
+        let storageRevision: Int
+        let fontSize: CGFloat
+        let paragraphSpacing: CGFloat?
+        let inset: NSSize
+    }
+    private var invalidatedContentLayout: ContentLayoutState?
+    private var measuredContent: (state: ContentLayoutState, width: CGFloat, size: CGSize)?
+    private(set) var contentMeasurementCount = 0
+    private(set) var contentInvalidationCount = 0
+
+    private func contentLayoutState(in textView: NativeTextView) -> ContentLayoutState {
+        ContentLayoutState(documentID: documentID, storageRevision: textView.storageRevision,
+            fontSize: textView.appliedBodyFontSize, paragraphSpacing: textView.paragraphSpacingOverride,
+            inset: textView.textContainerInset)
+    }
+
+    func invalidateContentSizeIfNeeded(in textView: NativeTextView) {
+        guard textView.usesHostScrollView else { return }
+        let state = contentLayoutState(in: textView)
+        guard invalidatedContentLayout != state else { return }
+        invalidatedContentLayout = state
+        measuredContent = nil
+        contentInvalidationCount += 1
+        textView.invalidateIntrinsicContentSize()
+    }
+
+    func contentSize(for width: CGFloat, in textView: NativeTextView) -> CGSize? {
+        guard width > 0, let container = textView.textContainer,
+              let layout = textView.textLayoutManager else { return nil }
+        let state = contentLayoutState(in: textView)
+        if let cached = measuredContent, cached.state == state, cached.width == width {
+            textView.setFrameSize(cached.size)
+            textView.revealCaretInHostAfterLayout()
+            return cached.size
+        }
+        textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
+        textView.resizeDocumentDividers()
+        container.containerSize = NSSize(width: max(1, width - textView.textContainerInset.width * 2),
+                                         height: .greatestFiniteMagnitude)
+        layout.ensureLayout(for: NSRect(origin: .zero, size: container.containerSize))
+        let height = max(48, ceil(layout.usageBoundsForTextContainer.maxY + textView.textContainerInset.height * 2 + 8))
+        let size = CGSize(width: width, height: height)
+        textView.setFrameSize(size)
+        let measuredState = contentLayoutState(in: textView)
+        measuredContent = (measuredState, width, size)
+        invalidatedContentLayout = measuredState
+        contentMeasurementCount += 1
+        textView.revealCaretInHostAfterLayout()
+        return size
+    }
+
     /// 宿主工具条/占位文案观察的句柄；编辑器每次文本变化都回写实时空状态。
     weak var handle: DocumentEditorHandle?
 
@@ -129,14 +182,18 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
         NSWorkspace.shared.open(url)
     }
 
-    func flushPendingComposition(in textView: NativeTextView) {
+    private func hasCommittedStorage(_ textView: NativeTextView) -> Bool {
         let trailing = textView.pendingTrailingBlock ?? Self.trailingBlockKind(of: document)
+        return committedStorageRevision == textView.storageRevision
+            && committedTrailingBlock == trailing
+            && committedTrailingIndentLevel == textView.trailingIndentLevel
+            && committedTrailingListStart == textView.trailingListStart
+            && committedTrailingAlign == textView.trailingAlign
+    }
+
+    func flushPendingComposition(in textView: NativeTextView) {
         if !textView.hasMarkedText(), textView.documentCommandCommit == nil,
-           committedStorageRevision == textView.storageRevision,
-           committedTrailingBlock == trailing,
-           committedTrailingIndentLevel == textView.trailingIndentLevel,
-           committedTrailingListStart == textView.trailingListStart,
-           committedTrailingAlign == textView.trailingAlign { return }
+           hasCommittedStorage(textView) { return }
         if textView.hasMarkedText() {
             textView.unmarkText()
         }
@@ -208,6 +265,8 @@ final class DocumentEditorCoordinator: NSObject, NSTextViewDelegate {
 
     private func commit(_ textView: NSTextView, force: Bool) {
         guard force || !textView.hasMarkedText() else { return }
+        if !force, let native = textView as? NativeTextView,
+           native.documentCommandCommit == nil, hasCommittedStorage(native) { return }
         // 文末空段的级别：优先用输入待定（光标在行上的最新意图），光标不在时
         // 回退到模型当前值——否则在别处编辑一次，文末列表就会丢级别。
         let pending = (textView as? NativeTextView)?.pendingTrailingBlock

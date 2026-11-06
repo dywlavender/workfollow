@@ -215,6 +215,85 @@ final class DocumentExternalClipboardCodecTests: XCTestCase {
         XCTAssertTrue(value.document.blocks[0].runs[0].marks.contains(.bold))
     }
 
+    func testMixedHTMLPlanPreservesEveryImageAndSurroundingTextInOrder() async throws {
+        let png = try imagePNG()
+        let dataURL = "data:image/png;base64," + png.base64EncodedString()
+        let html = "<h2>标题</h2><p>前<strong>粗</strong><img src='https://images.invalid/one.png' alt='远程一'/>中<img src='\(dataURL)' alt='内嵌'/>后<img src='https://images.invalid/two.png' alt='远程二' width='240' height='120'/>尾</p>"
+        let plan = try XCTUnwrap(DocumentExternalClipboardCodec.imagePlan(fromHTML: html))
+        XCTAssertEqual(plan.images.map(\.name), ["远程一", "远程二"])
+        XCTAssertEqual(plan.fragment.document.plainText, "标题\n前粗[远程一]中\u{fffc}后[远程二]尾")
+        var requested: [String] = []
+        let resolved = await plan.resolveImages { url in requested.append(url.absoluteString); return png }
+        XCTAssertEqual(requested, ["https://images.invalid/one.png", "https://images.invalid/two.png"])
+        XCTAssertEqual(resolved.document.plainText, "标题\n前粗\u{fffc}中\u{fffc}后\u{fffc}尾")
+        XCTAssertEqual(resolved.document.blocks.map(\.kind), [.heading(2), .paragraph])
+        let files = resolved.document.blocks.flatMap(\.runs).compactMap(\.attachment)
+        XCTAssertEqual(files.map(\.name), ["远程一", "内嵌", "远程二"])
+        XCTAssertTrue(files.allSatisfy { DocumentTextCodec.pastedImage(from: $0) != nil })
+        XCTAssertEqual(files.last?.displayWidth, 240)
+        XCTAssertEqual(files.last?.displayHeight, 120)
+        XCTAssertTrue(resolved.document.blocks[1].runs.contains { $0.text == "粗" && $0.marks.contains(.bold) })
+        XCTAssertEqual(resolved.document.blocks.map(\.id), plan.fragment.document.blocks.map(\.id))
+    }
+
+    func testFailedAndMalformedImagesKeepAltLinkAndDoNotPreventLaterImages() async throws {
+        let png = try imagePNG()
+        let html = "<ul><li>前<img src='https://images.invalid/failure.png' alt='失败'/>中<img src='https://images.invalid/not-image.png' alt='无效内容'/><img src='https://images.invalid/good.png' alt='成功'/>尾</li><li><img src='data:image/png;base64,broken' alt='无效内嵌'/><img alt='无地址'/></li></ul>"
+        let plan = try XCTUnwrap(DocumentExternalClipboardCodec.imagePlan(fromHTML: html))
+        var requests = 0
+        let value = await plan.resolveImages { url in
+            requests += 1
+            if url.lastPathComponent == "failure.png" { throw URLError(.cannotLoadFromNetwork) }
+            if url.lastPathComponent == "not-image.png" { return Data("not an image".utf8) }
+            return png
+        }
+        XCTAssertEqual(requests, 3)
+        XCTAssertEqual(value.document.plainText, "前[失败]中[无效内容]\u{fffc}尾\n[无效内嵌][无地址]")
+        XCTAssertEqual(value.document.blocks.map(\.kind), [.bullet, .bullet])
+        let runs = value.document.blocks.flatMap(\.runs)
+        XCTAssertEqual(runs.compactMap(\.attachment).map(\.name), ["成功"])
+        XCTAssertTrue(runs.contains { $0.text == "[失败]" && $0.marks.contains(.link("https://images.invalid/failure.png")) })
+        XCTAssertTrue(runs.contains { $0.text == "[无效内容]" && $0.marks.contains(.link("https://images.invalid/not-image.png")) })
+    }
+
+    func testPendingImageFallbackDoesNotAbsorbLinkedFollowingText() async throws {
+        let plan = try XCTUnwrap(DocumentExternalClipboardCodec.imagePlan(fromHTML:
+            "<p><a href='https://links.invalid/page'>前<img src='https://images.invalid/pic.png' alt='图'/>后</a>尾</p>"))
+        let png = try imagePNG()
+        let value = await plan.resolveImages { _ in png }
+        XCTAssertEqual(value.document.plainText, "前\u{fffc}后尾")
+        XCTAssertTrue(value.document.blocks[0].runs.contains { $0.text == "后" && $0.marks.contains(.link("https://links.invalid/page")) })
+    }
+
+    func testLocalFixtureImagePlanLoadsAllFilesWithoutNetworking() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("clipboard-images-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = directory.appendingPathComponent("one.png"), second = directory.appendingPathComponent("two.png")
+        let png = try imagePNG()
+        try png.write(to: first); try png.write(to: second)
+        let plan = try XCTUnwrap(DocumentExternalClipboardCodec.imagePlan(fromHTML:
+            "<p>前<img src='\(first.absoluteString)' alt='一'/>中<img src='\(second.absoluteString)' alt='二'/>后</p>"))
+        let value = await plan.resolveImages(using: DocumentExternalClipboardCodec.loadImage)
+        XCTAssertEqual(value.document.plainText, "前\u{fffc}中\u{fffc}后")
+        XCTAssertEqual(value.document.blocks.flatMap(\.runs).compactMap(\.attachment).map(\.name), ["一", "二"])
+        XCTAssertNil(DocumentExternalClipboardCodec.imagePlan(fromHTML: "<img src='\(first.absoluteString)'/>", destinationKind: .code))
+    }
+
+    func testSynchronousHTMLImportPreservesRemoteAltAndLinkWithoutLoading() throws {
+        let value = try XCTUnwrap(DocumentExternalClipboardCodec.fragment(fromHTML:
+            "<p>前<img src='https://images.invalid/pic.png' alt='说明'/>后</p>"))
+        XCTAssertEqual(value.document.plainText, "前[说明]后")
+        XCTAssertTrue(value.document.blocks[0].runs.contains { $0.text == "[说明]" && $0.marks.contains(.link("https://images.invalid/pic.png")) })
+    }
+
+    private func imagePNG() throws -> Data {
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 4,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        return try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+    }
+
     private func block(_ kind: DocumentBlockKind, _ text: String, _ marks: Set<DocumentMark> = []) -> DocumentBlock {
         DocumentBlock(kind: kind, runs: [DocumentRun(text: text, marks: marks)])
     }

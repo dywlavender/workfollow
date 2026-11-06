@@ -5,38 +5,27 @@ import XCTest
 
 @MainActor
 final class DocumentEditorHitTargetTests: XCTestCase {
-    func testInspectorBodyRetainsNativeHitTargetWhileMoreCloses() throws {
+    func testInspectorBodyRetainsWebKitHitTargetWhileMoreCloses() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let id = try XCTUnwrap(workspace.createTask(title: "空正文点击验收", in: .inbox).taskID)
         workspace.select(id)
         var frames: [InspectorRenderAnchor: CGRect] = [:]
-        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace,
-            onFrames: { frames = $0 })
+        let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, onFrames: { frames = $0 })
         let window = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { window.close() }
-        func editor(in view: NSView) -> NativeTextView? {
-            if let value = view as? NativeTextView { return value }
-            return view.subviews.lazy.compactMap { editor(in: $0) }.first
-        }
-        let textView = try XCTUnwrap(editor(in: host))
+        let editor = try MilkdownTestSupport.editor(in: host, id: id)
         try InspectorPanelTestSupport.click(try XCTUnwrap(frames[.title]), in: host, window: window)
-        XCTAssertFalse(window.firstResponder === textView)
+        XCTAssertFalse(MilkdownTestSupport.isFocused(editor))
         try InspectorPanelTestSupport.click(try XCTUnwrap(frames[.footerMore]), in: host, window: window)
         let more = try InspectorPanelTestSupport.actionPanel(in: window)
-        XCTAssertTrue(textView.window === window, "Editor must remain mounted across panel open")
-        // NSView.hitTest takes its superview's coordinates, not its own.
-        let point = try XCTUnwrap(host.superview).convert(CGPoint(x: 90, y: 18), from: textView)
-        XCTAssertTrue(host.hitTest(point) === textView)
-        XCTAssertFalse(textView.enclosingScrollView?.documentView === textView,
-                       "Content-sized body must not introduce a second native scroll viewport")
-        try InspectorPanelTestSupport.click(CGRect(x: 80, y: 8, width: 20, height: 20),
-                                           in: textView, window: window)
+        XCTAssertTrue(editor.window === window)
+        let point = try XCTUnwrap(host.superview).convert(CGPoint(x: 90, y: editor.bounds.midY), from: editor)
+        let hit = host.hitTest(point)
+        XCTAssertTrue(hit === editor.webView || hit?.isDescendant(of: editor.webView) == true)
+        XCTAssertFalse(editor.enclosingScrollView?.documentView === editor)
+        try InspectorPanelTestSupport.click(CGRect(x: 80, y: 8, width: 20, height: 20), in: editor, window: window)
         XCTAssertFalse(more.isVisible)
-        XCTAssertTrue(textView.window === window)
-        XCTAssertTrue(host.hitTest(point) === textView)
-        // Full first-click focus is verified with actual mouse input. Synthetic
-        // NSApplication dispatch in this harness does not deliver NSTextView's
-        // mouseDown, so it cannot stand in for that physical acceptance gate.
+        XCTAssertTrue(editor.window === window)
     }
 
     func testNativeMouseDownTakesFocusFromAnotherField() throws {
@@ -66,50 +55,31 @@ final class DocumentEditorHitTargetTests: XCTestCase {
         let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace)
         let window = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { window.close() }
-        func editor(in view: NSView) -> NativeTextView? {
-            if let value = view as? NativeTextView { return value }
-            return view.subviews.lazy.compactMap { editor(in: $0) }.first
-        }
-        let textView = try XCTUnwrap(editor(in: host))
-        let shortHeight = textView.frame.height
+        let editor = try MilkdownTestSupport.editor(in: host, id: id), shortHeight = editor.frame.height
         let content = (1...80).map { "第\($0)段正文用于检查宿主滚动" }.joined(separator: "\n")
         _ = workspace.setDocument(id, NativeDocument(plainText: content))
-        InspectorPanelTestSupport.settle(window)
-        XCTAssertGreaterThan(textView.frame.height, shortHeight + 500)
-        XCTAssertEqual(textView.string, content)
+        try MilkdownTestSupport.wait("长正文没有撑开宿主") { editor.document.plainText == content && editor.frame.height > shortHeight + 500 }
         let selection = NSRange(location: 5, length: 10)
-        textView.setSelectedRange(selection)
+        try MilkdownTestSupport.select(editor, selection)
         _ = workspace.setPriority(id, .high)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(textView.selectedRange(), selection)
-        let scrollView = try XCTUnwrap(textView.enclosingScrollView)
-        XCTAssertFalse(scrollView.documentView === textView)
-        textView.scrollRangeToVisible(NSRange(location: (content as NSString).length - 1, length: 1))
-        InspectorPanelTestSupport.settle(window)
-        XCTAssertGreaterThan(scrollView.contentView.bounds.minY, 0,
-                             "Native \(textView.frame), host \(String(describing: scrollView.documentView?.frame)), viewport \(scrollView.contentView.bounds)")
+        XCTAssertEqual(try MilkdownTestSupport.range(editor), selection)
+        let scroll = try XCTUnwrap(editor.enclosingScrollView)
+        XCTAssertFalse(scroll.documentView === editor)
+        try MilkdownTestSupport.command(editor, "focusEnd")
+        try MilkdownTestSupport.wait("文末定位没有滚动外层视口") { scroll.contentView.bounds.minY > 0 }
     }
 
-    func testEmptyContentSizedEditorHasVisibleNativeHitAreaBeforeFocus() throws {
-        let handle = DocumentEditorHandle()
-        let host = NSHostingView(rootView: DocumentEditor(
-            documentID: UUID(), document: .empty, onDocumentChange: { _ in },
-            onEscape: { .keepInspector }, onEditingChanged: { _ in },
-            contentSized: true, handle: handle).frame(width: 500, height: 48))
-        let window = NSWindow(contentRect: CGRect(x: 100, y: 100, width: 500, height: 48),
-                              styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = host
-        window.makeKeyAndOrderFront(nil)
+    func testEmptyContentSizedEditorHasVisibleWebKitHitAreaBeforeFocus() throws {
+        let host = NSHostingView(rootView: DocumentEditor(documentID: UUID(), document: .empty,
+            onDocumentChange: { _ in }, onEscape: { .keepInspector }, onEditingChanged: { _ in }, contentSized: true)
+            .frame(width: 500, height: 48))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 500, height: 48)
         defer { window.close() }
-        host.layoutSubtreeIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-        let textView = try XCTUnwrap(handle.textView)
-        XCTAssertGreaterThanOrEqual(textView.frame.height, 48,
-            "SwiftUI's visible editor height must be backed by a native hit target before first focus")
-        let point = try XCTUnwrap(host.superview).convert(CGPoint(x: 80, y: 12), from: textView)
+        let editor = try MilkdownTestSupport.editor(in: host)
+        XCTAssertGreaterThanOrEqual(editor.frame.height, 48)
+        let point = try XCTUnwrap(host.superview).convert(CGPoint(x: 80, y: editor.bounds.midY), from: editor)
         let hit = host.hitTest(point)
-        XCTAssertTrue(hit === textView || hit?.isDescendant(of: textView) == true,
-                      "Visible empty paragraph must hit the native editor, not its scroll container")
+        XCTAssertTrue(hit === editor.webView || hit?.isDescendant(of: editor.webView) == true)
     }
 }

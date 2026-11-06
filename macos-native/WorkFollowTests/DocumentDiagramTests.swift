@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import WebKit
 import XCTest
 @testable import WorkFollow
@@ -98,31 +99,29 @@ final class DocumentDiagramTests: XCTestCase {
 
     func testRepeatedSaveOfNewDrawingUpdatesSameAttachmentAndKeepsSurroundingText() async throws {
         let original = NativeDocument(plainText: "前文\n\n后文")
-        let editor = NativeTextView(frame: .zero, textContainer: nil)
-        editor.textStorage?.setAttributedString(DocumentTextCodec.render(original))
         var latest = original
-        let coordinator = DocumentEditorCoordinator(documentID: editor.documentIdentity, document: original,
-            onDocumentChange: { latest = $0 }, onEscape: { .keepInspector }, onEditingChanged: { _ in })
-        editor.delegate = coordinator
-        defer { withExtendedLifetime(coordinator) {} }
+        let host = NSHostingView(rootView: DocumentEditor(documentID: UUID(), document: original,
+            onDocumentChange: { latest = $0 }, onEscape: { .keepInspector }, onEditingChanged: { _ in }))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host)
+        defer { window.close() }
+        let editor = try await MilkdownTestSupport.editorAsync(in: host)
         var drawing = try diagram()
-        let insertion = NSRange(location: 3, length: 0)
-        XCTAssertTrue(editor.saveDiagram(drawing, replacing: insertion, existingID: nil))
-        try await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
-        let insertedText = editor.string
+        try MilkdownTestSupport.select(editor, NSRange(location: 3, length: 0))
+        let inserted = await editor.saveDiagram(drawing, updating: false)
+        XCTAssertTrue(inserted)
+        try await waitUntil(seconds: 5) { latest.blocks.flatMap(\.runs).contains { $0.diagram != nil } }
+        let insertedText = latest.plainText
         for label in ["第二次保存", "第三次保存"] {
             drawing.xml = Self.drawingXML.replacingOccurrences(of: "需求评审", with: label)
-            XCTAssertTrue(editor.saveDiagram(drawing, replacing: insertion, existingID: nil))
-            XCTAssertEqual(latest.blocks.flatMap(\.runs).compactMap(\.diagram), [drawing])
-            XCTAssertEqual(editor.string, insertedText, "连续保存不能再插入图表或额外换行")
-            try await _Concurrency.Task.sleep(nanoseconds: 20_000_000)
+            let updated = await editor.saveDiagram(drawing, updating: true)
+            XCTAssertTrue(updated)
+            try await waitUntil(seconds: 5) { latest.blocks.flatMap(\.runs).compactMap(\.diagram) == [drawing] }
+            XCTAssertEqual(latest.plainText, insertedText)
         }
-        XCTAssertTrue(editor.saveDiagram(drawing, replacing: insertion, existingID: nil))
-        editor.undo(nil)
-        let previous = try XCTUnwrap(latest.blocks.flatMap(\.runs).compactMap(\.diagram).first)
-        XCTAssertTrue(previous.xml.contains("第二次保存"))
+        try MilkdownTestSupport.command(editor, "undo")
+        XCTAssertTrue(try XCTUnwrap(latest.blocks.flatMap(\.runs).compactMap(\.diagram).first).xml.contains("第二次保存"))
         XCTAssertEqual(latest.blocks.flatMap(\.runs).compactMap(\.diagram).count, 1)
-        editor.redo(nil)
+        try MilkdownTestSupport.command(editor, "redo")
         XCTAssertEqual(latest.blocks.flatMap(\.runs).compactMap(\.diagram), [drawing])
     }
 
@@ -138,8 +137,8 @@ final class DocumentDiagramTests: XCTestCase {
         let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
         let parent = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { parent.close(); try? FileManager.default.removeItem(at: directory) }
-        let editor = try XCTUnwrap(descendants(host).compactMap { $0 as? NativeTextView }.first)
-        editor.insertDocumentDiagram(at: 0)
+        let editor = try await MilkdownTestSupport.editorAsync(in: host)
+        editor.editDiagram()
         let controller = try XCTUnwrap(editor.diagramEditor)
         defer { controller.close() }
         try await waitUntil(seconds: 25) { controller.isReady || controller.lastError != nil }
@@ -303,12 +302,11 @@ final class DocumentDiagramTests: XCTestCase {
         let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, width: 390, height: 700, environment: environment)
         let parent = InspectorPanelTestSupport.ownerWindow(for: host, width: 390, height: 700)
         defer { parent.close(); try? FileManager.default.removeItem(at: directory) }
-        let editor = try XCTUnwrap(descendants(host).compactMap { $0 as? NativeTextView }.first)
-        parent.makeFirstResponder(editor)
-        editor.insertText("/", replacementRange: NSRange(location: 0, length: 0))
-        XCTAssertNotNil(editor.slashSession)
-        let index = try XCTUnwrap(editor.profile.slashCommands.firstIndex { $0.id == "shared.drawio" })
-        editor.executeSlash(at: index)
+        let editor = try await MilkdownTestSupport.editorAsync(in: host)
+        try MilkdownTestSupport.command(editor, "insertText", ["text": "/"])
+        XCTAssertTrue(editor.menuPanel?.isVisible == true)
+        try MilkdownTestSupport.chooseMenu(editor, title: "流程图")
+        try await waitUntil(seconds: 5) { editor.diagramEditor != nil }
         let controller = try XCTUnwrap(editor.diagramEditor)
         defer { controller.close(); editor.diagramEditor?.close() }
         try await waitUntil(seconds: 25) { controller.isReady || controller.lastError != nil }
@@ -322,30 +320,18 @@ final class DocumentDiagramTests: XCTestCase {
         let document = try XCTUnwrap(workspace.task(for: taskID)?.document)
         let saved = try XCTUnwrap(document.blocks.flatMap(\.runs).compactMap(\.diagram).first)
         XCTAssertEqual(workspace.selectedTaskID, taskID)
-        XCTAssertFalse(editor.string.contains("/"))
+        XCTAssertFalse(editor.document.plainText.contains("/"))
         XCTAssertEqual(saved.xml.contains("需求评审"), true)
         InspectorPanelTestSupport.settle(parent)
-        let frame = try XCTUnwrap(editor.viewRect(forCharacterAt: 0))
-        XCTAssertLessThanOrEqual(frame.maxX, editor.bounds.width, "实际 TextKit 排版里的预览不得溢出窄任务栏")
-        if let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
-            host.cacheDisplay(in: host.bounds, to: bitmap)
-            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/private/tmp/workfollow-drawio-20261023-preview.png"))
-        }
-        let point = editor.convert(NSPoint(x: frame.midX, y: frame.midY), to: nil)
-        func click(_ type: NSEvent.EventType) throws -> NSEvent {
-            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: parent.windowNumber,
-                context: nil, eventNumber: 100, clickCount: 2, pressure: type == .leftMouseDown ? 1 : 0))
-        }
-        NSApp.postEvent(try click(.leftMouseUp), atStart: true)
-        NSApp.sendEvent(try click(.leftMouseDown))
-        if let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date(), inMode: .default, dequeue: true) { NSApp.sendEvent(up) }
+        let right = try XCTUnwrap(MilkdownTestSupport.script(editor, "document.querySelector('.wf-embed img').getBoundingClientRect().right") as? CGFloat)
+        XCTAssertLessThanOrEqual(right, editor.bounds.width)
+        try MilkdownTestSupport.script(editor, "document.querySelector('.wf-embed img').dispatchEvent(new MouseEvent('dblclick',{bubbles:true}))")
         try await waitUntil(seconds: 5) { editor.diagramEditor != nil }
         let reopened = try XCTUnwrap(editor.diagramEditor)
         reopened.close()
-        editor.undo(nil)
+        try MilkdownTestSupport.command(editor, "undo")
         XCTAssertFalse(workspace.task(for: taskID)?.document.blocks.flatMap(\.runs).contains { $0.diagram != nil } == true)
-        editor.redo(nil)
+        try MilkdownTestSupport.command(editor, "redo")
         XCTAssertEqual(workspace.task(for: taskID)?.document.blocks.flatMap(\.runs).compactMap(\.diagram).first, saved)
     }
 

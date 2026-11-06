@@ -78,12 +78,17 @@ enum QuillDeltaCodec {
     private static func runOps(_ run: DocumentRun, blockKind: DocumentBlockKind) -> [QuillDeltaOp] {
         var ops: [QuillDeltaOp] = []
         if let attachment = run.attachment {
-            ops.append(QuillDeltaOp(insert: .object([embedKey: .object([
+            var embed: [String: JSONValue] = [
                 "type": .string("attachment"),
                 "id": .string(attachment.id.uuidString),
                 "name": .string(attachment.name),
                 "storedName": .string(attachment.storedName)
-            ])])))
+            ]
+            if let size = attachment.displaySize {
+                embed["displayWidth"] = .number(size.width)
+                embed["displayHeight"] = .number(size.height)
+            }
+            ops.append(QuillDeltaOp(insert: .object([embedKey: .object(embed)])))
         }
         if let diagram = run.diagram {
             ops.append(QuillDeltaOp(insert: .object([embedKey: .object([
@@ -261,10 +266,17 @@ enum QuillDeltaCodec {
 
     private static func attachmentRun(from embed: [String: JSONValue]) -> DocumentRun {
         let id = embed["id"]?.stringValue.flatMap(UUID.init(uuidString:)) ?? UUID()
-        return DocumentRun(text: "\u{FFFC}", attachment: NativeAttachment(
+        var attachment = NativeAttachment(
             id: id,
             name: embed["name"]?.stringValue ?? "附件",
-            storedName: embed["storedName"]?.stringValue ?? ""))
+            storedName: embed["storedName"]?.stringValue ?? "",
+            displayWidth: embed["displayWidth"]?.doubleValue,
+            displayHeight: embed["displayHeight"]?.doubleValue)
+        if attachment.displaySize == nil {
+            attachment.displayWidth = nil
+            attachment.displayHeight = nil
+        }
+        return DocumentRun(text: "\u{FFFC}", attachment: attachment)
     }
 
     private static func diagramRun(from embed: [String: JSONValue]) -> DocumentRun {

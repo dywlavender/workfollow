@@ -25,11 +25,12 @@ struct ChecklistSummary: Codable, Equatable {
         var done = 0
         var reminders: [ChecklistReminderSummary] = []
         for block in blocks {
-            guard case .checklist(let checked) = block.kind else { continue }
-            total += 1
-            if checked {
-                done += 1
-                continue
+            if case .checklist(let checked) = block.kind {
+                total += 1
+                if checked {
+                    done += 1
+                    continue
+                }
             }
             guard let reminderAt = block.checklist?.reminderAt else { continue }
             let title = block.plainText.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -233,25 +233,18 @@ final class DocumentDecorationRenderTests: XCTestCase {
         defer { window.close() }
         host.layoutSubtreeIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        func editor(in view: NSView) -> NativeTextView? {
-            if let text = view as? NativeTextView { return text }
-            return view.subviews.lazy.compactMap { editor(in: $0) }.first
+        let text = try MilkdownTestSupport.editor(in: host)
+        func caretX() throws -> CGFloat {
+            let left = try XCTUnwrap(MilkdownTestSupport.script(text, "document.querySelector('.wf-block-content').getBoundingClientRect().left") as? CGFloat)
+            return host.convert(.zero, from: text).x + left
         }
-        let text = try XCTUnwrap(editor(in: host))
-        window.makeFirstResponder(text)
-        func caretX() -> CGFloat {
-            let rect = text.firstRect(forCharacterRange: NSRange(location: 0, length: 0), actualRange: nil)
-            return host.convert(window.convertFromScreen(rect), from: nil).minX
-        }
-        let emptyX = caretX()
-        XCTAssertEqual(emptyX, 45, accuracy: 1, "正文起点应是宿主40pt加TextKit的5pt，不额外占20pt沟槽")
-        text.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.heading1")))
-        text.insertText("一级标题", replacementRange: NSRange(location: 0, length: 0))
-        text.setSelectedRange(NSRange(location: 0, length: 0))
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        XCTAssertEqual(caretX(), emptyX, accuracy: 1, "切换标题不能改变正文起点")
-        let viewOrigin = host.convert(.zero, from: text).x
-        XCTAssertEqual(viewOrigin, 20, accuracy: 1, "装饰沟槽前置于宿主40pt正文区域")
+        let emptyX = try caretX()
+        XCTAssertEqual(emptyX, 45, accuracy: 1)
+        try MilkdownTestSupport.command(text, "format", ["id": "heading1"])
+        try MilkdownTestSupport.command(text, "insertText", ["text": "一级标题"])
+        try MilkdownTestSupport.select(text, NSRange(location: 0, length: 0))
+        XCTAssertEqual(try caretX(), emptyX, accuracy: 1, "切换标题不能改变正文起点")
+        XCTAssertEqual(host.convert(.zero, from: text).x, 20, accuracy: 1)
         text.displayIfNeeded()
         let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
             CGWindowID(window.windowNumber), [.bestResolution]))
@@ -325,50 +318,22 @@ final class DocumentDecorationRenderTests: XCTestCase {
         return false
     }
 
-    /// 2026-10-18 走查：整行被选中时，TextKit 2 的选区视图会盖住行首缩进区，
-    /// 复选框必须在选区之上可见（装饰层已移到选区视图之上的 overlay）。
+    /// The production checkbox stays outside the selected editable content.
     @MainActor
     func testChecklistMarkerStaysVisibleUnderSelection() throws {
-        let width: CGFloat = 600
-        let height: CGFloat = 300
-        let view = NativeTextView(frame: NSRect(x: 0, y: 0, width: width, height: height), textContainer: nil)
-        let window = NSWindow(contentRect: view.frame, styleMask: [.borderless],
-                              backing: .buffered, defer: false)
-        window.backgroundColor = .white
-        window.appearance = NSAppearance(named: .aqua)
-        window.contentView = view
-        window.orderFrontRegardless()
-        window.makeFirstResponder(view)
-        view.textStorage?.setAttributedString(DocumentTextCodec.render(NativeDocument(blocks: [
-            DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "检查项一")]),
-            DocumentBlock(kind: .checklist(true), runs: [DocumentRun(text: "已完成项")])
-        ])))
-        let length = (view.string as NSString).length
-        view.setSelectedRange(NSRange(location: 0, length: length))
-        view.displayIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-
-        let cgImage = try XCTUnwrap(CGWindowListCreateImage(
-            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.bestResolution]))
-        let rep = NSBitmapImageRep(cgImage: cgImage)
-        let scale = CGFloat(rep.pixelsWide) / width
-
-        // 复选框几何：markerOrigin = 文字起点 41 − 16 + 1 = 26pt，宽 12.96pt。
-        // 选区灰是中性色（R≈G≈B），复选框描边/填充是偏冷的灰（B 比 R 高 4~10）；
-        // 正文从 41pt 起，所以这一段里的"冷灰"像素只可能来自复选框。
-        var markerPixels = 0
-        let xRange = Int(24 * scale)..<Int(40 * scale)
-        for y in 0..<rep.pixelsHigh {
-            for x in xRange where x < rep.pixelsWide {
-                guard let color = rep.colorAt(x: x, y: y), color.alphaComponent > 0.5 else { continue }
-                let red = color.redComponent, green = color.greenComponent, blue = color.blueComponent
-                if red < 0.95, blue - red >= 0.015, green > red { markerPixels += 1 }
-            }
-        }
-        // 阈值只需区分"有标记"与"被选区整片盖住"：后者为 0。抗锯齿会让边缘像素
-        // 在 15~30 之间浮动，所以不设成"半行像素"那种高门槛。
-        XCTAssertGreaterThan(markerPixels, 8,
-                             "选中整行后复选框不可见（被选区盖住）：冷灰像素 \(markerPixels)")
+        let document = NativeDocument(blocks: [
+            .init(kind: .checklist(false), runs: [.init(text: "检查项一")]),
+            .init(kind: .checklist(true), runs: [.init(text: "已完成项")])
+        ])
+        let host = NSHostingView(rootView: DocumentEditor(documentID: UUID(), document: document,
+            onDocumentChange: { _ in }, onEscape: { .endEditing }, onEditingChanged: { _ in }).frame(width: 600, height: 300))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 600, height: 300)
+        defer { window.close() }
+        let view = try MilkdownTestSupport.editor(in: host)
+        try MilkdownTestSupport.command(view, "focus")
+        try MilkdownTestSupport.select(view, NSRange(location: 0, length: document.plainText.utf16.count))
+        XCTAssertEqual(try MilkdownTestSupport.script(view, "Array.from(document.querySelectorAll('[role=checkbox]')).every(b=>{ const r=b.getBoundingClientRect(); return r.width>=16 && r.height>=16 && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b; })") as? Bool, true)
+        XCTAssertEqual(try MilkdownTestSupport.script(view, "Array.from(document.querySelectorAll('[role=checkbox]')).map(b=>b.getAttribute('aria-checked'))") as? [String], ["false", "true"])
     }
 
     /// 光标在标题行：行首沟槽应出现 H2 角标。

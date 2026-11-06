@@ -5,6 +5,63 @@ import AppKit
 @MainActor
 enum DocumentExternalClipboardCodec {
     typealias Fragment = DocumentClipboardCodec.Fragment
+    typealias ImageLoader = @MainActor (URL) async throws -> Data
+
+    /// Exact run coordinates are captured by HTMLReader before any asynchronous
+    /// work. Resolving one image never re-parses or discards surrounding content.
+    @MainActor struct HTMLImagePlan {
+        struct Image {
+            var url: URL
+            var name: String
+            var blockIndex: Int
+            var runIndex: Int
+            var displayWidth: Double?
+            var displayHeight: Double?
+        }
+        var fragment: Fragment
+        var images: [Image]
+        var hasImages: Bool
+
+        func resolveImages(using loader: ImageLoader) async -> Fragment {
+            var document = fragment.document
+            for image in images {
+                guard !_Concurrency.Task.isCancelled else { break }
+                do {
+                    let data = try await loader(image.url)
+                    guard !_Concurrency.Task.isCancelled else { break }
+                    guard let attachment = DocumentExternalClipboardCodec.imageAttachment(
+                        data: data, name: image.name, width: image.displayWidth, height: image.displayHeight) else { continue }
+                    // A failed image keeps its original alt/link run, at the
+                    // same position, and must not stop later images resolving.
+                    document.blocks[image.blockIndex].runs[image.runIndex] =
+                        DocumentRun(text: "\u{FFFC}", attachment: attachment)
+                } catch { continue }
+            }
+            return Fragment(document: document, startsAtParagraphBoundary: fragment.startsAtParagraphBoundary,
+                            endsAtParagraphBoundary: fragment.endsAtParagraphBoundary)
+        }
+    }
+
+    static func loadImage(_ url: URL) async throws -> Data {
+        if url.isFileURL { return try Data(contentsOf: url) }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }
+
+    private static func imageAttachment(data: Data, name: String, width: Double?, height: Double?) -> NativeAttachment? {
+        guard NSImage(data: data) != nil else { return nil }
+        let png = NativeTextView.normalizedPNG(data)
+        var attachment = NativeAttachment(id: UUID(), name: name,
+            storedName: "data:image/png;base64," + png.base64EncodedString(),
+            displayWidth: width, displayHeight: height)
+        if attachment.displaySize == nil { attachment.displayWidth = nil; attachment.displayHeight = nil }
+        return attachment
+    }
 
     static func read(from pasteboard: NSPasteboard,
                      destinationKind: DocumentBlockKind = .paragraph) -> Fragment? {
@@ -39,6 +96,12 @@ enum DocumentExternalClipboardCodec {
         return pasteboard.string(forType: .string).flatMap {
             fragment(fromMarkdown: $0, destinationKind: destinationKind)
         }
+    }
+
+    /// Compatibility query for the legacy TextKit editor. Milkdown consumes
+    /// the complete HTMLImagePlan instead of pasting just this first image.
+    static func firstRemoteImageURL(inHTML html: String) -> URL? {
+        imagePlan(fromHTML: html)?.images.first?.url
     }
 
     static func fragment(from rich: NSAttributedString,
@@ -145,6 +208,11 @@ enum DocumentExternalClipboardCodec {
 
     static func fragment(fromHTML html: String,
                          destinationKind: DocumentBlockKind = .paragraph) -> Fragment? {
+        imagePlan(fromHTML: html, destinationKind: destinationKind)?.fragment
+    }
+
+    static func imagePlan(fromHTML html: String,
+                          destinationKind: DocumentBlockKind = .paragraph) -> HTMLImagePlan? {
         // The system's older HTML tidy parser otherwise treats fragments as
         // Latin-1, even when their Swift string was encoded as UTF-8.
         var content = html.replacingOccurrences(of: #"^\s*<\?xml[^>]*\?>"#,
@@ -159,7 +227,8 @@ enum DocumentExternalClipboardCodec {
         let reader = HTMLReader()
         reader.walk(root)
         reader.flush()
-        return makeFragment(reader.blocks, structural: reader.structural, marked: reader.marked)
+        guard let fragment = makeFragment(reader.blocks, structural: reader.structural, marked: reader.marked) else { return nil }
+        return HTMLImagePlan(fragment: fragment, images: reader.images, hasImages: reader.hasImages)
     }
 
     /// Publish native paragraph metadata instead of painted markers. Cocoa
@@ -438,18 +507,21 @@ enum DocumentExternalClipboardCodec {
         }
         var blocks: [DocumentBlock] = []
         var structural = false, marked = false
+        var images: [HTMLImagePlan.Image] = []
+        var hasImages = false
         private var runs: [DocumentRun] = []
         private var kind: DocumentBlockKind = .paragraph
         private var indentLevel = 0
         private var listStart: Int?
         private var started = false
+        private var lastRunIsImage = false
 
         func flush(force: Bool = false) {
             if started || force {
                 blocks.append(DocumentBlock(kind: kind, runs: runs.isEmpty ? [DocumentRun(text: "")] : runs,
                                             indentLevel: indentLevel, listStart: listStart))
             }
-            runs = []; started = false
+            runs = []; started = false; lastRunIsImage = false
         }
 
         private func begin(_ value: DocumentBlockKind, indent: Int, start: Int?) {
@@ -464,7 +536,12 @@ enum DocumentExternalClipboardCodec {
                 guard started || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
                 if !started { kind = defaultKind; indentLevel = list?.depth ?? 0; listStart = nil }
                 started = true; marked = marked || !marks.isEmpty
-                append(DocumentRun(text: text, marks: marks), to: &runs); return
+                // Do not merge text into a pending image's fallback run: its
+                // coordinates must survive until asynchronous resolution.
+                if lastRunIsImage { runs.append(DocumentRun(text: text, marks: marks)) }
+                else { append(DocumentRun(text: text, marks: marks), to: &runs) }
+                lastRunIsImage = false
+                return
             }
             guard let element = node as? XMLElement else { return }
             let tag = (element.localName ?? element.name ?? "").lowercased()
@@ -477,10 +554,33 @@ enum DocumentExternalClipboardCodec {
             }
             if tag == "hr" { flush(); structural = true; blocks.append(DocumentBlock(kind: .divider, runs: [DocumentRun(text: "\u{FFFC}")])); return }
             if tag == "br" { flush(force: true); started = true; return }
-            if tag == "img", let src = element.attribute(forName: "src")?.stringValue, src.hasPrefix("data:image/") {
-                started = true; structural = true
-                append(DocumentRun(text: "\u{FFFC}", attachment: NativeAttachment(id: UUID(),
-                    name: element.attribute(forName: "alt")?.stringValue ?? "图片", storedName: src)), to: &runs)
+            if tag == "img" {
+                if !started { kind = defaultKind; indentLevel = list?.depth ?? 0; listStart = nil }
+                started = true; structural = true; hasImages = true
+                let source = (element.attribute(forName: "src")?.stringValue ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let alt = (element.attribute(forName: "alt")?.stringValue ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let name = alt.isEmpty ? "图片" : alt
+                let width = element.attribute(forName: "width")?.stringValue.flatMap(Double.init)
+                let height = element.attribute(forName: "height")?.stringValue.flatMap(Double.init)
+                if source.hasPrefix("data:image/"), let comma = source.firstIndex(of: ","),
+                   let data = Data(base64Encoded: String(source[source.index(after: comma)...])),
+                   let attachment = imageAttachment(data: data, name: name, width: width, height: height) {
+                    runs.append(DocumentRun(text: "\u{FFFC}", attachment: attachment))
+                } else {
+                    var fallbackMarks = marks
+                    if !source.isEmpty, !fallbackMarks.contains(where: { if case .link = $0 { return true }; return false }) {
+                        fallbackMarks.insert(.link(source))
+                    }
+                    let index = runs.count
+                    runs.append(DocumentRun(text: "[\(name)]", marks: fallbackMarks))
+                    if let url = URL(string: source), ["http", "https", "file"].contains(url.scheme?.lowercased() ?? "") {
+                        images.append(HTMLImagePlan.Image(url: url, name: name, blockIndex: blocks.count,
+                            runIndex: index, displayWidth: width, displayHeight: height))
+                    }
+                }
+                lastRunIsImage = true
                 return
             }
             if tag == "ol" || tag == "ul" {

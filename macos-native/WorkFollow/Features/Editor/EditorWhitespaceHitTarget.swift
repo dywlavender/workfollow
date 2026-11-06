@@ -22,14 +22,16 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
         override var isFlipped: Bool { true }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-        private var editor: NativeTextView? {
+        private var editor: NSView? {
+            if let web = handle?.webView, web.window === window, window != nil,
+               web.documentIdentity == documentID, !web.isReadOnly, !web.isHiddenOrHasHiddenAncestor { return web }
             guard let textView = handle?.textView, let window,
                   textView.window === window, textView.documentIdentity == documentID,
                   textView.isEditable, !textView.isHiddenOrHasHiddenAncestor else { return nil }
             return textView
         }
 
-        private func bodyRect(for editor: NativeTextView) -> NSRect {
+        private func bodyRect(for editor: NSView) -> NSRect {
             let top = max(bounds.minY, convert(editor.bounds, from: editor).minY)
             return NSRect(x: bounds.minX, y: top, width: bounds.width,
                           height: max(0, bounds.maxY - top)).intersection(visibleRect)
@@ -37,7 +39,7 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
 
         /// 光标只铺到正文编辑器底边。宿主把命中层铺在整块内容上，便于点击空白
         /// 定位到文末；但下方关联任务、附件等区块不是正文，不能继续显示 I-beam。
-        private func cursorBodyRect(for editor: NativeTextView) -> NSRect {
+        private func cursorBodyRect(for editor: NSView) -> NSRect {
             let body = bodyRect(for: editor)
             let editorBottom = convert(editor.bounds, from: editor).maxY
             let bottom = min(body.maxY, editorBottom)
@@ -62,7 +64,7 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
             }
         }
 
-        func cursorSpaces(for editor: NativeTextView) -> [NSRect] {
+        func cursorSpaces(for editor: NSView) -> [NSRect] {
             let body = cursorBodyRect(for: editor)
             let text = convert(editor.bounds, from: editor)
             let spaces = [
@@ -77,7 +79,8 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
         }
 
         override func mouseDown(with event: NSEvent) {
-            guard let editor else { return }
+            if let web = editor as? MilkdownWebView { web.selectFromHost(event, phase: "down"); return }
+            guard let editor = editor as? NativeTextView else { return }
             editor.dismissSlash()
             editor.dismissTagCompletion()
             editor.hideLinkHoverMenu()
@@ -96,12 +99,16 @@ struct EditorWhitespaceHitTarget: NSViewRepresentable {
         }
 
         override func mouseDragged(with event: NSEvent) {
-            guard let editor, let anchor = dragAnchor else { return }
+            if let web = editor as? MilkdownWebView { web.selectFromHost(event, phase: "drag"); return }
+            guard let editor = editor as? NativeTextView, let anchor = dragAnchor else { return }
             let index = editor.insertionIndex(nearest: editor.convert(event.locationInWindow, from: nil))
             editor.setSelectedRange(NSRange(location: min(anchor, index), length: abs(index - anchor)))
         }
 
-        override func mouseUp(with event: NSEvent) { dragAnchor = nil }
+        override func mouseUp(with event: NSEvent) {
+            if let web = editor as? MilkdownWebView { web.selectFromHost(event, phase: "up") }
+            dragAnchor = nil
+        }
     }
 }
 

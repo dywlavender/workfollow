@@ -59,7 +59,7 @@ final class ChecklistItemReminderPanel: NSPanel {
                 target = window.parent
             }
             return false
-        }, dismiss: { [weak self] in self?.dismiss() })
+        }, dismiss: { [weak self] _ in self?.dismiss() })
     }
 
     /// 预设页与日历页高度不同：切换后按新内容高度重新贴回铃铛上方。

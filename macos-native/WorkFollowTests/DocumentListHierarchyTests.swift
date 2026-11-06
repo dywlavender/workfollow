@@ -139,13 +139,9 @@ final class DocumentListHierarchyTests: XCTestCase {
             .environmentObject(environment))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 760)
         defer { window.close() }
-        func findEditor(_ view: NSView) -> NativeTextView? {
-            if let value = view as? NativeTextView { return value }
-            return view.subviews.lazy.compactMap { findEditor($0) }.first
-        }
-        let body = try XCTUnwrap(findEditor(host))
-        window.makeFirstResponder(body)
-        body.setSelectedRange(NSRange(location: 0, length: 0))
+        let body = try MilkdownTestSupport.editor(in: host, id: id)
+        try MilkdownTestSupport.select(body, NSRange(location: 0, length: 0))
+        try MilkdownTestSupport.command(body, "focus")
         func tab(_ shift: Bool) throws {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
                 modifierFlags: shift ? [.shift] : [], timestamp: ProcessInfo.processInfo.systemUptime,
@@ -155,15 +151,15 @@ final class DocumentListHierarchyTests: XCTestCase {
             NSApp.sendEvent(event)
             InspectorPanelTestSupport.settle(window)
         }
-        XCTAssertTrue(window.firstResponder === body)
+        XCTAssertTrue(MilkdownTestSupport.isFocused(body))
         try tab(false)
         XCTAssertEqual(workspace.task(for: id)?.document.blocks.map(\.indentLevel), [1, 2, 0])
         XCTAssertEqual(environment.navigation.destination, .inbox)
-        XCTAssertTrue(window.firstResponder === body)
+        XCTAssertTrue(MilkdownTestSupport.isFocused(body))
         try tab(true)
         XCTAssertEqual(workspace.task(for: id)?.document.blocks.map(\.indentLevel), [0, 1, 0])
         XCTAssertEqual(environment.navigation.destination, .inbox)
-        XCTAssertFalse(body.string.contains("\t"))
+        XCTAssertFalse(body.document.plainText.contains("\t"))
     }
 
     @MainActor private final class Session {

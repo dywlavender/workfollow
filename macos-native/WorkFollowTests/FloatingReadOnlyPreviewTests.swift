@@ -28,8 +28,8 @@ final class FloatingReadOnlyPreviewTests: XCTestCase {
         return environment
     }
 
-    private func editors(in view: NSView) -> [NativeTextView] {
-        ([view as? NativeTextView].compactMap { $0 }) + view.subviews.flatMap { editors(in: $0) }
+    private func editors(in view: NSView) -> [MilkdownWebView] {
+        ([view as? MilkdownWebView].compactMap { $0 }) + view.subviews.flatMap { editors(in: $0) }
     }
 
     private func textFields(in view: NSView) -> [NSTextField] {
@@ -55,34 +55,30 @@ final class FloatingReadOnlyPreviewTests: XCTestCase {
         let owner = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
         defer { FloatingNoteWindowController.shared.close(noteID: id); owner.close() }
         InspectorPanelTestSupport.settle(owner)
-        XCTAssertTrue(editors(in: host).contains { $0.isEditable && $0.documentIdentity == id })
+        XCTAssertTrue(editors(in: host).contains { !$0.isReadOnly && $0.documentIdentity == id })
 
         FloatingNoteWindowController.shared.open(noteID: id)
         InspectorPanelTestSupport.settle(owner)
-        let preview = try XCTUnwrap(editors(in: host).first { !$0.isEditable },
-                                    "浮窗打开后主编辑栏应保留只读预览")
-        XCTAssertEqual(preview.string, "标题\n引用\n正文", "预览必须是富文本投影，不是 plainText")
-        XCTAssertEqual(preview.textStorage?.attribute(DocumentTextCodec.blockKey, at: 0,
-                                                      effectiveRange: nil) as? String, "h1")
-        XCTAssertEqual(preview.textStorage?.attribute(DocumentTextCodec.blockKey, at: 3,
-                                                      effectiveRange: nil) as? String, "quote")
-        XCTAssertTrue(preview.isSelectable)
-        XCTAssertFalse(editors(in: host).contains { $0.isEditable && $0.documentIdentity == id })
+        let preview = try MilkdownTestSupport.editor(in: host, readOnly: true)
+        XCTAssertEqual(preview.document.plainText, "标题\n引用\n正文", "预览必须是富文本投影，不是 plainText")
+        XCTAssertEqual(try MilkdownTestSupport.script(preview, "document.querySelector('[data-wf-block]').dataset.kind") as? String, "heading")
+        XCTAssertEqual(preview.document.blocks[1].kind, .quote)
+        XCTAssertFalse(editors(in: host).contains { !$0.isReadOnly && $0.documentIdentity == id })
 
-        preview.setSelectedRange(NSRange(location: 0, length: 2))
-        preview.refreshSelectionToolbar()
-        XCTAssertNil(preview.selectionPanel, "只读预览不应弹出格式浮条")
+        try MilkdownTestSupport.select(preview, NSRange(location: 0, length: 2))
+        XCTAssertEqual(try MilkdownTestSupport.script(preview, "document.getElementById('wf-selection').hidden") as? Bool, true)
 
         // 浮窗里的编辑要实时反映到原编辑栏的只读预览。
         let floating = try XCTUnwrap(FloatingEditorWindowController.shared.panel(for: .note(id)))
         InspectorPanelTestSupport.settle(floating)
-        let floatingEditor = try XCTUnwrap(floating.editorHandle.textView)
-        floatingEditor.setSelectedRange(NSRange(location: floatingEditor.string.utf16.count, length: 0))
-        floatingEditor.insertText("新增", replacementRange: floatingEditor.selectedRange())
+        let floatingEditor = try MilkdownTestSupport.editor(in: try XCTUnwrap(floating.contentView))
+        try MilkdownTestSupport.command(floatingEditor, "focusEnd")
+        try MilkdownTestSupport.command(floatingEditor, "insertText", ["text": "新增"])
         InspectorPanelTestSupport.settle(owner)
-        let refreshed = try XCTUnwrap(editors(in: host).first { !$0.isEditable })
-        XCTAssertTrue(refreshed.string.contains("新增"), "预览应跟随浮窗内容更新")
-        XCTAssertFalse(refreshed.isEditable)
+        let refreshed = try MilkdownTestSupport.editor(in: host, readOnly: true)
+        try MilkdownTestSupport.wait("只读正文未跟随浮窗更新") { refreshed.document.plainText.contains("新增") }
+        XCTAssertTrue(refreshed.document.plainText.contains("新增"), "预览应跟随浮窗内容更新")
+        XCTAssertFalse(!refreshed.isReadOnly)
     }
 
     func testFloatingTaskLeavesRichReadOnlyPreviewAndFreezesTitle() throws {
@@ -103,19 +99,18 @@ final class FloatingReadOnlyPreviewTests: XCTestCase {
 
         StickyNoteWindowController.shared.open(taskID: id)
         InspectorPanelTestSupport.settle(owner)
-        let preview = try XCTUnwrap(editors(in: host).first { !$0.isEditable },
-                                    "浮窗打开后任务详情应保留只读预览")
-        XCTAssertEqual(preview.string, "标题\n正文")
-        XCTAssertEqual(preview.textStorage?.attribute(DocumentTextCodec.blockKey, at: 0,
-                                                      effectiveRange: nil) as? String, "h1")
+        let preview = try MilkdownTestSupport.editor(in: host, readOnly: true)
+        XCTAssertEqual(preview.document.plainText, "标题\n正文")
+        XCTAssertEqual(try MilkdownTestSupport.script(preview, "document.querySelector('[data-wf-block]').dataset.kind") as? String, "heading")
         let readOnlyTitle = try XCTUnwrap(textFields(in: host).first { $0.accessibilityLabel() == "任务标题" })
         XCTAssertFalse(readOnlyTitle.isEditable, "浮窗接管期间标题也不能编辑")
         XCTAssertEqual(readOnlyTitle.stringValue, "浮窗只读")
 
         StickyNoteWindowController.shared.close(taskID: id)
         InspectorPanelTestSupport.settle(owner)
+        _ = try MilkdownTestSupport.editor(in: host, id: id, readOnly: false)
         let restoredTitle = try XCTUnwrap(textFields(in: host).first { $0.accessibilityLabel() == "任务标题" })
         XCTAssertTrue(restoredTitle.isEditable)
-        XCTAssertTrue(editors(in: host).contains { $0.isEditable && $0.documentIdentity == id })
+        XCTAssertTrue(editors(in: host).contains { !$0.isReadOnly && $0.documentIdentity == id })
     }
 }

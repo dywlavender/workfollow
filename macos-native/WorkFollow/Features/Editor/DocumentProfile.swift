@@ -8,17 +8,19 @@ struct DocumentCommand: Identifiable {
     var keywords: String = ""
     let perform: (NativeTextView) -> Void
     var performSlash: ((NativeTextView, SlashCommandInvocation) -> Void)?
+    var performWeb: (() -> Void)?
     var glyph: SlashGlyphKind?
     var resolvedGlyph: SlashGlyphKind { glyph ?? SlashGlyphKind.forCommand(id) }
 
     init(id: String, title: String, group: String, keywords: String = "",
-         perform: @escaping (NativeTextView) -> Void) {
+         web: (() -> Void)? = nil, perform: @escaping (NativeTextView) -> Void) {
         self.id = id
         self.title = title
         self.group = group
         self.keywords = keywords
         self.perform = perform
         self.performSlash = nil
+        self.performWeb = web
     }
 
     init(id: String, title: String, group: String, keywords: String = "",
@@ -30,6 +32,7 @@ struct DocumentCommand: Identifiable {
         self.keywords = keywords
         self.perform = perform
         self.performSlash = slash
+        self.performWeb = nil
         self.glyph = glyph
     }
 }
@@ -51,6 +54,32 @@ struct DocumentSelectionAction: Identifiable {
     var displayTitle: String { toolbarTitle ?? title }
 }
 
+/// `@` 提及候选（任务/笔记）。插入为 `@标题` 文本 + `workfollow://task|note/<id>`
+/// 链接 mark，反向面板扫文档里的这些链接。
+struct DocumentMention: Identifiable, Equatable {
+    enum Kind: String { case task, note }
+    let id: UUID
+    let kind: Kind
+    let title: String
+}
+
+enum DocumentMentionScanner {
+    /// 文档正文里 `@` 提及的资源链接，按出现顺序去重。反向面板靠它把正文里
+    /// 提到的任务并进关联区；非 `workfollow://` 链接一律忽略。
+    static func resourceLinks(in document: NativeDocument) -> [NativeResourceLink] {
+        var seen = Set<String>()
+        var result: [NativeResourceLink] = []
+        for run in document.blocks.flatMap(\.runs) {
+            for mark in run.marks {
+                guard case .link(let raw) = mark, let url = URL(string: raw),
+                      let link = NativeResourceLink(url: url), seen.insert(raw).inserted else { continue }
+                result.append(link)
+            }
+        }
+        return result
+    }
+}
+
 struct DocumentProfile {
     var commands: [DocumentCommand] = []
     var selectionActions: [DocumentSelectionAction] = []
@@ -67,6 +96,8 @@ struct DocumentProfile {
     /// （`prefixSymbal` 立即数 `0x7e`）。默认空 = 不启用。
     var listCandidates: () -> [String] = { [] }
     var onListInserted: (String) -> Void = { _ in }
+    /// `@` 提及补全（任务/笔记）：空 = 不启用（`@` 不弹浮层）。
+    var mentionCandidates: () -> [DocumentMention] = { [] }
     /// 粘贴文件（TI2-03 剩余项）：宿主负责落盘成附件；默认不处理。
     var onPasteFiles: (([URL]) -> Void)?
     /// 检查项行内控件：行号按换行切分，与 `NativeDocument.blocks` 对齐。
@@ -87,6 +118,11 @@ struct DocumentProfile {
     /// （六种标题都在），而 Slash 菜单实测只有 12 项、标题到 H3。共用一份会让块菜单
     /// 少掉 H4–H6，所以这里单独给。
     var blockMenuCommands: [DocumentCommand]?
+    /// 选中文字的 AI 动作接管点。宿主（笔记页 / 浮窗笔记）可以把选区快照
+    /// 送进右侧 AI 栏输出并回写；返回 true 表示已接管，编辑器不再打开独立选区浮窗。
+    /// nil 或返回 false 保持原来的浮窗路径，任务详情与测试宿主不受影响。
+    /// 传的是快照而不是选中字符串：焦点离开编辑器后仍要能重建原选区。
+    var onSelectionAI: ((AISelectionTarget, AIConversationPreset) -> Bool)?
     var supportsSelectionToolbar: Bool {
         selectionToolbarEnabled ?? (!taskSlash && !selectionActions.isEmpty)
     }

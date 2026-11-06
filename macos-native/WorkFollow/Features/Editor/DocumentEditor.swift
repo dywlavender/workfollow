@@ -37,6 +37,7 @@ struct EditorReference {
 
 @MainActor
 final class DocumentEditorHandle: ObservableObject {
+    weak var webView: MilkdownWebView?
     weak var textView: NativeTextView?
     weak var coordinator: DocumentEditorCoordinator?
     /// 工具条据此显示激活态；选区变化与每次格式化后都会重算。
@@ -57,6 +58,21 @@ final class DocumentEditorHandle: ObservableObject {
     private var painterWorkItem: DispatchWorkItem?
     private var observedUndoManager: UndoManager?
     private var undoObservers: [NSObjectProtocol] = []
+    var documentIdentity: UUID? { webView?.documentIdentity ?? textView?.documentIdentity }
+    var hasAttachedEditor: Bool { webView?.window != nil || textView?.window != nil }
+
+    func updateFromWeb(_ value: MilkdownSelection) {
+        if viewUpdateDepth > 0 {
+            DispatchQueue.main.async { [weak self] in self?.updateFromWeb(value) }; return
+        }
+        let next = DocumentSelectionStyle(blockToken: value.style.blockToken,
+            marks: Set(value.style.marks.compactMap { try? MilkdownDocumentCodec.decodeMark($0) }),
+            indentLevel: value.style.indentLevel, align: value.style.align, bodySize: value.style.bodySize)
+        if next != style { style = next }
+        setUndoState(canUndo: value.canUndo, canRedo: value.canRedo)
+        syncLiveTextIsEmpty(value.empty)
+        if let active = value.formatPainterActive, active != formatPainterActive { formatPainterActive = active }
+    }
 
     // AppKit emits selection callbacks while SwiftUI installs/rebinds storage.
     // Publish the final toolbar style after that update, not its transient styles.
@@ -81,6 +97,7 @@ final class DocumentEditorHandle: ObservableObject {
 
     func prepareForDocumentChange() {
         cancelFormatPainter()
+        if let webView { webView.prepareForDocumentChange(); return }
         guard let textView, let coordinator,
               textView.documentIdentity == coordinator.documentID else { return }
         coordinator.prepareForDocumentChange(in: textView)
@@ -90,6 +107,7 @@ final class DocumentEditorHandle: ObservableObject {
     func replaceDocument(_ document: NativeDocument,
                          commit: @escaping (NativeDocument) -> Void,
                          inverseCommit: @escaping (NativeDocument) -> Void) -> Bool {
+        if let webView { return webView.insert(document, whole: true, commit: commit, inverse: inverseCommit) }
         prepareForDocumentChange()
         guard let textView, let storage = textView.textStorage else { return false }
         let accepted = textView.replaceDocumentContent(textView.renderDocument(document),
@@ -99,6 +117,7 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func format(_ command: DocumentFormatCommand) {
+        if let webView { webView.perform("format", payload: ["id": String(command.id.dropFirst(7))]); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.applyFormat(command)
@@ -108,16 +127,19 @@ final class DocumentEditorHandle: ObservableObject {
     // MARK: 基础格式批：撤销 / 清除 / 对齐 / 缩进 / 颜色 / 格式刷
 
     func undo() {
+        if let webView { webView.perform("undo"); return }
         textView?.undoDocumentEdit()
         refreshStyle()
     }
 
     func redo() {
+        if let webView { webView.perform("redo"); return }
         textView?.redoDocumentEdit()
         refreshStyle()
     }
 
     func clearFormatting() {
+        if let webView { webView.perform("clear"); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.clearFormatting()
@@ -125,6 +147,7 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func applyAlignment(_ alignment: DocumentAlignment) {
+        if let webView { webView.perform("align", payload: ["value": alignment.rawValue]); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.applyAlignment(alignment)
@@ -132,6 +155,7 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func adjustIndent(by delta: Int) {
+        if let webView { webView.perform("indent", payload: ["delta": delta]); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.adjustIndent(by: delta)
@@ -139,6 +163,7 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func applyTextColor(_ hex: String?) {
+        if let webView { webView.perform("color", payload: ["value": hex.map { $0 as Any } ?? NSNull()]); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.applyTextColor(hex)
@@ -146,6 +171,7 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func applyHighlightColor(_ hex: String?) {
+        if let webView { webView.perform("highlight", payload: ["value": hex.map { $0 as Any } ?? NSNull()]); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.applyHighlightColor(hex)
@@ -154,6 +180,7 @@ final class DocumentEditorHandle: ObservableObject {
 
     /// 工具条高亮按钮：已有高亮就清掉，否则铺默认黄色。
     func toggleHighlight() {
+        if webView != nil { applyHighlightColor(style.marks.hasAnyHighlight ? nil : DocumentColorPalette.defaultHighlight); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.applyHighlightColor(style.marks.hasAnyHighlight ? nil : DocumentColorPalette.defaultHighlight)
@@ -162,6 +189,11 @@ final class DocumentEditorHandle: ObservableObject {
 
     /// 点一次取当前选区样式，下一次选区落定后应用并退出。
     func toggleFormatPainter() {
+        if let webView {
+            if formatPainterActive { cancelFormatPainter() }
+            else { formatPainterActive = true; webView.perform("captureStyle") }
+            return
+        }
         if formatPainterActive {
             cancelFormatPainter()
             return
@@ -175,6 +207,7 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func cancelFormatPainter() {
+        if formatPainterActive { webView?.perform("cancelPainter") }
         painterWorkItem?.cancel()
         painterWorkItem = nil
         painterStyle = nil
@@ -251,6 +284,7 @@ final class DocumentEditorHandle: ObservableObject {
     /// 从当前选区重算样式。空选区读 `typingAttributes`——那正是"接下来输入会是什么
     /// 样式"，所以空文档里点段落格式也能在工具条上看到反馈（原版同理）。
     func refreshStyle() {
+        if let webView { if let selection = webView.selection { updateFromWeb(selection) }; return }
         if viewUpdateDepth > 0 {
             guard !styleRefreshScheduled else { return }
             styleRefreshScheduled = true
@@ -276,11 +310,13 @@ final class DocumentEditorHandle: ObservableObject {
     }
 
     func focusEditor() {
+        if let webView { webView.focus(); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
     }
 
     func revealChecklistLine(_ line: Int) {
+        if let webView { webView.perform("revealBlock", payload: ["index": line]); return }
         textView?.revealChecklistLine(line)
         refreshStyle()
     }
@@ -288,6 +324,11 @@ final class DocumentEditorHandle: ObservableObject {
     /// `nil` 表示编辑器还没换上目标文档（调用方可稍后重试）；`false` 表示正文
     /// 里没有该词（例如只命中标题），无需继续等待。
     func revealSearchMatch(_ query: String, documentID: UUID) -> Bool? {
+        if let webView {
+            guard webView.documentIdentity == documentID, webView.isDocumentReady else { return nil }
+            guard webView.document.plainText.localizedCaseInsensitiveContains(query) else { return false }
+            webView.perform("search", payload: ["query": query]); return true
+        }
         guard let textView, textView.documentIdentity == documentID else { return nil }
         refreshStyle()
         return textView.revealSearchMatch(query)
@@ -296,27 +337,48 @@ final class DocumentEditorHandle: ObservableObject {
     /// 窗口失去 key（例如用户去滚 PDF）时，中文输入法可能还停在组合串；
     /// 先把未上屏内容提交给模型，避免切回来时丢字。
     func flushPendingComposition() {
+        if let webView { webView.prepareForDocumentChange(); return }
         guard let textView, let coordinator else { return }
         coordinator.flushPendingComposition(in: textView)
     }
 
     func focusEnd() {
+        if let webView { webView.focus(end: true); return }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
         textView.scrollRangeToVisible(textView.selectedRange())
     }
 
-    func editLink() { textView?.editDocumentLink(nil); refreshStyle() }
-    func removeLink() { textView?.removeDocumentLink(nil); refreshStyle() }
-    func insertAttachment() { textView?.insertDocumentAttachment(nil); refreshStyle() }
-    func insertImage() { textView?.insertDocumentImage(nil); refreshStyle() }
-    func insertDiagram() { textView?.insertDocumentDiagram(at: nil); refreshStyle() }
-    func insertTable() { textView?.insertDocumentTable(at: nil); refreshStyle() }
-    func insertFormula() { textView?.insertDocumentFormula(at: nil); refreshStyle() }
-    func insertTime(format: String) { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format); refreshStyle() }
-    func insertDivider() { textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider(); refreshStyle() }
+    /// 标题回车接力：光标落到正文第一行末尾；第一行空着时就是行首。
+    func focusFirstLine() {
+        if let webView { webView.focusFirstLine(); return }
+        guard let textView else { return }
+        let text = textView.string as NSString
+        let newline = text.range(of: "\n")
+        let end = newline.location == NSNotFound ? text.length : newline.location
+        textView.setSelectedRange(NSRange(location: end, length: 0))
+        textView.window?.makeFirstResponder(textView)
+        textView.scrollRangeToVisible(textView.selectedRange())
+    }
+
+    func editLink() { if let webView { webView.editLink(); return }; textView?.editDocumentLink(nil); refreshStyle() }
+    func removeLink() { if let webView { webView.perform("link", payload: ["value": NSNull()]); return }; textView?.removeDocumentLink(nil); refreshStyle() }
+    func insertAttachment() { if let webView { webView.chooseAttachments(); return }; textView?.insertDocumentAttachment(nil); refreshStyle() }
+    func insertImage() { if let webView { webView.chooseImage(); return }; textView?.insertDocumentImage(nil); refreshStyle() }
+    func insertDiagram() { if let webView { webView.editDiagram(); return }; textView?.insertDocumentDiagram(at: nil); refreshStyle() }
+    func insertTable() { if let webView { webView.insertTable(); return }; textView?.insertDocumentTable(at: nil); refreshStyle() }
+    func insertFormula() { if let webView { webView.insertFormula(); return }; textView?.insertDocumentFormula(at: nil); refreshStyle() }
+    func insertTime(format: String) {
+        if let webView { let date = DateFormatter(); date.dateFormat = format; webView.perform("insertText", payload: ["text": date.string(from: Date())]); return }
+        textView?.window?.makeFirstResponder(textView); textView?.insertDocumentTime(format: format); refreshStyle()
+    }
+    func insertDivider() { if let webView { webView.perform("insertDivider"); return }; textView?.window?.makeFirstResponder(textView); textView?.insertDocumentDivider(); refreshStyle() }
     func insertReference(_ reference: EditorReference) {
+        if let webView {
+            _ = webView.insert(NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [.init(text: reference.title, marks: [.link(reference.target)])])]))
+            return
+        }
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         let content = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
@@ -331,6 +393,10 @@ final class DocumentEditorHandle: ObservableObject {
     func insertReference(_ reference: EditorReference,
                          commit: @escaping (NativeDocument) -> Void,
                          undoCommit: @escaping (NativeDocument) -> Void) -> Bool {
+        if let webView {
+            return webView.insert(NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [.init(text: reference.title, marks: [.link(reference.target)])])]),
+                commit: commit, inverse: undoCommit)
+        }
         guard let textView else { return false }
         textView.window?.makeFirstResponder(textView)
         let range = textView.selectedRange()
@@ -409,7 +475,7 @@ struct DocumentEditor: View {
     var body: some View {
         DocumentBodyFontSizeReader { bodyFontSize in
             if let ready = try? document.materialized() {
-            DocumentEditorContent(documentID: documentID, document: ready,
+            MilkdownDocumentEditorView(documentID: documentID, document: ready,
                                   onDocumentChange: onDocumentChange, onEscape: onEscape,
                                   onEditingChanged: onEditingChanged, profile: profile,
                                   contentSized: contentSized, handle: handle,
@@ -431,155 +497,5 @@ private struct DocumentBodyFontSizeReader<Content: View>: View {
 
     var body: some View {
         content(EditorPreferences.clampedBodyFontSize(CGFloat(storedSize)))
-    }
-}
-
-private struct DocumentEditorContent: NSViewRepresentable {
-    let documentID: UUID
-    let document: NativeDocument
-    let onDocumentChange: (NativeDocument) -> Void
-    let onEscape: () -> InspectorEscapeEffect
-    let onEditingChanged: (Bool) -> Void
-    var profile = DocumentProfile()
-    var contentSized = false
-    var handle: DocumentEditorHandle?
-    var decorationVisibleMinX: CGFloat = 0
-    var readOnly = false
-    var bodyFontSize: CGFloat = EditorPreferences.defaultBodyFontSize
-
-    func makeCoordinator() -> DocumentEditorCoordinator {
-        let coordinator = DocumentEditorCoordinator(documentID: documentID, document: document,
-                                                    onDocumentChange: onDocumentChange,
-                                                    onEscape: onEscape,
-                                                    onEditingChanged: onEditingChanged)
-        coordinator.handle = handle
-        return coordinator
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        handle?.beginViewUpdate()
-        defer { handle?.endViewUpdate() }
-        let textView = NativeTextView(frame: .zero, textContainer: nil)
-        textView.paragraphSpacingOverride = profile.paragraphSpacing
-        textView.appliedBodyFontSize = bodyFontSize
-        textView.decorationVisibleMinX = decorationVisibleMinX
-        textView.documentIdentity = documentID
-        // 只读预览仍可选中/复制，但不能输入、勾选或打开块菜单。
-        textView.isEditable = !readOnly
-        textView.isSelectable = true
-        textView.delegate = context.coordinator
-        textView.textStorage?.setAttributedString(textView.renderDocument(document))
-        textView.seedTrailingParagraphKind(document.blocks.last.flatMap { block in
-            block.runs.allSatisfy { $0.text.isEmpty } ? block.kind : nil
-        }, indentLevel: document.blocks.last?.indentLevel ?? 0,
-           listStart: document.blocks.last?.listStart)
-        context.coordinator.didLoadDocument(in: textView, reparseInline: true)
-        textView.onEscape = onEscape
-        textView.onCancelTransient = { [weak handle] in
-            guard handle?.formatPainterActive == true else { return false }
-            handle?.cancelFormatPainter()
-            return true
-        }
-        textView.onEditingChanged = onEditingChanged
-        textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
-        textView.onLiveTextChange = { [weak textView, weak coordinator = context.coordinator] in
-            guard let textView, let coordinator else { return }
-            coordinator.handle?.syncLiveTextIsEmpty(textView.string.isEmpty)
-        }
-        textView.profile = profile
-        textView.autoresizingMask = [.width]
-        handle?.textView = textView
-        handle?.coordinator = context.coordinator
-        handle?.refreshStyle()
-        // Content-sized editors belong to their host's scroll view. A second
-        // scroll viewport is unnecessary and competes for input ownership.
-        if contentSized {
-            textView.usesHostScrollView = true
-            textView.isVerticallyResizable = false
-            textView.minSize.height = 48
-            return textView
-        }
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
-        CompactScrollStyle.apply(to: scrollView)
-        scrollView.focusRingType = .none
-        scrollView.documentView = textView
-        return scrollView
-    }
-
-    private static func editor(in view: NSView) -> NativeTextView? {
-        (view as? NativeTextView) ?? ((view as? NSScrollView)?.documentView as? NativeTextView)
-    }
-
-    func updateNSView(_ view: NSView, context: Context) {
-        guard let textView = Self.editor(in: view) else { return }
-        handle?.beginViewUpdate()
-        defer { handle?.endViewUpdate() }
-        textView.decorationVisibleMinX = decorationVisibleMinX
-        textView.isEditable = !readOnly
-        handle?.textView = textView
-        handle?.coordinator = context.coordinator
-        context.coordinator.handle = handle
-        textView.onSelectionChanged = { [weak handle] in handle?.selectionDidChange() }
-        textView.onLiveTextChange = { [weak textView, weak coordinator = context.coordinator] in
-            guard let textView, let coordinator else { return }
-            coordinator.handle?.syncLiveTextIsEmpty(textView.string.isEmpty)
-        }
-        textView.onCancelTransient = { [weak handle] in
-            guard handle?.formatPainterActive == true else { return false }
-            handle?.cancelFormatPainter()
-            return true
-        }
-        // 段距随 profile 变；先落到 textView，再让协调器按新节奏重建。
-        textView.paragraphSpacingOverride = profile.paragraphSpacing
-        let fontSizeChanged = textView.appliedBodyFontSize != bodyFontSize
-        textView.appliedBodyFontSize = bodyFontSize
-        context.coordinator.update(textView, documentID: documentID, document: document,
-                                   onDocumentChange: onDocumentChange,
-                                   onEscape: onEscape,
-                                   onEditingChanged: onEditingChanged)
-        if fontSizeChanged {
-            // 提交组合串可能回写模型，排到本轮更新之外再重排。
-            DispatchQueue.main.async { [weak textView, weak coordinator = context.coordinator, weak handle] in
-                guard let textView, let coordinator,
-                      textView.documentIdentity == coordinator.documentID else { return }
-                coordinator.reloadBodyTypography(in: textView)
-                handle?.refreshStyle()
-            }
-        }
-        // Flush the outgoing document with its own host actions before rebinding.
-        textView.profile = profile
-        if contentSized { textView.invalidateIntrinsicContentSize() }
-        // Refresh after model/selection rebind, not from the outgoing document.
-        handle?.refreshStyle()
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView,
-                      context: Context) -> CGSize? {
-        guard contentSized, let width = proposal.width, width > 0,
-              let textView = Self.editor(in: nsView),
-              let container = textView.textContainer,
-              let layout = textView.textLayoutManager else { return nil }
-        textView.setFrameSize(NSSize(width: width, height: textView.frame.height))
-        textView.resizeDocumentDividers()
-        // 容器宽 = 视图宽 − 左右 textContainerInset（与 widthTracksTextView 的
-        // 自动口径一致），否则行宽会超出视图右缘 20pt。
-        container.containerSize = NSSize(
-            width: max(1, width - textView.textContainerInset.width * 2),
-            height: .greatestFiniteMagnitude)
-        layout.ensureLayout(for: NSRect(origin: .zero, size: container.containerSize))
-        let bottom = layout.usageBoundsForTextContainer.maxY
-        let height = max(48, ceil(bottom + textView.textContainerInset.height * 2 + 8))
-        textView.setFrameSize(NSSize(width: width, height: height))
-        textView.revealCaretInHostAfterLayout()
-        return CGSize(width: width, height: height)
-    }
-
-    static func dismantleNSView(_ view: NSView, coordinator: DocumentEditorCoordinator) {
-        guard let textView = editor(in: view) else { return }
-        coordinator.detach(textView)
     }
 }

@@ -20,17 +20,11 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         return (environment, directory)
     }
 
-    private func editor(in panel: FloatingEditorPanel) throws -> NativeTextView {
-        InspectorPanelTestSupport.settle(panel)
-        try InspectorPanelTestSupport.waitUntil("Native floating editor did not load") {
-            panel.editorHandle.textView?.window === panel
-        }
-        return try XCTUnwrap(panel.editorHandle.textView)
+    private func editor(in panel: FloatingEditorPanel) throws -> MilkdownWebView {
+        try MilkdownTestSupport.editor(in: try XCTUnwrap(panel.contentView))
     }
 
-    private func editors(in view: NSView) -> [NativeTextView] {
-        ([view as? NativeTextView].compactMap { $0 }) + view.subviews.flatMap { editors(in: $0) }
-    }
+    private func editors(in view: NSView) -> [MilkdownWebView] { MilkdownTestSupport.editors(in: view) }
 
     func testNotesTopButtonOpensNativeFloatingEditorAndReturnsOwnership() throws {
         let (environment, _) = try fixture()
@@ -75,8 +69,8 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         XCTAssertEqual(task.minSize, note.minSize)
         XCTAssertEqual(task.collectionBehavior, note.collectionBehavior)
         let taskEditor = try editor(in: task), noteEditor = try editor(in: note)
-        taskEditor.insertText("任务正文", replacementRange: taskEditor.selectedRange())
-        noteEditor.insertText("笔记正文", replacementRange: noteEditor.selectedRange())
+        try MilkdownTestSupport.command(taskEditor, "insertText", ["text": "任务正文"])
+        try MilkdownTestSupport.command(noteEditor, "insertText", ["text": "笔记正文"])
         XCTAssertEqual(environment.taskWorkspace.task(for: taskID)?.document.plainText, "任务正文")
         XCTAssertEqual(environment.notesWorkspace.notes.first { $0.id == noteID }?.document.plainText, "笔记正文")
         StickyNoteWindowController.shared.closeAll()
@@ -93,21 +87,22 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, environment: environment)
         let owner = InspectorPanelTestSupport.ownerWindow(for: host)
         defer { windows.closeAll(); owner.close() }
-        let mainEditor = try XCTUnwrap(editors(in: host).first { $0.documentIdentity == id })
-        mainEditor.setMarkedText("切出组合", selectedRange: NSRange(location: 4, length: 0),
-                                 replacementRange: mainEditor.selectedRange())
+        let mainEditor = try MilkdownTestSupport.editor(in: host, id: id)
+        let client = try MilkdownTestSupport.inputClient(mainEditor)
+        client.setMarkedText("切出组合", selectedRange: NSRange(location: 4, length: 0), replacementRange: client.selectedRange())
+        InspectorPanelTestSupport.settle(owner)
         try InspectorPanelTestSupport.clickButton(containing: "打开浮窗", in: owner)
         let floating = try XCTUnwrap(windows.panel(for: .task(id)))
         let editor = try editor(in: floating)
         InspectorPanelTestSupport.settle(owner)
         XCTAssertFalse(editors(in: host).contains { $0.documentIdentity == id })
-        XCTAssertEqual(editor.string, "切出组合")
-        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-        editor.insertText("回到主页后保留", replacementRange: editor.selectedRange())
+        XCTAssertEqual(editor.document.plainText, "切出组合")
+        try MilkdownTestSupport.command(editor, "focusEnd")
+        try MilkdownTestSupport.command(editor, "insertText", ["text": "回到主页后保留"])
         StickyNoteWindowController.shared.close(taskID: id)
         InspectorPanelTestSupport.settle(owner)
-        let restored = try XCTUnwrap(editors(in: host).first { $0.documentIdentity == id })
-        XCTAssertEqual(restored.string, "切出组合回到主页后保留")
+        let restored = try MilkdownTestSupport.editor(in: host, id: id)
+        XCTAssertEqual(restored.document.plainText, "切出组合回到主页后保留")
     }
 
     func testNoteCloseCommitsCompositionAndPersistsRichDocument() throws {
@@ -122,9 +117,10 @@ final class FloatingEditorIntegrationTests: XCTestCase {
         FloatingNoteWindowController.shared.open(noteID: id)
         let panel = try XCTUnwrap(windows.panel(for: .note(id)))
         let editor = try editor(in: panel)
-        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-        editor.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0),
-                             replacementRange: editor.selectedRange())
+        try MilkdownTestSupport.command(editor, "focusEnd")
+        let client = try MilkdownTestSupport.inputClient(editor)
+        client.setMarkedText("组合输入", selectedRange: NSRange(location: 4, length: 0), replacementRange: client.selectedRange())
+        InspectorPanelTestSupport.settle(panel)
         FloatingNoteWindowController.shared.close(noteID: id)
         let saved = expectation(description: "Floating note persisted")
         environment.flush { error in XCTAssertNil(error); saved.fulfill() }

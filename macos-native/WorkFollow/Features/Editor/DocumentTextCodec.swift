@@ -276,7 +276,7 @@ enum DocumentTextCodec {
                         // 粘贴图片以 data URL 存在附件里（NativeDocument 暂无图片块类型），
                         // 渲染成真实图片；其余附件保持 📎 文本单元。
                         attachment.image = image
-                        attachment.bounds = Self.imageBounds(for: image)
+                        attachment.bounds = Self.imageBounds(for: image, attachment: file)
                     } else {
                         let cell = NSTextAttachmentCell(textCell: "📎 " + file.name)
                         attachment.attachmentCell = cell
@@ -546,8 +546,12 @@ extension DocumentTextCodec {
         return NSImage(data: data)
     }
 
-    /// 等比放入正文宽度内：上限 480×320，小图保持原尺寸不放大。
-    static func imageBounds(for image: NSImage) -> NSRect {
+    /// 显示尺寸：用户拖动过就用保存的尺寸，否则等比放入正文宽度内
+    /// （上限 480×320，小图保持原尺寸不放大）。
+    static func imageBounds(for image: NSImage, attachment: NativeAttachment? = nil) -> NSRect {
+        if let size = attachment?.displaySize {
+            return NSRect(x: 0, y: 0, width: ceil(size.width), height: ceil(size.height))
+        }
         var size = image.size
         guard size.width > 0, size.height > 0 else { return NSRect(x: 0, y: 0, width: 1, height: 1) }
         let maximum = NSSize(width: 480, height: 320)

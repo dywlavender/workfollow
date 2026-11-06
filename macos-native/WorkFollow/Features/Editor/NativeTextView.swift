@@ -37,6 +37,12 @@ final class NativeTextView: NSTextView {
     var checklistReminderPanel: ChecklistItemReminderPanel?
     /// 鼠标悬停的检查项行号；行尾铃铛/删除跟随悬停行显示（滴答 `TTHoverableImageView`）。
     var hoveredChecklistLine: Int?
+    /// 图片拖动改尺寸的当前会话（见 `DocumentImageResize.swift`）。
+    var imageResizeSession: ImageResizeSession?
+    /// 最近一次指针位置（视图坐标），供手柄绘制判断"指针是否在这张图片上"。
+    var imageResizeProbePoint: NSPoint?
+    /// 缩放光标是否已接管（离开手柄时还原成箭头）。
+    var imageResizeCursorActive = false
     private var linkTrackingArea: NSTrackingArea?
     private var lastBoundsOrigin: NSPoint?
     /// 斜杠面板"跟着滚动与窗口变化走"用的通知观察者（见 `startFollowingSlash`）。
@@ -147,6 +153,9 @@ final class NativeTextView: NSTextView {
         displayedTrailingListStart = nil
         displayedTrailingAlign = nil
         hoveredChecklistLine = nil
+        // 切文档/拆卸时丢弃进行中的图片拖动，避免把尺寸写到另一篇正文上。
+        imageResizeSession = nil
+        imageResizeProbePoint = nil
         lastBoundsOrigin = nil
         needsHostCaretReveal = false
         documentCommandCommit = nil
@@ -303,7 +312,76 @@ final class NativeTextView: NSTextView {
     override func draw(_ dirtyRect: NSRect) {
         drawInlineCodeChips(in: dirtyRect)
         drawCodeBlockBackgrounds(in: dirtyRect)
+        drawSelectionUnderText(in: dirtyRect)
         super.draw(dirtyRect)
+        // 手柄画在文字之上，否则会被图片附件自身覆盖掉。
+        drawImageResizeHandles(in: dirtyRect)
+    }
+
+    /// 自绘选中底色：逐字取矩形拼出选中区（同行的相邻矩形合并），并把每行
+    /// 左端裁到该行文字起点，行首沟槽（角标 / 列表标记）不再被选中色盖住。
+    /// 系统底色已在 init 里置空（selectedTextAttributes = [:]）。
+    private func drawSelectionUnderText(in dirtyRect: NSRect) {
+        guard let storage = textStorage else { return }
+        let selection = selectedRange()
+        let end = min(NSMaxRange(selection), storage.length)
+        guard selection.length > 0, selection.location < end else { return }
+        (window?.firstResponder === self
+            ? NSColor.selectedTextBackgroundColor
+            : NSColor.unemphasizedSelectedTextBackgroundColor).setFill()
+        var pending: NSRect?
+        var pendingStart = selection.location
+        var index = selection.location
+        while index < end {
+            var actual = NSRange(location: NSNotFound, length: 0)
+            let rect = firstRect(forCharacterRange: NSRange(location: index, length: 1),
+                                 actualRange: &actual)
+            if let current = pending,
+               abs(current.minY - rect.minY) < 0.5, rect.minX <= current.maxX + 0.5 {
+                pending = current.union(rect)
+            } else {
+                if let current = pending {
+                    fillSelectionTrimmed(current, lineStartCharAt: pendingStart, storage: storage)
+                }
+                pending = rect
+                pendingStart = index
+            }
+            // actual 不前进（零宽字符 / 未布局）时也要步进，避免死循环。
+            index = actual.length > 0 ? NSMaxRange(actual) : index + 1
+        }
+        if let current = pending {
+            fillSelectionTrimmed(current, lineStartCharAt: pendingStart, storage: storage)
+        }
+    }
+
+    /// 一行的选中矩形：左端裁到该行文字起点。charIndex 只在「是这一行第一个
+    /// 字形」时才会影响结果（mid-line 时裁剪是空操作），所以按它所在行首算缩进。
+    private func fillSelectionTrimmed(_ rect: NSRect, lineStartCharAt charIndex: Int,
+                                      storage: NSTextStorage) {
+        let source = storage.string as NSString
+        // 行首字符：向前找最近一个换行
+        var lineStart = charIndex
+        if lineStart > 0 {
+            let newline = source.rangeOfCharacter(
+                from: .newlines, options: .backwards,
+                range: NSRange(location: 0, length: lineStart))
+            if newline.location != NSNotFound {
+                lineStart = NSMaxRange(newline)
+            }
+        }
+        let safeIndex = min(lineStart, source.length - 1)
+        let paragraph = source.paragraphRange(for: NSRange(location: safeIndex, length: 0))
+        guard let style = storage.attribute(.paragraphStyle, at: safeIndex, effectiveRange: nil)
+            as? NSParagraphStyle else {
+            rect.fill()
+            return
+        }
+        // 行首落在段落起始 → 首行缩进；换行折出的续行 → headIndent
+        let indent = paragraph.location == lineStart ? style.firstLineHeadIndent : style.headIndent
+        let textStartX = textContainerOrigin.x + indent
+        let minX = max(rect.minX, textStartX)
+        guard rect.maxX > minX else { return }
+        NSRect(x: minX, y: rect.minY, width: rect.maxX - minX, height: rect.height).fill()
     }
 
     /// 整篇重新着色（外观切换 / 加载完成时用）。
@@ -505,12 +583,27 @@ final class NativeTextView: NSTextView {
             // 格式工具条叠在正文上方，跟踪区仍会收到 mouseMoved；留箭头。
             updateChecklistHover(at: nil)
             updateAttachmentHover(at: nil)
+            imageResizeProbePoint = nil
             NSCursor.arrow.set()
             hideLinkHoverMenu()
             return
         }
         let point = convert(event.locationInWindow, from: nil)
+        imageResizeProbePoint = point
         updateChecklistHover(at: point)
+        // 图片右下角手柄优先：命中就换成缩放光标，不再走链接/附件悬停。
+        if updateImageResizeCursor(at: point) {
+            updateAttachmentHover(at: nil)
+            hideLinkHoverMenu()
+            needsDisplay = true
+            return
+        }
+        // 离开手柄：撤销上一步设置的缩放光标，否则会一直停在双向箭头上。
+        if imageResizeCursorActive {
+            imageResizeCursorActive = false
+            NSCursor.arrow.set()
+        }
+        needsDisplay = true
         if updateAttachmentHover(at: point) {
             hideLinkHoverMenu()
             return
@@ -540,6 +633,10 @@ final class NativeTextView: NSTextView {
         hideLinkHoverMenu()
         updateChecklistHover(at: nil)
         updateAttachmentHover(at: nil)
+        if imageResizeProbePoint != nil {
+            imageResizeProbePoint = nil
+            needsDisplay = true
+        }
     }
 
     private var attachmentHoverActive = false
@@ -642,10 +739,17 @@ final class NativeTextView: NSTextView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        mouseSelecting = true
         dismissSlash()
         dismissTagCompletion()
         hideLinkHoverMenu()
         dismissChecklistReminderPanel()
+        // 图片右下角手柄：按下就开始拖动改尺寸，不移动插入点、不进入选字流程。
+        let imageResizePoint = convert(event.locationInWindow, from: nil)
+        if beginImageResize(at: imageResizePoint) {
+            window?.makeFirstResponder(self)
+            return
+        }
         if openBlockMenu(at: convert(event.locationInWindow, from: nil)) { return }
         // 文档复选框在任务与笔记两个面都可点（原版 `DocumentCheckboxBuilder` 挂在
         // 共享文档样式上，不分面）。
@@ -694,6 +798,27 @@ final class NativeTextView: NSTextView {
         // not the outgoing SwiftUI field editor.
         if isEditable { window?.makeFirstResponder(self) }
         super.mouseDown(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard imageResizeSession != nil else {
+            super.mouseDragged(with: event)
+            return
+        }
+        continueImageResize(to: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard imageResizeSession != nil else {
+            // 先复位再交给 super：拖动最后一帧定型时选区回调可能不再触发，
+            // 松开后显式刷新，浮条在选区完成后浮现。
+            mouseSelecting = false
+            super.mouseUp(with: event)
+            refreshSelectionToolbar()
+            return
+        }
+        endImageResize()
+        window?.invalidateCursorRects(for: self)
     }
 
     /// The plus is a menu trigger, not document content. Reuse a zero-length
@@ -1176,9 +1301,18 @@ final class NativeTextView: NSTextView {
     private var selectionContextActions: [DocumentSelectionAction] {
         var actions = profile.selectionActions
         if AISelectionWindowController.shared.isAvailable {
-            actions.append(DocumentSelectionAction(id: "ai.polish", title: "AI 润色", symbol: "sparkles") { [weak self] _ in
-                guard let self else { return }
-                AISelectionWindowController.shared.present(editor: self)
+            // 与 Milkdown 选区浮条同款三动作（路由同 AISelectionWindowController 预设）。
+            let aiActions: [(String, String, AIConversationPreset)] =
+                [("ai.polish", "AI 润色", .polish), ("ai.translate", "AI 翻译", .translate), ("ai.summarize", "AI 总结", .organize)]
+            actions.append(contentsOf: aiActions.map { id, title, intent in
+                DocumentSelectionAction(id: id, title: title, symbol: "sparkles") { [weak self] _ in
+                    guard let self else { return }
+                    // 焦点还没离开编辑器，先固定选区快照（range / 原文 / 文档身份）。
+                    // 右侧 AI 栏接管后由它输出并回写；没接管的宿主仍走独立选区浮窗。
+                    if let target = AISelectionTarget(editor: self),
+                       self.profile.onSelectionAI?(target, intent) == true { return }
+                    AISelectionWindowController.shared.present(editor: self, intent: intent)
+                }
             })
         }
         return actions
@@ -1189,6 +1323,8 @@ final class NativeTextView: NSTextView {
     /// Escape 或调用动作后压住浮条，直到选区再次变化（Flutter 的 selectionOverlaySuppressed）。
     var selectionToolbarSuppressed = false
     private var lastSelectionToolbarRange = NSRange(location: NSNotFound, length: 0)
+    /// 拖动选字期间压住浮条：选区回调在拖动中持续触发，松开鼠标才算选完。
+    private var mouseSelecting = false
 
     /// 选区变化时由协调器调用；非空选区 + 笔记 profile（有选区动作、非任务文档）浮现。
     func refreshSelectionToolbar() {
@@ -1199,7 +1335,7 @@ final class NativeTextView: NSTextView {
         }
         // 只读预览里选字只用于复制，不弹可修改格式的浮条。
         let eligible = isEditable && window != nil && !hasMarkedText() && range.length > 0
-            && profile.supportsSelectionToolbar
+            && profile.supportsSelectionToolbar && !mouseSelecting
             && !selectionContextActions.isEmpty && NSMaxRange(range) <= (string as NSString).length
         guard eligible, !selectionToolbarSuppressed else {
             closeSelectionPanel()
@@ -1341,6 +1477,9 @@ final class NativeTextView: NSTextView {
             }
         }
         if insertPastedImage() { return }
+        // 网页/浏览器复制图片：剪贴板只有 html 的远程 <img> + 同样的 URL 文本。
+        // 先把图取回来再按位图插入，否则会一路退化成"把图片地址粘进来"。
+        if fetchPastedRemoteImage() { return }
         if pasteExternalDocumentFragment(from: .general,
                                          destinationKind: currentParagraphKind() ?? .paragraph) { return }
         // 富文本粘贴：保留粗/斜/下划线/删除线/行内代码/链接这些**基础标记**，
@@ -1405,12 +1544,62 @@ final class NativeTextView: NSTextView {
     private func insertPastedImage() -> Bool {
         guard isEditable, NSPasteboard.general.data(forType: .fileURL) == nil,
               let raw = Self.pasteboardImageData() else { return false }
+        insertImageData(raw, name: "粘贴的图片.png")
+        return true
+    }
+
+    /// 位图字节 → data URL 附件并插入（粘贴截图与"网页远程图片取回"共用）。
+    private func insertImageData(_ raw: Data, name: String) {
+        insertImageData(raw, name: name, at: selectedRange())
+    }
+
+    /// 显式指定插入位置：远程取图是异步的，回来时选区可能已被用户改动。
+    private func insertImageData(_ raw: Data, name: String, at range: NSRange) {
         let dataURL = "data:image/png;base64," + Self.normalizedPNG(raw).base64EncodedString()
-        let attachment = NativeAttachment(id: UUID(), name: "粘贴的图片.png", storedName: dataURL)
+        let attachment = NativeAttachment(id: UUID(), name: name, storedName: dataURL)
+        // 异步回来时文档可能已切换/只读：放弃而不是插到别人的正文里。
+        guard isEditable, let window else { return }
+        window.makeFirstResponder(self)
         breakUndoCoalescing()
         undoManager?.beginUndoGrouping()
-        insertAttachments([attachment])
+        insertAttachments([attachment], replacing: range)
         undoManager?.endUndoGrouping()
+    }
+
+    /// 网页复制图片：剪贴板只有 html 里的远程 `<img>`（外加同样的 URL 文本）。
+    /// 把图取回来按位图粘贴；取不到才继续走后面的文本兜底。
+    ///
+    /// 返回 true 表示本次粘贴已被接管（可能是异步完成）。
+    private func fetchPastedRemoteImage() -> Bool {
+        guard isEditable, NSPasteboard.general.data(forType: .fileURL) == nil,
+              Self.pasteboardImageData() == nil,
+              let html = NSPasteboard.general.string(forType: .html),
+              let remote = DocumentExternalClipboardCodec.firstRemoteImageURL(inHTML: html)
+        else { return false }
+
+        let identity = documentIdentity
+        let target = selectedRange()
+        let name = remote.lastPathComponent.isEmpty ? "图片.png" : remote.lastPathComponent
+
+        // 本地 file:// 图片直接读；http(s) 才走网络。
+        if remote.isFileURL {
+            guard let data = try? Data(contentsOf: remote) else { return false }
+            insertImageData(data, name: name, at: target)
+            return true
+        }
+
+        var request = URLRequest(url: remote)
+        request.timeoutInterval = 15
+        request.setValue("image/*", forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
+            guard let data, !data.isEmpty,
+                  (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+                  NSImage(data: data) != nil else { return }
+            DispatchQueue.main.async {
+                guard let self, self.documentIdentity == identity else { return }
+                self.insertImageData(data, name: name, at: target)
+            }
+        }.resume()
         return true
     }
 
@@ -1489,7 +1678,27 @@ final class NativeTextView: NSTextView {
         if item.action == #selector(invokeSelectionAction(_:)) { return selectedRange().length > 0 }
         if item.action == #selector(undo(_:)) { return documentUndoManager.canUndo }
         if item.action == #selector(redo(_:)) { return documentUndoManager.canRedo }
+        // `importsGraphics = false`（见 init）把 public.png/tiff 排除在
+        // `readablePasteboardTypes` 之外，NSTextView 默认校验会对**纯图片剪贴板**
+        // （截图 ⌘⇧4 就只有 png+tiff）返回 false，⌘V 与菜单项随之变灰，
+        // `paste(_:)` 根本不会执行——正文里那条图片转 data URL 的逻辑因此从不可达。
+        // 这里按"我们自己的 paste 能处理这张剪贴板"重新判定，与
+        // `AIConversationInput` 的同类修法保持一致。
+        if item.action == #selector(NSText.paste(_:)), isEditable, hasPasteableContent {
+            return true
+        }
         return super.validateUserInterfaceItem(item)
+    }
+
+    /// 本编辑器的 `paste(_:)` 是否能消费当前剪贴板（含默认校验不认的位图）。
+    private var hasPasteableContent: Bool {
+        let board = NSPasteboard.general
+        if profile.onPasteFiles != nil,
+           board.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) {
+            return true
+        }
+        if Self.pasteboardImageData() != nil { return true }
+        return board.availableType(from: readablePasteboardTypes) != nil
     }
 
     override func becomeFirstResponder() -> Bool {
@@ -1649,6 +1858,9 @@ final class NativeTextView: NSTextView {
         backgroundColor = .clear
         textColor = NSColor(WFColors.documentText)
         insertionPointColor = NSColor(WFColors.documentText)
+        // 选中底色改为自绘（drawSelectionUnderText）：系统默认把整行片段连同
+        // headIndent 留出的行首沟槽一起涂色，蓝色会盖到角标/列表标记区。
+        selectedTextAttributes = [:]
         font = .systemFont(ofSize: EditorPreferences.bodyFontSize)
         // Empty documents must begin at the same origin as rendered paragraphs
         // and headings; NSTextView's default typing style has zero indent.

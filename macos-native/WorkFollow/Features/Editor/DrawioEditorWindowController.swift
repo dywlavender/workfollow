@@ -13,7 +13,7 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
     private let exportButton = NSButton(title: "导出 .drawio…", target: nil, action: nil)
     private let saveButton = NSButton(title: "保存并关闭", target: nil, action: nil)
     private let cancelButton = NSButton(title: "取消", target: nil, action: nil)
-    private let onSave: (NativeDiagram) -> Bool
+    private let onSave: @MainActor (NativeDiagram) async -> Bool
     private let onClose: () -> Void
     private let drawingID: UUID
     private var initialXML: String
@@ -27,7 +27,7 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
     private(set) var isModified = false
     private(set) var lastError: String?
 
-    init(diagram: NativeDiagram?, onSave: @escaping (NativeDiagram) -> Bool, onClose: @escaping () -> Void) {
+    init(diagram: NativeDiagram?, onSave: @escaping @MainActor (NativeDiagram) async -> Bool, onClose: @escaping () -> Void) {
         self.onSave = onSave
         self.onClose = onClose
         drawingID = diagram?.id ?? UUID()
@@ -166,20 +166,26 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
                 exportingSource = false; setControlsEnabled(true)
                 if let xml = payload["xml"] as? String { saveSource(xml) }
             } else if let pending = pendingSave {
-                pendingSave = nil; setControlsEnabled(true)
                 guard let uri = payload["data"] as? String, let data = Self.pngData(from: uri),
                       NSImage(data: data) != nil else {
+                    pendingSave = nil; setControlsEnabled(true)
                     showError("无法生成图表预览，请确认画布中有图形后重试。"); return
                 }
                 let diagram = NativeDiagram(id: drawingID, title: pending.title, xml: pending.xml, previewPNG: data)
-                guard onSave(diagram) else {
-                    showError("正文已变化，图表未能保存。请先导出 .drawio 文件保留修改。"); return
+                _Concurrency.Task { [weak self] in
+                    guard let self, !hasClosed else { return }
+                    let saved = await onSave(diagram)
+                    guard !hasClosed else { return }
+                    pendingSave = nil; setControlsEnabled(true)
+                    guard saved else {
+                        showError("正文已变化，图表未能保存。请先导出 .drawio 文件保留修改。"); return
+                    }
+                    initialXML = pending.xml; isModified = false; lastError = nil
+                    status.stringValue = "已保存到正文"
+                    status.textColor = .secondaryLabelColor
+                    send(["action": "status", "message": "已保存", "modified": false])
+                    if pending.exit { close() }
                 }
-                initialXML = pending.xml; isModified = false; lastError = nil
-                status.stringValue = "已保存到正文"
-                status.textColor = .secondaryLabelColor
-                send(["action": "status", "message": "已保存", "modified": false])
-                if pending.exit { close() }
             }
         case "exit":
             if let window, windowShouldClose(window) { close() }

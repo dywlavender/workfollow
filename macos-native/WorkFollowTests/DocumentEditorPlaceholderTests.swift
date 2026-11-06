@@ -7,10 +7,6 @@ import XCTest
 final class DocumentEditorPlaceholderTests: XCTestCase {
     private let bodyPlaceholder = "写下你的想法、会议记录或下一步行动…"
 
-    private func editor(in view: NSView) -> NativeTextView? {
-        if let editor = view as? NativeTextView { return editor }
-        return view.subviews.lazy.compactMap { self.editor(in: $0) }.first
-    }
 
     /// 实时空状态是排到下一轮 runloop 发布的，断言前先把它跑完。
     private func drainMainQueue() {
@@ -54,23 +50,19 @@ final class DocumentEditorPlaceholderTests: XCTestCase {
         try InspectorPanelTestSupport.waitUntil("空笔记应先显示正文占位") {
             titles.contains(bodyPlaceholder)
         }
-        let editor = try XCTUnwrap(editor(in: host))
-        window.makeFirstResponder(editor)
-        editor.setMarkedText("xing", selectedRange: NSRange(location: 4, length: 0),
-                             replacementRange: editor.selectedRange())
-        XCTAssertTrue(editor.hasMarkedText())
-        XCTAssertTrue(notes.notes.first?.document.isEmpty ?? false,
-                      "组合阶段模型里还没有提交任何字")
+        let editor = try MilkdownTestSupport.editor(in: host)
+        let client = try MilkdownTestSupport.inputClient(editor)
+        client.setMarkedText("xing", selectedRange: NSRange(location: 4, length: 0), replacementRange: client.selectedRange())
         InspectorPanelTestSupport.settle(window)
         XCTAssertFalse(titles.contains(bodyPlaceholder),
                        "拼音组合阶段占位文案就应让位，而不是等上屏提交")
 
-        editor.unmarkText()
+        client.unmarkText()
         InspectorPanelTestSupport.settle(window)
         XCTAssertFalse(titles.contains(bodyPlaceholder))
 
-        editor.selectAll(nil)
-        editor.deleteBackward(nil)
+        try MilkdownTestSupport.select(editor, NSRange(location: 0, length: editor.document.plainText.utf16.count))
+        try MilkdownTestSupport.command(editor, "insertText", ["text": ""])
         try InspectorPanelTestSupport.waitUntil("删空正文后占位文案应恢复") {
             titles.contains(bodyPlaceholder)
         }

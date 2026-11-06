@@ -65,7 +65,7 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
                                  font: .systemFont(ofSize: 15, weight: .semibold),
                                  accessibilityLabel: titleAccessibilityLabel,
                                  singleLine: true,
-                                 onSubmit: { editorHandle.focusEditor() })
+                                 onSubmit: { editorHandle.focusFirstLine() })
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, FloatingEditorMetrics.contentHorizontalPadding)
                 .frame(height: FloatingEditorMetrics.titleRowHeight)
@@ -114,7 +114,7 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
         .hidesSystemFocusEffect()
         .task {
             for _ in 0..<10 {
-                if editorHandle.textView?.window != nil {
+                if editorHandle.hasAttachedEditor {
                     if focusAtEnd { editorHandle.focusEnd() }
                     else { editorHandle.focusEditor() }
                     return

@@ -135,25 +135,72 @@ final class NativeTextViewTests: XCTestCase {
         editor.setSelectedRange(NSRange(location: 0, length: 2))
         editor.refreshSelectionToolbar()
         let host = try XCTUnwrap(editor.selectionPanel?.contentView
-            as? NSHostingView<DocumentSelectionToolbarView>)
-        XCTAssertEqual(host.rootView.textColorHex, "#ff3b30")
-        XCTAssertEqual(host.rootView.highlightHex, "#ffe58a")
+            as? NSHostingView<AnyView>)
+        func selectedMarks() -> Set<DocumentMark> {
+            DocumentTextCodec.style(of: editor.attributedString().attributedSubstring(from: editor.selectedRange())).marks
+        }
+        XCTAssertEqual(selectedMarks().textColorHex, "#ff3b30")
+        XCTAssertEqual(selectedMarks().highlightHex, "#ffe58a")
 
-        host.rootView.onTextColor("#0b7bff")
+        window.makeFirstResponder(editor)
+        editor.applyTextColor("#0b7bff")
+        editor.refreshSelectionToolbar()
         XCTAssertEqual(editor.textStorage?.attribute(DocumentTextCodec.textColorKey, at: 0,
                                                      effectiveRange: nil) as? String, "#0b7bff")
         let refreshed = try XCTUnwrap(editor.selectionPanel?.contentView
-            as? NSHostingView<DocumentSelectionToolbarView>)
+            as? NSHostingView<AnyView>)
         XCTAssertTrue(refreshed === host, "上色只换 rootView，不能重建浮条宿主")
-        XCTAssertEqual(refreshed.rootView.textColorHex, "#0b7bff")
+        XCTAssertEqual(selectedMarks().textColorHex, "#0b7bff")
         XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 2))
 
-        refreshed.rootView.onHighlightColor(nil)
+        editor.applyHighlightColor(nil)
+        editor.refreshSelectionToolbar()
         let cleared = try XCTUnwrap(editor.selectionPanel?.contentView
-            as? NSHostingView<DocumentSelectionToolbarView>)
-        XCTAssertNil(cleared.rootView.highlightHex)
+            as? NSHostingView<AnyView>)
+        XCTAssertTrue(cleared === host)
+        XCTAssertNil(selectedMarks().highlightHex)
         XCTAssertNil(editor.textStorage?.attribute(DocumentTextCodec.highlightColorKey,
                                                    at: 0, effectiveRange: nil))
+    }
+
+    func testSelectionToolbarWaitsUntilMouseUpDuringDrag() throws {
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 400, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let editor = NativeTextView(frame: window.contentLayoutRect, textContainer: nil)
+        window.contentView = editor
+        window.orderFront(nil)
+        defer { window.close() }
+        let coordinator = DocumentEditorCoordinator(documentID: UUID(), document: .empty,
+            onDocumentChange: { _ in }, onEscape: { .keepInspector }, onEditingChanged: { _ in })
+        editor.delegate = coordinator
+        editor.profile = NoteDocumentProfile.make(host: NoteEditorHostActions(createTaskFromSelection: { _ in }))
+        editor.onSelectionChanged = {}
+        editor.textStorage?.setAttributedString(
+            DocumentTextCodec.render(NativeDocument(plainText: "彩色正文待选内容")))
+        func mouse(_ type: NSEvent.EventType) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: type, location: NSPoint(x: 150, y: 150),
+                modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: type == .leftMouseUp ? 0 : 1))
+        }
+        // NSTextView 的 super.mouseDown 会同步跟踪鼠标直到 mouse-up；
+        // 先把 mouse-up 入队（同 InspectorPanelTestSupport.sendClick），防死锁。
+        let up = try mouse(.leftMouseUp)
+        NSApp.postEvent(up, atStart: true)
+        // 按住鼠标拖动选字：选区回调随拖动持续触发，浮条必须全程压住。
+        editor.mouseDown(with: try mouse(.leftMouseDown))
+        editor.setSelectedRange(NSRange(location: 0, length: 2))
+        XCTAssertNil(editor.selectionPanel, "拖动选字过程中不得弹出浮条")
+        editor.setSelectedRange(NSRange(location: 0, length: 4))
+        editor.refreshSelectionToolbar()
+        XCTAssertNil(editor.selectionPanel, "拖动中重复刷新仍须压住浮条")
+        // 松开鼠标：选区完成，浮条才浮现。
+        editor.mouseUp(with: up)
+        XCTAssertNotNil(editor.selectionPanel, "松开鼠标后浮条应出现")
+        // Escape 压制后，同选区上的刷新不得复活浮条（选区再次变化才会解除压制）。
+        editor.dismissSelectionToolbar()
+        editor.refreshSelectionToolbar()
+        XCTAssertNil(editor.selectionPanel, "被压制的选区不应复活浮条")
     }
 
     func testUndoManagersAreDocumentScoped() {
