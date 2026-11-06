@@ -120,6 +120,31 @@ final class PlanningViewLogicTests: XCTestCase {
         XCTAssertEqual(WFListPalette.argb.last, 0xFF8A909B)    // grey
     }
 
+    // MARK: - 日历条清单/标签取色
+
+    /// 日历条默认（清单/标签）模式：有彩色标签跟标签，清单显式选过色跟清单，
+    /// 两者都没有按任务散列。收集箱不可着色，清单优先会让它整片同色——
+    /// 标签必须先出场；而没选色的清单按名称推导，不算「有自己的颜色」。
+    func testListTagColorPrefersTagThenExplicitListThenTaskHash() {
+        let list = WFPlanningPalette.listColor(name: "收集箱", meta: nil)
+        let taskID = UUID(uuidString: "00000000-0000-4000-8000-000000000001")!
+
+        XCTAssertEqual(WFPlanningPalette.listTagColor(tagColors: [0xFFFF4153], listColor: list, taskID: taskID),
+                       WFListPalette.swatch(0xFFFF4153),
+                       "有彩色标签时必须跟标签色")
+        XCTAssertEqual(WFPlanningPalette.listTagColor(tagColors: [], listColor: list, taskID: taskID), list,
+                       "清单显式选过色时跟清单色")
+        XCTAssertEqual(WFPlanningPalette.listTagColor(tagColors: [], listColor: nil, taskID: taskID),
+                       WFPlanningPalette.taskColor(taskID: taskID),
+                       "没标签、清单没选色时退回按任务散列（旧随机取色）")
+    }
+
+    /// 显示设置默认取色源是清单/标签，且新选项排在最前（迁移依赖默认值就是它）。
+    func testCalendarColorSourceDefaultsToListTag() {
+        XCTAssertEqual(CalendarColorSource.allCases.first, .listTag)
+        XCTAssertEqual(CalendarPreferences().colorSource, .listTag)
+    }
+
     // MARK: - 格内日号
 
     func testDayNumberCarriesTheMonthOnlyOnTheFirst() {

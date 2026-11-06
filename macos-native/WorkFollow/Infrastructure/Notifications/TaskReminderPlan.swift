@@ -128,12 +128,12 @@ enum TaskReminderPlanner {
         return values.sorted { $0.fireDate == $1.fireDate ? $0.id < $1.id : $0.fireDate < $1.fireDate }
     }
 
-    /// 清单任务里未勾选、带提醒的检查项。摘要只投影未完成项：勾选、删除、
-    /// 切回文本或完成任务后，下一次对账自然不再生成投递。
+    /// 未勾选、带提醒的检查项，以及正文里带提醒的普通段落。摘要只投影
+    /// 未完成项：勾选、删除、切回文本或完成任务后，下一次对账自然不再生成投递。
     private static func appendChecklistItems(of task: Task,
                                              decisions: [String: ReminderDecision],
                                              into values: inout [ReminderDelivery]) {
-        guard task.kind == .checklist, task.isActiveSeriesOccurrence,
+        guard task.isActiveSeriesOccurrence,
               let reminders = task.document.checklistSummary?.reminders else { return }
         for item in reminders {
             let id = "checklist.\(task.id.uuidString).\(item.blockID.uuidString)"

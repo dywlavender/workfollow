@@ -94,7 +94,7 @@ final class RemindersSyncCoordinator: ObservableObject, ModuleStoreFlushable {
                 message = "请在系统设置 → 隐私与安全性 → 提醒事项中允许 WorkFollow 访问。"
                 return
             }
-            let target = try connectionTarget()
+            let target = try await connectionTarget()
             store.configure {
                 $0.targetListID = target.id; $0.enabled = true
                 $0.autoSyncLists = [RemindersIntegrationSnapshot.allTasksScope]
@@ -104,9 +104,35 @@ final class RemindersSyncCoordinator: ObservableObject, ModuleStoreFlushable {
             message = nil
         } catch { message = error.localizedDescription }
     }
-    private func connectionTarget() throws -> SystemReminderList {
-        guard let account = accounts.first(where: { $0.title.localizedCaseInsensitiveContains("iCloud") }) else {
-            throw CalendarIntegrationError.message("未找到 iCloud 提醒事项。请在系统设置 → Apple 账户 → iCloud 中开启“提醒事项”，然后重新连接。")
+    /// EventKit can answer an empty account list on the first read right after
+    /// access is granted (the daemon connection is still warming up). Only an
+    /// empty *account* list means "not loaded yet": an account with no reminder
+    /// lists is a normal state we recover from by creating the list.
+    private func loadedAccounts(attempts: Int = 8, delay: Duration = .milliseconds(250)) async -> [SystemReminderAccount] {
+        for attempt in 0..<attempts {
+            if !accounts.isEmpty { return accounts }
+            if attempt == attempts - 1 { break }
+            try? await _Concurrency.Task.sleep(for: delay)
+            refreshAccess()
+        }
+        return accounts
+    }
+    /// The account list is empty for several unrelated reasons; reporting the
+    /// wrong one sends the user to the wrong settings page.
+    static func missingAccountMessage(_ authorization: EKAuthorizationStatus) -> String {
+        if authorization == .writeOnly {
+            return "当前只有“仅添加”提醒事项权限，无法读取账户和清单。请在系统设置 → 隐私与安全性 → 提醒事项中选择“完整访问”。"
+        }
+        return "未找到 iCloud 提醒事项。请在系统设置 → Apple 账户 → iCloud 中开启“提醒事项”，然后重新连接。"
+    }
+    private func connectionTarget() async throws -> SystemReminderList {
+        let accounts = await loadedAccounts()
+        // Sync is only meaningful on an account that reaches the iPhone. iCloud
+        // surfaces as a CalDAV source, so match on the source kind instead of
+        // the account's display name.
+        let candidates = accounts.filter { $0.isICloud || $0.kind.isSynced }
+        guard let account = candidates.first else {
+            throw CalendarIntegrationError.message(Self.missingAccountMessage(authorization))
         }
         if let existing = lists.first(where: {
             $0.accountID == account.id && $0.writable && $0.title.localizedCaseInsensitiveCompare("WorkFollow") == .orderedSame

@@ -41,14 +41,18 @@ final class TaskWorkspaceModel: ObservableObject {
         let grouping: TaskListGrouping
         let hidesCompleted: Bool
         let viewMode: TaskListViewMode
-        let groups: [TaskListGroup]
+        var groups: [TaskListGroup]
+        var needsTextRefresh = false
     }
     private struct NodeCacheEntry {
         let scope: TaskListScope
         let query: TaskListQuery
         let roots: [UUID]
         let expanded: Set<UUID>
-        let nodes: [TaskTreeNode]
+        let sortMode: TaskListSortMode
+        let sortDescending: Bool
+        var nodes: [TaskTreeNode]
+        var needsTextRefresh = false
     }
     private var projectionStamp: ProjectionStamp?
     private var groupCache: [GroupCacheEntry] = []
@@ -57,10 +61,15 @@ final class TaskWorkspaceModel: ObservableObject {
     private var subtaskProgressRevision: Int?
     private var subtaskProgressCache: [UUID: String] = [:]
     private(set) var projectionBuildCount = 0
+    private(set) var projectionSortCount = 0
+
+    private func currentProjectionStamp() -> ProjectionStamp {
+        ProjectionStamp(revision: revision, storeRevision: store.readRevision, dateRevision: dateRevision,
+                        day: calendar.startOfDay(for: clock()), filter: activeFilter)
+    }
 
     private func prepareProjectionCache() {
-        let stamp = ProjectionStamp(revision: revision, storeRevision: store.readRevision, dateRevision: dateRevision,
-                                    day: calendar.startOfDay(for: clock()), filter: activeFilter)
+        let stamp = currentProjectionStamp()
         guard projectionStamp != stamp else { return }
         projectionStamp = stamp
         groupCache.removeAll(keepingCapacity: true)
@@ -1191,6 +1200,46 @@ final class TaskWorkspaceModel: ObservableObject {
     }
     func emptyTrash() { actions.emptyTrash(); select(nil); revision += 1 }
 
+    /// 一次性把「已完成」视图里显示的任务移入垃圾桶。
+    ///
+    /// 口径跟单条删除完全一致（软删、可撤销、父任务连子任务一起进桶），只是集合
+    /// 换成视图**真正显示**的成员：`.completed` 投影叠加当前保存过滤器——也就是
+    /// 页头计数 `count(for: .completed)` 用的同一份集合。已归档清单里的任务和
+    /// 笔记不在此列，投影本身就把它们排除了，所以这里不会误伤它们。
+    ///
+    /// 走 `actions.batch` 而不是自己拼一次 `store.commit`：批量删除对"父任务已
+    /// 在批内"的跳过规则、子任务级联都只有那一处实现，重复一遍迟早会走样。
+    /// 返回实际进入垃圾桶的任务数（含被父任务带下去的子任务）。
+    @discardableResult
+    func deleteAllCompleted() -> Int {
+        let ids = Set(filteredMatches(in: .completed, query: TaskListQuery()).map(\.id))
+        guard !ids.isEmpty else { return 0 }
+        let before = store.tasks
+        let deletedBefore = Set(before.filter { $0.deletedAt != nil }.map(\.id))
+        actions.batch(ids, operation: .delete)
+        guard store.tasks != before else { return 0 }
+        revision += 1
+        if selectedTask?.deletedAt != nil { select(nil) }
+        // 批里可能有正在多选的任务：留着死 id 会让批量条继续显示「已选择 N 项」。
+        let survivors = bulkSelection.filter { task(for: $0)?.deletedAt == nil }
+        if survivors != bulkSelection {
+            bulkSelection = survivors
+            if survivors.isEmpty { clearBulkSelection() }
+        }
+        let removed = store.tasks.filter {
+            $0.deletedAt != nil && !deletedBefore.contains($0.id)
+        }.count
+        report(FeedbackEvent(kind: .undoable, message: "已删除 \(removed) 个已完成任务",
+                             actionTitle: "撤销", action: undoStep()))
+        return removed
+    }
+
+    /// 当前「已完成」视图里可被「全部删除」处理的任务数，菜单据此决定是否置灰。
+    func completedDeletionCount() -> Int {
+        _ = revision
+        return filteredMatches(in: .completed, query: TaskListQuery()).count
+    }
+
     func task(for id: UUID) -> Task? {
         _ = revision
         return store.task(id) ?? (selectedOccurrence?.task.id == id ? selectedOccurrence?.task : nil)
@@ -1215,10 +1264,20 @@ final class TaskWorkspaceModel: ObservableObject {
                 viewMode: TaskListViewMode = .list) -> [TaskListGroup] {
         _ = revision
         prepareProjectionCache()
-        if let cached = groupCache.first(where: {
+        if let index = groupCache.firstIndex(where: {
             $0.scope == scope && $0.query == query && $0.grouping == grouping
                 && $0.hidesCompleted == hidesCompleted && $0.viewMode == viewMode
-        }) { return cached.groups }
+        }) {
+            if groupCache[index].needsTextRefresh {
+                groupCache[index].groups = groupCache[index].groups.map { group in
+                    TaskListGroup(kind: group.kind, day: group.day,
+                        tasks: group.tasks.map { store.task($0.id) ?? $0 }, label: group.label,
+                        sectionID: group.sectionID, creationTarget: group.creationTarget)
+                }
+                groupCache[index].needsTextRefresh = false
+            }
+            return groupCache[index].groups
+        }
         projectionBuildCount += 1
         let result = applyingFilter(
             TaskListProjection.groups(in: scope, store: store, now: clock(), calendar: calendar,
@@ -1264,16 +1323,29 @@ final class TaskWorkspaceModel: ObservableObject {
     }
 
     func nodes(for group: TaskListGroup, scope: TaskListScope, query: TaskListQuery = TaskListQuery(),
-               orderedRoots: [Task]? = nil) -> [TaskTreeNode] {
+               orderedRoots: [Task]? = nil, sortMode: TaskListSortMode = .manual,
+               sortDescending: Bool = false) -> [TaskTreeNode] {
         _ = revision
         prepareProjectionCache()
-        let rootTasks = orderedRoots ?? group.tasks
         let roots = Set(group.tasks.map(\.id))
         let expanded = query.isFiltering ? roots : roots.subtracting(collapsedTaskIDs)
-        let rootIDs = rootTasks.map(\.id)
-        if let cached = nodeCache.first(where: {
+        let rootIDs = (orderedRoots ?? group.tasks).map(\.id)
+        if let index = nodeCache.firstIndex(where: {
             $0.scope == scope && $0.query == query && $0.roots == rootIDs && $0.expanded == expanded
-        }) { return cached.nodes }
+                && $0.sortMode == sortMode && $0.sortDescending == sortDescending
+        }) {
+            if nodeCache[index].needsTextRefresh {
+                nodeCache[index].nodes = nodeCache[index].nodes.map { node in
+                    TaskTreeNode(task: store.task(node.task.id) ?? node.task, depth: node.depth,
+                                 hasChildren: node.hasChildren, expanded: node.expanded)
+                }
+                nodeCache[index].needsTextRefresh = false
+            }
+            return nodeCache[index].nodes
+        }
+        if orderedRoots == nil, sortMode != .manual, group.kind != .completed { projectionSortCount += 1 }
+        let rootTasks = orderedRoots ?? group.orderedTasks(using: sortMode,
+            descending: sortDescending, calendar: calendar)
         let followsMatchedParent = (scope == .today || scope == .tomorrow
                                     || scope == .nextSevenDays) &&
             query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1283,7 +1355,8 @@ final class TaskWorkspaceModel: ObservableObject {
                                              expanded: expanded, matchingTaskIDs: matching)
         if nodeCache.count >= 16 { nodeCache.removeFirst() }
         nodeCache.append(NodeCacheEntry(scope: scope, query: query, roots: rootIDs,
-                                       expanded: expanded, nodes: result))
+                                       expanded: expanded, sortMode: sortMode,
+                                       sortDescending: sortDescending, nodes: result))
         return result
     }
 
@@ -1325,6 +1398,29 @@ final class TaskWorkspaceModel: ObservableObject {
     private func filteredMatches(in scope: TaskListScope, query: TaskListQuery) -> [Task] {
         TaskListProjection.matches(in: scope, store: store, now: clock(), calendar: calendar, query: query)
             .filter { filterMatches($0) }
+    }
+
+    /// 这条任务此刻是否真的出现在 `scope`（+ 当前清单/标签/筛选）的可见投影里。
+    /// 创建后"打开新任务"必须先问这个：范围外的任务打开只会得到一个空详情，
+    /// 那不如按原有去向提示（HUD 的「查看」）处理。
+    func isVisible(_ id: UUID, in scope: TaskListScope, query: TaskListQuery = TaskListQuery()) -> Bool {
+        guard let task = store.task(id) else { return false }
+        if let parentID = task.parentID {
+            // 子任务在列表里只跟着父任务出现；父任务不在投影里时它也看不见。
+            return isVisible(parentID, in: scope, query: query)
+        }
+        return filteredMatches(in: scope, query: query).contains { $0.id == id }
+    }
+
+    /// 创建完成后的"打开新任务"：**只有它确实出现在当前视图里才切过去**。
+    /// 返回 false 表示范围外（或已被筛掉），调用方应保留原来的去向提示，别抢选中。
+    @discardableResult
+    func openCreatedTask(_ id: UUID, in scope: TaskListScope,
+                         query: TaskListQuery = TaskListQuery()) -> Bool {
+        guard isVisible(id, in: scope, query: query) else { return false }
+        clearBulkSelection()
+        select(id)
+        return true
     }
 
     func selectOccurrence(_ occurrence: TaskOccurrence) {
@@ -1409,6 +1505,24 @@ final class TaskWorkspaceModel: ObservableObject {
             report(FeedbackEvent(kind: .info, message: "已添加到「\(TaskList.inbox.name)」"))
         }
         return result
+    }
+
+    /// 选中文字建任务（滴答笔记编辑器行为）：多行选区每行一条，任务侧回链
+    /// `sourceNoteID`（关联任务区按 union 显示，无需再写 `linkedTaskIDs`）。
+    /// 整批一个事务，一次撤销全部消失。
+    @discardableResult
+    func createTasksFromSelection(_ text: String, noteID: UUID) -> [UUID] {
+        let titles = text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard !titles.isEmpty else { return [] }
+        let ids = actions.createSelectionTasks(titles: titles, noteID: noteID)
+        guard !ids.isEmpty else { return [] }
+        revision += 1
+        report(FeedbackEvent(kind: .undoable,
+            message: ids.count == 1 ? "已添加到「\(TaskList.inbox.name)」" : "已创建 \(ids.count) 项待办",
+            actionTitle: "撤销", action: undoStep()))
+        return ids
     }
 
     @discardableResult
@@ -1654,10 +1768,46 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setTitle(_ id: UUID, _ title: String) -> TaskActionResult {
-        let previous = store.readRevision
-        let result = withMaterializedTask(id) { actions.setTitle($0, title) }
-        if store.readRevision != previous { didMutate(result) }
+        editText(id) { actions.setTitle($0, title) }
+    }
+
+    /// Preserve membership/order for a single text edit, but still publish fresh
+    /// task values. Composite mutations keep the ordinary invalidation path.
+    private func editText(_ id: UUID, mutation: (UUID) -> TaskActionResult) -> TaskActionResult {
+        let before = store.task(id)
+        let previousReadRevision = store.readRevision
+        let previousStamp = projectionStamp
+        let result = withMaterializedTask(id, mutation)
+        if store.readRevision != previousReadRevision {
+            didMutate(result)
+            if let before, let after = store.task(id) {
+                preserveTextProjections(before: before, after: after, previousStamp: previousStamp)
+            }
+        }
         return result
+    }
+
+    private func preserveTextProjections(before: Task, after: Task, previousStamp: ProjectionStamp?) {
+        guard let previousStamp, projectionStamp == previousStamp else { return }
+        let current = currentProjectionStamp()
+        let expected = ProjectionStamp(revision: previousStamp.revision + 1,
+            storeRevision: previousStamp.storeRevision + 1, dateRevision: previousStamp.dateRevision,
+            day: previousStamp.day, filter: previousStamp.filter)
+        guard current == expected else { return }
+        var nonText = after
+        nonText.title = before.title; nonText.document = before.document; nonText.updatedAt = before.updatedAt
+        guard nonText == before else { return }
+
+        let hasSavedFilter = current.filter != nil
+        groupCache.removeAll { hasSavedFilter || !$0.query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        for index in groupCache.indices { groupCache[index].needsTextRefresh = true }
+        nodeCache.removeAll {
+            hasSavedFilter || !$0.query.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || $0.sortMode == .modified || ($0.sortMode == .title && before.title != after.title)
+        }
+        for index in nodeCache.indices { nodeCache[index].needsTextRefresh = true }
+        if subtaskProgressRevision == previousStamp.revision { subtaskProgressRevision = current.revision }
+        projectionStamp = current
     }
 
     @discardableResult
@@ -1669,10 +1819,7 @@ final class TaskWorkspaceModel: ObservableObject {
 
     @discardableResult
     func setDocument(_ id: UUID, _ document: NativeDocument) -> TaskActionResult {
-        let previous = store.readRevision
-        let result = withMaterializedTask(id) { actions.setDocument($0, document) }
-        if store.readRevision != previous { didMutate(result) }
-        return result
+        editText(id) { actions.setDocument($0, document) }
     }
 
     /// 检查项行内铃铛读的元数据。行号与文档块顺序一致。
@@ -1688,8 +1835,7 @@ final class TaskWorkspaceModel: ObservableObject {
     func setChecklistItemReminder(_ id: UUID, line: Int, at date: Date?) -> TaskActionResult {
         guard let task = task(for: id),
               var document = try? task.document.materialized(),
-              document.blocks.indices.contains(line),
-              case .checklist = document.blocks[line].kind else { return .failure(.missingTask) }
+              document.blocks.indices.contains(line) else { return .failure(.missingTask) }
         var meta = document.blocks[line].checklist ?? ChecklistItemMeta()
         guard meta.reminderAt != date else { return .success(id) }
         meta.reminderAt = date

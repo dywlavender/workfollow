@@ -28,7 +28,7 @@ final class TaskTextNoOpRevisionTests: XCTestCase {
         XCTAssertTrue(changed.didChangeStore)
         XCTAssertEqual(workspace.revision, revision + 1, "改动标题应递增一次 revision")
         XCTAssertEqual(read().map(\.task.title), ["新标题"])
-        XCTAssertGreaterThan(workspace.projectionBuildCount, builds, "改动标题应触发投影重建")
+        XCTAssertEqual(workspace.projectionBuildCount, builds, "改动标题应更新缓存中的文字，成员与顺序不变时不重建投影")
     }
 
     /// 组合编辑（属性 + 文本）里，末尾同值文本 no-op 不能抹掉前面属性改动的刷新。

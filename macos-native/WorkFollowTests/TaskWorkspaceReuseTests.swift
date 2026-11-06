@@ -74,8 +74,15 @@ final class TaskWorkspaceReuseTests: XCTestCase {
     }
 
     func testSelectionOnlyRefreshesVisibleAffectedRows() throws {
-        let workspace = TaskWorkspaceModel(seedDemoData: false)
-        let ids = try (0..<40).map { try XCTUnwrap(workspace.createTask(title: "虚构任务 \($0)", in: .inbox).taskID) }
+        let now = Date()
+        let tasks = (0..<40).map { index in
+            Task(id: UUID(), title: "虚构任务 \(index)", list: .inbox, priority: .none,
+                 schedule: TaskSchedule(), childOrder: index, createdAt: now, updatedAt: now)
+        }
+        // Seed persisted tasks so quick-add's two-second highlight expiry cannot
+        // race an assertion that measures selection updates alone.
+        let workspace = TaskWorkspaceModel(seedDemoData: false, initialTasks: tasks)
+        let ids = tasks.map(\.id)
         let environment = AppEnvironment()
         let navigation = AppNavigation(destination: .inbox)
         let host = NSHostingView(rootView: RootShellView(workspace: workspace, navigation: navigation)

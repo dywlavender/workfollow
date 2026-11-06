@@ -206,7 +206,7 @@ final class FocusDurationOutsideClickView: NSView {
         guard let window else { return }
         registration = PopupInteractionRegistry.shared.register(window: window, contains: { [weak self] event in
             self?.containsMouseDown(event) ?? true
-        }, dismiss: { [weak self] in self?.onOutsideClick?() })
+        }, dismiss: { [weak self] _ in self?.onOutsideClick?() })
     }
 
     /// Always return the original event so the clicked control can act normally.

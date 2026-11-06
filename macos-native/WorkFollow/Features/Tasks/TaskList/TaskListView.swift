@@ -159,6 +159,8 @@ struct TaskListView: View {
     /// 「倒数纪念日」小节的折叠状态。它与任务组的折叠是两套：任务组按 `id` 记，
     /// 这里只有一个固定小节，用布尔就够。
     @State private var countdownSectionCollapsed = false
+    /// 「已完成」视图「全部删除」的二次确认。破坏性且一次动整页，必须过对话框。
+    @State private var confirmDeleteAllCompleted = false
     @FocusState private var descriptionFocused: Bool
     @FocusState private var listFocused: Bool
     @State private var editingRowTitle = false
@@ -298,7 +300,8 @@ struct TaskListView: View {
         }
         .onChange(of: groupIDs) { _, _ in collapseNewCompletedGroups() }
         .sheet(isPresented: $showTemplatePicker) {
-            TemplatePickerView(workspace: workspace, templateStore: templateStore,
+            TemplatePickerView(templateStore: templateStore,
+                               apply: { TemplateApplier.apply($0, to: workspace) },
                                onDismiss: { showTemplatePicker = false },
                                onApplied: { _ in
                                    clearQuickAddDraft()
@@ -346,6 +349,19 @@ struct TaskListView: View {
         .onReceive(workspace.$selectedTaskID.receive(on: RunLoop.main)) { _ in revealSelectedClosedTask() }
         .onChange(of: navigation.destination) { _, _ in dropFeedback.clear() }
         .onDisappear { dropFeedback.clear() }
+        // 「已完成」视图的「全部删除」。文案里的数量取**确认框弹出那一刻**的计数，
+        // 不是菜单打开时的：菜单到确认之间可能又勾完了几条。
+        .workfollowAlert(
+            "全部删除已完成任务",
+            message: TaskListMoreMenuPolicy.deleteAllCompletedMessage(
+                count: workspace.completedDeletionCount()),
+            isPresented: $confirmDeleteAllCompleted,
+            actions: [
+                .cancel(),
+                .destructive(TaskListMoreMenuPolicy.deleteAllCompletedTitle) {
+                    workspace.deleteAllCompleted()
+                }
+            ])
         .onAppear {
             if environment.quickAddRequest > 0 { quickAddFocused = true }
             else { listFocused = true }
@@ -537,7 +553,7 @@ struct TaskListView: View {
         // 滴答清单页「⋯」：视图三图标 + 隐藏已完成 + 隐藏/显示详细 + 显示设置。
         // 打印按用户要求不提供；撤销在菜单栏、模板在快速添加属性里已有入口。
         BusinessMenu(width: PopupMetrics.menuWidthNarrow, title: "列表操作") {
-            ForEach(TaskListMoreMenuPolicy.entries, id: \.self) { entry in
+            ForEach(TaskListMoreMenuPolicy.entries(for: navigation.destination), id: \.self) { entry in
                 switch entry {
                 case .viewModes:
                     TaskListMenuViewModes(selection: viewModeBinding, options: availableViewModes)
@@ -555,6 +571,15 @@ struct TaskListView: View {
                     Button("显示设置", systemImage: "slider.horizontal.3") {
                         showDisplaySettings = true
                     }
+                case .deleteAllCompleted:
+                    Button(TaskListMoreMenuPolicy.deleteAllCompletedTitle,
+                           systemImage: TaskListMoreMenuPolicy.deleteAllCompletedSymbol,
+                           role: .destructive) {
+                        // 菜单收起后再弹确认框：`AnchoredPropertyPanel` 还挂着的时候
+                        // 起对话框，两个子窗口会抢焦点。
+                        DispatchQueue.main.async { confirmDeleteAllCompleted = true }
+                    }
+                    .disabled(completedDeletionCount == 0)
                 }
             }
         } label: {
@@ -566,6 +591,12 @@ struct TaskListView: View {
         }
         .fixedSize()
         .hoverTip("列表操作")
+    }
+
+    /// 菜单置灰与确认框文案共用的计数：菜单打开那一刻算一次，避免 body 里反复跑投影。
+    private var completedDeletionCount: Int {
+        guard navigation.destination == .completed else { return 0 }
+        return workspace.completedDeletionCount()
     }
 
     // MARK: - 快速添加：浅灰圆角条，聚焦后展开解析预览
@@ -1318,9 +1349,7 @@ struct TaskListView: View {
 
     private func displayedNodes(for group: TaskListGroup, scope: TaskListScope) -> [TaskTreeNode] {
         workspace.nodes(for: group, scope: scope, query: query,
-                        orderedRoots: group.orderedTasks(using: sortMode,
-                                                         descending: sortDescending,
-                                                         calendar: workspace.calendar))
+                        sortMode: sortMode, sortDescending: sortDescending)
     }
 
     private func selectFiltered(_ offset: Int) {
@@ -1633,6 +1662,8 @@ struct TaskListView: View {
             dismissedTokenIDs: dismissedQuickAddTokens, scheduleOverride: quickAddScheduleOverride,
             priorityOverride: quickAddPriorityOverride, listOverride: quickAddListOverride,
             tagsOverride: quickAddTagsOverride)
+        // 先不选：等确认新任务真的落在当前视图里再打开，否则"选中一个看不见的任务"
+        // 只会把详情栏清空。范围外的仍走 `reportPlacementChange` 的去向提示。
         let createdIDs = workspace.submitCapture(capture, defaultDueAt: quickAddDefaultDue(for: scope), selectCreatedTask: false)
 
         // Keep the draft available if creation is rejected; Flutter follows
@@ -1644,7 +1675,14 @@ struct TaskListView: View {
         }
         clearQuickAddDraft()
         quickAddEscapePrimed = false
+        // 创建完成就打开它：详情栏跟到新任务，而不是停在上一条的正文上。
+        // 批量创建时打开最后一条（与 `submitCapture` 的落点一致）。
+        if let target = createdIDs.last {
+            workspace.openCreatedTask(target, in: scope, query: query)
+        }
         // 描述行也能提交，提交后焦点必须回到标题，否则下一次输入无处可去。
+        // **必须在打开新任务之后再抢回来**：选中变化会让详情栏重绑编辑器并交还焦点，
+        // 先设再选等于白设。
         quickAddFocused = true
     }
 }
@@ -1786,8 +1824,11 @@ struct TaskRowView: View {
         .frame(maxWidth: .infinity, minHeight: rowHeight, alignment: .topLeading)
         // 选中底色用中性灰（`listSelection`，滴答实测 #F2F2F2），不用强调色。
         // 行底色铺满 Cell 宿主；宿主左右的 18 / 1pt 内边距决定与列表边界的距离。
-        .rowHoverBackground(selected: selected || recentlyCreated,
+        // 「刚创建」的短暂标识走 `highlighted`，**不能或进 `selected`**：那是另一种语义，
+        // 或起来会让新建行看着已被选中，而详情栏还停在上一条任务。
+        .rowHoverBackground(selected: selected,
                             horizontalInset: 0,
+                            highlighted: recentlyCreated,
                             onHoverChanged: { pointer.update($0) })
         // 整行可点（含左右内缩留白）：标题旁的留白、行内空隙、元数据区点下去也能选中；
         // 行内按钮（勾选框/日期）优先级更高。
@@ -2247,12 +2288,28 @@ enum TaskListMoreMenuEntry: Hashable {
     case hidesCompleted
     case detailsVisibility
     case displaySettings
+    /// 「已完成」视图专属：把该视图里的已完成任务一次性移入垃圾桶。
+    case deleteAllCompleted
 }
 
 enum TaskListMoreMenuPolicy {
+    /// 通用条目。集合与顺序按滴答截图钉死，`testMoreMenuMatchesTickTickWithoutPrint` 直接断言。
     static let entries: [TaskListMoreMenuEntry] = [
         .viewModes, .separator, .hidesCompleted, .detailsVisibility, .displaySettings
     ]
+
+    /// 视图专属条目追加在通用条目之后。
+    ///
+    /// 只有「已完成」视图给「全部删除」：它删的是"这个视图里的全部"，别的视图
+    /// 没有这么明确的边界——「所有任务」里也放一条，用户点下去才发现删的是全部
+    /// 待办，代价太大。`已放弃` 同理没给，需求只落在已完成。
+    static func entries(for destination: NativeDestination) -> [TaskListMoreMenuEntry] {
+        destination == .completed ? entries + [.separator, .deleteAllCompleted] : entries
+    }
+
+    /// 破坏性动作的文案：菜单里就写「全部删除」，确认框里再复述一遍范围。
+    static let deleteAllCompletedTitle = "全部删除"
+    static let deleteAllCompletedSymbol = "trash"
 
     static func detailsTitle(hidesDetails: Bool) -> String {
         hidesDetails ? "显示详细" : "隐藏详细"
@@ -2260,6 +2317,11 @@ enum TaskListMoreMenuPolicy {
 
     static func viewModeHelp(_ mode: TaskListViewMode) -> String {
         mode.title + "视图"
+    }
+
+    /// 确认框文案：把"删多少、删到哪、能不能撤销"三件事一次说清。
+    static func deleteAllCompletedMessage(count: Int) -> String {
+        "已完成的 \(count) 个任务将移入垃圾桶，可以撤销。"
     }
 }
 

@@ -189,12 +189,10 @@ final class SummaryMetadataPresentationTests: XCTestCase {
             window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
             defer { window.close() }
             InspectorPanelTestSupport.settle(window)
-            let text = try XCTUnwrap(handle.textView)
-            XCTAssertTrue(text.isEditable)
-            let storage = try XCTUnwrap(text.textStorage)
-            let range = (storage.string as NSString).range(of: "项目、待评审")
-            XCTAssertNotEqual(range.location, NSNotFound)
-            XCTAssertEqual((storage.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)?.pointSize, 12)
+            let text = try MilkdownTestSupport.editor(in: host)
+            XCTAssertFalse(text.isReadOnly)
+            XCTAssertTrue(text.document.plainText.contains("项目、待评审"))
+            XCTAssertEqual(try MilkdownTestSupport.script(text, "parseFloat(getComputedStyle(document.querySelector('.wf-caption')).fontSize)") as? CGFloat, 12)
             if let directory = ProcessInfo.processInfo.environment["WORKFOLLOW_SUMMARY_CAPTURE_DIRECTORY"] {
                 let url = URL(fileURLWithPath: directory)
                 try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

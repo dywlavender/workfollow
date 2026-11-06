@@ -18,16 +18,17 @@ final class TaskSwitchingTests: XCTestCase {
         defer { window.close() }
         workspace.select(first)
         InspectorPanelTestSupport.settle(window)
-        let original = try XCTUnwrap(editor(in: host))
+        let original = try MilkdownTestSupport.editor(in: host)
         _ = workspace.setDocument(first, NativeDocument(plainText: "第一任务即时更新"))
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(original.string, "第一任务即时更新")
+        try MilkdownTestSupport.wait("正文更新未装载") { original.document.plainText == "第一任务即时更新" }
         _ = workspace.setDocument(second, NativeDocument(plainText: "第二任务正文"))
         workspace.select(second)
         InspectorPanelTestSupport.settle(window)
         XCTAssertTrue(editor(in: host) === original)
+        _ = try MilkdownTestSupport.editor(in: host, id: second)
         XCTAssertEqual(original.documentIdentity, second)
-        XCTAssertEqual(original.string, "第二任务正文")
+        XCTAssertEqual(original.document.plainText, "第二任务正文")
         navigation.destination = .tomorrow
         InspectorPanelTestSupport.settle(window)
         XCTAssertNil(workspace.selectedTaskID, "Navigation still clears the outgoing task selection")
@@ -35,15 +36,18 @@ final class TaskSwitchingTests: XCTestCase {
         InspectorPanelTestSupport.settle(window)
         workspace.select(first)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertEqual(try XCTUnwrap(editor(in: host)).string, "第一任务即时更新")
+        XCTAssertEqual(try MilkdownTestSupport.editor(in: host).document.plainText, "第一任务即时更新")
     }
 
     func testFullShellSwitchesLoadedTasksWithoutStaleDocument() throws {
         let environment = AppEnvironment()
         let workspace = environment.taskWorkspace
         environment.navigation.destination = .allTasks
-        let ids = Array(workspace.allTasks.filter { $0.deletedAt == nil }.prefix(2).map(\.id))
-        guard ids.count == 2 else { throw XCTSkip("Requires at least two loaded tasks") }
+        for index in 0..<2 {
+            let id = try XCTUnwrap(workspace.createTask(title: "虚构切换任务 \(index)", in: .inbox).taskID)
+            _ = workspace.setDocument(id, NativeDocument(plainText: "虚构正文 \(index)"))
+        }
+        let ids = Array(workspace.allTasks.filter { $0.deletedAt == nil && $0.kind != .note }.prefix(2).map(\.id))
         let host = NSHostingView(rootView: RootShellView(workspace: workspace,
             navigation: environment.navigation).environmentObject(environment)
             .frame(width: 1280, height: 800))
@@ -51,7 +55,7 @@ final class TaskSwitchingTests: XCTestCase {
         defer { window.close() }
         workspace.select(ids[0])
         InspectorPanelTestSupport.settle(window)
-        let original = try XCTUnwrap(editor(in: host))
+        let original = try MilkdownTestSupport.editor(in: host)
         var samples: [Double] = []
         var selectionSamples: [Double] = []
         var firstLayoutSamples: [Double] = []
@@ -73,10 +77,10 @@ final class TaskSwitchingTests: XCTestCase {
             firstLayoutSamples.append((laidOut - selected) * 1000)
             deferredSamples.append((deferred - laidOut) * 1000)
             finalLayoutSamples.append((finished - deferred) * 1000)
-            let current = try XCTUnwrap(editor(in: host))
+            let current = try MilkdownTestSupport.editor(in: host, id: id)
             XCTAssertTrue(current === original)
             XCTAssertEqual(current.documentIdentity, id)
-            XCTAssertEqual(current.string, workspace.task(for: id)?.document.plainText)
+            XCTAssertEqual(current.document.plainText, workspace.task(for: id)?.document.plainText)
         }
         samples.sort()
         print("TASK_FULL_SHELL_SWITCH tasks=\(workspace.allTasks.count) p50_ms=\(samples[15]) p95_ms=\(samples[28]) switches=30")
@@ -87,8 +91,8 @@ final class TaskSwitchingTests: XCTestCase {
         }
     }
 
-    private func editor(in view: NSView) -> NativeTextView? {
-        if let text = view as? NativeTextView { return text }
+    private func editor(in view: NSView) -> MilkdownWebView? {
+        if let text = view as? MilkdownWebView { return text }
         return view.subviews.lazy.compactMap { self.editor(in: $0) }.first
     }
 
@@ -107,7 +111,7 @@ final class TaskSwitchingTests: XCTestCase {
                 .environmentObject(environment).frame(width: 520, height: 650))
             let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 520, height: 650)
             defer { window.close() }
-            var previous = try XCTUnwrap(editor(in: host))
+            var previous = try MilkdownTestSupport.editor(in: host)
             var rebuilds = 0
             var samples: [Double] = []
             for iteration in 0..<20 {
@@ -117,13 +121,13 @@ final class TaskSwitchingTests: XCTestCase {
                 host.layoutSubtreeIfNeeded()
                 RunLoop.main.run(until: Date().addingTimeInterval(0.001))
                 host.layoutSubtreeIfNeeded()
-                let current = try XCTUnwrap(editor(in: host))
+                let current = try MilkdownTestSupport.editor(in: host, id: id)
                 samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
                 if current !== previous { rebuilds += 1 }
                 XCTAssertTrue(current === previous, "Task switches must rebind, not recreate the editor")
                 previous = current
                 XCTAssertEqual(current.documentIdentity, id)
-                XCTAssertEqual(current.string, workspace.task(for: id)?.document.plainText)
+                XCTAssertEqual(current.document.plainText, workspace.task(for: id)?.document.plainText)
             }
             samples.sort()
             print("TASK_SWITCH lines=\(lines) p50_ms=\(samples[10]) p95_ms=\(samples[18]) rebuilds=\(rebuilds)/20")
@@ -140,30 +144,26 @@ final class TaskSwitchingTests: XCTestCase {
             .environmentObject(AppEnvironment()).frame(width: 520, height: 650))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 520, height: 650)
         defer { window.close() }
-        let original = try XCTUnwrap(editor(in: host))
-        window.makeFirstResponder(original)
-        original.insertText("第一正文", replacementRange: NSRange(location: 0, length: 0))
-        original.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0),
-                               replacementRange: NSRange(location: NSNotFound, length: 0))
+        let original = try MilkdownTestSupport.editor(in: host)
+        try MilkdownTestSupport.command(original, "insertText", ["text": "第一正文"])
+        let client = try MilkdownTestSupport.inputClient(original)
+        client.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0), replacementRange: client.selectedRange())
+        try MilkdownTestSupport.wait("WebKit 输入未提交") { workspace.task(for: first)?.document.plainText == "第一正文中文" }
         workspace.select(second)
         XCTAssertEqual(workspace.task(for: first)?.document.plainText, "第一正文中文",
                        "Outgoing input must be committed before the next SwiftUI render")
-        XCTAssertFalse(original.hasMarkedText())
-        XCTAssertFalse(window.firstResponder === original)
+        XCTAssertFalse(MilkdownTestSupport.isFocused(original))
         InspectorPanelTestSupport.settle(window)
-        let rebound = try XCTUnwrap(editor(in: host))
+        let rebound = try MilkdownTestSupport.editor(in: host, id: second)
         XCTAssertTrue(rebound === original)
         XCTAssertEqual(workspace.task(for: first)?.document.plainText, "第一正文中文")
         XCTAssertEqual(workspace.task(for: second)?.document.plainText, "第二正文")
-        XCTAssertEqual(rebound.string, "第二正文")
-        XCTAssertFalse(rebound.hasMarkedText())
-        XCTAssertEqual(rebound.selectedRange(), NSRange(location: 0, length: 0))
-        XCTAssertFalse(rebound.undoManager?.canUndo ?? true)
-        XCTAssertFalse(window.firstResponder === rebound)
-        XCTAssertNil(rebound.slashPanel)
-        XCTAssertNil(rebound.selectionPanel)
-        window.makeFirstResponder(rebound)
-        rebound.insertText("新", replacementRange: NSRange(location: 0, length: 0))
+        XCTAssertEqual(rebound.document.plainText, "第二正文")
+        XCTAssertEqual(try MilkdownTestSupport.range(rebound), NSRange(location: 0, length: 0))
+        XCTAssertFalse(rebound.canUndo)
+        XCTAssertFalse(MilkdownTestSupport.isFocused(rebound))
+        XCTAssertNil(rebound.menuPanel)
+        try MilkdownTestSupport.command(rebound, "insertText", ["text": "新"])
         XCTAssertEqual(workspace.task(for: second)?.document.plainText, "新第二正文")
         XCTAssertEqual(workspace.task(for: first)?.document.plainText, "第一正文中文")
     }
@@ -178,20 +178,20 @@ final class TaskSwitchingTests: XCTestCase {
             .environmentObject(AppEnvironment()).frame(width: 520, height: 650))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 520, height: 650)
         defer { window.close() }
-        let original = try XCTUnwrap(editor(in: host))
-        window.makeFirstResponder(original)
-        original.setMarkedText("未提交中文", selectedRange: NSRange(location: 5, length: 0),
-                               replacementRange: NSRange(location: NSNotFound, length: 0))
+        let original = try MilkdownTestSupport.editor(in: host)
+        let client = try MilkdownTestSupport.inputClient(original)
+        client.setMarkedText("未提交中文", selectedRange: NSRange(location: 5, length: 0), replacementRange: client.selectedRange())
+        try MilkdownTestSupport.wait("WebKit 输入未提交") { workspace.task(for: first)?.document.plainText == "未提交中文" }
         workspace.select(second)
         XCTAssertEqual(workspace.task(for: first)?.document.plainText, "未提交中文")
         workspace.select(first)
         InspectorPanelTestSupport.settle(window)
         XCTAssertTrue(editor(in: host) === original)
         XCTAssertEqual(original.documentIdentity, first)
-        XCTAssertEqual(original.string, "未提交中文")
+        XCTAssertEqual(original.document.plainText, "未提交中文")
         XCTAssertEqual(workspace.task(for: second)?.document.plainText, "保留第二正文")
         workspace.select(nil)
-        XCTAssertFalse(window.firstResponder === original)
+        XCTAssertFalse(MilkdownTestSupport.isFocused(original))
         InspectorPanelTestSupport.settle(window)
         XCTAssertNil(editor(in: host))
     }
@@ -204,10 +204,10 @@ final class TaskSwitchingTests: XCTestCase {
             .environmentObject(AppEnvironment()).frame(width: 520, height: 650))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 520, height: 650)
         defer { window.close() }
-        let text = try XCTUnwrap(editor(in: host))
-        window.makeFirstResponder(text)
-        text.setMarkedText("删除前的中文", selectedRange: NSRange(location: 6, length: 0),
-                           replacementRange: NSRange(location: NSNotFound, length: 0))
+        let text = try MilkdownTestSupport.editor(in: host)
+        let client = try MilkdownTestSupport.inputClient(text)
+        client.setMarkedText("删除前的中文", selectedRange: NSRange(location: 6, length: 0), replacementRange: client.selectedRange())
+        try MilkdownTestSupport.wait("WebKit 输入未提交") { workspace.task(for: id)?.document.plainText == "删除前的中文" }
         XCTAssertNotNil(workspace.delete(id).taskID)
         XCTAssertNil(workspace.selectedTaskID)
         InspectorPanelTestSupport.settle(window)
@@ -232,7 +232,7 @@ final class TaskSwitchingTests: XCTestCase {
                 .environmentObject(environment).frame(width: 1050, height: 650))
             let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1050, height: 650)
             defer { window.close() }
-            let original = try XCTUnwrap(editor(in: host))
+            let original = try MilkdownTestSupport.editor(in: host)
             var samples: [Double] = []
             for iteration in 0..<20 {
                 let id = ids[(iteration + 1) % 2]
@@ -241,8 +241,9 @@ final class TaskSwitchingTests: XCTestCase {
                 host.layoutSubtreeIfNeeded()
                 RunLoop.main.run(until: Date().addingTimeInterval(0.001))
                 host.layoutSubtreeIfNeeded()
+                _ = try MilkdownTestSupport.editor(in: host, id: id)
                 samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
-                XCTAssertEqual(try XCTUnwrap(editor(in: host)).documentIdentity, id)
+                XCTAssertEqual(try MilkdownTestSupport.editor(in: host).documentIdentity, id)
                 XCTAssertTrue(editor(in: host) === original)
             }
             samples.sort()
@@ -271,7 +272,7 @@ final class TaskSwitchingTests: XCTestCase {
             let frame = try XCTUnwrap(probe.frames[.init(taskID: id, part: .title)])
             try InspectorPanelTestSupport.click(frame, in: host, window: window)
             XCTAssertEqual(workspace.selectedTaskID, id)
-            XCTAssertEqual(try XCTUnwrap(editor(in: host)).documentIdentity, id)
+            XCTAssertEqual(try MilkdownTestSupport.editor(in: host).documentIdentity, id)
             XCTAssertTrue(workspace.bulkSelection.isEmpty)
         }
     }

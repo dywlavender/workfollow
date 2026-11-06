@@ -8,8 +8,13 @@ enum CalendarViewMode: String, CaseIterable, Codable {
 }
 
 enum CalendarColorSource: String, CaseIterable, Codable {
-    case list, priority, tag, task
-    var label: String { switch self { case .list: "清单"; case .priority: "优先级"; case .tag: "标签"; case .task: "任务" } }
+    case listTag, list, priority, tag, task
+    var label: String {
+        switch self {
+        case .listTag: "清单/标签"; case .list: "清单"; case .priority: "优先级"
+        case .tag: "标签"; case .task: "任务"
+        }
+    }
 }
 
 struct CalendarPreferences: Equatable, Codable {
@@ -18,7 +23,8 @@ struct CalendarPreferences: Equatable, Codable {
     var showFutureOccurrences = true
     var showSubtasks = true
     var showArrangePane = true
-    var colorSource: CalendarColorSource = .task
+    /// 默认清单/标签取色（见 `WFPlanningPalette.listTagColor`）：不再按任务散列。
+    var colorSource: CalendarColorSource = .listTag
     /// 周一为一周起点：与摘要的周界一致（滴答中文环境同口径）。
     /// 仍可在日历显示设置里改成其它周首日。
     var firstWeekday = 2

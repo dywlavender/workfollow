@@ -145,7 +145,7 @@ final class SystemRemindersIntegrationTests: XCTestCase {
     func testConnectWithoutICloudExplainsSetupAndDoesNotCreateLocalList() async {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let client = FakeSystemRemindersClient()
-        client.availableAccounts = [.init(id: "local", title: "我的 Mac")]
+        client.availableAccounts = [.init(id: "local", title: "我的 Mac", kind: .local)]
         client.availableLists = [.init(id: "local-list", title: "WorkFollow", accountID: "local", accountTitle: "我的 Mac", writable: true)]
         let value = RemindersSyncCoordinator(directory: folder, client: client)
         await value.connect()
@@ -153,6 +153,99 @@ final class SystemRemindersIntegrationTests: XCTestCase {
         XCTAssertNil(value.store.snapshot.targetListID)
         XCTAssertTrue(client.createdLists.isEmpty)
         XCTAssertTrue(value.message?.contains("iCloud") == true)
+    }
+
+    /// Regression: iCloud reminder accounts come back from EventKit as CalDAV
+    /// sources, and their display name is not guaranteed to contain "iCloud".
+    /// Matching on the title made every connect fail with 「未找到 iCloud 提醒事项」.
+    func testConnectFindsICloudBySourceKindEvenWhenTitleIsLocalized() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemRemindersClient()
+        client.availableAccounts = [.init(id: "icloud-account", title: "iCloud 云盘", kind: .calDAV)]
+        client.availableLists = [.init(id: "wf-list", title: "WorkFollow", accountID: "icloud-account",
+                                      accountTitle: "iCloud 云盘", writable: true)]
+        let value = RemindersSyncCoordinator(directory: folder, client: client)
+        await value.connect()
+        XCTAssertNil(value.message)
+        XCTAssertTrue(value.store.snapshot.enabled)
+        XCTAssertEqual(value.store.snapshot.targetListID, "wf-list")
+        XCTAssertTrue(client.createdLists.isEmpty)
+    }
+
+    func testConnectIgnoresNonSyncingAccountsWhenAnICloudOneExists() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemRemindersClient()
+        client.availableAccounts = [
+            .init(id: "local", title: "我的 Mac", kind: .local),
+            .init(id: "icloud-account", title: "iCloud", kind: .calDAV)
+        ]
+        client.availableLists = [
+            .init(id: "local-list", title: "WorkFollow", accountID: "local", accountTitle: "我的 Mac", writable: true),
+            .init(id: "wf-list", title: "WorkFollow", accountID: "icloud-account", accountTitle: "iCloud", writable: true)
+        ]
+        let value = RemindersSyncCoordinator(directory: folder, client: client)
+        await value.connect()
+        XCTAssertEqual(value.store.snapshot.targetListID, "wf-list")
+        XCTAssertTrue(client.createdLists.isEmpty)
+    }
+
+    /// An iCloud account that simply has no reminder list yet must still work:
+    /// the app creates the dedicated list rather than reporting a setup error.
+    func testConnectCreatesListForICloudAccountThatHasNoListsYet() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemRemindersClient(); client.availableLists = []
+        let value = RemindersSyncCoordinator(directory: folder, client: client)
+        await value.connect()
+        XCTAssertNil(value.message)
+        XCTAssertEqual(client.createdLists.count, 1)
+        XCTAssertEqual(client.createdLists.first?.accountID, "icloud")
+        XCTAssertEqual(value.store.snapshot.targetListID, client.createdLists.first?.id)
+    }
+
+    /// Regression: on a cold launch EventKit may answer empty before its daemon
+    /// connection is ready. That must be retried, not reported as missing iCloud.
+    func testConnectRetriesWhenEventKitAnswersEmptyOnFirstRead() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemRemindersClient()
+        client.emptyReadsRemaining = 4
+        let value = RemindersSyncCoordinator(directory: folder, client: client)
+        await value.connect()
+        XCTAssertNil(value.message)
+        XCTAssertTrue(value.store.snapshot.enabled)
+        XCTAssertEqual(value.store.snapshot.targetListID, "icloud-workfollow")
+        XCTAssertTrue(client.createdLists.isEmpty)
+    }
+
+    func testConnectStillReportsMissingAccountAfterRetries() async {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeSystemRemindersClient()
+        client.availableAccounts = []
+        client.availableLists = []
+        let value = RemindersSyncCoordinator(directory: folder, client: client)
+        await value.connect()
+        XCTAssertFalse(value.store.snapshot.enabled)
+        XCTAssertTrue(client.createdLists.isEmpty)
+        XCTAssertTrue(value.message?.contains("iCloud") == true)
+    }
+
+    func testWriteOnlyAuthorizationExplainsTheRealCause() {
+        let message = RemindersSyncCoordinator.missingAccountMessage(.writeOnly)
+        XCTAssertTrue(message.contains("仅添加"))
+        XCTAssertFalse(message.contains("iCloud 中开启"))
+        XCTAssertTrue(RemindersSyncCoordinator.missingAccountMessage(.denied).contains("iCloud"))
+        XCTAssertTrue(RemindersSyncCoordinator.missingAccountMessage(.fullAccess).contains("iCloud"))
+    }
+
+    func testAccountKindTreatsCalDAVAndMobileMeAsSynced() {
+        XCTAssertEqual(SystemRemindersService.kind(.calDAV), .calDAV)
+        XCTAssertEqual(SystemRemindersService.kind(.mobileMe), .iCloud)
+        XCTAssertEqual(SystemRemindersService.kind(.local), .local)
+        XCTAssertTrue(SystemReminderAccountKind.calDAV.isSynced)
+        XCTAssertTrue(SystemReminderAccountKind.iCloud.isSynced)
+        XCTAssertFalse(SystemReminderAccountKind.local.isSynced)
+        XCTAssertTrue(SystemReminderAccount(id: "a", title: "iCloud 云盘", kind: .calDAV).isICloud)
+        XCTAssertTrue(SystemReminderAccount(id: "b", title: "iCloud", kind: .other).isICloud)
+        XCTAssertFalse(SystemReminderAccount(id: "c", title: "我的 Mac", kind: .local).isICloud)
     }
 
     func testScheduledAndUndatedTasksKeepDatesAndMultipleAlarmsSeparate() {
@@ -386,11 +479,16 @@ final class FakeSystemRemindersClient: SystemRemindersClient {
     var values: [String: SystemReminderItem] = [:]
     var writes = 0
     var failNextSave = false
-    var availableAccounts: [SystemReminderAccount] = [.init(id: "icloud", title: "iCloud")]
+    var availableAccounts: [SystemReminderAccount] = [.init(id: "icloud", title: "iCloud", kind: .calDAV)]
     var availableLists: [SystemReminderList] = [.init(id: "icloud-workfollow", title: "WorkFollow", accountID: "icloud", accountTitle: "iCloud", writable: true)]
     var createdLists: [SystemReminderList] = []
+    /// Simulates EventKit answering empty on the first reads after a cold launch.
+    var emptyReadsRemaining = 0
     func requestAccess() async throws -> Bool { authorization == .fullAccess }
-    func accounts() -> [SystemReminderAccount] { availableAccounts }
+    func accounts() -> [SystemReminderAccount] {
+        if emptyReadsRemaining > 0 { emptyReadsRemaining -= 1; return [] }
+        return availableAccounts
+    }
     func lists() -> [SystemReminderList] { availableLists }
     func createList(title: String, accountID: String) throws -> SystemReminderList {
         let value = SystemReminderList(id: "created-list-\(createdLists.count)", title: title,

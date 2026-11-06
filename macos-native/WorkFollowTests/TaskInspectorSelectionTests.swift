@@ -26,20 +26,20 @@ final class TaskInspectorSelectionTests: XCTestCase {
             if let value = view as? NSOutlineView { return value }
             return view.subviews.lazy.compactMap { outline($0) }.first
         }
-        func editor(_ view: NSView) -> NativeTextView? {
-            if let value = view as? NativeTextView { return value }
+        func editor(_ view: NSView) -> MilkdownWebView? {
+            if let value = view as? MilkdownWebView { return value }
             return view.subviews.lazy.compactMap { editor($0) }.first
         }
         let list = try XCTUnwrap(outline(host))
         XCTAssertEqual(try XCTUnwrap(list.enclosingScrollView).frame.width, 390, accuracy: 1)
-        var editorHost: NativeTextView?
+        var editorHost: MilkdownWebView?
         for id in [first, second, first, second] {
             workspace.select(id)
             InspectorPanelTestSupport.settle(window)
             XCTAssertEqual(workspace.selectedTaskID, id)
-            let current = try XCTUnwrap(editor(host))
+            let current = try MilkdownTestSupport.editor(in: host, id: id)
             XCTAssertEqual(current.documentIdentity, id)
-            XCTAssertEqual(current.string, seed.task(for: id)?.document.plainText)
+            XCTAssertEqual(current.document.plainText, seed.task(for: id)?.document.plainText)
             if let editorHost { XCTAssertTrue(current === editorHost) }
             else { editorHost = current }
             XCTAssertTrue(outline(host) === list)
@@ -62,17 +62,16 @@ final class TaskInspectorSelectionTests: XCTestCase {
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 500)
         defer { window.close() }
         InspectorPanelTestSupport.settle(window)
-        func editor(_ view: NSView) -> NativeTextView? {
-            if let value = view as? NativeTextView { return value }
+        func editor(_ view: NSView) -> MilkdownWebView? {
+            if let value = view as? MilkdownWebView { return value }
             return view.subviews.lazy.compactMap { editor($0) }.first
         }
-        let editorView = try XCTUnwrap(editor(host))
+        let editorView = try MilkdownTestSupport.editor(in: host, id: id)
 
         workspace.requestSearchReveal(taskID: id, query: "预算复核")
         InspectorPanelTestSupport.settle(window, duration: 0.5)
 
-        XCTAssertEqual((editorView.string as NSString).substring(with: editorView.selectedRange()),
-                       "预算复核")
+        XCTAssertEqual(try MilkdownTestSupport.selection(editorView).text, "预算复核")
         XCTAssertNil(workspace.searchRevealRequest, "定位成功后一次性请求应被消费")
     }
 
@@ -90,18 +89,18 @@ final class TaskInspectorSelectionTests: XCTestCase {
         let host = InspectorPanelTestSupport.inspectorHost(workspace: workspace, width: 500)
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 500)
         defer { window.close() }
-        func editor(_ view: NSView) -> NativeTextView? {
-            if let value = view as? NativeTextView { return value }
+        func editor(_ view: NSView) -> MilkdownWebView? {
+            if let value = view as? MilkdownWebView { return value }
             return view.subviews.lazy.compactMap { editor($0) }.first
         }
-        let initialEditor = try XCTUnwrap(editor(host))
+        let initialEditor = try MilkdownTestSupport.editor(in: host, id: first)
         for id in ids + ids.reversed() {
             workspace.select(id)
             InspectorPanelTestSupport.settle(window)
-            let current = try XCTUnwrap(editor(host))
+            let current = try MilkdownTestSupport.editor(in: host, id: id)
             XCTAssertTrue(current === initialEditor)
             XCTAssertEqual(current.documentIdentity, id)
-            XCTAssertEqual(current.string, workspace.task(for: id)?.document.plainText)
+            XCTAssertEqual(current.document.plainText, workspace.task(for: id)?.document.plainText)
         }
         XCTAssertEqual(ids.compactMap { workspace.task(for: $0) }, originals)
     }

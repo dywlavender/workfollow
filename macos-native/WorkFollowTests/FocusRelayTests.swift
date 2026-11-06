@@ -11,7 +11,7 @@ final class FocusRelayTests: XCTestCase {
         let (environment, id, window, host) = try makeShell()
         defer { window.close() }
         let title = try XCTUnwrap(firstResponderField(in: host), "标题字段应已建出来")
-        let body = try XCTUnwrap(firstTextView(in: host))
+        let body = try MilkdownTestSupport.editor(in: host)
 
         window.makeFirstResponder(title)
         // Return 走字段的 doCommandBy：与真实按键同一条路径。
@@ -20,7 +20,7 @@ final class FocusRelayTests: XCTestCase {
                                      doCommandBy: #selector(NSResponder.insertNewline(_:)))
         RunLoop.main.run(until: Date().addingTimeInterval(0.15))
 
-        XCTAssertTrue(window.firstResponder === body,
+        XCTAssertTrue(MilkdownTestSupport.isFocused(body),
                       "标题 Return 后焦点应落在正文，实际 \(String(describing: window.firstResponder))")
         XCTAssertNotNil(environment.taskWorkspace.task(for: id))
     }
@@ -29,13 +29,13 @@ final class FocusRelayTests: XCTestCase {
         let (_, _, window, host) = try makeShell()
         defer { window.close() }
         let title = try XCTUnwrap(firstResponderField(in: host))
-        let body = try XCTUnwrap(firstTextView(in: host))
+        let body = try MilkdownTestSupport.editor(in: host)
         window.makeFirstResponder(title)
         let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
         _ = title.delegate?.control?(title, textView: editor,
                                      doCommandBy: #selector(NSResponder.cancelOperation(_:)))
         RunLoop.main.run(until: Date().addingTimeInterval(0.15))
-        XCTAssertFalse(window.firstResponder === body, "Esc 只结束编辑，不接力到正文")
+        XCTAssertFalse(MilkdownTestSupport.isFocused(body), "Esc 只结束编辑，不接力到正文")
     }
 
     func testPaletteBlankCreateRequestsTitleFocus() throws {
@@ -98,8 +98,4 @@ final class FocusRelayTests: XCTestCase {
         return view.subviews.lazy.compactMap { self.firstResponderField(in: $0) }.first
     }
 
-    private func firstTextView(in view: NSView) -> NativeTextView? {
-        if let text = view as? NativeTextView { return text }
-        return view.subviews.lazy.compactMap { self.firstTextView(in: $0) }.first
-    }
 }

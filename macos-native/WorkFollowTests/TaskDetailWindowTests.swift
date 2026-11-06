@@ -40,8 +40,8 @@ final class TaskDetailWindowTests: XCTestCase {
         let first = try XCTUnwrap(TaskDetailWindowController.shared.window)
         XCTAssertEqual(first.title, "任务浮窗")
         let panel = try XCTUnwrap(first as? FloatingEditorPanel)
-        InspectorPanelTestSupport.settle(panel)
-        XCTAssertEqual(panel.editorHandle.textView?.documentIdentity, id)
+        _ = try MilkdownTestSupport.editor(in: try XCTUnwrap(panel.contentView), id: id)
+        XCTAssertEqual(panel.editorHandle.webView?.documentIdentity, id)
 
         TaskDetailWindowController.shared.show(workspace: workspace, environment: environment)
         XCTAssertTrue(TaskDetailWindowController.shared.window === first,
@@ -49,7 +49,7 @@ final class TaskDetailWindowTests: XCTestCase {
         let other = try XCTUnwrap(workspace.createTask(title: "另一个任务", in: .inbox).taskID)
         workspace.select(other)
         InspectorPanelTestSupport.settle(panel)
-        XCTAssertEqual(panel.editorHandle.textView?.documentIdentity, id,
+        XCTAssertEqual(panel.editorHandle.webView?.documentIdentity, id,
                        "主页面切换任务不能改变已打开浮窗的内容")
     }
 

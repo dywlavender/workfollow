@@ -25,17 +25,26 @@ final class TaskRelationInteractionTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }
         RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        let editor = try XCTUnwrap(handle.textView)
-        editor.setSelectedRange(NSRange(location: editor.attributedString().length, length: 0))
+        let editor = try MilkdownTestSupport.editor(in: host)
+        try MilkdownTestSupport.command(editor, "focusEnd")
         XCTAssertTrue(TaskRelationSelection.apply(.note(note), sourceTaskID: source,
             workspace: workspace, notes: [note], handle: handle))
-        XCTAssertTrue(window.firstResponder === editor)
+        try MilkdownTestSupport.wait("关联事务未提交") { workspace.task(for: source)?.sourceNoteID == note.id }
+        XCTAssertTrue(MilkdownTestSupport.isFocused(editor))
         let linked = try XCTUnwrap(workspace.task(for: source)?.document)
         XCTAssertEqual(workspace.task(for: source)?.sourceNoteID, note.id)
-        XCTAssertTrue(NSApp.sendAction(#selector(NativeTextView.undo(_:)), to: window.firstResponder, from: nil))
+        let client = try MilkdownTestSupport.inputClient(editor)
+        client.insertText("快速续写", replacementRange: NSRange(location: NSNotFound, length: 0))
+        try MilkdownTestSupport.wait("续写未提交") { workspace.task(for: source)?.document.plainText.hasSuffix("快速续写") == true }
+        handle.undo()
+        try MilkdownTestSupport.wait("续写撤销未完成") { workspace.task(for: source)?.document == linked }
+        XCTAssertEqual(workspace.task(for: source)?.sourceNoteID, note.id)
+        handle.undo()
+        try MilkdownTestSupport.wait("关联撤销未完成") { workspace.task(for: source)?.sourceNoteID == nil }
         XCTAssertEqual(workspace.task(for: source)?.document, original)
         XCTAssertNil(workspace.task(for: source)?.sourceNoteID)
-        XCTAssertTrue(NSApp.sendAction(#selector(NativeTextView.redo(_:)), to: window.firstResponder, from: nil))
+        handle.redo()
+        try MilkdownTestSupport.wait("关联重做未完成") { workspace.task(for: source)?.sourceNoteID == note.id }
         XCTAssertEqual(workspace.task(for: source)?.document, linked)
         XCTAssertEqual(workspace.task(for: source)?.sourceNoteID, note.id)
         RunLoop.current.run(until: Date().addingTimeInterval(0.05))
@@ -76,6 +85,7 @@ final class TaskRelationInteractionTests: XCTestCase {
         window.orderFront(nil)
         defer { window.close() }
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        _ = try MilkdownTestSupport.editor(in: host, id: source)
         let targetID = TaskRelationTarget.task(try XCTUnwrap(workspace.task(for: target))).id
         let row = try XCTUnwrap(frames[.target(targetID)])
         XCTAssertNotNil(frames[.target(TaskRelationTarget.note(note).id)])

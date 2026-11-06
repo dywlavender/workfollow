@@ -31,8 +31,8 @@ final class TaskRowTitleFocusTests: XCTestCase {
             try InspectorPanelTestSupport.click(try XCTUnwrap(frames[.init(taskID: id, part: .title)]),
                                                in: host, window: window)
         }
-        func inspector(in view: NSView) -> NativeTextView? {
-            if let native = view as? NativeTextView { return native }
+        func inspector(in view: NSView) -> MilkdownWebView? {
+            if let native = view as? MilkdownWebView { return native }
             return view.subviews.lazy.compactMap { inspector(in: $0) }.first
         }
         try clickTitle(first)

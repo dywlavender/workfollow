@@ -23,8 +23,19 @@ final class TaskListMoreMenuTests: XCTestCase {
         XCTAssertEqual(TaskListMoreMenuPolicy.entries,
                        [.viewModes, .separator, .hidesCompleted, .detailsVisibility, .displaySettings],
                        "条目集合与顺序按滴答截图，打印/撤销/模板/分组/清单动态都不在这张菜单里")
+        // 「全部删除」只属于已完成视图：通用条目不能因为它被改动。
+        XCTAssertEqual(TaskListMoreMenuPolicy.entries(for: .completed),
+                       [.viewModes, .separator, .hidesCompleted, .detailsVisibility,
+                        .displaySettings, .separator, .deleteAllCompleted])
+        for destination in [NativeDestination.today, .tomorrow, .inbox, .allTasks,
+                            .nextSevenDays, .abandoned, .trash] {
+            XCTAssertEqual(TaskListMoreMenuPolicy.entries(for: destination),
+                           TaskListMoreMenuPolicy.entries,
+                           "\(destination.title) 不该出现「全部删除」")
+        }
         XCTAssertEqual(TaskListMoreMenuPolicy.detailsTitle(hidesDetails: false), "隐藏详细")
         XCTAssertEqual(TaskListMoreMenuPolicy.detailsTitle(hidesDetails: true), "显示详细")
+        XCTAssertEqual(TaskListMoreMenuPolicy.deleteAllCompletedTitle, "全部删除")
         for mode in TaskListViewMode.allCases {
             XCTAssertEqual(TaskListMoreMenuPolicy.viewModeHelp(mode), mode.title + "视图")
         }
@@ -167,8 +178,90 @@ final class TaskListMoreMenuTests: XCTestCase {
         try InspectorPanelTestSupport.waitUntil("Esc 应关闭清单动态") { window.attachedSheet == nil }
     }
 
-    func testViewModeIconsExposeAllModesAndSwitchSelection() throws {
-        var selection = TaskListViewMode.list
+    /// 「已完成」视图的「⋯」多出「全部删除」：菜单里点得到、确认后整批进垃圾桶。
+    ///
+    /// 菜单高度用**同一窗口切换目的地前后**的对比来判断，不写死像素：条目
+    /// 变多，菜单就该变高，这比"等于某个数"更不容易被无关的排版调整带崩。
+    func testCompletedViewMenuAddsDeleteAllCompletedAndDeletesAfterConfirmation() throws {
+        let (environment, workspace, window, host, probe) = try makeCompletedWindow()
+        defer { window.close() }
+
+        // 先量通用菜单的高度（换成收集箱量基准）。
+        environment.navigation.destination = .inbox
+        InspectorPanelTestSupport.settle(window)
+        try openMoreMenu(in: window, host: host, probe: probe)
+        let genericMenu = try InspectorPanelTestSupport.panel(title: "列表操作", below: window)
+        let genericHeight = genericMenu.frame.height
+        try InspectorPanelTestSupport.sendEscape(to: genericMenu)
+
+        environment.navigation.destination = .completed
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(workspace.completedDeletionCount(), 2)
+
+        try openMoreMenu(in: window, host: host, probe: probe)
+        let menu = try InspectorPanelTestSupport.panel(title: "列表操作", below: window)
+        XCTAssertGreaterThan(menu.frame.height, genericHeight,
+                             "已完成视图的菜单要比通用菜单多出「全部删除」那一行")
+        XCTAssertEqual(menu.frame.width, PopupMetrics.menuWidthNarrow, accuracy: 0.5)
+        try InspectorPanelTestSupport.sendEscape(to: menu)
+
+        try triggerDeleteAllCompleted(in: window, host: host, probe: probe)
+        let dialog = try deleteAllCompletedDialog(in: window)
+        XCTAssertEqual(workspace.completedDeletionCount(), 2, "确认之前不能动数据")
+
+        try clickDialogButton("全部删除", in: dialog, probe: probe)
+        try InspectorPanelTestSupport.waitUntil("确认后已完成视图应清空", timeout: 2) {
+            workspace.completedDeletionCount() == 0
+        }
+        XCTAssertEqual(workspace.deletedTasks.count, 2)
+        // 未完成的那条仍在列表里，没被顺手删掉。
+        XCTAssertTrue(workspace.allTasks.contains { $0.title == "还在做" && $0.deletedAt == nil })
+    }
+
+    /// 取消确认框时一条都不删：破坏性动作必须真的做到"点了取消就什么都没发生"。
+    func testCancellingTheConfirmationKeepsCompletedTasks() throws {
+        let (_, workspace, window, host, probe) = try makeCompletedWindow()
+        defer { window.close() }
+        XCTAssertEqual(workspace.completedDeletionCount(), 2)
+
+        try triggerDeleteAllCompleted(in: window, host: host, probe: probe)
+        let dialog = try deleteAllCompletedDialog(in: window)
+        try clickDialogButton("取消", in: dialog, probe: probe)
+
+        try InspectorPanelTestSupport.waitUntil("确认框应关闭", timeout: 2) {
+            !(window.childWindows ?? []).contains {
+                $0.title == "全部删除已完成任务" && $0.isVisible
+            }
+        }
+        XCTAssertEqual(workspace.completedDeletionCount(), 2)
+        XCTAssertTrue(workspace.deletedTasks.isEmpty)
+    }
+
+    /// 已完成为空时菜单项置灰：点下去不该弹一个"删 0 条"的确认框。
+    func testEmptyCompletedViewDisablesTheMenuEntry() throws {
+        let environment = try makeEnvironment(prefix: "task-list-completed-empty")
+        _ = environment.taskWorkspace.createDraft(title: "还在做", list: TaskList.inbox.name,
+                                                  schedule: TaskSchedule(), priority: .none,
+                                                  tags: [], reminder: nil,
+                                                  repeatFrequency: .never)
+        environment.navigation.destination = .completed
+        let (window, host, probe) = try host(environment)
+        defer { window.close() }
+        XCTAssertEqual(environment.taskWorkspace.completedDeletionCount(), 0)
+
+        try openMoreMenu(in: window, host: host, probe: probe)
+        let menu = try InspectorPanelTestSupport.panel(title: "列表操作", below: window)
+        // 走到「全部删除」那一行回车：禁用行不该执行动作。
+        for _ in 0..<4 { try sendKey(125, to: menu) }
+        try sendKey(36, to: menu)
+        // 禁用项被键盘跳过，回车可能落在别处；无论落在哪，都不能出现删除确认框。
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        XCTAssertFalse((window.childWindows ?? []).contains {
+            $0.title == "全部删除已完成任务" && $0.isVisible
+        }, "已完成为空时不该弹确认框")
+    }
+
+    func testViewModeIconsExposeAllModesAndSwitchSelection() throws {        var selection = TaskListViewMode.list
         var frames: [TaskListViewMode: CGRect] = [:]
         let binding = Binding(get: { selection }, set: { selection = $0 })
         let root = TaskListMenuViewModes(selection: binding,
@@ -228,14 +321,12 @@ final class TaskListMoreMenuTests: XCTestCase {
 
     private final class MenuProbe {
         var triggers: [String: CGRect] = [:]
+        /// 主题化对话框的按钮锚点（`workflowActionAnchor` 上报，按 identifier 索引）。
+        var dialogAnchors: [String: NSView] = [:]
     }
 
     private func makeWindow() throws -> (AppEnvironment, NSWindow, NSView, MenuProbe) {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("task-list-menu-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
-        let environment = AppEnvironment(directory: directory)
+        let environment = try makeEnvironment(prefix: "task-list-menu")
         let workspace = environment.taskWorkspace
         _ = workspace.createDraft(title: "工作安排", list: "工作", schedule: TaskSchedule(),
                                   priority: .none, tags: [], reminder: nil,
@@ -243,18 +334,90 @@ final class TaskListMoreMenuTests: XCTestCase {
         workspace.select(nil)
         workspace.activeList = "工作"
         environment.navigation.destination = .allTasks
+        let (window, host, probe) = try host(environment)
+        return (environment, window, host, probe)
+    }
+
+    /// 「已完成」视图的宿主：两条已完成 + 一条待办，方便断言"只删已完成的"。
+    private func makeCompletedWindow()
+        throws -> (AppEnvironment, TaskWorkspaceModel, NSWindow, NSView, MenuProbe) {
+        let environment = try makeEnvironment(prefix: "task-list-completed-menu")
+        let workspace = environment.taskWorkspace
+        for title in ["完成一", "完成二"] {
+            let id = workspace.createDraft(title: title, list: TaskList.inbox.name,
+                                           schedule: TaskSchedule(), priority: .none, tags: [],
+                                           reminder: nil, repeatFrequency: .never).taskID!
+            _ = workspace.complete(id)
+        }
+        _ = workspace.createDraft(title: "还在做", list: TaskList.inbox.name,
+                                  schedule: TaskSchedule(), priority: .none, tags: [],
+                                  reminder: nil, repeatFrequency: .never)
+        workspace.select(nil)
+        environment.navigation.destination = .completed
+        let (window, host, probe) = try host(environment)
+        return (environment, workspace, window, host, probe)
+    }
+
+    private func makeEnvironment(prefix: String) throws -> AppEnvironment {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return AppEnvironment(directory: directory)
+    }
+
+    private func host(_ environment: AppEnvironment) throws -> (NSWindow, NSView, MenuProbe) {
         let probe = MenuProbe()
-        let root = TaskListView(workspace: workspace, navigation: environment.navigation,
+        let root = TaskListView(workspace: environment.taskWorkspace,
+                                navigation: environment.navigation,
                                 navigationVisible: false)
             .environmentObject(environment)
             .coordinateSpace(name: "business-menu")
             .onPreferenceChange(BusinessMenuTriggerFrames.self) { probe.triggers = $0 }
+            // 主题化对话框的按钮是自绘的，不在 AX 树里；只能靠 debug 锚点定位。
+            .environment(\.workflowActionObservation, { probe.dialogAnchors[$0] = $1 })
             .frame(width: 900, height: 800)
         let host = NSHostingView(rootView: root)
         host.appearance = NSAppearance(named: .aqua)
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 900, height: 800)
         InspectorPanelTestSupport.settle(window)
-        return (environment, window, host, probe)
+        return (window, host, probe)
+    }
+
+    /// 点主题化对话框里的某个按钮。按钮标题即 identifier（未显式给 id 时）。
+    private func clickDialogButton(_ title: String, in dialog: NSWindow,
+                                   probe: MenuProbe) throws {
+        let key = "dialog.button.\(title)"
+        try InspectorPanelTestSupport.waitUntil("对话框按钮「\(title)」应完成布局", timeout: 2) {
+            guard let anchor = probe.dialogAnchors[key] else { return false }
+            return anchor.window === dialog && !anchor.bounds.isEmpty
+        }
+        let anchor = try XCTUnwrap(probe.dialogAnchors[key])
+        try InspectorPanelTestSupport.click(anchor.bounds, in: anchor, window: dialog)
+    }
+
+    /// 等到「全部删除」确认框出现并返回它。
+    private func deleteAllCompletedDialog(in window: NSWindow) throws -> NSWindow {
+        try InspectorPanelTestSupport.waitUntil("应弹出全部删除确认框", timeout: 2) {
+            (window.childWindows ?? []).contains {
+                $0.title == "全部删除已完成任务" && $0.isVisible
+            }
+        }
+        let dialog = try XCTUnwrap((window.childWindows ?? [])
+            .first { $0.title == "全部删除已完成任务" && $0.isVisible })
+        InspectorPanelTestSupport.settle(dialog)
+        return dialog
+    }
+
+    /// 在「已完成」视图里打开「⋯」并用键盘落到「全部删除」那一行。
+    private func triggerDeleteAllCompleted(in window: NSWindow, host: NSView,
+                                           probe: MenuProbe) throws {
+        try openMoreMenu(in: window, host: host, probe: probe)
+        let menu = try InspectorPanelTestSupport.panel(title: "列表操作", below: window)
+        // 键盘行序：隐藏已完成 → 隐藏详细 → 显示设置 → 全部删除
+        //（顶部三枚视图图标是自绘块，不进键盘行序）。
+        for _ in 0..<4 { try sendKey(125, to: menu) }
+        try sendKey(36, to: menu)
     }
 
     private func assertNarrowLayout(_ layout: TaskDetailLayout) throws {
@@ -275,7 +438,7 @@ final class TaskListMoreMenuTests: XCTestCase {
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 600, height: 700)
         defer { window.close() }
         try InspectorPanelTestSupport.waitUntil("\(layout.title)详情的正文编辑器应就位") {
-            self.find(NativeTextView.self, in: host) != nil
+            self.find(MilkdownWebView.self, in: host)?.isDocumentReady == true
         }
         XCTAssertNotNil(find(NativeTaskOutline.OutlineView.self, in: host),
                         "\(layout.title)形态下列表必须留在详情后面")

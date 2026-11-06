@@ -44,6 +44,16 @@ final class PlanningSettingsStore: ObservableObject {
                 persist()
             }
         }
+        // 日历取色默认从「按任务散列」迁到「清单/标签」：只迁移仍停留在旧默认值
+        // （任务）的设置，用户显式选过清单/标签/优先级的保持原样。
+        let listTagColorKey = namespace + ".calendar.colorSource.listTag.v1"
+        if !defaults.bool(forKey: listTagColorKey) {
+            defaults.set(true, forKey: listTagColorKey)
+            if calendar.colorSource == .task {
+                calendar.colorSource = .listTag
+                persist()
+            }
+        }
         renameObserver = NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)
             .receive(on: RunLoop.main)
             .sink { [weak self] notification in

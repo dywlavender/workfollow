@@ -168,12 +168,27 @@ enum WFPlanningPalette {
 
     /// 清单在当前工作区里的最终颜色：显式选色优先，否则按清单名稳定折叠。
     /// 侧栏圆点、象限行、专注面板的清单圆点因此永远同色。
-    /// **日历条不在其列**——它按任务取色，见 `taskColor(taskID:)`。
+    /// **纯「任务」模式的日历条不在其列**——它按任务取色，见 `taskColor(taskID:)`；
+    /// 清单/标签模式只在清单显式选过色时走这里，见 `listTagColor`。
     static func listColor(name: String, meta: TaskListMeta?) -> Color {
         WFListPalette.color(for: name, meta: meta)
     }
 
-    /// 日历条的颜色：按**任务**而不是按清单。
+    /// 日历条默认取色（清单/标签模式）：**有彩色标签跟标签，清单显式选过色跟清单，
+    /// 两者都没有按任务散列**（`taskColor(taskID:)`，旧「任务」模式的取色）。
+    ///
+    /// 标签优先的理由与 `taskColorIndex` 当年的取舍同源：清单色那条路对「收集箱」
+    /// 是堵死的（`setListColor` 拒绝收集箱），而大量任务都停在收集箱里——清单优先
+    /// 会让整屏只有一个蓝。标签先出场，打了标签的收集箱任务就有各自的颜色。
+    /// `listColor` 由调用方解析：仅当清单显式选过色（`TaskListMeta.hasExplicitColor`）
+    /// 才传清单色，没选色传 nil——名称推导色不是「清单自己的颜色」，此时退回任务散列。
+    static func listTagColor(tagColors: [UInt32], listColor: Color?, taskID: UUID) -> Color {
+        if let tagARGB = tagColors.first { return WFListPalette.swatch(tagARGB) }
+        if let listColor { return listColor }
+        return taskColor(taskID: taskID)
+    }
+
+    /// 「任务」模式的日历条颜色：按**任务**而不是按清单。
     ///
     /// 与 `listColor` 分开是有意的：清单色那条路对「收集箱」是堵死的（`setListColor`
     /// 拒绝收集箱），而 35 条任务里 20 条都在收集箱——日历因此只能是一整片同色的蓝。

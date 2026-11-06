@@ -23,47 +23,23 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
         defer { window.close() }
         host.layoutSubtreeIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
-        func editor(_ view: NSView) -> NativeTextView? {
-            if let text = view as? NativeTextView { return text }
-            return view.subviews.lazy.compactMap { editor($0) }.first
+        let text = try MilkdownTestSupport.editor(in: host, id: child)
+        func left(_ selector: String) throws -> CGFloat {
+            let data = try XCTUnwrap(MilkdownTestSupport.script(text, "document.querySelector('\(selector)').getBoundingClientRect().left") as? CGFloat)
+            return host.convert(.zero, from: text).x + data
         }
-        let text = try XCTUnwrap(editor(host))
-        window.makeFirstResponder(text)
-        func caretX() -> CGFloat {
-            host.convert(window.convertFromScreen(text.firstRect(forCharacterRange:
-                NSRange(location: 0, length: 0), actualRange: nil)), from: nil).minX
-        }
-        let initialX = caretX()
+        let initialX = try left(".wf-block-content")
         XCTAssertEqual(initialX, TaskInspectorMetrics.horizontalPadding, accuracy: 1)
-        let origin = host.convert(.zero, from: text).x
-        // 标记（空行 + / 标题角标）距 pane 左缘的**几何**位置：滴答实测墨迹起点 5.5pt（2x 截图里 11px），
-        // 扣掉抗锯齿的约 0.5pt → 几何值 5.0pt。替代原先"≥4"的弱断言，锁住宿主缩进 / 槽宽变化时的实际位置。
-        let expectedMarkerGeometryFromPaneEdge: CGFloat = 5.0
-        let markerX = origin + DocumentEditorGeometry.decorationMarkerX(visibleMinX: text.decorationVisibleMinX)
-        XCTAssertEqual(markerX, expectedMarkerGeometryFromPaneEdge, accuracy: 0.5,
-                       "装饰标记距 pane 左缘应为滴答实测值，当前 \(markerX)")
-        let caret = text.convert(window.convertFromScreen(text.firstRect(forCharacterRange:
-            NSRange(location: 0, length: 0), actualRange: nil)), from: nil)
-        let before = text.string
-        XCTAssertTrue(text.openBlockMenu(at: NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: text.decorationVisibleMinX) + 2,
-                                                        y: caret.midY)))
-        XCTAssertNotNil(text.slashPanel)
-        XCTAssertEqual(text.slashSession?.range.length, 0)
-        XCTAssertEqual(text.string, before)
-        text.dismissSlash()
-        XCTAssertEqual(text.string, before)
-        for level in 0...3 {
-            if level > 0 {
-                text.applyFormat(try XCTUnwrap(EditorCommandCatalog.format("format.heading\(level)")))
-            }
-            text.setSelectedRange(NSRange(location: 0, length: 0))
-            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
-            text.displayIfNeeded()
-            XCTAssertEqual(caretX(), initialX, accuracy: 1)
-            let image = try XCTUnwrap(CGWindowListCreateImage(.null, .optionIncludingWindow,
-                CGWindowID(window.windowNumber), [.bestResolution]))
-            try XCTUnwrap(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]))
-                .write(to: URL(fileURLWithPath: "/tmp/render_child_inspector_marker_\(level).png"))
+        XCTAssertEqual(try left(".wf-block-handle"), 5, accuracy: 0.5)
+        let before = text.document
+        try MilkdownTestSupport.script(text, "document.querySelector('.wf-block-handle').click()")
+        XCTAssertTrue(text.menuPanel?.isVisible == true)
+        XCTAssertEqual(text.document, before)
+        try MilkdownTestSupport.script(text, "document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
+        for level in 1...3 {
+            try MilkdownTestSupport.command(text, "format", ["id": "heading\(level)"])
+            XCTAssertEqual(try left(".wf-block-content"), initialX, accuracy: 1)
+            XCTAssertEqual(try left(".wf-block-handle"), 5, accuracy: 0.5)
         }
     }
 
@@ -164,6 +140,7 @@ final class TaskInspectorHierarchyRenderTests: XCTestCase {
         window.contentView = host
         window.orderFront(nil)
         defer { window.orderOut(nil) }
+        _ = try MilkdownTestSupport.editor(in: host)
         host.layoutSubtreeIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.15))
         host.layoutSubtreeIfNeeded()

@@ -8,7 +8,7 @@ enum TaskRelationSelection {
         guard workspace.selectedTaskID == sourceTaskID,
               let source = workspace.task(for: sourceTaskID), source.deletedAt == nil,
               !source.isConverted, source.skippedAt == nil,
-              handle.textView?.documentIdentity == sourceTaskID,
+              handle.documentIdentity == sourceTaskID,
               let current = TaskRelationProjection.targets(sourceTaskID: sourceTaskID,
                   tasks: workspace.allTasks, notes: notes, query: "").first(where: { $0.id == target.id }) else { return false }
         let previousNoteID = source.sourceNoteID

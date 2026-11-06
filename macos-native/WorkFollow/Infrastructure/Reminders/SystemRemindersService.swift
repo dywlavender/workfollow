@@ -1,9 +1,25 @@
 import EventKit
 import Foundation
 
+/// Where a reminder account actually syncs. iCloud reminder accounts surface
+/// through EventKit as CalDAV sources on macOS, so both count as "synced" for
+/// the purpose of reaching the iPhone.
+enum SystemReminderAccountKind: Equatable {
+    case iCloud, calDAV, local, other
+
+    var isSynced: Bool { self == .iCloud || self == .calDAV }
+}
+
 struct SystemReminderAccount: Identifiable, Equatable {
     var id: String
     var title: String
+    var kind: SystemReminderAccountKind = .other
+
+    /// iCloud is not always titled "iCloud" (localized or renamed accounts), so
+    /// detection uses the source kind first and the title only as a fallback.
+    var isICloud: Bool {
+        kind == .iCloud || title.localizedCaseInsensitiveContains("iCloud")
+    }
 }
 
 struct SystemReminderList: Identifiable, Equatable {
@@ -67,8 +83,18 @@ final class SystemRemindersService: SystemRemindersClient {
         guard authorization == .fullAccess else { return [] }
         let available = Set(lists().map(\.accountID))
         return store.sources.filter { available.contains($0.sourceIdentifier) }.map {
-            SystemReminderAccount(id: $0.sourceIdentifier, title: $0.title)
+            SystemReminderAccount(id: $0.sourceIdentifier, title: $0.title, kind: Self.kind($0.sourceType))
         }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+    /// iCloud reminder accounts come back from EventKit as CalDAV sources on
+    /// macOS; `.mobileMe` is the legacy type and is rarely observed today.
+    static func kind(_ value: EKSourceType) -> SystemReminderAccountKind {
+        switch value {
+        case .mobileMe: return .iCloud
+        case .calDAV: return .calDAV
+        case .local: return .local
+        default: return .other
+        }
     }
     func lists() -> [SystemReminderList] {
         guard authorization == .fullAccess else { return [] }

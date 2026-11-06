@@ -57,8 +57,8 @@ final class SummaryDraftInteractionTests: XCTestCase {
         let host = NSHostingView(rootView: EditorSurface(draft: draft, handle: handle, id: UUID()))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 700, height: 400)
         defer { window.contentView = nil; window.close() }
-        let editor = try XCTUnwrap(handle.textView)
-        window.makeFirstResponder(editor)
+        let editor = try MilkdownTestSupport.editor(in: host)
+        try MilkdownTestSupport.command(editor, "focus")
         XCTAssertTrue(handle.replaceDocument(candidate, commit: { updated in
             draft.document = updated; draft.adopted = true
         }, inverseCommit: { updated in
@@ -67,15 +67,14 @@ final class SummaryDraftInteractionTests: XCTestCase {
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(draft.document.plainText, candidate.plainText)
         XCTAssertTrue(draft.adopted)
-        XCTAssertTrue(handle.textView === editor)
-        XCTAssertTrue(editor.undoManager?.canUndo == true, "原生撤销栈应含采用操作")
-        let identity = editor.documentIdentity
-        editor.undo(nil)
-        XCTAssertEqual(editor.string, original.plainText, "undo 后的原生正文；identityChanged=\(identity != editor.documentIdentity), canUndo=\(editor.undoManager?.canUndo == true), group=\(editor.undoManager?.groupingLevel ?? -1)")
+        XCTAssertTrue(handle.webView === editor)
+        XCTAssertTrue(editor.canUndo)
+        try MilkdownTestSupport.command(editor, "undo")
+        XCTAssertEqual(editor.document.plainText, original.plainText)
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(draft.document, original)
         XCTAssertFalse(draft.adopted)
-        editor.redo(nil)
+        try MilkdownTestSupport.command(editor, "redo")
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(draft.document.plainText, candidate.plainText)
         XCTAssertTrue(draft.adopted)

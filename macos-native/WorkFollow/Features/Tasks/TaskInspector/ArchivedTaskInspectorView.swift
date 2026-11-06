@@ -25,26 +25,15 @@ struct ArchivedTaskInspectorView: View {
     }
 }
 
-private struct ArchivedTaskDocument: NSViewRepresentable {
+private struct ArchivedTaskDocument: View {
     let task: Task
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true; scroll.drawsBackground = false
-        CompactScrollStyle.apply(to: scroll)
-        let text = NativeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 400), textContainer: nil)
-        text.isEditable = false; text.isSelectable = true
-        text.textContainerInset = NSSize(width: 20, height: 20)
-        text.autoresizingMask = [.width]
-        scroll.documentView = text
-        return scroll
-    }
-    func updateNSView(_ view: NSScrollView, context: Context) {
-        guard let text = view.documentView as? NativeTextView else { return }
-        let rendered = NSMutableAttributedString(string: task.title + "\n\n", attributes: [
-            .font: NSFont.systemFont(ofSize: 22, weight: .medium), .foregroundColor: NSColor(WFColors.documentText)])
-        if let document = try? task.document.materialized() {
-            rendered.append(DocumentTextCodec.render(document, paragraphSpacing: 0))
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(task.title).font(.system(size: 22, weight: .medium)).padding(.horizontal, 20).padding(.top, 20)
+            DocumentEditor(documentID: task.id, document: task.document,
+                onDocumentChange: { _ in }, onEscape: { .keepInspector }, onEditingChanged: { _ in },
+                profile: DocumentProfile(paragraphSpacing: 0), readOnly: true)
+                .padding(.horizontal, 20)
         }
-        if !text.attributedString().isEqual(to: rendered) { text.textStorage?.setAttributedString(rendered); text.sizeToFit() }
     }
 }

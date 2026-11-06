@@ -275,10 +275,22 @@ struct CalendarWorkspaceView: View {
     private func barColor(_ id: UUID) -> Color {
         _ = visibleTasks
         guard let task = occurrenceCache.task(for: id) else { return WFColors.accent }
+        let listColor = WFPlanningPalette.listColor(name: task.list.name, meta: workspace.listMeta(for: task.list.name))
         switch settings.calendar.colorSource {
+        // 默认：有彩色标签跟标签色，清单显式选过色跟清单色，都没有按任务散列
+        // （见 WFPlanningPalette.listTagColor）。
+        case .listTag:
+            let tagColors = task.tags.compactMap { workspace.tag(named: $0)?.colorARGB }
+            let meta = workspace.listMeta(for: task.list.name)
+            let explicitListColor = meta?.hasExplicitColor == true
+                ? WFPlanningPalette.listColor(name: task.list.name, meta: meta) : nil
+            return WFPlanningPalette.listTagColor(tagColors: tagColors, listColor: explicitListColor, taskID: id)
+        case .list: return listColor
+        case .tag:
+            guard let tagName = task.tags.first else { return listColor }
+            if let tagARGB = workspace.tag(named: tagName)?.colorARGB { return WFListPalette.swatch(tagARGB) }
+            return WFPlanningPalette.listColor(name: tagName, meta: nil)
         case .task: return WFPlanningPalette.taskColor(taskID: id)
-        case .list: return WFPlanningPalette.listColor(name: task.list.name, meta: workspace.listMeta(for: task.list.name))
-        case .tag: return WFPlanningPalette.listColor(name: task.tags.first ?? task.list.name, meta: nil)
         case .priority:
             let index = switch task.priority { case .high: 0; case .medium: 1; case .low: 2; case .none: 3 }
             return WFPlanningPalette.quadrant[index]

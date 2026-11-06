@@ -99,6 +99,39 @@ final class TaskActions {
         return ids
     }
 
+    /// 笔记选中文字建任务：与 createAITasks 同一事务/回链/正文惯例（来源段落
+    /// 带可点回笔记的链接），但不去重——用户重复点击就重复创建，反馈与撤销
+    /// 由工作区层统一处理。
+    func createSelectionTasks(titles: [String], noteID: UUID) -> [UUID] {
+        let noteTitle = store.task(noteID)?.title ?? ""
+        let source = NativeDocument(blocks: [DocumentBlock(kind: .paragraph, runs: [
+            DocumentRun(text: "来源："),
+            DocumentRun(text: noteTitle.isEmpty ? "笔记" : noteTitle,
+                        marks: [.link(NativeResourceLink.note(noteID).url.absoluteString)])])])
+        var ids: [UUID] = []
+        store.transaction {
+            for title in titles {
+                let result = createDocumentedTask(title: title, document: source)
+                guard let id = result.taskID else { continue }
+                _ = setSourceNote(id, noteID)
+                ids.append(id)
+            }
+        }
+        return ids
+    }
+
+    /// create 的带正文变体：选中建任务需要携带来源段落。
+    private func createDocumentedTask(title: String, document: NativeDocument) -> TaskActionResult {
+        guard !store.archivedListNames.contains(TaskList.inbox.name) else { return .failure(.invalidList) }
+        let now = clock()
+        var task = Task(id: UUID(), title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                        document: document, list: .inbox, priority: .none, schedule: TaskSchedule(),
+                        parentID: nil, childOrder: 0, createdAt: now, updatedAt: now)
+        task.listID = listReferenceID(TaskList.inbox.name)
+        store.commit(store.tasks + [task])
+        return .success(task.id)
+    }
+
     @discardableResult
     func createChild(_ parentID: UUID, title: String = "") -> TaskActionResult {
         guard let parent = store.task(parentID) else { return .failure(.missingTask) }

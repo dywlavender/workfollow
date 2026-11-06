@@ -891,7 +891,10 @@ enum MigrationSnapshot {
     }
 
     private static func normalizedNoteFolderMetadata(_ records: [NoteFolderMeta]) -> [NoteFolderMeta] {
-        records.enumerated().sorted(by: {
+        // 导入的 parentId 可能指向不存在的 ID 或成环；先清洗再编号，
+        // 否则树视图遍历父链时可能死循环。清洗只回落 parentID，不丢记录。
+        let cleaned = NoteFolderTree.sanitized(records)
+        return cleaned.enumerated().sorted(by: {
             $0.element.sortOrder == $1.element.sortOrder
                 ? $0.offset < $1.offset
                 : $0.element.sortOrder < $1.element.sortOrder

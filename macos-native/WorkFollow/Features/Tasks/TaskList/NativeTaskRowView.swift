@@ -187,7 +187,11 @@ final class NativeTaskRowView: NSView {
         selectedTaskID = id
         guard let config = configuration else { return }
         selected = id == config.task.id || config.bulkSelected
-        hover.setSelected(selected || config.recentlyCreated)
+        // 「刚创建」是独立的一层：它只标"这行是新的"，不代表"这行正被打开"。
+        // 以前这里写成 `selected || config.recentlyCreated`，把新建标识画成了选中底色，
+        // 于是新行看着被选中、详情栏却还是上一条任务。
+        hover.setSelected(selected)
+        hover.setHighlighted(!selected && config.recentlyCreated)
         divider.isHidden = selected
         updateDragHandleVisibility()
     }

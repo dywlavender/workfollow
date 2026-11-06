@@ -103,7 +103,7 @@ struct TaskInspectorShell: View {
         .workfollowEditorPageSurface(0.93)
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
         .onReceive(workspace.selectionWillChange) { nextID in
-            guard editorHandle.textView?.documentIdentity != nextID else { return }
+            guard editorHandle.documentIdentity != nextID else { return }
             editorHandle.prepareForDocumentChange()
         }
         .onChange(of: titleEditing) { _, editing in
@@ -529,7 +529,7 @@ struct TaskInspectorShell: View {
                                  isEditing: $titleEditing,
                                  placeholder: task.parentID == nil ? "任务标题" : "准备做什么？",
                                  // 标题 Return → 正文（TI2-22，滴答 `focusOnContentIfNeeded`）。
-                                 onSubmit: { editorHandle.focusEditor() },
+                                 onSubmit: { editorHandle.focusFirstLine() },
                                  readOnly: selectedTaskHasFloatingEditor)
                 .id(task.id)
                 .inspectorRenderAnchor(.title)

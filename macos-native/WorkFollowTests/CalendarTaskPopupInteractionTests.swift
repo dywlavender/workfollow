@@ -75,7 +75,7 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
                   "first", firstFrame, "second", secondFrame, "regions", probe.frames.mapValues(\.count))
         }
 
-        var editor: NativeTextView? { Self.descendants(host).compactMap { $0 as? NativeTextView }.first }
+        var editor: MilkdownWebView? { Self.descendants(host).compactMap { $0 as? MilkdownWebView }.first }
 
         func click(_ frame: CGRect) throws { try InspectorPanelTestSupport.click(screenFrame: frame, in: window) }
 
@@ -104,7 +104,7 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
             try InspectorPanelTestSupport.waitUntil("\(mode.label)视图浮层编辑器应就位") {
                 fixture.editor != nil
             }
-            let editor = try XCTUnwrap(fixture.editor)
+            let editor = try MilkdownTestSupport.editor(in: fixture.host, id: fixture.first)
             if let bitmap = fixture.host.bitmapImageRepForCachingDisplay(in: fixture.host.bounds) {
                 fixture.host.cacheDisplay(in: fixture.host.bounds, to: bitmap)
                 try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: "/private/tmp/workfollow-calendar-popup-\(mode.rawValue).png"))
@@ -119,8 +119,10 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
                 fixture.workspace.selectedTaskID == fixture.second
             }
             XCTAssertEqual(changes, [fixture.second], "任务间切换不应先清空选中项")
+            _ = try MilkdownTestSupport.editor(in: fixture.host, id: fixture.second)
             XCTAssertEqual(fixture.editor?.documentIdentity, fixture.second)
-            XCTAssertEqual(fixture.editor?.string, "乙的正文")
+            _ = try MilkdownTestSupport.editor(in: fixture.host, id: fixture.second)
+        XCTAssertEqual(fixture.editor?.document.plainText, "乙的正文")
             if let current = fixture.editor {
                 XCTAssertTrue(current === editor, "切换时复用共享编辑器")
                 XCTAssertNotEqual(current.convert(CGPoint.zero, to: fixture.host), oldOrigin, "浮层应跟随新任务锚点")
@@ -128,7 +130,8 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
 
             try fixture.click(fixture.firstFrame)
             XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.first)
-            XCTAssertEqual(fixture.editor?.string, "甲的正文")
+            _ = try MilkdownTestSupport.editor(in: fixture.host, id: fixture.first)
+            XCTAssertEqual(fixture.editor?.document.plainText, "甲的正文")
             try InspectorPanelTestSupport.click(CGRect(x: 1180, y: 875, width: 10, height: 10), in: fixture.host, window: fixture.window)
             try InspectorPanelTestSupport.waitUntil("点击空白区域关闭详情") {
                 fixture.workspace.selectedTaskID == nil
@@ -146,7 +149,8 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
         try fixture.click(fixture.firstFrame)
         try fixture.click(fixture.secondFrame)
         XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.second)
-        XCTAssertEqual(fixture.editor?.string, "乙的正文")
+        _ = try MilkdownTestSupport.editor(in: fixture.host, id: fixture.second)
+        XCTAssertEqual(fixture.editor?.document.plainText, "乙的正文")
         XCTAssertEqual(fixture.workspace.task(for: fixture.second), original)
         try fixture.click(fixture.firstFrame)
         XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.first)
@@ -156,10 +160,9 @@ final class CalendarTaskPopupInteractionTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.close() }
         try fixture.click(fixture.firstFrame)
-        let editor = try XCTUnwrap(fixture.editor)
-        fixture.window.makeFirstResponder(editor)
-        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-        editor.insertText("，已补充", replacementRange: editor.selectedRange())
+        let editor = try MilkdownTestSupport.editor(in: fixture.host, id: fixture.first)
+        try MilkdownTestSupport.command(editor, "focusEnd")
+        try MilkdownTestSupport.command(editor, "insertText", ["text": "，已补充"])
         try fixture.click(fixture.secondFrame)
         XCTAssertEqual(fixture.workspace.selectedTaskID, fixture.second)
         XCTAssertEqual(fixture.workspace.task(for: fixture.first)?.document.plainText, "甲的正文，已补充")
