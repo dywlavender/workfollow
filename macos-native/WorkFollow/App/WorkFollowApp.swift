@@ -80,6 +80,7 @@ struct WorkFollowApp: App {
                                                           glassBackdrop: glassWindowBackdrop))
                 .onAppear {
                     lifecycle.environment = environment
+                    environment.startPersonalAssistant()
                     lifecycle.resourceLinks.configure(route: { [weak environment] url in
                         environment?.openResourceLink(url) ?? false
                     }, activate: {
@@ -109,6 +110,8 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         windowLaunch?.didFinishLaunching()
+        if NativeAppTestRunner.runIfRequested() { return }
+        environment?.startAIScheduler()
         _Concurrency.Task { await AIBackendBridge.shared.prewarm() }
         #if DEBUG
         ScrollProbeDebug.schedule()
@@ -116,6 +119,8 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        environment?.assistantBriefing.stop()
+        environment?.stopAIScheduler()
         AIBackendBridge.shared.shutdown()
     }
 
@@ -124,12 +129,14 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if NativeAppTestRunner.isRunning { return .terminateCancel }
         guard let environment else { return .terminateNow }
         // End editing first so title fields and marked text reach the model.
         for window in sender.windows { window.makeFirstResponder(nil) }
         // 悬浮笔记和便签一样要先关窗（原生编辑器借 dismantle/flush 提交
         // 组合输入），再走统一 flush 落盘。
         FloatingEditorWindowController.shared.closeAll()
+        environment.stopAIScheduler()
         environment.flush { error in
             if let error {
                 WorkfollowDialog.notice("预览数据尚未保存", message: error.localizedDescription,

@@ -100,6 +100,134 @@ final class AIConversationTests: XCTestCase {
         XCTAssertEqual(restored.current.latestResult, "第一答")
     }
 
+    func testSwitchingAndNewConversationKeepBackgroundStreamDraftAndReceipts() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-switch-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory), first = store.current
+        var resume: CheckedContinuation<String, Never>?
+        var updates: (@Sendable (AITextUpdate) -> Void)?
+        defer { first.stop(); resume?.resume(returning: "清理") }
+        first.input = "第一问"
+        first.send { _, _, _, _, receive in
+            updates = receive
+            receive(.init(kind: "text", text: "部分回复"))
+            return await withCheckedContinuation { resume = $0 }
+        }
+        try await wait { resume != nil && first.record.messages.last?.text == "部分回复" }
+        first.input = "下一问草稿"
+        let attachment = directory.appendingPathComponent("草稿.txt")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try "虚构附件".write(to: attachment, atomically: true, encoding: .utf8)
+        first.attachments.add(files: [attachment])
+        try await wait { !first.attachments.isImporting }
+        let files = first.attachments.items
+        XCTAssertEqual(files.count, 1)
+        store.newConversation()
+        let second = store.current
+        second.input = "第二问"; second.send { _, _, _, _, _ in "第二答" }
+        try await wait { !second.isRunning }
+        XCTAssertTrue(first.isRunning)
+        XCTAssertEqual(store.runningIDs, [first.record.id]); XCTAssertTrue(store.isAnyRunning)
+        store.select(first.record.id)
+        XCTAssertTrue(store.current === first)
+        XCTAssertEqual(first.input, "下一问草稿"); XCTAssertEqual(first.attachments.items, files)
+        store.select(second.record.id)
+        updates?(.init(kind: "text", text: "后台继续回复"))
+        let undoID = UUID()
+        store.recordAction(.init(title: "虚构笔记", details: "已保存", undoID: undoID), conversationID: first.record.id)
+        store.markUndone(undoID)
+        try await wait { store.records.first(where: { $0.id == first.record.id })?.messages.last?.text == "后台继续回复" }
+        let completion = resume; resume = nil; completion?.resume(returning: "第一答已完成")
+        try await wait { !first.isRunning && store.runningIDs.isEmpty }
+        XCTAssertFalse(store.isAnyRunning); XCTAssertTrue(store.current === second)
+        let saved = try XCTUnwrap(store.records.first(where: { $0.id == first.record.id }))
+        XCTAssertEqual(saved.messages.last?.text, "第一答已完成")
+        XCTAssertEqual(saved.messages.last?.actions?.first?.undone, true)
+        await withCheckedContinuation { continuation in store.flush { error in XCTAssertNil(error); continuation.resume() } }
+        let restored = AIChatStore(directory: directory)
+        restored.select(first.record.id)
+        XCTAssertEqual(restored.current.latestResult, "第一答已完成")
+        XCTAssertEqual(restored.current.record.messages.last?.actions?.first?.undone, true)
+        XCTAssertTrue(restored.runningIDs.isEmpty)
+    }
+
+    func testConcurrentConversationsStopAndDeleteOnlyTheirOwnExecution() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-concurrent-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory), first = store.current
+        var firstResume: CheckedContinuation<String, Never>?
+        var secondResume: CheckedContinuation<String, Never>?
+        first.input = "第一问"
+        first.send { _, _, _, _, _ in await withCheckedContinuation { firstResume = $0 } }
+        try await wait { firstResume != nil }
+        store.newConversation()
+        let second = store.current
+        defer {
+            first.stop(); second.stop()
+            firstResume?.resume(returning: "清理"); secondResume?.resume(returning: "清理")
+        }
+        second.input = "第二问"
+        second.send { _, _, _, _, _ in await withCheckedContinuation { secondResume = $0 } }
+        try await wait { secondResume != nil }
+        XCTAssertEqual(store.runningIDs, [first.record.id, second.record.id])
+        store.select(first.record.id); first.stop()
+        XCTAssertTrue(second.isRunning)
+        XCTAssertEqual(store.runningIDs, [second.record.id]); XCTAssertTrue(store.isAnyRunning)
+        await store.delete(second.record.id) { _ in }
+        XCTAssertFalse(second.isRunning); XCTAssertTrue(store.runningIDs.isEmpty)
+        XCTAssertTrue(store.current === first); XCTAssertFalse(store.isAnyRunning)
+        let late = secondResume; secondResume = nil; late?.resume(returning: "迟到回复")
+        try await _Concurrency.Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(store.records.map(\.id), [first.record.id])
+    }
+
+    func testBackgroundFailureClearsRunningStateAndDeleteReusesAnotherRunningModel() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-background-failure-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory), first = store.current
+        var resume: CheckedContinuation<Void, Never>?
+        defer { first.stop(); resume?.resume() }
+        first.input = "第一问"
+        first.send { _, _, _, _, _ in
+            await withCheckedContinuation { resume = $0 }
+            throw AIBackendError.disconnected
+        }
+        try await wait { resume != nil }
+        store.newConversation()
+        let second = store.current
+        second.input = "第二问"; second.send { _, _, _, _, _ in "第二答" }
+        try await wait { !second.isRunning }
+        await store.delete(second.record.id) { _ in }
+        XCTAssertTrue(store.current === first); XCTAssertTrue(first.isRunning)
+        store.newConversation()
+        let completion = resume; resume = nil; completion?.resume()
+        try await wait { !first.isRunning }
+        XCTAssertTrue(store.runningIDs.isEmpty); XCTAssertFalse(store.isAnyRunning)
+        XCTAssertEqual(store.records.first?.messages.last?.state, .failed)
+        XCTAssertNotEqual(store.current.record.id, first.record.id)
+    }
+
+    func testRelaunchDoesNotRestoreBackgroundExecutionIndicators() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-restore-running-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory), first = store.current
+        var resume: CheckedContinuation<String, Never>?
+        defer { first.stop(); resume?.resume(returning: "清理") }
+        first.input = "第一问"
+        first.send { _, _, _, _, _ in await withCheckedContinuation { resume = $0 } }
+        try await wait { resume != nil }
+        store.newConversation()
+        store.current.input = "第二问"; store.current.send { _, _, _, _, _ in "第二答" }
+        try await wait { !store.current.isRunning }
+        await withCheckedContinuation { continuation in store.flush { _ in continuation.resume() } }
+        let restored = AIChatStore(directory: directory)
+        XCTAssertFalse(restored.isAnyRunning); XCTAssertTrue(restored.runningIDs.isEmpty)
+        XCTAssertEqual(restored.records.first(where: { $0.id == first.record.id })?.messages.last?.state, .stopped)
+        restored.select(first.record.id)
+        XCTAssertFalse(restored.current.isRunning)
+        XCTAssertFalse(restored.current === first)
+    }
+
     func testDeletingHistoryKeepsCurrentOrSelectsRemainingAndSurvivesRelaunch() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-delete-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -155,20 +283,27 @@ final class AIConversationTests: XCTestCase {
             onDocumentChange: { document = $0 }, onEscape: { .keepInspector }, onEditingChanged: { _ in }, handle: handle))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 800, height: 500)
         defer { window.contentView = nil; window.close() }
-        let editor = try XCTUnwrap(handle.textView)
-        editor.setSelectedRange((editor.string as NSString).range(of: "原来的文字"))
-        let target = try XCTUnwrap(AISelectionTarget(editor: editor))
-        XCTAssertTrue(target.apply("润色后的文字", inserting: false))
-        XCTAssertEqual(editor.string, "开头。润色后的文字。结尾。")
-        editor.undoDocumentEdit()
-        XCTAssertEqual(editor.string, "开头。原来的文字。结尾。")
-        editor.setSelectedRange((editor.string as NSString).range(of: "原来的文字"))
-        let insert = try XCTUnwrap(AISelectionTarget(editor: editor))
-        XCTAssertTrue(insert.apply("新增文字", inserting: true))
-        XCTAssertEqual(editor.string, "开头。原来的文字\n新增文字。结尾。")
-        editor.undoDocumentEdit()
-        let stale = try XCTUnwrap(AISelectionTarget(editor: editor))
-        editor.documentIdentity = UUID()
-        XCTAssertFalse(stale.apply("不能写到其他笔记", inserting: false))
+        let editor = try await MilkdownTestSupport.editorAsync(in: host, id: id)
+        try MilkdownTestSupport.select(editor, (editor.document.plainText as NSString).range(of: "原来的文字"))
+        let target = try XCTUnwrap(AISelectionTarget(editor: editor, selection: MilkdownTestSupport.selection(editor)))
+        let replaced = await target.applyAsync("润色后的文字", inserting: false)
+        XCTAssertTrue(replaced); await editor.flush()
+        XCTAssertEqual(editor.document.plainText, "开头。润色后的文字。结尾。")
+        try MilkdownTestSupport.command(editor, "undo")
+        XCTAssertEqual(editor.document.plainText, "开头。原来的文字。结尾。")
+        try MilkdownTestSupport.select(editor, (editor.document.plainText as NSString).range(of: "原来的文字"))
+        let insert = try XCTUnwrap(AISelectionTarget(editor: editor, selection: MilkdownTestSupport.selection(editor)))
+        let inserted = await insert.applyAsync("新增文字", inserting: true)
+        XCTAssertTrue(inserted); await editor.flush()
+        XCTAssertEqual(editor.document.plainText, "开头。原来的文字\n新增文字。结尾。")
+        try MilkdownTestSupport.command(editor, "undo")
+        try MilkdownTestSupport.select(editor, (editor.document.plainText as NSString).range(of: "原来的文字"))
+        let stale = try XCTUnwrap(AISelectionTarget(editor: editor, selection: MilkdownTestSupport.selection(editor)))
+        let other = UUID()
+        editor.bind(.init(id: other, document: .empty, profile: .init(), readOnly: false, fontSize: 14,
+            onChange: { _ in }, onEscape: { .keepInspector }, onEditingChanged: { _ in }), handle: handle)
+        _ = try await MilkdownTestSupport.editorAsync(in: host, id: other)
+        let rejected = await stale.applyAsync("不能写到其他笔记", inserting: false)
+        XCTAssertFalse(rejected)
     }
 }

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct AppCommands: Commands {
+    @ObservedObject private var editorSession = MilkdownEditorRegistry.shared
     @ObservedObject var environment: AppEnvironment
     @ObservedObject var quickAdd: GlobalQuickAddController
     @AppStorage("globalQuickAddEnabled") private var globalQuickAddEnabled = false
@@ -143,14 +144,17 @@ struct AppCommands: Commands {
     }
 
     private var canUndo: Bool {
-        textUndoManager?.canUndo ?? environment.taskWorkspace.canUndo
+        if let editor = editorSession.focusedEditor { return editor.canUndo }
+        return textUndoManager?.canUndo ?? environment.taskWorkspace.canUndo
     }
     private var canRedo: Bool {
-        textUndoManager?.canRedo ?? environment.taskWorkspace.canRedo
+        if let editor = editorSession.focusedEditor { return editor.canRedo }
+        return textUndoManager?.canRedo ?? environment.taskWorkspace.canRedo
     }
 
     private func routeHistory(redo: Bool) {
-        if let editor = NSApp.keyWindow?.firstResponder as? NativeTextView {
+        if let editor = editorSession.focusedEditor { editor.perform(redo ? "redo" : "undo") }
+        else if let editor = NSApp.keyWindow?.firstResponder as? NativeTextView {
             if redo { editor.redo(nil) } else { editor.undo(nil) }
         } else if let manager = textUndoManager {
             if redo { manager.redo() } else { manager.undo() }

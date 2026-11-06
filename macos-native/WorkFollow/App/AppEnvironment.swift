@@ -39,6 +39,19 @@ final class AppEnvironment: ObservableObject {
     let meetingStore: MeetingStore
     let aiModels: AIModelStore
     let aiChat: AIChatStore
+    let assistantMemories: AssistantMemoryStore
+    let assistantBriefing: AssistantBriefingStore
+    let aiScheduledJobs: AIScheduledJobStore
+    var assistantStarted = false
+    var aiSchedulerStarted = false
+    lazy var aiScheduler = AIScheduledJobRunner(store: aiScheduledJobs, chats: aiChat,
+        canRun: { [weak self] in self?.canSeedWelcomeGuide == true }) { [weak self] job, run, model in
+            guard let self else { return { _, _, _, _, _ in throw AIBackendError.unavailable } }
+            var client = self.conversationClient()
+            client.scheduledTask = ["id": job.id.uuidString, "title": job.title,
+                "scheduledFor": ISO8601DateFormatter().string(from: run.scheduledFor), "timeZone": job.schedule.timeZoneID]
+            return client.generator(for: model)
+        }
     let filterStore: FilterStore
     /// 任务列表的排序/分组记忆（modules/view-preferences.json，独立于任务快照）。
     let viewPreferences: TaskViewPreferenceStore
@@ -201,6 +214,9 @@ final class AppEnvironment: ObservableObject {
         let aiModels = AIModelStore(directory: directory.appendingPathComponent("modules"))
         self.aiModels = aiModels
         aiChat = AIChatStore(directory: directory.appendingPathComponent("modules"))
+        assistantMemories = AssistantMemoryStore(directory: directory.appendingPathComponent("modules"))
+        assistantBriefing = AssistantBriefingStore(directory: directory.appendingPathComponent("modules"), clock: clock, calendar: calendar)
+        aiScheduledJobs = AIScheduledJobStore(directory: directory.appendingPathComponent("modules"), clock: clock)
         meetingStore = MeetingStore(directory: directory.appendingPathComponent("modules"),
             ai: MeetingPiClient(textModel: { try aiModels.request() }))
         filterStore = FilterStore(clock: clock)
@@ -304,6 +320,8 @@ final class AppEnvironment: ObservableObject {
                 self?.taskWorkspace.refreshDates()
                 self?.countdownStore.refresh()
                 self?.refreshSystemIntegrations()
+                self?.refreshAssistantBriefingAutomatically()
+                self?.checkAIScheduledJobs()
                 _Concurrency.Task { @MainActor [weak self] in await self?.taskWidget?.processPending() }
             }
             .store(in: &subscriptions)
@@ -391,15 +409,23 @@ final class AppEnvironment: ObservableObject {
         for name in [NSWorkspace.didWakeNotification] {
             NSWorkspace.shared.notificationCenter.publisher(for: name).sink { [weak self] _ in
                 self?.refreshSystemIntegrations()
+                self?.checkAIScheduledJobs()
             }.store(in: &subscriptions)
         }
         for name in [NSNotification.Name.NSSystemTimeZoneDidChange, .NSCalendarDayChanged, NSNotification.Name("NSSystemClockDidChangeNotification")] {
             NotificationCenter.default.publisher(for: name).sink { [weak self] _ in
                 self?.refreshSystemIntegrations()
+                self?.refreshAssistantBriefingAutomatically()
+                self?.checkAIScheduledJobs()
             }.store(in: &subscriptions)
         }
         automation = NativeAutomationBridge(channel: AutomationChannel(workspaceDirectory: directory),
-            service: NativeAutomationService(tasks: taskWorkspace, notes: notesWorkspace, directory: directory, meetings: meetingStore),
+            service: NativeAutomationService(tasks: taskWorkspace, notes: notesWorkspace, directory: directory,
+                meetings: meetingStore, memories: assistantMemories, scheduledJobs: aiScheduledJobs,
+                runScheduledJob: { [weak self] id in
+                    guard let self else { throw AIBackendError.unavailable }
+                    try self.runAIScheduledJob(id)
+                }),
             canProcess: { [weak self] in
                 guard let self else { return false }
                 return !self.loadFailed && !self.storageNeedsReload && !self.storageReplacementPending
@@ -482,8 +508,8 @@ final class AppEnvironment: ObservableObject {
             .store(in: &subscriptions)
 
         // AI 对话页和笔记右侧 AI 栏是两套会话，任意一边在生成都算“一起想”。
-        Publishers.Merge(aiChat.$current.map { $0.$isRunning }.switchToLatest(),
-                         NoteAIConversationStore.shared.$isAnyRunning)
+        Publishers.CombineLatest(aiChat.$isAnyRunning, NoteAIConversationStore.shared.$isAnyRunning)
+            .map { $0 || $1 }
             .removeDuplicates()
             .sink { [weak self] running in self?.companion.setAIThinking(running) }
             .store(in: &subscriptions)
@@ -657,6 +683,13 @@ final class AppEnvironment: ObservableObject {
     }
 
     func flush(completion: @escaping (Error?) -> Void) {
+        _Concurrency.Task { @MainActor in
+            await MilkdownEditorRegistry.shared.flushAll()
+            flushStores(completion: completion)
+        }
+    }
+
+    private func flushStores(completion: @escaping (Error?) -> Void) {
         meetingStore.stopRecording()
         flushMetadata()
         persistence.flush { first in
@@ -679,6 +712,8 @@ final class AppEnvironment: ObservableObject {
     /// Drain the old in-memory state before import/restore. After replacement,
     /// disable workspace autosave until restart so termination cannot overwrite it.
     func prepareStorageReplacement(completion: @escaping (Error?) -> Void) {
+        assistantBriefing.stop()
+        stopAIScheduler()
         flushMetadata()
         storageReplacementPending = true
         flush(completion: completion)

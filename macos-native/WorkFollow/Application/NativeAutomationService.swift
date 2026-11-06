@@ -6,10 +6,19 @@ final class NativeAutomationService {
     let notes: NotesWorkspaceModel
     let directory: URL
     let meetings: MeetingStore?
-    init(tasks: TaskWorkspaceModel, notes: NotesWorkspaceModel, directory: URL, meetings: MeetingStore? = nil) {
+    let memories: AssistantMemoryStore
+    let scheduledJobs: AIScheduledJobStore
+    let runScheduledJob: ((UUID) throws -> Void)?
+    init(tasks: TaskWorkspaceModel, notes: NotesWorkspaceModel, directory: URL, meetings: MeetingStore? = nil,
+         memories: AssistantMemoryStore? = nil, scheduledJobs: AIScheduledJobStore? = nil,
+         runScheduledJob: ((UUID) throws -> Void)? = nil) {
         self.tasks = tasks; self.notes = notes; self.directory = directory; self.meetings = meetings
+        self.memories = memories ?? AssistantMemoryStore(directory: directory.appendingPathComponent("modules"))
+        self.scheduledJobs = scheduledJobs ?? AIScheduledJobStore(directory: directory.appendingPathComponent("modules"))
+        self.runScheduledJob = runScheduledJob
     }
     func execute(_ request: AutomationRequest) throws -> AutomationValue {
+        if request.operation.hasPrefix("memory.") || request.operation.hasPrefix("schedule.") { return try executeBody(request) }
         guard Self.writes(request.operation), request.operation != "operation.undo" else { return try executeBody(request) }
         let before = tasks.automationUndoID
         let value = try tasks.automationTransaction { try executeBody(request) }
@@ -25,6 +34,8 @@ final class NativeAutomationService {
             throw AutomationFailure.argument("不支持的操作或协议版本，请更新 CLI 与 App。")
         }
         let args = request.arguments
+        if let result = try executeMemory(request) { return result }
+        if let result = try executeSchedule(request) { return result }
         if let result = try executeOrganization(request) { return result }
         switch request.operation {
         case "operation.undo":
@@ -133,6 +144,8 @@ final class NativeAutomationService {
     }
     static func writes(_ operation: String) -> Bool {
         ["task.add", "task.update", "task.complete", "task.reopen", "task.trash", "note.create", "note.update", "note.append", "operation.undo"].contains(operation)
+            || ["memory.add", "memory.update", "memory.delete"].contains(operation)
+            || ["schedule.add", "schedule.update", "schedule.delete", "schedule.run"].contains(operation)
             || organizationWrites.contains(operation)
     }
     private func id(_ args: [String: String]) throws -> UUID {

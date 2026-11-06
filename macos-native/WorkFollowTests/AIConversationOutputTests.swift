@@ -19,6 +19,19 @@ final class AIConversationOutputTests: XCTestCase {
         let draft = try AIConversationOutput.decode("```workfollow-note\n{\"content\":\"正文\\n第二段\"}\n```", preset: nil)
         XCTAssertEqual(draft.artifacts.first?.content, "正文\n第二段")
     }
+    /// 选区 AI 的三个动作都必须能回写；provider 不按结果块格式返回时也一样。
+    func testAllThreeSelectionPresetsStayAdoptableWithPlainTextResult() throws {
+        for preset: AIConversationPreset in [.polish, .organize, .translate] {
+            let output = try AIConversationOutput.decode("译文正文", preset: preset)
+            XCTAssertEqual(output.artifacts.count, 1, "\(preset.rawValue) 应产生可采纳文稿")
+            XCTAssertEqual(output.artifacts.first?.kind, .writing)
+            XCTAssertEqual(output.artifacts.first?.content, "译文正文")
+            XCTAssertEqual(output.text, "")
+        }
+        let chat = try AIConversationOutput.decode("自由讨论的回复", preset: nil)
+        XCTAssertTrue(chat.artifacts.isEmpty, "普通聊天不能凭空冒出可采纳按钮")
+        XCTAssertEqual(chat.text, "自由讨论的回复")
+    }
     func testReceiptsReachBothTransientSurfaces() {
         for scene in [AIConversationModel.Scene.note, .selection] {
             let model = AIConversationModel(record: .init(messages: [.init(role: .assistant, text: "")]), scene: scene)

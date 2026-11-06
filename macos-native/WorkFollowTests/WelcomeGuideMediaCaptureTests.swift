@@ -378,34 +378,20 @@ final class WelcomeGuideMediaCaptureTests: XCTestCase {
                 $0.document = NativeDocument(plainText: "把想法和任务放在一起：\n· 读到有启发的一段，先记下来\n· 需要行动的部分，直接转成任务")
             }
         } after: { fixture, recorder in
-            let editor = try XCTUnwrap(fixture.descendants(of: fixture.window)
-                .compactMap { $0 as? NativeTextView }
-                .first { $0.isEditable }, "笔记编辑器未出现")
-            fixture.window.makeFirstResponder(editor)
-            let text = editor.string as NSString
-            let range = text.range(of: "需要行动的部分，直接转成任务")
+            let editor = try MilkdownTestSupport.editor(in: try XCTUnwrap(fixture.window.contentView))
+            try MilkdownTestSupport.command(editor, "focus")
+            let range = (editor.document.plainText as NSString).range(of: "需要行动的部分，直接转成任务")
             XCTAssertNotEqual(range.location, NSNotFound)
-            editor.setSelectedRange(range)
-            editor.refreshSelectionToolbar()
+            try MilkdownTestSupport.select(editor, range)
             recorder.wait(0.5)
-
-            var toolbar: NSPanel?
-            let deadline = Date().addingTimeInterval(2)
-            while Date() < deadline {
-                toolbar = fixture.window.childWindows?.compactMap { $0 as? NSPanel }
-                    .first { $0.isVisible && $0.frame.height > 20 && $0.frame.height < 80 }
-                if toolbar != nil { break }
-                fixture.settle(0.05)
-            }
-            let panel = try XCTUnwrap(toolbar, "选区工具条未出现")
-            let content = try XCTUnwrap(panel.contentView)
-            let actionRect = CGRect(x: 10, y: content.bounds.midY - 13, width: 68, height: 26)
-            let actionPoint = fixture.point(
-                screenFrame: panel.convertToScreen(content.convert(actionRect, to: nil)))
+            let geometry = try XCTUnwrap(MilkdownTestSupport.script(editor, "(() => { const b=Array.from(document.querySelectorAll('#wf-selection button')).find(b=>b.textContent==='创建任务'); const r=b.getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()") as? [String: CGFloat])
+            let actionRect = NSRect(x: geometry["x"]!, y: geometry["y"]!, width: geometry["width"]!, height: geometry["height"]!)
+            let nativeRect = NSRect(x: actionRect.minX, y: editor.webView.isFlipped ? actionRect.minY : editor.webView.bounds.height - actionRect.maxY,
+                width: actionRect.width, height: actionRect.height)
+            let actionPoint = fixture.point(screenFrame: fixture.window.convertToScreen(editor.webView.convert(nativeRect, to: nil)))
             recorder.moveCursor(to: actionPoint, over: 0.6)
-            recorder.wait(0.4)
-            recorder.click(at: actionPoint)
-            try InspectorPanelTestSupport.click(actionRect, in: content, window: panel)
+            recorder.wait(0.4); recorder.click(at: actionPoint)
+            try MilkdownTestSupport.script(editor, "Array.from(document.querySelectorAll('#wf-selection button')).find(b=>b.textContent==='创建任务').click()")
             recorder.wait(1.2)
 
             let notes = fixture.environment.notesWorkspace

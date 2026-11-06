@@ -197,53 +197,66 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var records: [AIConversationRecord]
     @Published private(set) var storageError: String?
     @Published private(set) var deletingIDs: Set<UUID> = []
+    @Published private(set) var runningIDs: Set<UUID> = []
+    @Published private(set) var isAnyRunning = false
     let sessionDirectory: URL
     private let persistence: JSONFileStore<Snapshot>
+    private var models: [UUID: AIConversationModel] = [:]
+    private var observations: [UUID: AnyCancellable] = [:]
 
     init(directory: URL) {
         sessionDirectory = directory.appendingPathComponent("ai-conversations", isDirectory: true)
         persistence = JSONFileStore(filename: "ai-chat.json", directory: directory)
         let saved = persistence.load()
-        records = saved?.records ?? []
-        current = AIConversationModel(record: saved?.records.first(where: { $0.id == saved?.selectedID }) ?? .init(), directory: sessionDirectory)
-        connect()
+        var restored = saved?.records ?? []
+        for i in restored.indices {
+            for j in restored[i].messages.indices where restored[i].messages[j].state == .generating {
+                restored[i].messages[j].state = .stopped
+            }
+        }
+        records = restored
+        current = AIConversationModel(record: restored.first(where: { $0.id == saved?.selectedID }) ?? .init(), directory: sessionDirectory)
+        connect(current)
     }
     func newConversation() {
-        current.stop()
-        current.attachments.discard()
-        guard !current.record.messages.isEmpty else { current.input = ""; current.setReferences([]); return }
-        current = AIConversationModel(directory: sessionDirectory); connect(); save()
+        guard !current.record.messages.isEmpty else {
+            current.input = ""; current.attachments.discard(); current.setReferences([]); return
+        }
+        current = AIConversationModel(directory: sessionDirectory); connect(current); save()
     }
     func select(_ id: UUID) {
         guard id != current.record.id, !deletingIDs.contains(id),
               let record = records.first(where: { $0.id == id }) else { return }
-        current.stop(); current.attachments.discard()
-        current = AIConversationModel(record: record, directory: sessionDirectory); connect(); save()
+        current = model(for: record); save()
     }
     func delete(_ id: UUID, using removeSession: (UUID) async throws -> Void) async {
         guard records.contains(where: { $0.id == id }), deletingIDs.insert(id).inserted else { return }
         defer { deletingIDs.remove(id) }
-        if current.record.id == id { current.stop(); current.attachments.discard() }
+        let model = models[id]
+        model?.stop(); model?.attachments.discard()
         do { try await removeSession(id) }
         catch { storageError = error.localizedDescription; return }
+        model?.onChange = nil
+        observations.removeValue(forKey: id)
+        models.removeValue(forKey: id)
         records.removeAll { $0.id == id }
         if current.record.id == id {
-            current.onChange = nil
-            current = AIConversationModel(record: records.max(by: { $0.updatedAt < $1.updatedAt }) ?? .init(), directory: sessionDirectory)
-            connect()
+            current = self.model(for: records.max(by: { $0.updatedAt < $1.updatedAt }) ?? .init())
         }
         storageError = nil; save()
     }
+    /// A scheduled run writes to history without replacing the selected chat or draft.
+    func trackBackground(_ model: AIConversationModel) { connect(model) }
     func recordAction(_ receipt: AIActionReceipt, conversationID: UUID) {
-        if current.record.id == conversationID { current.appendAction(receipt); return }
+        if let model = models[conversationID] { model.appendAction(receipt); return }
         guard let index = records.firstIndex(where: { $0.id == conversationID }),
               let message = records[index].messages.lastIndex(where: { $0.role == .assistant }) else { return }
         records[index].messages[message].actions = (records[index].messages[message].actions ?? []) + [receipt]
         save()
     }
     func markUndone(_ token: UUID) {
-        current.markUndone(token)
-        for i in records.indices where records[i].id != current.record.id {
+        for model in models.values { model.markUndone(token) }
+        for i in records.indices where models[records[i].id] == nil {
             for j in records[i].messages.indices {
                 guard var actions = records[i].messages[j].actions else { continue }
                 for k in actions.indices where actions[k].undoID == token { actions[k].undone = true }
@@ -252,13 +265,29 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
         }
         save()
     }
-    private func connect() {
-        current.onChange = { [weak self] value in
-            guard let self, self.current.record.id == value.id else { return }
+    private func model(for record: AIConversationRecord) -> AIConversationModel {
+        if let model = models[record.id] { return model }
+        let model = AIConversationModel(record: record, directory: sessionDirectory)
+        connect(model); return model
+    }
+    private func connect(_ model: AIConversationModel) {
+        let id = model.record.id
+        guard models[id] !== model else { return }
+        models[id] = model
+        AIConversationRegistry.shared.register(model)
+        model.onChange = { [weak self, weak model] value in
+            guard let self, let model, self.models[value.id] === model else { return }
             guard !value.messages.isEmpty else { self.objectWillChange.send(); return }
             if let i = self.records.firstIndex(where: { $0.id == value.id }) { self.records[i] = value }
             else { self.records.append(value) }
             self.save()
+        }
+        observations[id] = model.$isRunning.removeDuplicates().sink { [weak self] running in
+            guard let self else { return }
+            var ids = self.runningIDs
+            if running { ids.insert(id) } else { ids.remove(id) }
+            if ids != self.runningIDs { self.runningIDs = ids }
+            if self.isAnyRunning != !ids.isEmpty { self.isAnyRunning = !ids.isEmpty }
         }
     }
     private func save() { persistence.schedule(Snapshot(selectedID: current.record.id, records: records)) }

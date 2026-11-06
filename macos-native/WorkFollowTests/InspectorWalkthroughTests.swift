@@ -74,41 +74,18 @@ final class InspectorWalkthroughTests: XCTestCase {
         InspectorPanelTestSupport.settle(window)
         try capture(window, "04-after-deadline")
 
-        if let textView = firstTextView(in: window) {
-            let point = NSPoint(x: DocumentEditorGeometry.decorationMarkerX(visibleMinX: textView.decorationVisibleMinX) + 2,
-                                y: (textView.viewRect(forCharacterAt: 0) ?? .zero).midY)
-            _ = textView.openBlockMenu(at: point)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.25))
-            if let panel = textView.slashPanel, panel.isVisible { try capture(panel, "05-block-menu") }
-            textView.dismissSlash()
-        }
-
-        if let textView = firstTextView(in: window) {
-            window.makeFirstResponder(textView)
-            let end = (textView.string as NSString).length
-            textView.setSelectedRange(NSRange(location: end, length: 0))
-            textView.insertText("\n#", replacementRange: textView.selectedRange())
-            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-            if let panel = textView.tagPanel, panel.isVisible { try capture(panel, "06-tag-completion") }
-            textView.dismissTagCompletion()
-        }
-
-        if let textView = firstTextView(in: window) {
-            let source = textView.string as NSString
-            let linkRange = source.range(of: "链接")
-            if linkRange.location != NSNotFound,
-               let line = textView.viewRect(forCharacterAt: linkRange.location),
-               let event = NSEvent.mouseEvent(with: .mouseMoved,
-                                              location: textView.convert(NSPoint(x: line.minX + 8, y: line.midY), to: nil),
-                                              modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                              windowNumber: window.windowNumber, context: nil,
-                                              eventNumber: 0, clickCount: 0, pressure: 0) {
-                textView.mouseMoved(with: event)
-                RunLoop.main.run(until: Date().addingTimeInterval(0.2))
-                if let panel = textView.linkHoverPanel, panel.isVisible { try capture(panel, "07-link-hover") }
-                textView.hideLinkHoverMenu()
-            }
-        }
+        let body = try MilkdownTestSupport.editor(in: host, id: id)
+        try MilkdownTestSupport.script(body, "document.querySelector('.wf-block-handle').click()")
+        try capture(window, "05-block-menu")
+        try MilkdownTestSupport.script(body, "document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
+        try MilkdownTestSupport.command(body, "focusEnd")
+        try MilkdownTestSupport.command(body, "insertText", ["text": "\n#"])
+        try capture(window, "06-tag-completion")
+        try MilkdownTestSupport.script(body, "document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
+        try MilkdownTestSupport.script(body, "document.querySelector('a').dispatchEvent(new PointerEvent('pointerover',{bubbles:true}))")
+        InspectorPanelTestSupport.settle(window, duration: 0.25)
+        try capture(window, "07-link-hover")
+        try MilkdownTestSupport.script(body, "document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
 
         try InspectorPanelTestSupport.clickButton(containing: "任务类型", in: window)
         if let menu = InspectorPanelTestSupport.visibleWindows(below: window).first(where: { $0.title == "任务类型" }) {
@@ -138,14 +115,4 @@ final class InspectorWalkthroughTests: XCTestCase {
         try capture(window, "12-comments-open")
     }
 
-    private func firstTextView(in window: NSWindow) -> NativeTextView? {
-        var found: NativeTextView?
-        func walk(_ view: NSView) {
-            if found != nil { return }
-            if let text = view as? NativeTextView { found = text; return }
-            for child in view.subviews { walk(child) }
-        }
-        if let root = window.contentView { walk(root) }
-        return found
-    }
 }

@@ -8,6 +8,12 @@ struct AutomationInvocation {
 
     static let options: [String: Set<String>] = [
         "status": [],
+        "memory.list": [], "memory.add": ["content"],
+        "memory.update": ["id", "version", "content"], "memory.delete": ["id", "version"],
+        "schedule.list": ["query", "limit", "offset"], "schedule.get": ["id"],
+        "schedule.add": ["title", "content", "at", "repeat", "time-zone", "enabled"],
+        "schedule.update": ["id", "version", "title", "content", "at", "repeat", "time-zone", "enabled"],
+        "schedule.delete": ["id", "version"], "schedule.run": ["id"],
         "task.add": ["title", "list", "section", "priority", "date", "due", "content", "reminder", "reminder-offsets", "repeat", "repeat-interval", "repeat-weekdays", "repeat-until", "repeat-count"],
         "task.list": ["query", "list", "section", "completed", "from", "to", "priority", "limit", "offset"],
         "task.count": ["query", "list", "completed", "from", "to", "priority"],
@@ -35,6 +41,17 @@ struct AutomationInvocation {
     workfollowctl — 操作本机 WorkFollow 原生 App
 
       status
+      memory list
+      memory add --content TEXT
+      memory update --id UUID --version VERSION --content TEXT
+      memory delete --id UUID --version VERSION
+      schedule list [--query TEXT] [--limit N] [--offset N]
+      schedule get --id UUID
+      schedule add --content TEXT --at ISO8601 [--title TEXT] [--repeat once|daily|weekdays|weekly]
+                   [--time-zone Asia/Shanghai] [--enabled true|false]
+      schedule update --id UUID --version VERSION [--content TEXT] [--at ISO8601] [--repeat VALUE] [--enabled true|false]
+      schedule delete --id UUID --version VERSION
+      schedule run --id UUID
       task add --title TEXT [--list NAME] [--section ID] [--priority none|low|medium|high]
                [--date YYYY-MM-DD|ISO8601] [--due YYYY-MM-DD|ISO8601] [--content TEXT]
       task list [--query TEXT] [--list NAME] [--section ID] [--completed true|false] [--limit N] [--offset N]
@@ -122,6 +139,8 @@ struct AutomationInvocation {
             values["content"] = try readContent(file)
         }
         var required: [String] = []
+        if ["memory.add", "memory.update"].contains(operation) { required.append("content") }
+        if operation == "schedule.add" { required += ["content", "at"] }
         if ["task.add", "section.create", "section.rename"].contains(operation) { required.append("title") }
         if operation.hasPrefix("list.") && operation != "list.list"
             || operation.hasPrefix("group.") && operation != "group.list" { required.append("name") }
@@ -131,11 +150,11 @@ struct AutomationInvocation {
         for key in required where values[key]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
             throw AutomationFailure.argument("请提供非空 --\(key)。")
         }
-        if ["task.get", "task.update", "task.complete", "task.reopen", "task.trash", "note.get", "note.update", "note.append", "meeting.get", "operation.undo"].contains(operation) {
+        if ["task.get", "task.update", "task.complete", "task.reopen", "task.trash", "note.get", "note.update", "note.append", "meeting.get", "operation.undo", "memory.update", "memory.delete", "schedule.get", "schedule.update", "schedule.delete", "schedule.run"].contains(operation) {
             guard let id = values["id"], UUID(uuidString: id) != nil else { throw AutomationFailure.argument("请提供有效的 --id UUID。") }
         }
-        if ["task.update", "task.complete", "task.reopen", "note.update", "note.append"].contains(operation), values["version"] == nil {
-            throw AutomationFailure.argument("请先 get 读取记录，再传入其 --version。")
+        if ["task.update", "task.complete", "task.reopen", "note.update", "note.append", "memory.update", "memory.delete", "schedule.update", "schedule.delete"].contains(operation), values["version"] == nil {
+            throw AutomationFailure.argument("请先读取最新记录，再传入其 --version。")
         }
         if operation.hasSuffix(".update"), Set(values.keys).subtracting(["id", "version"]).isEmpty {
             throw AutomationFailure.argument("请至少提供一个要修改的字段。")

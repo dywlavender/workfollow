@@ -1,12 +1,13 @@
 import Foundation
 
 enum AIConversationPreset: String, Codable {
-    case extract, organize, polish
+    case extract, organize, polish, translate
     var question: String {
         switch self {
         case .extract: "请从当前内容中提取明确的待办，先给出候选。"
         case .organize: "请把当前内容整理成清晰的要点。"
         case .polish: "请润色当前内容，保留原意和事实。"
+        case .translate: "请把当前内容翻译成英文；如果原文已经是英文，就翻译成中文。"
         }
     }
 }
@@ -74,7 +75,11 @@ enum AIConversationOutput {
                   object["tasks"] is [[String: Any]] else { throw SummaryPiError.failed("待办结果格式无效，请重试。") }
             return Result(text: "", artifacts: [.init(kind: .tasks, content: json)])
         }
-        if preset == .organize || preset == .polish {
+        // 选区的润色 / 总结 / 翻译都要能在右侧 AI 栏回写。模型偶尔不按
+        // workfollow-note 结果块的格式返回，这时把整段正文当作可采纳文稿；
+        // 漏掉 translate 会让 latestWritingResult 为空，"替换 / 插入" 不出现，
+        // 翻译结果就写不回选区（润色和总结不会，行为不一致）。
+        if preset == .organize || preset == .polish || preset == .translate {
             return Result(text: "", artifacts: [.init(kind: .writing, content: raw)])
         }
         return Result(text: raw, artifacts: [])
@@ -91,6 +96,7 @@ final class AIConversationRegistry {
         models = models.filter { $0.value.model != nil }
         models[model.record.id] = Entry(model)
     }
+    func model(_ id: UUID) -> AIConversationModel? { models[id]?.model }
     func append(_ receipt: AIActionReceipt, id: UUID) -> Bool {
         guard let model = models[id]?.model else { return false }
         model.appendAction(receipt); return true

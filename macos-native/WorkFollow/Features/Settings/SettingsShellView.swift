@@ -2,12 +2,13 @@ import SwiftUI
 import ServiceManagement
 
 enum SettingsSection: String, CaseIterable, Hashable {
-    case general, ai, data, appleSync, localNotifications
+    case general, ai, assistant, data, appleSync, localNotifications
 
     var title: String {
         switch self {
         case .general: return "通用"
         case .ai: return "AI 模型"
+        case .assistant: return "助手记忆"
         case .data: return "数据"
         case .appleSync: return "Apple 同步"
         case .localNotifications: return "本机通知"
@@ -18,6 +19,7 @@ enum SettingsSection: String, CaseIterable, Hashable {
         switch self {
         case .general: return "gearshape"
         case .ai: return "sparkles"
+        case .assistant: return "brain.head.profile"
         case .data: return "externaldrive"
         case .appleSync: return "checklist"
         case .localNotifications: return "bell"
@@ -80,6 +82,11 @@ struct SettingsShellView: View {
         case .ai:
             SettingsAIModelsView(store: environment.meetingStore, models: environment.aiModels,
                                  catalog: aiCatalog)
+        case .assistant:
+            SettingsAssistantMemoryView(memories: environment.assistantMemories,
+                briefing: environment.assistantBriefing) {
+                    environment.refreshAssistantBriefingAutomatically()
+                }.disabled(!environment.canSeedWelcomeGuide)
         case .data:
             SettingsDataView()
         case .appleSync:

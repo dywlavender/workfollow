@@ -7,6 +7,8 @@ struct AIConversationClient {
     var model = ""
     var directory: URL
     var appURL: URL = Bundle.main.bundleURL
+    var assistantContext: @MainActor () -> ([AssistantMemory], String) = { ([], "") }
+    var scheduledTask: [String: String]? = nil
 
     func checkConfiguration() async throws -> [AIConfigurationCheck] {
         struct Response: Decodable { let checks: [AIConfigurationCheck] }
@@ -36,6 +38,10 @@ struct AIConversationClient {
             "scene": scene.rawValue, "context": context, "message": message,
             "piExecutable": executable, "model": model, "engine": "pi", "timeoutSeconds": 120
         ]
+        let (memories, briefing) = await assistantContext()
+        params["memories"] = memories.map(\.parameters)
+        if let scheduledTask { params["scheduledTask"] = scheduledTask }
+        if scene == .chat, scheduledTask == nil, !briefing.isEmpty { params["briefing"] = briefing }
         if !attachments.isEmpty { params["attachments"] = attachments.map(\.parameters) }
         if let preset { params["preset"] = preset.rawValue }
         if let source { params["source"] = source.parameters }
@@ -48,6 +54,16 @@ struct AIConversationClient {
             params["localTime"] = day.string(from: Date()); params["timeZone"] = TimeZone.current.identifier
         }
         let response: Response = try await AITextStreamRequest.call(backend: backend, method: "conversation.send", params: params, updates: updates)
+        return response.text
+    }
+
+    func briefing(facts: AssistantBriefingFacts, updates: @escaping @Sendable (AITextUpdate) -> Void) async throws -> String {
+        struct Response: Decodable { let text: String }
+        let (memories, _) = await assistantContext()
+        let response: Response = try await AITextStreamRequest.call(backend: backend, method: "assistant.briefing", params: [
+            "piExecutable": executable, "model": model, "engine": "pi", "timeoutSeconds": 120,
+            "facts": facts.parameters, "memories": memories.map(\.parameters)
+        ], updates: updates)
         return response.text
     }
 

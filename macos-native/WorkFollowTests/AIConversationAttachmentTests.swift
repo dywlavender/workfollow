@@ -150,7 +150,7 @@ final class AIConversationAttachmentTests: XCTestCase {
         pasteboard.clearContents(); pasteboard.writeObjects([file as NSURL])
         // Paste and native drop share this exact pasteboard consumer.
         XCTAssertTrue(input.receiveAttachments(from: pasteboard))
-        try await wait { model.attachments.items.count == 2 }
+        try await wait { model.attachments.items.count == 2 && !model.attachments.isImporting && model.canSend }
         XCTAssertEqual(input.string, "", "附件不能插入为普通路径文字")
         if let path = ProcessInfo.processInfo.environment["WORKFOLLOW_ATTACHMENT_CAPTURE"] {
             InspectorPanelTestSupport.settle(window)
@@ -158,6 +158,7 @@ final class AIConversationAttachmentTests: XCTestCase {
             host.cacheDisplay(in: host.bounds, to: bitmap)
             try XCTUnwrap(bitmap.representation(using: .png, properties: [:])).write(to: URL(fileURLWithPath: path))
         }
+        InspectorPanelTestSupport.settle(window)
         let send = try XCTUnwrap(anchors["ai.chat.send"])
         try InspectorPanelTestSupport.click(send.bounds, in: send, window: window)
         try await wait { !model.isRunning && model.record.messages.count == 2 }

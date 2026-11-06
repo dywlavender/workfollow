@@ -49,7 +49,7 @@ struct SettingsAIModelsView: View {
                 if textEngine == .langchain {
                     SettingsDirectAIModelView(models: models)
                     modelRow(speech: false, chatOnly: true)
-                    WFFormNote("独立对话和选区浮窗使用 Pi；其他文字处理使用上方的直接调用配置。")
+                    WFFormNote("对话、今日简报和 AI 定时任务使用 Pi；其他文字处理使用上方的直接调用配置。")
                 }
                 else { modelRow(speech: false) }
                 if let configurationError {

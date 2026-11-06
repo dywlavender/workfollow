@@ -7,6 +7,7 @@ struct AIChatWorkspaceView: View {
     @State private var historyPresented = false
     @State private var deletionTarget: AIConversationRecord?
     @State private var referencesPresented = false
+    @State private var scheduledTasksPresented = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -16,6 +17,12 @@ struct AIChatWorkspaceView: View {
                 conversation(showHistoryButton: !wide)
             }
         }.accessibilityIdentifier("ai.chat.page").workflowActionAnchor("ai.chat.page")
+            .sheet(isPresented: $scheduledTasksPresented) {
+                AIScheduledTasksView(store: environment.aiScheduledJobs, runner: environment.aiScheduler,
+                    runNow: { try environment.runAIScheduledJob($0) }, openResult: { environment.openAIScheduledResult($0) },
+                    close: { scheduledTasksPresented = false })
+                    .disabled(!environment.canSeedWelcomeGuide)
+            }
             .workfollowAlert(
                 "删除这段对话？",
                 message: "将删除“\(deletionTarget?.title ?? "")”及其本地会话记录，无法恢复。已创建的待办和笔记会保留。",
@@ -49,6 +56,7 @@ struct AIChatWorkspaceView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(WFColors.border))
                     .contentShape(Rectangle())
             }.buttonStyle(.plain)
+                .firstMouseAction { store.newConversation(); historyPresented = false }
                 .accessibilityLabel("新对话").accessibilityIdentifier("ai.chat.new").workflowActionAnchor("ai.chat.new")
                 .padding(.horizontal, 12).padding(.top, 36).padding(.bottom, 24)
             Text("历史对话").font(WFType.sectionSemibold)
@@ -61,6 +69,7 @@ struct AIChatWorkspaceView: View {
                     }
                     ForEach(store.records.sorted { $0.updatedAt > $1.updatedAt }) { record in
                         AIChatHistoryRow(record: record, selected: record.id == store.current.record.id,
+                                         running: store.runningIDs.contains(record.id),
                                          deleting: store.deletingIDs.contains(record.id)) {
                             store.select(record.id); historyPresented = false
                         } onDelete: {
@@ -71,6 +80,19 @@ struct AIChatWorkspaceView: View {
             }.compactScrollbars()
             Divider()
             PiChatModelButton(store: environment.meetingStore, disabled: store.current.isRunning).padding(.horizontal, 8)
+            Button(action: showScheduledTasks) {
+                Label("定时任务", systemImage: "clock.badge.checkmark")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(12).contentShape(Rectangle())
+            }.buttonStyle(.plain).padding(.horizontal, 8)
+                .firstMouseAction(showScheduledTasks)
+                .accessibilityIdentifier("ai.chat.schedules").workflowActionAnchor("ai.chat.schedules")
+            Button { environment.settingsSection = .assistant; openSettings() } label: {
+                Label("助手记忆", systemImage: "brain.head.profile")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(12).contentShape(Rectangle())
+            }.buttonStyle(.plain).padding(.horizontal, 8)
+                .workflowActionAnchor("ai.chat.memory")
             Button { environment.settingsSection = .ai; openSettings() } label: {
                 Label("模型设置", systemImage: "slider.horizontal.3")
                     .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
@@ -83,6 +105,14 @@ struct AIChatWorkspaceView: View {
             .accessibilityIdentifier("ai.chat.history").workflowActionAnchor("ai.chat.history")
     }
 
+    private func showScheduledTasks() {
+        if historyPresented {
+            historyPresented = false
+            // Present from the chat page after its history child has closed.
+            DispatchQueue.main.async { scheduledTasksPresented = true }
+        } else { scheduledTasksPresented = true }
+    }
+
     private func conversation(showHistoryButton: Bool) -> some View {
         let current = store.current
         return VStack(spacing: 0) {
@@ -93,6 +123,7 @@ struct AIChatWorkspaceView: View {
                 if showHistoryButton {
                     WFGlassControlGroup(spacing: 0) {
                         Button("历史对话", systemImage: "clock.arrow.circlepath") { historyPresented = true }
+                            .workflowActionAnchor("ai.chat.history.toggle")
                             .propertyPanelTrigger("ai.chat.history")
                     }
                 }
@@ -135,7 +166,10 @@ struct AIChatWorkspaceView: View {
             }
             AIConversationView(model: current, generate: environment.conversationClient().generator(for: current),
                undoAction: { environment.undoAIAction($0) },
-               canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID }).id(store.current.record.id)
+               canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
+               leadingContent: AnyView(AssistantBriefingCard(store: environment.assistantBriefing, conversation: current) {
+                   environment.refreshAssistantBriefing(force: true)
+               })).id(store.current.record.id)
                 .disabled(store.deletingIDs.contains(store.current.record.id))
                 .environment(\.openURL, OpenURLAction { url in
                     environment.openResourceLink(url) ? .handled : .systemAction
@@ -148,6 +182,7 @@ struct AIChatWorkspaceView: View {
 private struct AIChatHistoryRow: View {
     let record: AIConversationRecord
     let selected: Bool
+    let running: Bool
     let deleting: Bool
     let onSelect: () -> Void
     let onDelete: () -> Void
@@ -156,12 +191,22 @@ private struct AIChatHistoryRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onSelect) {
-                Text(record.title).font(WFType.supporting).lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 12).padding(.vertical, 12).contentShape(Rectangle())
+                HStack(spacing: 6) {
+                    Text(record.title).font(WFType.supporting).lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if running {
+                        ProgressView().controlSize(.small)
+                            .tint(WFColors.secondaryText).foregroundStyle(WFColors.secondaryText)
+                            .accessibilityLabel("正在执行")
+                            .accessibilityIdentifier("ai.chat.running.\(record.id)")
+                            .workflowActionAnchor("ai.chat.running.\(record.id)")
+                            .allowsHitTesting(false)
+                    }
+                }.padding(.leading, 12).padding(.vertical, 12).contentShape(Rectangle())
             }.buttonStyle(.plain)
                 .accessibilityIdentifier("ai.chat.history.\(record.id)")
                 .workflowActionAnchor("ai.chat.history.\(record.id)")
+                .firstMouseAction(onSelect)
             Button(action: onDelete) {
                 Image(systemName: "trash").font(WFType.supporting).frame(width: 28, height: 28)
                     .contentShape(Rectangle())
@@ -170,6 +215,7 @@ private struct AIChatHistoryRow: View {
                 .hoverTip("删除对话").accessibilityLabel("删除对话：\(record.title)")
                 .accessibilityIdentifier("ai.chat.delete.\(record.id)")
                 .workflowActionAnchor("ai.chat.delete.\(record.id)")
+                .firstMouseAction(onDelete)
         }.padding(.trailing, 6)
             .background(selected ? WFColors.selection : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle()).onHover { hovered = $0 }.disabled(deleting)

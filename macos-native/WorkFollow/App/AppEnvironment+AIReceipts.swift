@@ -30,6 +30,17 @@ extension AppEnvironment {
                 return names[Int(day) - 1]
             }.joined(separator: "、"))
         }
+        if request.operation.hasPrefix("memory.") {
+            details = [request.operation == "memory.delete" ? "已忘记这条偏好" : "助手记忆已保存"]
+        }
+        if request.operation.hasPrefix("schedule.") {
+            if request.operation == "schedule.delete" { details = ["定时任务已删除，历史结果保留"] }
+            else if request.operation == "schedule.run" { details = ["已触发执行，结果将保存到对话历史"] }
+            else {
+                details = [data["schedule"]?.string ?? "定时任务已保存"]
+                if data["enabled"] == .bool(false) { details.append("已停用") }
+            }
+        }
         if details.isEmpty { details.append(request.operation.hasPrefix("note.") ? "笔记已保存" : "已保存") }
         let receipt = AIActionReceipt(title: title, url: data["url"]?.string, details: details.joined(separator: " · "),
             undoID: data["undoID"]?.string.flatMap(UUID.init(uuidString:)))
