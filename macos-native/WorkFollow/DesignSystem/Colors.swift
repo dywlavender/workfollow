@@ -50,6 +50,10 @@ enum WFColors {
         theme.isThemed && pageCanvasActive ? theme.selectionFill : listSelection
     }
     static let hover = Color.primary.opacity(0.04)
+    /// 列表行"刚创建"的短暂标识底色（2 秒）。**不是选中色**：它只表示"这行是新的"，
+    /// 不表示"这行正被打开"。取强调色最淡的一档，和中性灰的 `listSelection`
+    /// 明显区分——否则新建行会被误读成已选中，而详情栏还停在上一条任务。
+    static let listCreationHighlight = accentFaint
     /// 快速添加条未选中的底色（滴答/Flutter `tokens.canvas` = 0xFFF2F4F8）：
     /// 带一点蓝调的极浅灰，比中性的 hover 更接近滴答那条浅浅的输入位。
     /// 深色沿用 Flutter 暗色 canvas。主题页面的输入框底色见
@@ -206,6 +210,22 @@ enum WFColors {
     /// 正文 PingFang Regular 14，墨色都是 #191919；系统 `labelColor` 在白底上
     /// 解析成 #262626（85% 黑），比滴答浅一档，编辑器里一行行看会很虚。
     static let documentText = themed(rgb(0x191919), rgb(0xEDEDED))
+    /// 编辑区正文墨色的 `NSColor` 版本。
+    ///
+    /// `NSAttributedString` 的文字属性只认 `NSColor`：把 SwiftUI `Color` 塞进
+    /// `.foregroundColor` 时能编过，但排版到 `_setColor:inGraphicsContext:` 时
+    /// 会当成 `NSColor` 调消息，直接 SIGTRAP 崩掉。自绘富文本处一律用这个。
+    static let nsDocumentText = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? rgb(0xEDEDED) : rgb(0x191919)
+    }
+    /// AI 回复正文里代码块底色、表格表头底色（同档中性填充）。
+    /// 单文本视图方案拿不到圆角面板，靠 run 背景色把代码区从正文里衬出来；
+    /// `NSAttributedString` 只认 `NSColor`，所以和 `nsDocumentText` 一样单独立一份。
+    static let nsCodeFill = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? rgb(0x2B2F36) : rgb(0xF4F5F7)
+    }
 
     // MARK: 锚定浮层（日历/四象限的编辑器与新建卡）
 

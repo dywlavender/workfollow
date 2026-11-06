@@ -25,7 +25,9 @@ struct FirstMouseAction: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         /// 只在窗口非 key 时接管；其余事件（含滚动、右键）沿响应链照常传递。
         override func hitTest(_ point: NSPoint) -> NSView? {
-            window?.isKeyWindow == false ? self : nil
+            guard window?.isKeyWindow == false, !isHiddenOrHasHiddenAncestor else { return nil }
+            let local = convert(point, from: superview)
+            return bounds.intersection(visibleRect).contains(local) ? self : nil
         }
         override func mouseDown(with event: NSEvent) {
             window?.makeKeyAndOrderFront(nil)

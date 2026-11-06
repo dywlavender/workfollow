@@ -150,3 +150,9 @@ xcodebuild -project macos-native/WorkFollow.xcodeproj -scheme WorkFollow -destin
 列表获得焦点时 ↑/↓ 切换任务，Return 打开首项或保持所选详情；Quick Add 输入焦点下不接管这些按键。Today Quick Add 设置当天真实 schedule，Inbox Quick Add 不预设日期。Phase 1 全尺寸拖动、窄屏返回和跨屏窗口恢复仍是 IMPLEMENTED / PARTIALLY VERIFIED。
 
 提醒、重复、标签、附件、关联、Persistence、Notes 尚未接入完整业务；此实验数据不会写入 Flutter 正式数据。当前 401 项 XCTest 通过。正文中文多行粘贴、撤销/重做、查找、跨任务隔离已实机验证；中文输入法候选窗仍待专门实测。Phase 4 的日期 Popover、优先级/清单菜单、父子清单联动及完成/恢复已有验收记录；低于 641pt 紧凑布局阈值后的第二次 Escape、Popover 外部关闭和菜单键盘导航仍待实机验收。
+
+## 正文编辑器
+
+生产正文统一使用离线 Milkdown / ProseMirror，原有 NativeDocument 与 Delta 持久化保持兼容。Xcode 会通过 `scripts/package-milkdown.py` 构建并打包静态资源；首次源码构建需要本机 Node/npm，依赖按前端锁文件安装。分发 App 不携带 Node 或 node_modules。
+
+架构、宿主适配与验证记录见 [Milkdown 全量替换](../docs/milkdown-migration-plan-2026-11-03.md)。

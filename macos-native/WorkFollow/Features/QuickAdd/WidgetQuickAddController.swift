@@ -69,7 +69,7 @@ final class WidgetQuickAddController {
                 current = window.parent
             }
             return false
-        }, dismiss: { [weak self] in self?.dismiss() })
+        }, dismiss: { [weak self] _ in self?.dismiss() })
         DispatchQueue.main.async { [weak self, weak panel, weak host] in
             guard let self, let panel, self.panel === panel, panel.isVisible, let host else { return }
             host.layoutSubtreeIfNeeded()

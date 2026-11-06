@@ -100,10 +100,10 @@ struct RootShellView: View {
             let shellWidth = environment.notesAIFrozenWindowWidth ?? geometry.size.width
             let navigationVisible = shellWidth >= WFMetrics.navigationBreakpoint
             let destination = navigation.destination
-            let notesFolderSuppressed = destination.isNotes
-                && (environment.notesFolderPaneHidden || environment.notesFolderPaneAutoHidden)
+            // 笔记页（含垃圾桶）自带「目录 + 文件」单栏树，壳层不再给它第二根导航列：
+            // 省下 212pt，leadingWidth / 玻璃底色 / 整窗画布都跟着自动收窄。
             let showsNavigationColumn = navigationVisible && environment.sidebarVisible
-                && !notesFolderSuppressed
+                && !destination.isNotes
                 && destination != .calendar && destination != .matrix
                 && destination != .countdown && destination != .meetings
                 && destination != .focus && destination != .aiChat
@@ -191,9 +191,15 @@ struct RootShellView: View {
             .onAppear {
                 selectionMemory.connect(workspace: workspace, notes: environment.notesWorkspace, navigation: navigation)
             }
-            .onChange(of: navigation.destination) { _, _ in
+            .onChange(of: navigation.destination) { _, destination in
                 navigation.taskSelectionToPreserveOnNextNavigation = nil
                 workspace.clearBulkSelection()
+                // AI 会话窗属于笔记页：切走时隐藏、切回时原样恢复，不销毁会话。
+                if destination == .notes {
+                    AISelectionWindowController.shared.restoreIfNeeded()
+                } else {
+                    AISelectionWindowController.shared.hideForPageSwitch()
+                }
             }
         }
         .ignoresSafeArea(.container, edges: .top)

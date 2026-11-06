@@ -15,6 +15,15 @@ enum PopupEscapeRank {
     static let schedule = 4
 }
 
+/// 注册表只报告"为什么要求收起"，关不关由注册方按自己的窗口语义决定。
+/// 瞬态弹层通常一律关闭；有持续状态的会话窗可以忽略应用失焦。
+enum PopupDismissReason {
+    case outsideClick       // 本应用内点击弹层以外
+    case keyWindowChanged   // key window 转到别的窗口族
+    case appDeactivated     // 应用失焦 / 点击其它 App
+    case siblingOpened      // 同窗口族里打开了另一条分支
+}
+
 /// Presentation-only ownership. Outside clicks are observed; a matching context
 /// target consumes its right-click before normal view dispatch.
 /// A child taking key focus is still inside its owner's window family.
@@ -24,7 +33,7 @@ final class PopupInteractionRegistry {
     private struct Entry {
         weak var window: NSWindow?
         let contains: (NSEvent) -> Bool
-        let dismiss: () -> Void
+        let dismiss: (PopupDismissReason) -> Void
     }
     private var entries: [UUID: Entry] = [:]
     private struct ContextEntry {
@@ -37,7 +46,7 @@ final class PopupInteractionRegistry {
     private var observers: [NSObjectProtocol] = []
 
     func register(window: NSWindow, contains: @escaping (NSEvent) -> Bool,
-                  dismiss: @escaping () -> Void) -> UUID {
+                  dismiss: @escaping (PopupDismissReason) -> Void) -> UUID {
         let id = UUID()
         entries[id] = Entry(window: window, contains: contains, dismiss: dismiss)
         startObservingIfNeeded()
@@ -64,11 +73,11 @@ final class PopupInteractionRegistry {
                 return self.showContextMenu(for: event) ? nil : event
             }
             globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
-                self?.dismissAll()
+                self?.dismissAll(reason: .appDeactivated)
             }
             observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification,
                 object: NSApp, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.dismissAll() }
+                MainActor.assumeIsolated { self?.dismissAll(reason: .appDeactivated) }
             })
             observers.append(NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification,
                 object: nil, queue: .main) { [weak self] notification in
@@ -111,7 +120,7 @@ final class PopupInteractionRegistry {
             }
             return true
         }
-        outside.forEach { $0.dismiss() }
+        outside.forEach { $0.dismiss(.siblingOpened) }
     }
 
     @discardableResult
@@ -140,13 +149,14 @@ final class PopupInteractionRegistry {
 
     func routeMouseDown(_ event: NSEvent) -> NSEvent {
         let outside = entries.values.filter { $0.window != nil && !$0.contains(event) }
-        outside.forEach { $0.dismiss() }
+        outside.forEach { $0.dismiss(.outsideClick) }
         return event
     }
 
-    func dismissAll() {
+    /// 把收起原因报给每个注册方；默认用于应用失焦 / 点击其它 App。
+    func dismissAll(reason: PopupDismissReason = .appDeactivated) {
         let current = Array(entries.values)
-        current.forEach { $0.dismiss() }
+        current.forEach { $0.dismiss(reason) }
     }
 
     func dismissOutsideFamily(of keyWindow: NSWindow?) {
@@ -155,11 +165,14 @@ final class PopupInteractionRegistry {
             while let parent = result.parent { result = parent }
             return result
         }
+        // 没有 key window 通常是应用失焦，与 didResignActive 同一类原因。
+        let reason: PopupDismissReason = keyWindow == nil ? .appDeactivated : .keyWindowChanged
         let outside = entries.values.filter { entry in
-            guard let window = entry.window, let keyWindow else { return true }
+            guard let window = entry.window else { return true }
+            guard let keyWindow else { return true }
             return root(window) !== root(keyWindow)
         }
-        outside.forEach { $0.dismiss() }
+        outside.forEach { $0.dismiss(reason) }
     }
 }
 

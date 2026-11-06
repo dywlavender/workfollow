@@ -216,7 +216,7 @@ struct AnchoredPropertyPanel<PanelContent: View>: NSViewRepresentable {
                         return true
                     }
                     return false
-                }, dismiss: { [weak self] in self?.dismiss() }) }
+                }, dismiss: { [weak self] _ in self?.dismiss() }) }
             }
             positionPanel(isOpening: isOpening)
         }

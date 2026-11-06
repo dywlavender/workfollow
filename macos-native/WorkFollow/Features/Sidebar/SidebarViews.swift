@@ -305,8 +305,6 @@ struct NavigationColumnView: View {
         VStack(alignment: .leading, spacing: 0) {
             if navigation.destination.isTaskList {
                 taskSidebar
-            } else if navigation.destination.isNotes {
-                NotesNavigationSection(notes: environment.notesWorkspace, navigation: navigation, onNavigate: onNavigate)
             } else {
                 Text(navigation.destination.isNotes ? "笔记" : "工作空间")
                     .font(WFType.sidebarSection).foregroundStyle(WFColors.faintText)
@@ -452,88 +450,6 @@ struct NavigationColumnView: View {
         .firstMouseAction(activate)
         .accessibilityLabel(destination.title)
         .guideTourAnchor("nav." + destination.title)
-    }
-}
-
-private struct NotesNavigationSection: View {
-    @ObservedObject var notes: NotesWorkspaceModel
-    @ObservedObject var navigation: AppNavigation
-    @EnvironmentObject private var environment: AppEnvironment
-    var onNavigate: () -> Void
-    /// 正在被笔记拖拽悬停的文件夹行（只影响描边高亮）。
-    @State private var noteDropTarget: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            row("全部笔记", symbol: "text.alignleft", folder: nil)
-            row("收藏", symbol: "star", folder: nil, favorites: true)
-            row("未归档", symbol: "folder", folder: "未归档")
-                .modifier(NoteFolderDropTarget(folder: "未归档", notes: notes, targeted: $noteDropTarget))
-            HStack {
-                Text("文件夹").font(WFType.sidebarSection).foregroundStyle(WFColors.faintText)
-                Spacer()
-                Button {
-                    if let name = TaskNamePrompt.ask("新建文件夹") {
-                        if notes.addFolder(name) { notes.folderFilter = name; notes.favoritesOnly = false; environment.navigate(to: .notes) }
-                        else { TaskNamePrompt.invalidName() }
-                    }
-                } label: { Image(systemName: "plus") }.buttonStyle(.plain).hoverTip("新建文件夹")
-            }.foregroundStyle(WFColors.secondaryText)
-             .padding(.horizontal, WFSpace.sm).padding(.top, WFSpace.lg).padding(.bottom, WFSpace.sm)
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(notes.folders, id: \.self) { folder in
-                        row(folder, symbol: "folder", folder: folder)
-                            .modifier(NoteFolderDropTarget(folder: folder, notes: notes, targeted: $noteDropTarget))
-                            .businessContextMenu {
-                                Button("重命名文件夹…") {
-                                    if let name = TaskNamePrompt.ask("重命名文件夹", value: folder), name != folder,
-                                       !notes.renameFolder(folder, to: name) { TaskNamePrompt.invalidName() }
-                                }
-                                Button("删除文件夹…") {
-                                    if TaskNamePrompt.confirm("删除文件夹“\(folder)”？",
-                                                              message: "其中的笔记会保留，并移到“未归档”。",
-                                                              action: "删除") { notes.removeFolder(folder) }
-                                }
-                            }
-                    }
-                }
-                .compactScrollbars()
-            }
-            Divider().padding(.vertical, WFSpace.xs)
-            row("垃圾桶", symbol: "trash", folder: nil, trash: true)
-        }
-    }
-
-    private func row(_ title: String, symbol: String, folder: String?, favorites: Bool = false, trash: Bool = false) -> some View {
-        let selected = trash ? navigation.destination == .notesTrash :
-            navigation.destination == .notes && notes.folderFilter == folder && notes.favoritesOnly == favorites
-        let count = notes.rows(trash: trash, query: "", folder: folder, favorites: favorites).count
-        let activate = {
-            notes.folderFilter = folder
-            notes.favoritesOnly = favorites
-            environment.navigate(to: trash ? .notesTrash : .notes)
-            onNavigate()
-        }
-        return Button(action: activate) {
-            HStack(spacing: WFSpace.sm) {
-                Image(systemName: symbol).frame(width: 18)
-                Text(title).lineLimit(1)
-                Spacer(minLength: 4)
-                if count > 0 {
-                    Text("\(count)").font(WFType.sidebarBadge).foregroundStyle(WFColors.taskMetaText)
-                        .contentTransition(.numericText())
-                        .animation(WFMotion.noneIfDisabled, value: count)
-                }
-            }
-            .font(WFType.navigation).padding(.horizontal, WFSpace.sm).frame(height: NavigationMetrics.rowHeight)
-            .foregroundStyle(WFColors.text)
-            .contentShape(Rectangle())
-            .rowHoverBackground(selected: selected)
-        }
-        .buttonStyle(.plain)
-        // 窗口未激活时的首击直达（同任务侧栏，见 FirstMouseAction）。
-        .firstMouseAction(activate)
     }
 }
 

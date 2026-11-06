@@ -63,6 +63,8 @@ struct TaskListMeta: Equatable, Codable {
     var colorIndex: Int?
     /// Imported Flutter colors outside the built-in palette remain exact ARGB values.
     var colorARGB: UInt32?
+    /// 用户显式选过色（colorIndex/colorARGB 任一）；否则颜色由名称推导，不算「有自己的颜色」。
+    var hasExplicitColor: Bool { colorIndex != nil || colorARGB != nil }
     var isPinned: Bool
     var sortOrder: Int
     /// 清单图标（Emoji）。nil = 回落到色点（现有行为）。additive：旧快照缺键 → nil。

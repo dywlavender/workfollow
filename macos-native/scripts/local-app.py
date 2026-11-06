@@ -23,6 +23,9 @@ LOG = Path.home() / "Library/Logs/WorkFollowNativeUpdates/build.log"
 AI_BUNDLE_SCRIPT = Path(__file__).with_name("bundle-ai-backend.py")
 TMP_ROOT = Path("/private/tmp")
 TMP_OUTPUT = TMP_ROOT / "workfollow-local-build"
+# 固定 DerivedData：Swift 未变时让 Xcode 走增量编译。名字不能以 "-build" 结尾，
+# 否则会被 clean_stale_builds 当成过期构建目录清掉。
+DERIVED_DATA = TMP_ROOT / "workfollow-release-derived"
 
 
 class AppError(Exception):
@@ -199,6 +202,15 @@ def clean_stale_builds(keep=None, max_age_seconds=6 * 3600):
             continue
 
 
+def archive_derived_data():
+    """强制全量重编译时把固定缓存改名归档；不删除，避免触发批量删除保护。"""
+    if not DERIVED_DATA.exists():
+        return None
+    archive = DERIVED_DATA.with_name(f"{DERIVED_DATA.name}-clean-{time.strftime('%Y%m%d%H%M%S')}")
+    DERIVED_DATA.rename(archive)
+    return archive
+
+
 def build(output, build_number, identity):
     if not re.fullmatch(r"[1-9][0-9]*", build_number):
         raise AppError("构建号必须是正整数。")
@@ -209,7 +221,8 @@ def build(output, build_number, identity):
     LOG.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="workfollow-release-") as folder, LOG.open("w") as log:
         run_logged([sys.executable, str(AI_BUNDLE_SCRIPT), "prepare"], log)
-        derived = Path(folder) / "DerivedData"
+        derived = DERIVED_DATA
+        derived.mkdir(parents=True, exist_ok=True)
         command = ["/usr/bin/xcodebuild", "-project", str(PROJECT), "-scheme", "WorkFollow",
                    "-configuration", "Release", "-destination", "platform=macOS",
                    "-derivedDataPath", str(derived), f"CODE_SIGNING_ALLOWED={'NO' if identity == '-' else 'YES'}",
@@ -229,11 +242,15 @@ def build(output, build_number, identity):
         spec = importlib.util.spec_from_file_location("ai_bundle", AI_BUNDLE_SCRIPT)
         ai_bundle = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ai_bundle)
-        if not (package / "Contents/Resources/AIBackend/runtime.json").exists():
-            raise AppError("AI 后端未打包，构建已停止。")
+        try:
+            ai_bundle.ensure_backend_sources(package, log)
+        except (OSError, ValueError, RuntimeError) as error:
+            raise AppError(str(error)) from error
         ai_bundle.sign(package, identity, log)
         plist = package / "Contents/Info.plist"
         value = info(package)
+        # 增量构建可能不重处理 Info.plist，显式写回本次构建号。
+        value["CFBundleVersion"] = build_number
         value["WorkFollowAIBackendProtocol"] = 1
         value["WorkFollowAIModelConfiguration"] = 1
         value["WorkFollowAppleSiliconOnly"] = True
@@ -289,6 +306,8 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("/private/tmp/workfollow-local-build/WorkFollow.app"))
     parser.add_argument("--build-number", help="默认使用已安装构建号加一")
     parser.add_argument("--signing-identity", default="-", help="本机可用的签名证书名称；默认本机签名")
+    parser.add_argument("--clean-build", action="store_true",
+                        help="把固定构建缓存改名归档，强制全量重编译（旧缓存保留，不删除）")
     args = parser.parse_args()
     destination = args.destination.expanduser().absolute()
     backup = args.backup_dir.expanduser().absolute()
@@ -303,6 +322,10 @@ def main():
             status(install(args.source.expanduser().absolute(), destination, backup))
         else:
             number = args.build_number or next_build(destination)
+            if args.clean_build:
+                archived = archive_derived_data()
+                if archived:
+                    print(f"已归档构建缓存：{archived}")
             if args.command == "update":
                 require_quit(destination)
                 with tempfile.TemporaryDirectory(prefix="workfollow-daily-") as folder:

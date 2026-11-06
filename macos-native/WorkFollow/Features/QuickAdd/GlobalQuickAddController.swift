@@ -412,7 +412,9 @@ private struct GlobalQuickAddPanelView: View {
         .onAppear { DispatchQueue.main.async { inputFocused = true } }
         .onExitCommand(perform: handleEscape)
         .sheet(isPresented: $showTemplates) {
-            TaskTemplateGalleryView(workspace: composer.workspace, templateStore: TemplateStore.shared,
+            TaskTemplateGalleryView(templateStore: TemplateStore.shared,
+                apply: { TemplateApplier.apply($0, to: composer.workspace) },
+                title: "任务模板",
                 onDismiss: { showTemplates = false }, onApplied: { _ in draft.clear(); close() })
         }
     }

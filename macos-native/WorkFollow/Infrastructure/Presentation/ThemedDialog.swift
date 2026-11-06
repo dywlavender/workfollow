@@ -156,7 +156,9 @@ private struct WorkfollowAlertModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(WorkfollowDialogWindowReader(ref: windowRef))
+            // 纯读取宿主 window 的透明视图，不参与命中测试；否则会盖住下层按钮点击
+            // （同 PopupPresentingWindowReader 的处理）。
+            .background(WorkfollowDialogWindowReader(ref: windowRef).allowsHitTesting(false))
             .onAppear { if isPresented.wrappedValue { start() } }
             .onChange(of: isPresented.wrappedValue) { _, presented in
                 if presented { start() }

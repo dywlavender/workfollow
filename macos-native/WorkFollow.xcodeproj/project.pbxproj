@@ -26,6 +26,8 @@
 		};
 		A00000000000000000000003 = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (C10000000000000000000001);
+			explicitFolders = ("Resources/milkdown-web");
 			path = WorkFollow;
 			sourceTree = "<group>";
 		};
@@ -45,7 +47,7 @@
 		A00000000000000000000006 = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A00000000000000000000012;
-			buildPhases = (A00000000000000000000008, A00000000000000000000009, A00000000000000000000010, D00000000000000000000011, F00000000000000000000011, F00000000000000000000014, F00000000000000000000017, A10000000000000000000001);
+			buildPhases = (A00000000000000000000008, A00000000000000000000009, A00000000000000000000010, D00000000000000000000011, F00000000000000000000011, F00000000000000000000014, F00000000000000000000017, C10000000000000000000002, A10000000000000000000001);
 			buildRules = ();
 			dependencies = (D00000000000000000000009, F00000000000000000000009);
 			fileSystemSynchronizedGroups = (A00000000000000000000003, E00000000000000000000002, F00000000000000000000013);
@@ -69,6 +71,23 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/usr/bin/python3 \"${SRCROOT}/scripts/bundle-ai-backend.py\" embed --if-ready --app \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\n";
+		};
+		C10000000000000000000002 = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = ();
+			inputPaths = ();
+			name = "Bundle Milkdown editor";
+			outputPaths = ();
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/usr/bin/python3 \"${SRCROOT}/scripts/package-milkdown.py\" --app \"${TARGET_BUILD_DIR}/${WRAPPER_NAME}\"\n";
+		};
+		C10000000000000000000001 = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = ("Resources/milkdown-web", "Resources/MilkdownRuntime.zip");
+			target = A00000000000000000000006;
 		};
 		C00000000000000000000001 = { isa = PBXFileReference; lastKnownFileType = text; name = "Meeting Minutes Skill"; path = "../.pi/skills/meeting-minutes/SKILL.md"; sourceTree = "<group>"; };
 		C00000000000000000000002 = { isa = PBXBuildFile; fileRef = C00000000000000000000001; };
@@ -128,7 +147,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "WorkFollow Native";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks $(DEVELOPER_DIR)/Platforms/MacOSX.platform/Developer/Library/Frameworks $(DEVELOPER_DIR)/SharedFrameworks";
+				FRAMEWORK_SEARCH_PATHS = "$(inherited) $(DEVELOPER_DIR)/Platforms/MacOSX.platform/Developer/Library/Frameworks $(DEVELOPER_DIR)/SharedFrameworks";
 				MARKETING_VERSION = 0.2.0;
 				CURRENT_PROJECT_VERSION = 2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.workfollow.native.preview;

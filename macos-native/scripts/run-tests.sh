@@ -6,14 +6,9 @@
 # before establishing connection"），一个用例都不会执行。这不是代码问题——构建出来的
 # 应用能正常启动并常驻。挂住的是 xcodebuild 与 testmanagerd 之间的 IPC 那一层。
 #
-# 绕法：直接拿构建产物里的 .xctest 包，用 Xcode 的 `xctest` 临时宿主进程加载并执行。这样走的
-# 是 XCTest 自己的执行路径，断言、失败信息、用例计数都是真的，只是绕开了 xcodebuild
-# 的 runner 编排。
-#
-# 唯一需要处理的是动态库解析：测试包用 `@rpath/WorkFollow.debug.dylib` 之类的相对路径，
-# 而这些库在应用包里。测试包的 LC_RPATH 里有 `@loader_path/../Frameworks`，所以把包
-# 拷到临时目录、在 `Contents/Frameworks` 下放几个符号链接就满足了——不改动 DerivedData，
-# 也不用 install_name_tool（它常常因 headerpad 不足而失败）。
+# 绕法：用签名后的正式 App 副本加载其 .xctest 包，直接运行 XCTestSuite。
+# 绕开 testmanagerd 的 runner 编排，同时让 WKWebView 保留真实 App 的宿主身份。
+# 测试专用入口仅在 WORKFOLLOW_APP_TEST_HOST 编译条件下存在；数据目录隔离。
 #
 # 用法：
 #   scripts/run-tests.sh                  # 跑全部用例
@@ -21,7 +16,7 @@
 #   scripts/run-tests.sh QuickAddCompositionTests GlobalQuickAddTests
 #   scripts/run-tests.sh "QuickAddCompositionTests,GlobalQuickAddTests"   # 等价
 #
-# ⚠️ 类名**必须写全**——`-XCTest` 不认子串，也不认前缀。2026-10-07 实测：
+# 类名必须写全；找不到类或执行零用例都返回失败。旧 xctest 入口曾有以下陷阱：
 # `Meeting`、`MeetingStore` 两种写法都得到 "Executed 0 tests" 且 exit 0
 # （**看起来像全绿**），只有 `MeetingStoreTests` 才真的跑起来。别用简称。
 # （本文件上一版这里写的是「子串匹配」，是错的，已改。）
@@ -55,17 +50,17 @@ fi
 # 这**不是代码问题**，而且会连带报出一堆 `cannot find '_name' in scope` /
 # `cannot assign to property: 'self' is immutable` 的假错误。
 # 设 WORKFOLLOW_DISABLE_SWIFT_SANDBOX=1 绕开（本地 Xcode GUI 构建不需要）。
-EXTRA_BUILD_ARGS=()
+EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -D WORKFOLLOW_APP_TEST_HOST')
 if [[ -n "${WORKFOLLOW_DISABLE_SWIFT_SANDBOX:-}" ]]; then
-  EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox')
+  EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox -D WORKFOLLOW_APP_TEST_HOST')
 fi
 if [[ "${WORKFOLLOW_TEST_OPTIMIZE:-}" == "1" ]]; then
   # Keep Xcode's debug-dylib layout for the standalone XCTest loader while
   # the Swift compiler optimizes the same application and test source.
   if [[ -n "${WORKFOLLOW_DISABLE_SWIFT_SANDBOX:-}" ]]; then
-    EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox -O')
+    EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -Xfrontend -disable-sandbox -D WORKFOLLOW_APP_TEST_HOST -O')
   else
-    EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -O')
+    EXTRA_BUILD_ARGS=(OTHER_SWIFT_FLAGS='$(inherited) -D WORKFOLLOW_APP_TEST_HOST -O')
   fi
 fi
 
@@ -108,39 +103,27 @@ if [[ ! -d "$SRC_BUNDLE" ]]; then
 fi
 
 DEVELOPER_DIR_PATH="$(xcode-select -p)"
-XCTEST_FRAMEWORK="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/Library/Frameworks/XCTest.framework"
-XCTEST_SUPPORT="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib"
-
-BUNDLE="$WORK/WorkFollowTests.xctest"
-cp -R "$SRC_BUNDLE" "$BUNDLE"
-mkdir -p "$BUNDLE/Contents/Frameworks"
-ln -s "$APP/Contents/MacOS/WorkFollow.debug.dylib" "$BUNDLE/Contents/Frameworks/WorkFollow.debug.dylib"
-ln -s "$XCTEST_FRAMEWORK" "$BUNDLE/Contents/Frameworks/XCTest.framework"
-ln -s "$XCTEST_SUPPORT" "$BUNDLE/Contents/Frameworks/libXCTestSwiftSupport.dylib"
-
-# A bundled host is required by UNUserNotificationCenter. Keep default test
-# storage separate from the user's app; explicitly supplied fixture paths still work.
 RUNNER="$WORK/WorkFollowTestsRunner.app"
-mkdir -p "$RUNNER/Contents/MacOS" "$WORK/storage"
-ln -s "$APP/Contents/Resources" "$RUNNER/Contents/Resources"
-ln -s "$APP/Contents/MacOS/workfollowctl" "$RUNNER/Contents/MacOS/workfollowctl"
-cp "$(xcrun --find xctest)" "$RUNNER/Contents/MacOS/xctest"
-# Preserve the built app's declarations so tests can verify its URL schemes.
-cp "$APP/Contents/Info.plist" "$RUNNER/Contents/Info.plist"
-plutil -replace CFBundleExecutable -string xctest "$RUNNER/Contents/Info.plist"
+# A real application executable is required by WebKit. The standalone xctest
+# executable aborts when WebContent asks for its owning application's extension.
+cp -cR "$APP" "$RUNNER"
+mkdir -p "$WORK/storage"
 plutil -replace CFBundleIdentifier -string com.workfollow.native.tests.runner "$RUNNER/Contents/Info.plist"
-plutil -replace CFBundlePackageType -string APPL "$RUNNER/Contents/Info.plist"
 plutil -replace WorkFollowAcceptanceStorageRoot -string "$WORK/storage" "$RUNNER/Contents/Info.plist"
+if ! /usr/bin/codesign --force --deep --sign - "$RUNNER" > "$WORK/sign.log" 2>&1; then
+  cat "$WORK/sign.log" >&2
+  exit 1
+fi
 export DYLD_FRAMEWORK_PATH="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/Library/Frameworks:$DEVELOPER_DIR_PATH/SharedFrameworks${DYLD_FRAMEWORK_PATH:+:$DYLD_FRAMEWORK_PATH}"
-export DYLD_LIBRARY_PATH="$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/usr/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+export DYLD_LIBRARY_PATH="$RUNNER/Contents/MacOS:$DEVELOPER_DIR_PATH/Platforms/MacOSX.platform/Developer/usr/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 TEST_ARGS=()
 if [[ $# -gt 0 ]]; then
   JOINED="$(IFS=,; echo "$*")"
-  TEST_ARGS=(-XCTest "$JOINED")
+  TEST_ARGS=(--wf-test-classes "$JOINED")
 fi
 
-echo "==> 执行用例（隔离存储）"
-if "$RUNNER/Contents/MacOS/xctest" "${TEST_ARGS[@]+"${TEST_ARGS[@]}"}" "$BUNDLE" > "$WORK/tests.log" 2>&1; then
+echo "==> 执行用例（真实 App 宿主、隔离存储）"
+if "$RUNNER/Contents/MacOS/WorkFollow" --automation --wf-xctest "$RUNNER/Contents/PlugIns/WorkFollowTests.xctest" "${TEST_ARGS[@]+"${TEST_ARGS[@]}"}" > "$WORK/tests.log" 2>&1; then
   cat "$WORK/tests.log"
 else
   TEST_STATUS=$?

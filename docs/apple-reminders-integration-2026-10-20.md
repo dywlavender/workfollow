@@ -64,3 +64,28 @@
 - 排期显示的实测差异：一条任务在项目及 EventKit 中安排为 2026-10-29（全天），独立提醒为 2026-10-28 09:00；Apple 提醒事项和 Apple 日历显示在 10-28。项目仍分别保留安排日期与独立提醒时间。本轮确认任务可以直接显示，但不把 Apple 的显示日期与项目安排日期视为始终一致。
 
 依据：[EventKit 创建和修改提醒事项](https://developer.apple.com/documentation/eventkit/creating-events-and-reminders)、[在所有设备上设置 iCloud 提醒事项](https://support.apple.com/zh-cn/guide/icloud/mmbf52194b5a/icloud)、[Apple 日历中显示计划的提醒事项](https://support.apple.com/zh-cn/guide/reminders/remn2ff3b312/mac)。
+
+## 2026-11-02 修复「一直提示未找到 Apple 提醒事项」
+
+### 根因
+
+连接逻辑用账户**标题**匹配 iCloud：`accounts.first(where: { $0.title.localizedCaseInsensitiveContains("iCloud") })`。这条路径有两个独立缺陷：
+
+1. **iCloud 在 EventKit 里是 CalDAV 源**。本机实测 `store.sources` 只有一个源：`title=iCloud, sourceType=2 (calDAV)`，`mobileMe` 为 0 个。按标题匹配等于把唯一可用的账户交给一次字符串比较决定；账户被本地化、改名或标题不含 "iCloud" 时直接落到错误分支，抛出「未找到 iCloud 提醒事项」。
+2. **首次读取可能为空**。刚获得授权时 EventKit 的 daemon 连接尚在预热，账户列表可能先返回空。原实现把这次空结果当成"没有 iCloud"，用户看到的就是同一条误导性报错。
+
+另外 `EKEventStore` 存在**每进程 10 个实例**的硬上限（实测第 11 个起 `sources`/`calendars` 恒为空，日志报 `EKCADErrorDomain Code=1021 "This process has too many EKEventStore instances"`）。该错误的表现同样是"枚举不到账户"，因此错误文案也必须能区分权限与账户两种情况。
+
+### 改动
+
+- `SystemReminderAccount` 新增 `kind: SystemReminderAccountKind`（`iCloud`/`calDAV`/`local`/`other`），由 `EKSourceType` 判定；`isICloud` 改为"源类型优先、标题兜底"。`calDAV` 与 `mobileMe` 都视为可同步账户。
+- `connectionTarget()` 改为按**源类型**选账户，不再依赖标题；`loadedAccounts()` 对"账户列表为空"做 8 次 × 250ms 重试，避免把预热期当成缺账户。
+- 账户确实缺失时才报错，且按授权状态区分：仅"仅添加"权限时提示改为去隐私设置选"完整访问"，而不是引导用户去 iCloud 设置。
+- 账户存在但没有清单属于正常状态，仍自动创建 iCloud「WorkFollow」清单。
+
+### 验证
+
+- 28 → 29 项 `SystemRemindersIntegrationTests` 通过、0 失败；新增 7 项覆盖：标题本地化仍能连上、存在本地账户时优先选 iCloud、账户无清单时自动建清单、首次读取为空时重试成功、重试后仍缺失才报错、`EKSourceType` 映射、仅添加权限的错误文案。系统日历、提醒来源、弹窗宽度等 33 项相关用例通过。
+- 真机（macOS 27.0.1，本机签名构建 0.2.0 (16)）验收：重置提醒事项权限后重新授权，设置页由「需要允许提醒事项访问」变为「已连接 iCloud」，`targetListID` 解析到既有 iCloud「WorkFollow」清单（`38F7619F-…`），未重复创建；Apple 提醒事项「WorkFollow」清单实际有 17 条事项，含已完成与未完成，说明写入链路正常。
+- 实测 EventKit 侧 `store.sources` = 1（iCloud/calDAV）、`store.calendars(for: .reminder)` = 4（提醒、每日学习、BOSS直聘、WorkFollow，均可写），与 App 内解析结果一致。
+

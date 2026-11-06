@@ -15,6 +15,12 @@ struct RowHoverBackground: NSViewRepresentable {
     /// nil 表示按当前表面取默认选中色：主题页面用偏白底，其他表面用中性灰。
     var selectedFill: Color? = nil
     var hoverFill: Color = WFColors.hover
+    /// 刚创建、正在短暂标识的行。**与 `selected` 是两件事**：它只说明"这行是新的"，
+    /// 不说明"这行正被打开"。以前调用点把两者或进同一个 `selected`，于是新建行涂上了
+    /// 选中底色、详情栏却还停在上一条任务——看着像选中了，编辑的却是别人。
+    var highlighted = false
+    /// 新建标识的底色：比选中灰更淡，避免和真选中混淆。
+    var highlightFill: Color = WFColors.listCreationHighlight
     /// 菜单子窗口通常不成为 key window，需用 app 级追踪才能收到 hover。
     var activeInActiveApp = false
     /// 需要悬停时显示行内操作的行接这个回调；只画背景的行留空即可。
@@ -45,8 +51,10 @@ struct RowHoverBackground: NSViewRepresentable {
         view.idleFill = idleFill
         view.selectedFill = resolvedSelectedFill
         view.hoverFill = hoverFill
+        view.highlightFill = highlightFill
         view.activeInActiveApp = activeInActiveApp
         view.setSelected(selected)
+        view.setHighlighted(highlighted)
     }
 }
 
@@ -54,6 +62,7 @@ final class RowHoverView: NSView {
     private var pointerArea: NSTrackingArea?
     private(set) var selected = false
     private(set) var hovered = false
+    private(set) var highlighted = false
     var onHover: ((Bool) -> Void)?
     /// 用 mask 把可视底色内缩，但 view（以及它的追踪区域）仍覆盖整行：
     /// 鼠标移到行左侧的拖拽柄或行内按钮上时，底色不会消失。
@@ -76,6 +85,9 @@ final class RowHoverView: NSView {
     }
     var hoverFill: Color = WFColors.hover {
         didSet { if hoverFill != oldValue { paint() } }
+    }
+    var highlightFill: Color = WFColors.listCreationHighlight {
+        didSet { if highlightFill != oldValue { paint() } }
     }
     var activeInActiveApp = false {
         didSet {
@@ -136,6 +148,12 @@ final class RowHoverView: NSView {
         paint()
     }
 
+    func setHighlighted(_ value: Bool) {
+        guard highlighted != value else { return }
+        highlighted = value
+        paint()
+    }
+
     private func setHovered(_ value: Bool) {
         guard hovered != value else { return }
         hovered = value
@@ -144,7 +162,10 @@ final class RowHoverView: NSView {
     }
 
     private func paint() {
+        // 选中 > 新建标识 > 悬停 > 静止。选中必须压过新建标识：同一行刚建完又被
+        // 打开时，用户该看到的是"正被编辑"，而不是"刚建出来"。
         let color = selected ? NSColor(selectedFill)
+            : highlighted ? NSColor(highlightFill)
             : hovered ? NSColor(hoverFill) : NSColor(idleFill)
         effectiveAppearance.performAsCurrentDrawingAppearance {
             CATransaction.begin()
@@ -164,6 +185,8 @@ private struct RowHoverBackgroundModifier: ViewModifier {
     let idleFill: Color
     let selectedFill: Color?
     let hoverFill: Color
+    let highlighted: Bool
+    let highlightFill: Color
     let activeInActiveApp: Bool
     let onHoverChanged: ((Bool) -> Void)?
 
@@ -175,6 +198,8 @@ private struct RowHoverBackgroundModifier: ViewModifier {
                                idleFill: idleFill,
                                selectedFill: selectedFill,
                                hoverFill: hoverFill,
+                               highlighted: highlighted,
+                               highlightFill: highlightFill,
                                activeInActiveApp: activeInActiveApp,
                                onHoverChanged: onHoverChanged)
         }
@@ -184,6 +209,9 @@ private struct RowHoverBackgroundModifier: ViewModifier {
 extension View {
     /// 整行 hover/选中底色。`selected` 优先于 hover；`idleFill` 用于本身
     /// 有底色的卡片，让同一层同时绘制静止/悬停两态。
+    ///
+    /// `highlighted` 是"刚创建"的短暂标识，**独立于 `selected`**：它不该让行看起来
+    /// 被打开。调用点不要再用 `selected: selected || recentlyCreated` 把两者或起来。
     func rowHoverBackground(
         selected: Bool = false,
         cornerRadius: CGFloat = WFMetrics.corner,
@@ -191,6 +219,8 @@ extension View {
         idleFill: Color = .clear,
         selectedFill: Color? = nil,
         hoverFill: Color = WFColors.hover,
+        highlighted: Bool = false,
+        highlightFill: Color = WFColors.listCreationHighlight,
         activeInActiveApp: Bool = false,
         onHoverChanged: ((Bool) -> Void)? = nil
     ) -> some View {
@@ -200,6 +230,8 @@ extension View {
                                             idleFill: idleFill,
                                             selectedFill: selectedFill,
                                             hoverFill: hoverFill,
+                                            highlighted: highlighted,
+                                            highlightFill: highlightFill,
                                             activeInActiveApp: activeInActiveApp,
                                             onHoverChanged: onHoverChanged))
     }
