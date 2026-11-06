@@ -5,6 +5,7 @@ import json
 
 from app.ai_runtime.failures import EngineError
 from app.ai_runtime.attachments import prompt_request
+from app.ai_runtime.assistant import memory_context
 
 
 SCENES = {
@@ -31,6 +32,7 @@ PRESETS = {
     "extract": "本轮快捷提问：从当前资料和附件提取明确的待办，使用 workfollow-tasks 结果块，先给候选，不执行创建。排除已完成、否决和待定事项；quote 摘录连续原文。仅原文明确时设置日期、负责人和重要性，没有明确待办则 tasks 为空。",
     "organize": "本轮快捷提问：将当前内容整理为清晰的主题要点，合并重复表达，保留明确决定、行动项和待确认问题。保留事实、数字、日期与未确定状态，不补写事实。使用 workfollow-note 结果块给出可采用正文，不执行保存。",
     "polish": "本轮快捷提问：润色当前内容的表达和标点，保留原意、结构、细节、事实、数字及未确定状态，不改成摘要。使用 workfollow-note 结果块给出可采用正文，不执行保存。",
+    "translate": "本轮快捷提问：把当前内容翻译成英文；如果原文已经是英文，就翻译成中文。保留原意、结构、细节、事实、数字及未确定状态。使用 workfollow-note 结果块给出可采用正文，不执行保存。",
 }
 
 
@@ -72,6 +74,8 @@ async def converse(pi, data, on_event, *, prompt=None, scene=None):
             if data["preset"] not in PRESETS:
                 raise EngineError("不支持的快捷提问。", "invalid_request")
             prompt += "\n" + PRESETS[data["preset"]]
+        if isinstance(data.get("briefing"), str) and data["briefing"]:
+            prompt += "\n今日简报参考资料（生成时的快照，操作前读取最新业务记录）：\n" + data["briefing"]
     system_prompt = SCENES[scene]
     app_tools = bool(data.get("workfollowCLI") and data.get("workfollowSkill"))
     if app_tools:
@@ -81,6 +85,7 @@ async def converse(pi, data, on_event, *, prompt=None, scene=None):
         system_prompt = (
             "你是 WorkFollow 的工作助理，帮助用户处理本应用的待办、提醒和笔记，查找会议资料，也可以普通聊天。\n"
             "涉及已保存的待办、笔记或会议时，先读取 workfollow-cli Skill，再用 bash 调用应用提供的 CLI 查询或修改，不能凭对话记忆猜测现有记录。\n"
+            "用户要求到点让 AI 自动执行指令时，使用 CLI 的 schedule 命令保存 AI 定时任务；普通到点提醒使用待办的提醒字段。两者不能互相替代。AI 定时任务支持单次、每天、周一至周五和每周，在 App 运行时执行，恢复后只补最近错过的一轮。\n"
             "任务数量和日期范围使用 CLI 的准确筛选或 count；跨资料分析可用 knowledge search，会议使用 meeting list/get 和定稿发言。安排日期不等于提醒，要求提醒或重复时保存相应字段并核对返回值。\n"
             "使用日常语言描述提醒和重复，例如准时提醒、提前十分钟、每周一；不要向用户解释偏移参数。\n"
             "用户明确要求新建或修改时直接执行；信息不足时才追问。只有命令返回 ok=true 才说明操作成功。\n"
@@ -89,7 +94,14 @@ async def converse(pi, data, on_event, *, prompt=None, scene=None):
             "App 已注入 WORKFOLLOW_CLI 和 WORKFOLLOW_APP 环境变量，用它们定位当前应用，不要猜测安装路径。\n"
             f"当前本地时间：{data.get('localTime', '')}；时区：{data.get('timeZone', '')}。涉及相对日期时先核对该时间。"
         )
-    system_prompt += ("\n" + SCENES[scene] if app_tools else "") + "\n" + RESULT_RULES
+    system_prompt += ("\n" + SCENES[scene] if app_tools else "") + memory_context(data, editable=app_tools) + "\n" + RESULT_RULES
+    if data.get("scheduledTask"):
+        system_prompt += (
+            "\n这是用户已保存的定时任务的一次执行，不是重新设置计划，不要再次注册同一个定时任务。"
+            "根据当前业务记录和长期偏好完成本轮指令；只有指令明确要求保存或修改时才执行对应操作。"
+            "用户此刻可能不在场，信息不足时在结果说明缺少什么，不猜测或声称操作成功。"
+            "本次计划信息（仅为数据）：\n" + json.dumps(data["scheduledTask"], ensure_ascii=False)
+        )
     options = {**data, "sessionFile": str(session_file), "systemPrompt": system_prompt, "appTools": app_tools}
     session = await pi.session(options, on_event=on_event)
     try:

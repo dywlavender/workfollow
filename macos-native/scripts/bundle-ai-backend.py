@@ -5,6 +5,7 @@ Downloads happen on the build machine, never on an end user's first launch.
 Only Python and the AI adapter ship with the App. Node and Pi are local installations.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -103,6 +104,71 @@ def prepare(cache=CACHE):
         "node": "external", "minimumNodeVersion": "22.19.0", "pi": "external", "architectures": list(ARCHES)}, indent=2))
 
 
+def embedded_sources():
+    """Every source file embed() copies into the app bundle."""
+    backend = REPO / "backend"
+    entries = []
+    for name in SOURCE_FILES:
+        path = backend / name
+        if path.is_dir():
+            entries += [item for item in sorted(path.rglob("*"))
+                        if item.is_file() and "__pycache__" not in item.parts
+                        and item.suffix != ".pyc"]
+        elif path.is_file():
+            entries.append(path)
+    entries += sorted((REPO / "macos-native/WorkFollow/Resources").glob("wf-*.mjs"))
+    skill = REPO / ".pi/skills/meeting-minutes/SKILL.md"
+    if skill.is_file():
+        entries.append(skill)
+    return entries
+
+
+def embedded_source_digest():
+    digest = hashlib.sha256()
+    for path in embedded_sources():
+        digest.update(str(path.relative_to(REPO)).encode("utf-8"))
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def ensure_backend_sources(app, log=None):
+    """Re-embed when an incremental Xcode build left stale backend sources."""
+    manifest_path = app / "Contents/Resources/AIBackend/runtime.json"
+    if not manifest_path.exists():
+        raise RuntimeError("AI 后端未打包，构建已停止。")
+    expected = embedded_source_digest()
+    if json.loads(manifest_path.read_text()).get("backendSourceDigest") == expected:
+        return False
+    print("AI 后端源码已变更，重新嵌入当前 backend/。", file=log, flush=True)
+    embed(app)
+    if json.loads(manifest_path.read_text()).get("backendSourceDigest") != expected:
+        raise RuntimeError("AI 后端重新嵌入后源码仍不一致。")
+    return True
+
+
+def runtime_fingerprint(cache):
+    """缓存运行时的内容指纹。只做 stat，成本远低于整棵 97M 拷贝。"""
+    digest = hashlib.sha256()
+    for relative in ("runtime.json", "runtime/arm64/python/.workfollow-ready"):
+        path = cache / relative
+        digest.update(relative.encode("utf-8"))
+        digest.update(path.read_bytes() if path.is_file() else b"")
+    runtime = cache / "runtime"
+    for path in sorted(runtime.rglob("*")):
+        relative = str(path.relative_to(cache)).encode("utf-8")
+        if path.is_symlink():
+            digest.update(relative)
+            digest.update(str(path.readlink()).encode("utf-8"))
+            continue
+        if not path.is_file():
+            continue
+        stat = path.stat()
+        digest.update(relative)
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(str(stat.st_mtime_ns).encode("ascii"))
+    return digest.hexdigest()
+
+
 def embed(app, cache=CACHE, if_ready=False):
     if not (cache / "runtime.json").exists():
         if if_ready:
@@ -110,20 +176,30 @@ def embed(app, cache=CACHE, if_ready=False):
             return
         raise RuntimeError("请先执行 bundle-ai-backend.py prepare")
     root = app / "Contents/Resources/AIBackend"
-    if root.exists():
-        shutil.rmtree(root)
-    root.mkdir(parents=True)
-    for arch in ARCHES:
-        shutil.copytree(cache / "runtime" / arch / "python", root / "runtime" / arch / "python", symlinks=True)
-    thin_native_files(root)
-    # Older prepared caches can contain unused pip/console wrappers. They are
-    # build tools, and their shebangs can refer to a build-machine environment.
-    for arch in ARCHES:
-        python = root / "runtime" / arch / "python"
-        shutil.rmtree(python / "lib/python3.12/site-packages/bin", ignore_errors=True)
-        for path in (python / "bin").iterdir():
-            if path.name not in ("python", "python3", "python3.12"):
-                path.unlink()
+    root.mkdir(parents=True, exist_ok=True)
+    # 旧版组件不应随增量构建残留，validate_layout 会拒绝它们。
+    for stale in ("pi", "runtime/x86_64"):
+        shutil.rmtree(root / stale, ignore_errors=True)
+    fingerprint = runtime_fingerprint(cache)
+    manifest_path = root / "runtime.json"
+    previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    runtime_ready = (previous.get("runtimeFingerprint") == fingerprint
+                     and all((root / "runtime" / arch / "python/bin/python3").is_file() for arch in ARCHES))
+    if runtime_ready:
+        print("AI 运行环境未变化，跳过 97M 运行时拷贝。", flush=True)
+    else:
+        shutil.rmtree(root / "runtime", ignore_errors=True)
+        for arch in ARCHES:
+            shutil.copytree(cache / "runtime" / arch / "python", root / "runtime" / arch / "python", symlinks=True)
+        thin_native_files(root)
+        # Older prepared caches can contain unused pip/console wrappers. They are
+        # build tools, and their shebangs can refer to a build-machine environment.
+        for arch in ARCHES:
+            python = root / "runtime" / arch / "python"
+            shutil.rmtree(python / "lib/python3.12/site-packages/bin", ignore_errors=True)
+            for path in (python / "bin").iterdir():
+                if path.name not in ("python", "python3", "python3.12"):
+                    path.unlink()
     manifest = json.loads((cache / "runtime.json").read_text())
     manifest["architectures"] = list(ARCHES)
     manifest["node"] = "external"
@@ -131,7 +207,11 @@ def embed(app, cache=CACHE, if_ready=False):
     manifest["minimumNodeVersion"] = "22.19.0"
     manifest.pop("boundedText", None)
     manifest["textTransport"] = "pi-agent"
-    (root / "runtime.json").write_text(json.dumps(manifest, indent=2))
+    manifest["runtimeFingerprint"] = fingerprint
+    manifest["backendSourceDigest"] = embedded_source_digest()
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    # 源码和资源目录很小，每次全量同步，顺带清掉白名单里已移除的旧文件。
+    shutil.rmtree(root / "backend", ignore_errors=True)
     for name in SOURCE_FILES:
         source, destination = REPO / "backend" / name, root / "backend" / name
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -139,6 +219,7 @@ def embed(app, cache=CACHE, if_ready=False):
             shutil.copytree(source, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         else:
             shutil.copy2(source, destination)
+    shutil.rmtree(root / "resources", ignore_errors=True)
     resources = root / "resources"
     resources.mkdir()
     for path in (REPO / "macos-native/WorkFollow/Resources").glob("wf-*.mjs"):

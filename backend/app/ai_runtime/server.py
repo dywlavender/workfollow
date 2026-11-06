@@ -18,6 +18,7 @@ from pydantic import ValidationError
 
 from app.ai_runtime.pi_engine import PiEngine
 from app.ai_runtime.conversation import converse, conversation_file
+from app.ai_runtime.assistant import briefing_prompt
 from app.ai_runtime.diagnostics import configuration_check
 from app.ai_runtime.failures import EngineError, model_failure
 from app.ai_runtime.prompts import minutes_prompt, summary_prompt, task_prompt
@@ -44,35 +45,67 @@ class Runtime:
         self.pi = PiEngine(root)
         self.pending: dict[str, asyncio.Task] = {}
         self.conversation_tasks: dict[Path, asyncio.Task] = {}
+        self.conversation_deletions: dict[Path, asyncio.Task] = {}
         self.text_gate = asyncio.Lock()
+        self.background_text = None
         self.cooldowns = {}
 
     async def dispatch(self, method: str, data: dict):
-        text_methods = {"knowledge.ask", "note.rewrite", "text.tasks", "text.summary", "text.generate", "chat", "conversation.send", "meeting.minutes", "model.test"}
+        text_methods = {"knowledge.ask", "note.rewrite", "text.tasks", "text.summary", "text.generate", "chat", "conversation.send", "assistant.briefing", "meeting.minutes", "model.test"}
         if method not in text_methods or (method == "knowledge.ask" and not data.get("sources")):
             return await self._dispatch(method, data)
-        key = self.model_key(data)
-        remaining = self.cooldowns.get(key, 0) - time.monotonic()
-        if remaining > 0:
-            raise model_failure(status=429, retry_after=remaining)
+        file = conversation_file(data).resolve() if method == "conversation.send" else None
+        task = asyncio.current_task()
+        if file is not None:
+            if file in self.conversation_tasks or file in self.conversation_deletions:
+                raise EngineError("这个对话正在处理或删除，请等待完成或先取消。", "busy")
+            # Reserve the session before any await, including briefing cleanup.
+            self.conversation_tasks[file] = task
+        acquired = False
         try:
-            # A cancelled child can take a moment to exit. Briefly wait for
-            # cleanup, then report busy without starting another model call.
-            await asyncio.wait_for(self.text_gate.acquire(), 2)
-        except TimeoutError:
-            raise EngineError("另一个文字 AI 任务正在处理，请等待完成或先取消。", "busy") from None
-        try:
+            # Only optional briefings yield to other requests. Scheduled and
+            # foreground conversations have independent session ownership.
+            if method == "assistant.briefing":
+                if self.text_gate.locked() or self.conversation_tasks:
+                    raise EngineError("正在处理你的 AI 请求，稍后可刷新今日简报。", "busy")
+            elif self.background_text:
+                background = self.background_text
+                if not background.cancelling():
+                    background.cancel()
+                await asyncio.gather(asyncio.shield(background), return_exceptions=True)
+            key = self.model_key(data)
             remaining = self.cooldowns.get(key, 0) - time.monotonic()
             if remaining > 0:
                 raise model_failure(status=429, retry_after=remaining)
-            async with asyncio.timeout(600):
-                return await self._dispatch(method, data)
-        except EngineError as exc:
-            if exc.code == "rate_limited":
-                self.cooldowns[key] = time.monotonic() + (exc.retry_after or 30)
-            raise
+            if file is None:
+                try:
+                    # Keep other text methods serial, allowing cancelled work
+                    # a brief wait to finish its model cleanup.
+                    await asyncio.wait_for(self.text_gate.acquire(), 2)
+                except TimeoutError:
+                    raise EngineError("另一个文字 AI 任务正在处理，请等待完成或先取消。", "busy") from None
+                acquired = True
+                if method == "assistant.briefing":
+                    if self.conversation_tasks:
+                        raise EngineError("正在处理你的 AI 请求，稍后可刷新今日简报。", "busy")
+                    self.background_text = task
+            remaining = self.cooldowns.get(key, 0) - time.monotonic()
+            if remaining > 0:
+                raise model_failure(status=429, retry_after=remaining)
+            try:
+                async with asyncio.timeout(600):
+                    return await self._dispatch(method, data)
+            except EngineError as exc:
+                if exc.code == "rate_limited":
+                    self.cooldowns[key] = time.monotonic() + (exc.retry_after or 30)
+                raise
         finally:
-            self.text_gate.release()
+            if self.background_text is task:
+                self.background_text = None
+            if acquired:
+                self.text_gate.release()
+            if file is not None and self.conversation_tasks.get(file) is task:
+                self.conversation_tasks.pop(file)
 
     @staticmethod
     def model_key(data):
@@ -92,28 +125,44 @@ class Runtime:
             return {"models": await self.pi.models(data)}
         if method == "configuration.check":
             return await configuration_check(self.pi, data)
+        if method == "assistant.briefing":
+            return {"text": await self.pi.generate({**data, "appTools": False, "sessionFile": ""},
+                briefing_prompt(data), on_event=self.text_stream(method, data))}
         if method == "conversation.send":
-            file = conversation_file(data)
-            self.conversation_tasks[file] = asyncio.current_task()
-            try:
-                return await converse(self.pi, data, self.text_stream(method, data))
-            finally:
-                self.conversation_tasks.pop(file, None)
+            return await converse(self.pi, data, self.text_stream(method, data))
         if method == "conversation.delete":
-            file = conversation_file(data, scene="chat")
-            task = self.conversation_tasks.get(file)
-            if task:
-                if not task.cancelling():
-                    task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+            file = conversation_file(data, scene="chat").resolve()
+            if file in self.conversation_deletions:
+                raise EngineError("这个对话正在删除，请等待完成。", "busy")
+            deletion = asyncio.current_task()
+            self.conversation_deletions[file] = deletion
+            cancelled = False
             try:
-                file.unlink(missing_ok=True)
-                attachments = file.parent.parent / "attachments" / "chat" / file.stem
-                if attachments.exists():
-                    shutil.rmtree(attachments)
-            except OSError as exc:
-                raise EngineError("无法删除本地会话，请检查数据目录权限。", "storage_failed") from exc
-            return {"deleted": True}
+                task = self.conversation_tasks.get(file)
+                if task:
+                    if not task.cancelling():
+                        task.cancel()
+                    cleanup = asyncio.gather(task, return_exceptions=True)
+                    # Cancelling deletion must not cancel Pi cleanup again or
+                    # release the reservation while a request can still write.
+                    while not cleanup.done():
+                        try:
+                            await asyncio.shield(cleanup)
+                        except asyncio.CancelledError:
+                            cancelled = True
+                try:
+                    file.unlink(missing_ok=True)
+                    attachments = file.parent.parent / "attachments" / "chat" / file.stem
+                    if attachments.exists():
+                        shutil.rmtree(attachments)
+                except OSError as exc:
+                    raise EngineError("无法删除本地会话，请检查数据目录权限。", "storage_failed") from exc
+                if cancelled:
+                    raise asyncio.CancelledError
+                return {"deleted": True}
+            finally:
+                if self.conversation_deletions.get(file) is deletion:
+                    self.conversation_deletions.pop(file)
         if method == "model.test":
             return await self.langchain(method, data)
         if method in ("knowledge.ask", "note.rewrite"):
@@ -248,7 +297,7 @@ class Runtime:
     def accept(self, message: dict):
         if message.get("method") == "cancel":
             task = self.pending.get(message.get("params", {}).get("requestID"))
-            if task:
+            if task and not task.cancelling():
                 task.cancel()
             return
         request_id = message.get("id")
@@ -259,7 +308,8 @@ class Runtime:
     async def close(self):
         tasks = list(self.pending.values())
         for task in tasks:
-            task.cancel()
+            if not task.cancelling():
+                task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         await self.pi.close()
         self.cooldowns.clear()
