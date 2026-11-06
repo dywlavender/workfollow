@@ -1,0 +1,23 @@
+{
+  "name": "workfollow-milkdown-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "WorkFollow Milkdown editor web bundle (offline, WKWebView-embedded)",
+  "scripts": {
+    "build": "node build.mjs",
+    "clean": "rm -rf dist node_modules",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@milkdown/core": "7.23.0",
+    "@milkdown/plugin-history": "7.23.0",
+    "@milkdown/prose": "7.23.0",
+    "@milkdown/utils": "7.23.0",
+    "highlight.js": "11.11.1",
+    "katex": "0.19.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.0"
+  }
+}

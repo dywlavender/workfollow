@@ -1,0 +1,75 @@
+:root { --wf-body-size:14px; --wf-paragraph-spacing:10px; --wf-text:#242426; --wf-accent:#5278d4; --wf-fill:rgba(30,30,35,.055); --wf-border:rgba(30,30,35,.14); --wf-muted:#818187; --wf-popup:#fafafa; color-scheme:light; }
+:root[data-appearance=dark] { --wf-fill:rgba(240,240,245,.065); --wf-border:rgba(240,240,245,.17); --wf-muted:#a0a0a8; --wf-popup:#303033; color-scheme:dark; }
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; background:transparent; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif; color:var(--wf-text); }
+body { overflow-y:auto; }
+body.wf-grows { height:auto; overflow:hidden; }
+#root { padding:6px 8px 6px 5px; min-height:56px; }
+.milkdown,.ProseMirror { outline:none; }
+/* 跨段落选区时 WebKit 会在块边界补画一条横带让选区连续，但它从容器左边缘
+   起算，会伸进 20pt 行首沟槽。把容器左边缘移到文字起点、沟槽改由块外负偏移
+   承载：横带保留且左端正好落在文字起点，也不必为遮挡层匹配主题画布色。 */
+.ProseMirror { font-size:var(--wf-body-size); line-height:1.5; min-height:44px; overflow-wrap:anywhere; white-space:pre-wrap; word-break:normal; margin-left:20px; }
+.ProseMirror-focused { outline:none; }
+.wf-block { position:relative; padding-left:calc(var(--indent,0)*20px); margin:0 0 var(--wf-paragraph-spacing) 0; min-height:22px; }
+.wf-block:last-child { margin-bottom:0; }
+.wf-block-content { min-height:1.6em; outline:none; }
+.wf-is-empty .wf-block-content:before { content:attr(data-placeholder); color:var(--wf-muted); pointer-events:none; position:absolute; }
+.wf-block:not(:first-child) .wf-block-content:before { content:''; }
+.wf-block-handle { position:absolute; left:calc(var(--wf-marker-left,0px) - 20px); top:1px; width:16px; height:22px; padding:0; opacity:0; color:var(--wf-muted); font-size:10px; }
+.wf-block:hover>.wf-block-handle,.wf-is-empty>.wf-block-handle { opacity:1; }
+.wf-heading>.wf-block-content { font-weight:700; line-height:1.6; }
+.wf-heading { margin-bottom:8px; }
+.wf-marker { display:none; position:absolute; left:calc(var(--indent,0)*20px); top:1px; padding:0; font-size:inherit; line-height:inherit; width:17px; text-align:left; }
+.wf-bullet,.wf-ordered,.wf-quote { margin-bottom:2px; }
+.wf-bullet,.wf-ordered,.wf-quote,.wf-checklist { font-size:14px; line-height:18px; }
+.wf-bullet>.wf-block-content,.wf-ordered>.wf-block-content { margin-left:17px; }
+.wf-bullet>.wf-marker,.wf-ordered>.wf-marker { display:block; }
+.wf-checklist { margin-bottom:19px; padding-right:24px; }
+.wf-checklist>.wf-block-content { margin-left:24px; }
+.wf-checklist>.wf-marker { display:block; top:3px; width:17px; height:17px; border:1.5px solid var(--wf-border); border-radius:4px; line-height:14px; font-size:13px; text-align:center; cursor:pointer; }
+.wf-checked>.wf-marker { color:white; background:var(--wf-accent); border-color:var(--wf-accent); }
+.wf-checked>.wf-block-content { color:var(--wf-muted); text-decoration:line-through; }
+.wf-checklist:after { content:''; position:absolute; left:24px; right:0; bottom:-9px; height:1px; background:var(--wf-border); opacity:.45; }
+.wf-reminder { position:absolute; right:2px; top:1px; width:22px; height:22px; padding:0; color:var(--wf-muted); opacity:0; }
+.wf-block:hover>.wf-reminder,.wf-reminder.has-reminder { opacity:1; }
+.wf-reminder.has-reminder { color:var(--wf-accent); }
+.wf-quote>.wf-block-content { border-left:2px solid var(--wf-border); padding-left:14px; }
+.wf-code>.wf-block-content { background:var(--wf-fill); border:1px solid var(--wf-border); border-radius:6px; padding:7px 12px; font:13px/1.5 'SFMono-Regular',Menlo,monospace; tab-size:4; white-space:pre-wrap; }
+.wf-code { margin-bottom:2px; }
+.wf-divider>.wf-block-content { border-top:1px solid var(--wf-border); font-size:0; min-height:10px; margin-top:10px; }
+.wf-divider { min-height:22px; }
+.wf-empty-run { font-size:0; line-height:0; }
+strong { font-weight:650; } code { font:90% 'SFMono-Regular',Menlo,monospace; background:var(--wf-fill); padding:1px 3px; border-radius:3px; }
+mark { background:#ffe98a; color:#27272b; } a { color:var(--wf-accent); text-decoration:none; cursor:pointer; } a:hover { text-decoration:underline; }
+.wf-muted { color:var(--wf-muted); } .wf-caption { color:var(--wf-muted); font-size:12px; }
+.wf-ink-accent { color:var(--wf-accent); } .wf-ink-danger { color:#df5d69; }
+button { border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; border-radius:4px; }
+button:hover { background:var(--wf-fill); } button:disabled { cursor:default; }
+[hidden] { display:none!important; }
+.wf-embed { position:relative; display:inline-block; vertical-align:baseline; max-width:100%; border-radius:5px; white-space:normal; }
+.wf-embed>img { display:block; object-fit:contain; max-width:100%; height:auto; max-height:1400px; border-radius:4px; margin:4px 0; }
+.wf-embed>button { border:1px solid var(--wf-border); padding:5px 9px; font-size:13px; }
+.wf-image-resize { position:absolute; right:-3px; bottom:0; width:11px; height:11px; padding:0!important; background:var(--wf-accent)!important; border:2px solid white!important; border-radius:3px; cursor:nwse-resize; opacity:0; }
+.wf-embed:hover>.wf-image-resize { opacity:1; }
+.wf-table-wrap { display:inline-block; overflow:auto; margin:4px 0; border:1px solid var(--wf-border); }
+.wf-table-wrap table { border-collapse:collapse; min-width:240px; width:100%; }
+.wf-table-wrap td { border:1px solid var(--wf-border); min-width:90px; vertical-align:top; }
+.wf-table-wrap textarea { display:block; resize:vertical; outline:none; border:0; background:transparent; color:inherit; font:var(--wf-body-size)/1.5 -apple-system,sans-serif; width:100%; min-width:85px; padding:5px 7px; }
+.wf-embed-controls { display:flex; gap:8px; padding:3px 6px; font-size:11px; color:var(--wf-muted); }
+.wf-formula-preview { display:inline-block; margin:4px 5px; }
+.wf-embed[data-type=formula]>input { display:block; color:var(--wf-muted); font:12px Menlo,monospace; border:1px solid var(--wf-border); background:transparent; outline:none; border-radius:4px; padding:3px 6px; min-width:180px; width:100%; }
+#wf-selection,.wf-menu { position:fixed; z-index:100; color:var(--wf-text); background:var(--wf-popup); border:1px solid var(--wf-border); box-shadow:0 5px 20px rgba(0,0,0,.15); border-radius:8px; white-space:nowrap; user-select:none; font-size:13px; line-height:22px; }
+#wf-selection { display:flex; padding:4px; gap:2px; }
+#wf-selection button { min-width:26px; height:26px; padding:0 6px; }
+.wf-menu { width:208px; padding:5px; max-height:300px; overflow-y:auto; }
+.wf-menu>button { display:block; width:100%; min-height:30px; text-align:left; padding:4px 9px; font-size:13px; }
+.wf-menu>button.selected { background:var(--wf-fill); }
+.wf-readonly .wf-block-handle,.wf-readonly .wf-image-resize,.wf-readonly .wf-embed-controls { display:none!important; }
+.hljs-keyword,.hljs-selector-tag,.hljs-literal { color:#ad5dbe; } .hljs-string,.hljs-regexp { color:#ba4a54; } .hljs-comment { color:var(--wf-muted); } .hljs-number,.hljs-built_in { color:#507da8; }
+::-webkit-scrollbar { width:7px; height:7px; } ::-webkit-scrollbar-thumb { background:var(--wf-border); border-radius:5px; } ::-webkit-scrollbar-track { background:transparent; }
+
+/* 行内日期与 AI 续写建议都只在视图层，不写进文档模型。 */
+.wf-inline-date { text-decoration:underline dotted; text-underline-offset:2px; text-decoration-color:var(--wf-border); }
+.wf-inline-date:hover { background:var(--wf-fill); }
+.wf-ghost { color:var(--wf-muted); opacity:.7; pointer-events:none; user-select:none; }
