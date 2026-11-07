@@ -96,8 +96,10 @@ private struct NoteAITaskDraftEditor: View {
                         AppKitTaskTitleField(text: $draft.title,
                                              isEditing: $titleEditing,
                                              placeholder: "任务标题",
-                                             onSubmit: { editorHandle.focusFirstLine() })
+                                             onSubmit: { editorHandle.focusFirstLine() },
+                                             onArrowRightAtEnd: { editorHandle.focusFirstLineStart() })
                             .id(draft.id)
+                            .task(id: draft.id) { editorHandle.onLeftEdge = { titleEditing = true } }
                             .accessibilityLabel("候选任务标题")
                             .workflowActionAnchor("note.ai.draftEditor.title")
                             .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)

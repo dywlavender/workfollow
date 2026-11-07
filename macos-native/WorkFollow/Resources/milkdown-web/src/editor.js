@@ -274,6 +274,11 @@ function handleKeyDown(_, event) {
   if (mod && event.key.toLowerCase() === 'z') { command(event.shiftKey ? 'redo' : 'undo'); return true; }
   if (event.key === 'Tab' && !event.shiftKey && ghost.text && view.state.selection.empty) { acceptGhost(); return true; }
   if (event.key === 'Tab') { adjustIndent(event.shiftKey ? -1 : 1); return true; }
+  // 正文第一行行首按左方向键：把焦点交还标题栏，与标题的回车/右方向键接力互补。
+  if (event.key === 'ArrowLeft' && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey
+      && view.state.selection.empty && view.state.selection.$from.pos === 1) {
+    post({ event: 'leftEdgePressed' }); return true;
+  }
   if (event.key === 'Enter' && !event.shiftKey) return enter(view.state, view.dispatch);
   if (event.key === 'Backspace' && view.state.selection.empty && view.state.selection.$from.parentOffset === 0) {
     if (blockAt().attrs.indentLevel > 0) { adjustIndent(-1); return true; }
@@ -736,6 +741,11 @@ function command(name, payload = {}) {
   if (name === 'focusFirstLine') {
     const first = view.state.doc.firstChild, end = first ? 1 + first.content.size : 1;
     view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(end))).scrollIntoView());
+    view.focus(); if (settings.grows) revealSelection(); return true;
+  }
+  // 标题右方向键接力：光标落到正文第一行行首。
+  if (name === 'focusFirstLineStart') {
+    view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(1))).scrollIntoView());
     view.focus(); if (settings.grows) revealSelection(); return true;
   }
   // 原生差量缓存缺口时的恢复通道：作废基线并重发全量。

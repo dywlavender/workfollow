@@ -193,7 +193,7 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
     }
     func perform(_ name: String, payload: [String: Any] = [:]) {
         if !isBridgeReady || active == nil {
-            if ["focus", "focusEnd", "focusFirstLine"].contains(name) { pendingFocus = name }
+            if ["focus", "focusEnd", "focusFirstLine", "focusFirstLineStart"].contains(name) { pendingFocus = name }
             return
         }
         _Concurrency.Task { [weak self] in
@@ -209,6 +209,11 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
     func focusFirstLine() {
         window?.makeFirstResponder(webView)
         perform("focusFirstLine")
+    }
+    /// 标题右方向键接力：焦点给正文，选区落在第一行行首。
+    func focusFirstLineStart() {
+        window?.makeFirstResponder(webView)
+        perform("focusFirstLineStart")
     }
     func selectFromHost(_ event: NSEvent, phase: String) {
         guard !isReadOnly else { return }
@@ -355,6 +360,7 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
                 }
             case "focusChanged": context.onEditingChanged(value["focused"] as? Bool ?? false); MilkdownEditorRegistry.shared.changed()
             case "escapePressed": _ = context.onEscape()
+            case "leftEdgePressed": handle?.onLeftEdge?()
             case "requestAction": handleAction(value["action"] as? String ?? "", payload: value["payload"] as? [String: Any] ?? [:])
             default: break
             }

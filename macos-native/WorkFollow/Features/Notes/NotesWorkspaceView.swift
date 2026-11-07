@@ -336,15 +336,19 @@ struct NotesWorkspaceView: View {
                             placeholder: "笔记标题",
                             font: .systemFont(ofSize: 18, weight: .semibold),
                             accessibilityLabel: "笔记标题",
-                            onSubmit: { editorHandle.focusFirstLine() })
+                            onSubmit: { editorHandle.focusFirstLine() },
+                            onArrowRightAtEnd: { editorHandle.focusFirstLineStart() })
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .task(id: note.id) { titleEditing = note.title.isEmpty }
+                            .task(id: note.id) {
+                                titleEditing = note.title.isEmpty
+                                editorHandle.onLeftEdge = { titleEditing = true }
+                            }
                         if note.hasPreservedRichContent {
                             HStack(spacing: 8) {
                                 Image(systemName: "lock.shield")
                                 Text("原始富文本已保留；需要纯文本版本时可创建独立副本。")
                                 Button("创建副本") { _ = notes.createPlainTextCopy(note.id) }
-                            }.font(.caption).foregroundStyle(.secondary)
+                            }.font(WFType.caption).foregroundStyle(.secondary)
                         }
                         // Task and note hosts share the same native editing kernel.
                         // The profile supplies note-specific business actions.

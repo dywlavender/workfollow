@@ -530,8 +530,10 @@ struct TaskInspectorShell: View {
                                  placeholder: task.parentID == nil ? "任务标题" : "准备做什么？",
                                  // 标题 Return → 正文（TI2-22，滴答 `focusOnContentIfNeeded`）。
                                  onSubmit: { editorHandle.focusFirstLine() },
+                                 onArrowRightAtEnd: { editorHandle.focusFirstLineStart() },
                                  readOnly: selectedTaskHasFloatingEditor)
                 .id(task.id)
+                .task(id: task.id) { editorHandle.onLeftEdge = { titleEditing = true } }
                 .inspectorRenderAnchor(.title)
                 .padding(.horizontal, TaskInspectorMetrics.horizontalPadding)
                 .padding(.top, TaskInspectorMetrics.titleTopPadding)

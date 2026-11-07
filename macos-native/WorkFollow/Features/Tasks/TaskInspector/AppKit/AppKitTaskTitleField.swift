@@ -21,6 +21,8 @@ struct AppKitTaskTitleField: NSViewRepresentable {
     /// Return 的落点：标题编辑结束后把焦点交给正文（滴答 `focusOnContentIfNeeded`）。
     /// nil 时保持旧行为（只结束编辑）。
     var onSubmit: (() -> Void)? = nil
+    /// 右方向键越过标题末尾的落点：把焦点交给正文第一行行首。nil 时保持默认（光标原地不动）。
+    var onArrowRightAtEnd: (() -> Void)? = nil
     /// 浮窗接管期间，原详情里的标题只展示、不可编辑。
     var readOnly = false
 
@@ -92,6 +94,11 @@ struct AppKitTaskTitleField: NSViewRepresentable {
             DispatchQueue.main.async {
                 guard self.isEditing, field.currentEditor() == nil else { return }
                 field.window?.makeFirstResponder(field)
+                // 程序化聚焦把光标放到文本末尾：正文左方向键回跳标题时落在「最右边」，
+                // 再按右方向键就能原路返回正文（点击/Tab 聚焦不经过这里，行为不变）。
+                if let editor = field.currentEditor() {
+                    editor.selectedRange = NSRange(location: (field.stringValue as NSString).length, length: 0)
+                }
             }
         } else if !isEditing, editing {
             DispatchQueue.main.async {
@@ -156,6 +163,17 @@ struct AppKitTaskTitleField: NSViewRepresentable {
                 DispatchQueue.main.async { [parent] in
                     parent.isEditing = false
                     control.window?.makeFirstResponder(nil)
+                }
+                return true
+            }
+            // 右方向键越过标题末尾（含空标题）：焦点接力给正文第一行行首，
+            // 与正文的左方向键回跳形成标题⇄正文的双向巡游。Shift+右（扩选）不受影响。
+            if commandSelector == #selector(NSResponder.moveRight(_:)),
+               let exitRight = parent.onArrowRightAtEnd,
+               textView.selectedRange.location >= (textView.string as NSString).length {
+                DispatchQueue.main.async { [parent] in
+                    parent.isEditing = false
+                    exitRight()
                 }
                 return true
             }

@@ -40,6 +40,8 @@ final class DocumentEditorHandle: ObservableObject {
     weak var webView: MilkdownWebView?
     weak var textView: NativeTextView?
     weak var coordinator: DocumentEditorCoordinator?
+    /// 正文第一行行首按左方向键时宿主接管的落点（通常聚焦标题栏）。由宿主接线，nil 时不响应。
+    var onLeftEdge: (() -> Void)?
     /// 工具条据此显示激活态；选区变化与每次格式化后都会重算。
     @Published private(set) var style = DocumentSelectionStyle()
     @Published private(set) var canUndo = false
@@ -358,6 +360,15 @@ final class DocumentEditorHandle: ObservableObject {
         let newline = text.range(of: "\n")
         let end = newline.location == NSNotFound ? text.length : newline.location
         textView.setSelectedRange(NSRange(location: end, length: 0))
+        textView.window?.makeFirstResponder(textView)
+        textView.scrollRangeToVisible(textView.selectedRange())
+    }
+
+    /// 标题右方向键接力：光标落到正文第一行行首。
+    func focusFirstLineStart() {
+        if let webView { webView.focusFirstLineStart(); return }
+        guard let textView else { return }
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
         textView.window?.makeFirstResponder(textView)
         textView.scrollRangeToVisible(textView.selectedRange())
     }

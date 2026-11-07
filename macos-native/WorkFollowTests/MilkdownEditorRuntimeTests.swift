@@ -51,6 +51,42 @@ final class MilkdownEditorRuntimeTests: XCTestCase {
         XCTAssertTrue(MilkdownTestSupport.isFocused(view))
     }
 
+    /// 标题右方向键接力：光标落在正文第一行行首。
+    func testFocusFirstLineStartLandsAtDocumentStart() async throws {
+        let (model, view, _) = try await fixture(document: NativeDocument(plainText: "第一行正文\n第二行正文"))
+        model.handle.focusFirstLineStart()
+        try await wait("光标没有落到第一行行首") {
+            guard let range = try? MilkdownTestSupport.range(view) else { return false }
+            return range == NSRange(location: 0, length: 0)
+        }
+        XCTAssertTrue(MilkdownTestSupport.isFocused(view))
+    }
+
+    /// 正文第一行行首按左方向键：上报 leftEdgePressed，宿主把焦点交还标题栏；
+    /// 光标不在行首时（第二行行首）不能误报。
+    func testLeftEdgeAtDocumentStartRequestsTitleFocus() async throws {
+        let (model, view, _) = try await fixture(document: NativeDocument(plainText: "第一行正文\n第二行正文"))
+        var leftEdgeRequests = 0
+        model.handle.onLeftEdge = { leftEdgeRequests += 1 }
+        try MilkdownTestSupport.command(view, "focusFirstLineStart")
+        try await wait("光标没有落到第一行行首") { (try? MilkdownTestSupport.range(view))?.location == 0 }
+        try MilkdownTestSupport.script(view, """
+            document.querySelector('.ProseMirror').dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }))
+            """)
+        try await wait("leftEdgePressed 没有上报") { leftEdgeRequests == 1 }
+        // 光标不在第一行行首时（第二行中间）按左方向键：不上报。合成事件不会驱动
+        // 浏览器原生光标移动，所以这里只断言「没有重复上报」，移动语义由真机覆盖。
+        try MilkdownTestSupport.select(view, NSRange(location: 8, length: 0))
+        try MilkdownTestSupport.script(view, """
+            document.querySelector('.ProseMirror').dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }))
+            """)
+        try await _Concurrency.Task.sleep(nanoseconds: 300_000_000)
+        XCTAssertEqual(leftEdgeRequests, 1, "不在行首时不应上报")
+        XCTAssertEqual((try? MilkdownTestSupport.range(view))?.location, 8, "光标不应移动")
+    }
+
     /// 第一行选字时上方放不下浮条，应翻到选区下方，不压住第一行文字。
     func testSelectionToolbarClearsFirstLine() async throws {
         var profile = DocumentProfile()

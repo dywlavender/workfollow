@@ -65,8 +65,10 @@ struct FloatingEditorView<Actions: View, TopBar: View>: View {
                                  font: .systemFont(ofSize: 15, weight: .semibold),
                                  accessibilityLabel: titleAccessibilityLabel,
                                  singleLine: true,
-                                 onSubmit: { editorHandle.focusFirstLine() })
+                                 onSubmit: { editorHandle.focusFirstLine() },
+                                 onArrowRightAtEnd: { editorHandle.focusFirstLineStart() })
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .task { editorHandle.onLeftEdge = { titleEditing = true } }
                 .padding(.horizontal, FloatingEditorMetrics.contentHorizontalPadding)
                 .frame(height: FloatingEditorMetrics.titleRowHeight)
             GeometryReader { viewport in
