@@ -280,7 +280,8 @@ extension MilkdownWebView {
         reminderPanel?.dismiss()
         let identity = documentIdentity
         reminderPanel = ChecklistItemReminderPanel(anchor: anchor, owner: window, now: Date(), calendar: .current,
-            current: suggested ?? document.blocks[index].checklist?.reminderAt, notice: context.profile.checklistReminderNotice(),
+            // 已设过的提醒优先回显；行内日期建议值只作没有提醒时的默认选中。
+            current: document.blocks[index].checklist?.reminderAt ?? suggested, notice: context.profile.checklistReminderNotice(),
             onSelect: { [weak self] date in
                 guard let self, documentIdentity == identity, let index = document.blocks.firstIndex(where: { $0.id == id }) else { return }
                 context.profile.setChecklistReminder(index, date)
