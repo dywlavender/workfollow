@@ -30,7 +30,7 @@ final class WorkspaceContinuityTests: XCTestCase {
         XCTAssertNil(defaults.data(forKey: GlobalQuickAddDraft.storageKey))
     }
 
-    func testTaskNotesRoundTripRestoresListContextButClosesDetails() throws {
+    func testTaskNotesRoundTripRestoresListContextAndReopensNote() throws {
         let environment = AppEnvironment()
         let workspace = environment.taskWorkspace
         let navigation = environment.navigation
@@ -43,15 +43,15 @@ final class WorkspaceContinuityTests: XCTestCase {
         workspace.select(id)
         environment.navigate(to: .notes)
         InspectorPanelTestSupport.settle(window)
-        environment.notesWorkspace.create()
-        XCTAssertNotNil(environment.notesWorkspace.selectedID)
+        let noteID = environment.notesWorkspace.create()
+        XCTAssertEqual(environment.notesWorkspace.selectedID, noteID)
         XCTAssertNil(workspace.selectedTaskID, "切到笔记后任务详情关闭")
         environment.navigate(to: .today)
         InspectorPanelTestSupport.settle(window)
         XCTAssertNil(workspace.selectedTaskID, "切回清单不再恢复任务详情")
         environment.navigate(to: .notes)
         InspectorPanelTestSupport.settle(window)
-        XCTAssertNil(environment.notesWorkspace.selectedID, "切回笔记不再恢复笔记详情")
+        XCTAssertEqual(environment.notesWorkspace.selectedID, noteID, "切回笔记恢复上一次打开的笔记")
         environment.openTask(id)
         InspectorPanelTestSupport.settle(window)
         XCTAssertEqual(workspace.selectedTaskID, id, "显式链接仍直接打开任务")
@@ -63,7 +63,7 @@ final class WorkspaceContinuityTests: XCTestCase {
         XCTAssertNil(workspace.selectedTaskID, "清单上下文不包含选中任务")
     }
 
-    func testSwitchingScopesClosesTaskAndNoteDetails() throws {
+    func testSwitchingScopesClosesTaskDetailsAndRestoresNoteOnReturn() throws {
         let workspace = TaskWorkspaceModel(seedDemoData: false)
         let notes = NotesWorkspaceModel()
         let navigation = AppNavigation(destination: .today)
@@ -86,12 +86,25 @@ final class WorkspaceContinuityTests: XCTestCase {
         XCTAssertEqual(workspace.activeList, "工作", "清单上下文在「所有任务」内仍逐页恢复")
 
         navigation.destination = .notes
-        notes.create()
-        XCTAssertNotNil(notes.selectedID)
+        let noteID = notes.create()
+        XCTAssertEqual(notes.selectedID, noteID)
         navigation.destination = .notesTrash
-        XCTAssertNil(notes.selectedID)
+        XCTAssertNil(notes.selectedID, "去垃圾桶关闭详情")
         navigation.destination = .notes
-        XCTAssertNil(notes.selectedID, "笔记与垃圾桶之间切换同样不恢复详情")
+        XCTAssertEqual(notes.selectedID, noteID, "从垃圾桶切回笔记恢复上一次打开的笔记")
+    }
+
+    func testReturnToNotesSkipsNoteTrashedWhileAway() throws {
+        let workspace = TaskWorkspaceModel(seedDemoData: false)
+        let notes = NotesWorkspaceModel()
+        let navigation = AppNavigation(destination: .today)
+        let memory = WorkspaceSelectionMemory()
+        memory.connect(workspace: workspace, notes: notes, navigation: navigation)
+        let noteID = notes.create()
+        navigation.destination = .today
+        notes.delete(noteID)
+        navigation.destination = .notes
+        XCTAssertNil(notes.selectedID, "离开期间被移进垃圾桶的笔记不再恢复")
     }
 
     func testReturnMemoryDoesNotReopenDeletedTask() throws {
