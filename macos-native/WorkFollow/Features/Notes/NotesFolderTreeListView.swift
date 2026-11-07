@@ -281,15 +281,9 @@ struct NotesFolderTreeListView: View {
 
     @ViewBuilder
     private func noteChildren(_ items: [Note], depth: Int) -> some View {
-        if items.isEmpty, query.isEmpty && !favorites {
-            Text("暂无笔记")
-                .font(.system(size: 11)).foregroundStyle(WFColors.tertiaryText)
-                .padding(.leading, CGFloat(depth) * 16 + 22)
-                .frame(height: 24)
-        } else {
-            ForEach(items) { note in
-                noteRow(note, depth: depth)
-            }
+        // 空文件夹不再渲染「暂无笔记」占位（用户要求），直接留白。
+        ForEach(items) { note in
+            noteRow(note, depth: depth)
         }
     }
 
