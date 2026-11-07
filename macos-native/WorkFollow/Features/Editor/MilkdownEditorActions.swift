@@ -1,5 +1,9 @@
 import AppKit
+import os
 import UniformTypeIdentifiers
+
+/// ghost 续写链路的诊断日志（`log stream --predicate 'category == "ghost"'`）。
+private let ghostLog = Logger(subsystem: "com.workfollow.native", category: "ghost")
 
 /// An asynchronous paste owns a document generation and the selection captured
 /// before loading images. The JS transaction rechecks these tokens atomically.
@@ -246,25 +250,50 @@ extension MilkdownWebView {
         return QuickAddParser.parse(text, now: Date(), calendar: .current, knownLists: []).dueAt
     }
 
+    /// text.generate 被模型服务策略性拒绝（client_unauthorized）后，本轮运行
+    /// 不再重复请求；超时等瞬时失败不禁用，避免冷启动第一枪误杀续写。
     /// 停顿后的短续写。走 text.generate 的裸补全，不落会话、不写文档；
     /// 结果回来时校验文档身份与请求序号，过期建议直接丢弃。
     private func requestGhost(_ payload: [String: Any]) {
-        guard !isReadOnly, let context = payload["context"] as? String,
+        guard !ghostDisabled, !isReadOnly, let context = payload["context"] as? String,
               let request = payload["request"] as? Int,
               let documentID = payload["documentID"] as? String,
               let epochString = payload["epoch"] as? String,
-              let anchor = payload["anchor"] as? Int else { return }
+              let anchor = payload["anchor"] as? Int else {
+            if ghostDisabled { ghostLog.info("ghost 已禁用，忽略请求") }
+            else { ghostLog.error("ghostRequest 守卫拦截 readOnly=\(self.isReadOnly) keys=\(Array(payload.keys).sorted(), privacy: .public)") }
+            return
+        }
         let identity = documentIdentity, expectedEpoch = epoch
         let prompt = "续写下面这段文字，只输出紧接着的一小句，不超过 25 个汉字。不要重复原文、不要解释、不要换行、不要加引号：\n" + context
+        ghostLog.info("ghostRequest 收到 anchor=\(anchor) 上下文 \(context.count) 字")
         _Concurrency.Task { [weak self] in
-            let text = try? await SummaryPiOptimizer(timeout: 15).generate(prompt: prompt)
+            let text: String
+            do { text = try await SummaryPiOptimizer(timeout: 15).generate(prompt: prompt) }
+            catch {
+                let description = String(describing: error)
+                ghostLog.error("ghost AI 失败：\(description, privacy: .public)")
+                if description.contains("client_unauthorized") {
+                    self?.ghostDisabled = true
+                    ghostLog.error("模型服务拒绝通用补全 API，本轮运行禁用 ghost 续写")
+                }
+                return
+            }
+            ghostLog.info("ghost AI 返回 \(text.count) 字")
             guard let self, self.documentIdentity == identity, self.epoch == expectedEpoch,
                   self.documentIdentity?.uuidString == documentID,
-                  self.epoch.uuidString == epochString,
-                  let text, !text.isEmpty else { return }
-            _ = try? await self.call("applyGhost", ["text": text,
-                "documentID": documentID, "epoch": epochString,
-                "anchor": anchor, "request": request])
+                  self.epoch.uuidString == epochString, !text.isEmpty else {
+                ghostLog.error("ghost 建议过期丢弃")
+                return
+            }
+            do {
+                _ = try await self.call("applyGhost", ["text": text,
+                    "documentID": documentID, "epoch": epochString,
+                    "anchor": anchor, "request": request])
+                ghostLog.info("applyGhost 已发送")
+            } catch {
+                ghostLog.error("applyGhost 失败：\(String(describing: error), privacy: .public)")
+            }
         }
     }
 

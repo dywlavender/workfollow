@@ -93,6 +93,8 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
     var menuPanel: NSPanel? { menuPresenter.panel }
     private let statusLabel = NSTextField(labelWithString: "正在载入正文…")
     var reminderPanel: ChecklistItemReminderPanel?
+    /// text.generate 被模型服务策略性拒绝后本轮运行置位，续写不再重复请求。
+    var ghostDisabled = false
     struct HostOperation {
         var before: NativeDocument
         var after: NativeDocument?
