@@ -21,6 +21,20 @@ struct AIConversationComposer<Model: AIConversationComposing>: View {
         VStack(alignment: .leading, spacing: 8) {
             AIAttachmentStrip(items: attachments.items, remove: attachments.remove)
             AIAttachmentDraftStatus(draft: attachments)
+            if let steer = model.pendingSteerText {
+                // 引导已排队：本轮回复结束后自动发出。
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath").font(.system(size: 10))
+                    Text("已排队：\(steer)").font(WFType.caption).lineLimit(1)
+                        .foregroundStyle(WFColors.secondaryText)
+                    Spacer()
+                    Button { model.cancelSteer() } label: {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                    }.buttonStyle(.plain).foregroundStyle(WFColors.secondaryText)
+                        .accessibilityLabel("取消排队消息")
+                }.padding(8)
+                .background(WFColors.secondarySurface, in: RoundedRectangle(cornerRadius: 8))
+            }
             HStack(alignment: .bottom, spacing: 12) {
                 Button { attachments.choose() } label: {
                     Image(systemName: "paperclip").font(.system(size: 16)).frame(width: 26, height: 32)
@@ -53,6 +67,10 @@ struct AIConversationComposer<Model: AIConversationComposing>: View {
                 .accessibilityIdentifier(actionID).workflowActionAnchor(actionID)
                 .workflowActionAnchor(instanceID.map { actionID + "." + $0.uuidString } ?? actionID)
             }
+            if model.isRunning, !model.input.isEmpty {
+                Text("生成中：按回车把这句话排入队尾，本轮结束后自动发送")
+                    .font(WFType.caption).foregroundStyle(WFColors.tertiaryText)
+            }
         }
         .padding(12)
         .background(themedInput ? backgroundTheme.inputFill : WFColors.secondarySurface,
@@ -62,5 +80,13 @@ struct AIConversationComposer<Model: AIConversationComposing>: View {
         .workflowActionAnchor(identifierPrefix + ".composer")
     }
 
-    private func send() { if canSubmit { submit() } }
+    private func send() {
+        if canSubmit { submit(); return }
+        // 生成中按回车 = 引导（steer）：排队的话在本轮结束后自动发送。
+        if model.isRunning, !attachments.isImporting,
+           !model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            model.queueSteer(model.input)
+            model.input = ""
+        }
+    }
 }

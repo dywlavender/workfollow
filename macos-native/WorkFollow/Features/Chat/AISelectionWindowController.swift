@@ -8,6 +8,7 @@ final class AISelectionTarget {
     private weak var webEditor: MilkdownWebView?
     private var webSelection: MilkdownSelection?
     private var webEpoch: UUID?
+    private var postWriteRevision: Int?
     private let identity: UUID
     private let range: NSRange
     private let original: String
@@ -54,6 +55,23 @@ final class AISelectionTarget {
         editor.window?.makeFirstResponder(editor)
         editor.insertText(inserting ? "\n" + text : text, replacementRange: replacement)
         editor.breakUndoCoalescing()
+        return true
+    }
+
+    /// 回写成功后记录当时的文档版本：撤销前校验「写入之后没有再改过」。
+    func noteApplied() { postWriteRevision = webEditor?.revision }
+
+    /// 撤销本次写入：触发编辑器自身的撤销栈；写入之后文档又被改过（版本对不上）
+    /// 则拒绝，交给用户在编辑器里手动 ⌘Z，绝不盲退到未知状态。
+    func undoWriteAsync() async -> Bool {
+        if let webEditor {
+            guard let webEpoch, webEditor.documentIdentity == identity, webEditor.epoch == webEpoch,
+                  let postWriteRevision, webEditor.revision == postWriteRevision else { return false }
+            do { return try await webEditor.call("command", ["name": "undo", "payload": [:]]) as? Bool == true }
+            catch { return false }
+        }
+        guard let editor else { return false }
+        editor.undoManager?.undo()
         return true
     }
 }

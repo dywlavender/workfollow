@@ -293,39 +293,61 @@ final class AIConversationInteractionTests: XCTestCase {
     }
 
     /// 选区 AI 不再弹独立浮窗：结果落在笔记右侧 AI 栏，「替换」写回原选区且可撤销。
-    /// 这条是真实 Milkdown 编辑器 + 真实窗口 + 真实上下文菜单的端到端路径。
+    /// 两轮润色后每条结果各自绑定选区快照：动作按条出现在结果下方，互不覆盖，
+    /// 回写第一轮仍落在第一轮的选区上。真实 Milkdown 编辑器 + 真实窗口 + 真实上下文菜单。
     func testSelectedTextOpensNoteAIPaneAndReplacementIsUndoable() async throws {
         let environment = try fixture()
         let noteID = environment.notesWorkspace.create()
         environment.notesWorkspace.edit(noteID) { $0.title = "虚构笔记"; $0.document = NativeDocument(plainText: "前文。原句。后文。") }
         environment.navigation.destination = .notes
-        var anchors: [String: NSView] = [:]
+        var anchors: [String: [NSView]] = [:]
         let host = NSHostingView(rootView: RootShellView(workspace: environment.taskWorkspace, navigation: environment.navigation)
             .environmentObject(environment)
-            .environment(\.workflowActionObservation, { anchors[$0] = $1 })
+            .environment(\.workflowActionObservation, { anchors[$0, default: []].append($1) })
             .frame(width: 1100, height: 740))
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 740)
         defer { window.contentView = nil; window.close() }
         let editor = try await MilkdownTestSupport.editorAsync(in: host, id: noteID)
-        try MilkdownTestSupport.select(editor, (editor.document.plainText as NSString).range(of: "原句"))
-        try MilkdownTestSupport.script(editor, "document.querySelector('.ProseMirror').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:100,clientY:60}))")
-        try MilkdownTestSupport.chooseMenu(editor, title: "AI 润色")
+        func polish(_ text: String) throws {
+            try MilkdownTestSupport.select(editor, (editor.document.plainText as NSString).range(of: text))
+            try MilkdownTestSupport.script(editor, "document.querySelector('.ProseMirror').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:100,clientY:60}))")
+            try MilkdownTestSupport.chooseMenu(editor, title: "AI 润色")
+        }
+        try polish("原句")
         let model = NoteAIConversationStore.shared.model(for: noteID)
-        try await wait("右栏选区会话") { !model.conversation.record.messages.isEmpty && model.selectionTarget != nil }
+        try await wait("右栏选区会话") { !model.conversation.record.messages.isEmpty && !model.selectionTargets.isEmpty }
         XCTAssertNil(AISelectionWindowController.shared.panel, "笔记页的选区 AI 不应再弹独立浮窗")
-        try await wait("AI 栏已展开") { anchors["note.ai.pane"]?.window === window }
+        try await wait("AI 栏已展开") { anchors["note.ai.pane"]?.last?.window === window }
         XCTAssertEqual(model.conversation.submittedSource?.kind, "selection")
         XCTAssertEqual(model.conversation.submittedSource?.content, "原句")
         XCTAssertNil(model.conversation.submittedSource?.id, "带 id 会把选区结果误投影成替换整篇正文的卡片")
         XCTAssertTrue(model.exchanges.isEmpty)
-        try await wait("生成完成") { !model.isRunning }
-        try await wait("替换按钮") { anchors["ai.selection.replace"] != nil }
-        let replace = try XCTUnwrap(anchors["ai.selection.replace"])
+        try await wait("第一轮生成完成") { !model.isRunning }
+        // SwiftUI 重渲染会重复上报同一按钮，按去重后的对象数判断。
+        try await wait("第一轮替换按钮") { Set((anchors["ai.selection.replace"] ?? []).map(ObjectIdentifier.init)).count >= 1 }
+
+        // 第二轮换一段选区再润色：两条结果各自绑定快照，动作各自成组、互不覆盖。
+        try polish("后文")
+        try await wait("第二轮生成完成") {
+            !model.isRunning && model.conversation.latestWritingResult == "第2轮回复：清楚的虚构文字"
+        }
+        try await wait("第二轮替换按钮") { Set((anchors["ai.selection.replace"] ?? []).map(ObjectIdentifier.init)).count >= 2 }
+        let assistantMessages = model.conversation.record.messages.filter { $0.role == .assistant }
+        XCTAssertEqual(assistantMessages.count, 2)
+        let firstTarget = try XCTUnwrap(model.selectionTarget(for: assistantMessages[0]), "第一轮快照仍可解析")
+        let secondTarget = try XCTUnwrap(model.selectionTarget(for: assistantMessages[1]), "第二轮快照仍可解析")
+        XCTAssertTrue(firstTarget !== secondTarget, "两轮各自持有快照")
+
+        // 回写第一轮：仍落在第一轮的选区（原句），不碰第二轮的（后文）。
+        let replace = try XCTUnwrap(anchors["ai.selection.replace"]?.first, "第一轮的动作行")
         try InspectorPanelTestSupport.click(replace.bounds, in: replace, window: window)
-        try await wait("回写原选区") { editor.document.plainText == "前文。第1轮回复：清楚的虚构文字。后文。" }
-        XCTAssertNil(model.selectionTarget)
+        try await wait("回写第一轮原选区") { editor.document.plainText == "前文。第1轮回复：清楚的虚构文字。后文。" }
+        // 回写在 JS 应用阶段就可见，消费发生在桥接回包之后，这里等消费落地。
+        try await wait("消费第一轮快照") { model.selectionTarget(for: assistantMessages[0]) == nil }
+        XCTAssertNotNil(model.selectionTarget(for: assistantMessages[1]), "第二轮快照不受影响")
         try MilkdownTestSupport.command(editor, "undo")
         XCTAssertEqual(editor.document.plainText, "前文。原句。后文。")
+        model.stop(); model.clearSelectionTargets()
     }
 
     func testSelectionContextMenuOffersTranslateWithDistinctPreset() async throws {
@@ -363,8 +385,8 @@ final class AIConversationInteractionTests: XCTestCase {
         let replace = try XCTUnwrap(anchors["ai.selection.replace"])
         try InspectorPanelTestSupport.click(replace.bounds, in: replace, window: window)
         try await wait("翻译回写原选区") { editor.document.plainText == "前文。第1轮回复：清楚的虚构文字。后文。" }
-        XCTAssertNil(model.selectionTarget)
-        model.stop(); model.clearSelectionTarget()
+        try await wait("消费翻译快照") { model.selectionTargets.isEmpty }
+        model.stop(); model.clearSelectionTargets()
     }
 
     // MARK: - 会话窗的收起规则（没有右侧 AI 栏的宿主仍用独立浮窗）

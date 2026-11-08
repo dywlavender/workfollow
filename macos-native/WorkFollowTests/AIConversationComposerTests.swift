@@ -8,11 +8,15 @@ final class AIConversationComposerTests: XCTestCase {
     private final class RunningComposer: ObservableObject, AIConversationComposing {
         @Published var input = "准备下一问"
         @Published var isRunning = true
+        @Published private(set) var pendingSteerText: String?
         let attachments: AIAttachmentDraft
         var canSend = true
         var stopCount = 0
+        var steerCount = 0
         init(directory: URL) { attachments = AIAttachmentDraft(directory: directory) }
         func stop() { stopCount += 1; isRunning = false }
+        func queueSteer(_ text: String) { steerCount += 1; pendingSteerText = text }
+        func cancelSteer() { pendingSteerText = nil }
     }
     private func wait(_ condition: () -> Bool) async throws {
         for _ in 0..<500 {
@@ -29,7 +33,8 @@ final class AIConversationComposerTests: XCTestCase {
         return root
     }
 
-    func testReturnDuringGenerationKeepsDraftAndOnlyButtonStopsForBothSizes() throws {
+    /// 生成中回车 = 引导（steer）：排队、清空输入，不动停止按钮的职责。
+    func testReturnDuringGenerationSteersAndButtonStopsForBothSizes() throws {
         for compact in [false, true] {
             let model = RunningComposer(directory: try directory())
             var sent = 0
@@ -49,7 +54,9 @@ final class AIConversationComposerTests: XCTestCase {
             input.keyDown(with: event)
             XCTAssertEqual(sent, 0)
             XCTAssertEqual(model.stopCount, 0)
-            XCTAssertEqual(model.input, "准备下一问")
+            XCTAssertEqual(model.steerCount, 1)
+            XCTAssertEqual(model.pendingSteerText, "准备下一问")
+            XCTAssertEqual(model.input, "")
             let button = try XCTUnwrap(anchors["ai.chat.send"])
             try InspectorPanelTestSupport.click(button.bounds, in: button, window: window)
             XCTAssertEqual(model.stopCount, 1)

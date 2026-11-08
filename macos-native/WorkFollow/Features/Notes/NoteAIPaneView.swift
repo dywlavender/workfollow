@@ -37,35 +37,58 @@ struct NoteAIPaneView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            VStack(spacing: 0) {
-                AIConversationView(model: model.conversation, generate: generate,
-                    adopt: model.selectionTarget == nil ? nil : { text, inserting in
-                        guard let target = model.selectionTarget else { return }
-                        _Concurrency.Task { @MainActor in
-                            if await target.applyAsync(text, inserting: inserting) {
-                                model.clearSelectionTarget()
-                                selectionAdoptError = nil
-                            } else {
-                                selectionAdoptError = "原文已改变或已切换笔记，请重新选择文字后生成。"
-                            }
-                        }
-                    },
-                    undoAction: { environment.undoAIAction($0) },
-                    canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
-                    compact: true, identifierPrefix: "note.ai",
-                    leadingContent: AnyView(VStack(alignment: .leading, spacing: 14) { greeting; actionCards }),
-                    artifactContent: { message in AnyView(resultCards(message)) },
-                    submit: sendMessage)
-                    .id(model.conversation.record.id)
-                    .environment(\.openURL, OpenURLAction { url in
-                        environment.openResourceLink(url) ? .handled : .systemAction
-                    })
-                if let selectionAdoptError {
-                    Text(selectionAdoptError)
-                        .font(WFType.caption)
-                        .foregroundStyle(WFColors.danger)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16).padding(.bottom, 8)
+            if let historyModel = model.viewingHistory {
+                // 只读回看归档会话：不显示输入区，随时回到当前会话。
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "clock.arrow.circlepath").font(.system(size: 11))
+                        Text("正在查看历史会话").font(WFType.supporting)
+                        Spacer()
+                        Button("回到当前会话") { model.backToCurrent(); selectionAdoptError = nil }
+                            .buttonStyle(.plain).foregroundStyle(WFColors.accent).font(WFType.supporting)
+                    }.padding(.horizontal, 16).padding(.vertical, 8)
+                    Divider()
+                    AIConversationView(model: historyModel, generate: generate,
+                        compact: true, identifierPrefix: "note.ai.history", readOnly: true)
+                        .id(historyModel.record.id)
+                        .environment(\.openURL, OpenURLAction { url in
+                            environment.openResourceLink(url) ? .handled : .systemAction
+                        })
+                }
+            } else {
+                VStack(spacing: 0) {
+                    AIConversationView(model: model.conversation, generate: generate,
+                        undoAction: { environment.undoAIAction($0) },
+                        canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
+                        compact: true, identifierPrefix: "note.ai",
+                        leadingContent: AnyView(VStack(alignment: .leading, spacing: 14) { greeting; actionCards }),
+                        artifactContent: { message in AnyView(resultCards(message)) },
+                        submit: sendMessage)
+                        .id(model.conversation.record.id)
+                        .environment(\.openURL, OpenURLAction { url in
+                            environment.openResourceLink(url) ? .handled : .systemAction
+                        })
+                    if let selectionAdoptError {
+                        Text(selectionAdoptError)
+                            .font(WFType.caption)
+                            .foregroundStyle(WFColors.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16).padding(.bottom, 8)
+                    }
+                    if let lastWrite = model.lastWrite {
+                        // 回执一等公民化：写入过什么、能不能撤，摆在明面上。
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle").font(.system(size: 10))
+                            Text("已\(lastWrite.kind)到原文").font(WFType.caption).foregroundStyle(WFColors.secondaryText)
+                            Button("撤销本次写入") { undoLastWrite() }
+                                .buttonStyle(.plain).font(WFType.caption).foregroundStyle(WFColors.accent)
+                            Spacer()
+                            Button { model.dismissLastWrite() } label: {
+                                Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                            }.buttonStyle(.plain).foregroundStyle(WFColors.secondaryText)
+                                .accessibilityLabel("忽略")
+                        }.padding(.horizontal, 16).padding(.bottom, 8)
+                    }
                 }
             }
         }
@@ -92,15 +115,34 @@ struct NoteAIPaneView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
-            Button { model.reset(); selectionAdoptError = nil } label: {
+            // 历史会话：点开归档列表，只读回看，随时回到当前会话。
+            Menu {
+                ForEach(model.history) { record in
+                    Button { model.viewHistory(record.id); selectionAdoptError = nil } label: {
+                        Text(Self.historyTitle(record))
+                    }
+                }
+            } label: {
+                Image(systemName: "clock.arrow.circlepath").frame(width: 24, height: 24)
+            }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+            .fixedSize()
+            .buttonStyle(.plain)
+            .hoverTip("历史会话")
+            .disabled(model.history.isEmpty || model.viewingHistory != nil)
+            .opacity(model.history.isEmpty ? 0.35 : 1)
+            .accessibilityLabel("历史会话")
+            .workflowActionAnchor("note.ai.history")
+            // 清空当前会话记录并新开一个 session：旧会话归档进历史，不销毁。
+            Button { model.startNewSession(); selectionAdoptError = nil } label: {
                 Image(systemName: "plus").frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .hoverTip("新对话")
-            .disabled(model.isRunning || model.conversation.record.messages.isEmpty)
-            .opacity(model.isRunning || model.conversation.record.messages.isEmpty ? 0.35 : 1)
+            .hoverTip("新会话（当前会话归档进历史）")
+            .disabled(model.isRunning)
+            .opacity(model.isRunning ? 0.35 : 1)
             Button {
-                model.clearSelectionTarget()
+                model.clearSelectionTargets()
                 selectionAdoptError = nil
                 onClose()
             } label: {
@@ -112,6 +154,14 @@ struct NoteAIPaneView: View {
         .padding(.horizontal, 16)
         // 与编辑栏顶栏同高，两栏的分割线才能连成一条。
         .frame(height: 44)
+    }
+
+    /// 历史菜单条目：归档时间 + 首条提问的一行预览。
+    private static func historyTitle(_ record: AIConversationRecord) -> String {
+        let question = record.messages.first(where: { $0.role == .user })?.text ?? ""
+        let preview = question.split(separator: "\n").first.map(String.init) ?? ""
+        let trimmed = preview.isEmpty ? "（无文字）" : (preview.count > 18 ? String(preview.prefix(18)) + "…" : preview)
+        return record.updatedAt.formatted(date: .abbreviated, time: .shortened) + " · " + trimmed
     }
 
     private var greeting: some View {
@@ -184,11 +234,32 @@ struct NoteAIPaneView: View {
 
     @ViewBuilder
     private func resultCards(_ message: AIConversationMessage) -> some View {
-        if model.results(for: message).isEmpty {
+        if model.viewingHistory != nil {
+            // 历史会话只读回看：产物按通用结果视图展示，不再接回写动作。
+            AIConversationArtifactsView(artifacts: message.artifacts ?? [])
+        } else if model.results(for: message).isEmpty {
             // 选区会话的文稿不是「整篇笔记改写」：不投影成可替换正文的结果卡，
-            // 只展示可采用的正文，回写交给 AIConversationView 的「替换 / 插入」。
+            // 只展示可采用的正文。替换/插入/复制紧跟在本条结果下方——多轮润色
+            // 会有多组动作，各自回写各自的选区快照，互不覆盖。
             if model.isSelectionResult(message) {
-                AIConversationArtifactsView(artifacts: message.artifacts ?? [])
+                VStack(alignment: .leading, spacing: 8) {
+                    AIConversationArtifactsView(artifacts: message.artifacts ?? [])
+                    if let artifact = (message.artifacts ?? []).last(where: { $0.kind == .writing && !$0.content.isEmpty }),
+                       model.selectionTarget(for: message) != nil {
+                        HStack(spacing: 18) {
+                            Button("替换") { adoptSelection(message, artifact.content, inserting: false) }
+                                .accessibilityIdentifier("ai.selection.replace").workflowActionAnchor("ai.selection.replace")
+                            Button("插入") { adoptSelection(message, artifact.content, inserting: true) }
+                                .accessibilityIdentifier("ai.selection.insert").workflowActionAnchor("ai.selection.insert")
+                            Button("复制") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(artifact.content, forType: .string)
+                            }
+                            Spacer()
+                        }.buttonStyle(.plain).foregroundStyle(WFColors.accent)
+                            .disabled(model.isRunning)
+                    }
+                }
             }
         } else {
             ForEach(model.results(for: message)) { exchange in
@@ -203,6 +274,36 @@ struct NoteAIPaneView: View {
                         canReplaceBody: canReplaceBody, onReplaceBody: onReplaceBody, onOpenNote: onOpenNote,
                         onRetry: { model.retry(messageID: message.id, using: generate) })
                 }
+            }
+        }
+    }
+
+    /// 回写某条选区结果：用该条结果自己的选区快照重建选区，成功后消费掉
+    /// 快照、动作行随之收起，并给出「撤销本次写入」入口；原文已变或已切
+    /// 笔记时明确报错，快照保留。
+    private func adoptSelection(_ message: AIConversationMessage, _ text: String, inserting: Bool) {
+        _Concurrency.Task { @MainActor in
+            guard let target = model.selectionTarget(for: message) else {
+                selectionAdoptError = "这条结果的原文快照已失效，请重新选中文字后生成。"
+                return
+            }
+            if await target.applyAsync(text, inserting: inserting) {
+                model.consumeSelectionTarget(for: message)
+                model.noteLastWrite(target: target, kind: inserting ? "插入" : "替换")
+                selectionAdoptError = nil
+            } else {
+                selectionAdoptError = "原文已改变或已切换笔记，请重新选择文字后生成。"
+            }
+        }
+    }
+
+    /// 撤销最近一次写入：写入之后原文又有改动时引导用户手动 ⌘Z。
+    private func undoLastWrite() {
+        _Concurrency.Task { @MainActor in
+            if await model.undoLastWriteAsync() {
+                selectionAdoptError = nil
+            } else {
+                selectionAdoptError = "写入之后原文又有改动，请在编辑器里按 ⌘Z 撤销。"
             }
         }
     }

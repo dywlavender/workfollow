@@ -7,7 +7,11 @@ protocol AIConversationComposing: ObservableObject {
     var attachments: AIAttachmentDraft { get }
     var isRunning: Bool { get }
     var canSend: Bool { get }
+    /// 生成期间排队的话（steer）：本轮结束后自动作为新消息发出。
+    var pendingSteerText: String? { get }
     func stop()
+    func queueSteer(_ text: String)
+    func cancelSteer()
 }
 
 struct AIConversationReference: Identifiable, Codable, Equatable {
@@ -59,6 +63,7 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
     @Published var input = ""
     @Published private(set) var status = "正在回复…"
     @Published private(set) var isRunning = false
+    @Published private(set) var pendingSteerText: String?
     let scene: Scene
     let context: String
     let attachments: AIAttachmentDraft
@@ -111,11 +116,13 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
             record.messages[i].artifacts?[j].adoption = result; changed(); return
         }
     }
-    func retry(_ messageID: UUID, using generate: @escaping Generate) {
+    func retry(_ messageID: UUID, using generate: @escaping Generate, guidance: String? = nil) {
         guard !isRunning, let index = record.messages.firstIndex(where: { $0.id == messageID }),
               let question = record.messages[..<index].last(where: { $0.role == .user }) else { return }
         let actions = record.messages[index].actions ?? []
-        submit(message: question.text, files: question.attachments ?? [], preset: question.preset, source: question.source) { id, scene, context, message, updates in
+        let trimmedGuidance = guidance.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let instruction = (trimmedGuidance?.isEmpty == false) ? "\n\n（用户补充指示：\(trimmedGuidance!)）" : ""
+        submit(message: question.text + instruction, files: question.attachments ?? [], preset: question.preset, source: question.source) { id, scene, context, message, updates in
             let completed = actions.filter { !$0.undone }.map { $0.title + "：" + $0.details }.joined(separator: "\n")
             let extra = completed.isEmpty ? "" : "\n本轮以下操作已经保存成功，不要再次创建或执行；核对后完成回复：\n" + completed
             return try await generate(id, scene, context + extra, message, updates)
@@ -139,6 +146,25 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
     private func submit(message: String, files: [AIConversationAttachment], preset: AIConversationPreset? = nil,
                         source: AIConversationSource? = nil, using generate: @escaping Generate) {
         record.messages.append(.init(role: .user, text: message, attachments: files.isEmpty ? nil : files, preset: preset, source: source))
+        launchReply(preset: preset, source: source, using: generate)
+    }
+
+    /// 编辑重发：替换指定用户消息的文字、丢弃其后的回复，重新生成。
+    /// 只允许对空闲会话操作；被编辑消息的附件与预设原样保留。
+    func editAndResend(_ messageID: UUID, text: String, using generate: @escaping Generate) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isRunning, !trimmed.isEmpty,
+              let index = record.messages.firstIndex(where: { $0.id == messageID }),
+              record.messages[index].role == .user else { return }
+        record.messages[index].text = trimmed
+        if record.messages.count > index + 1 { record.messages.removeSubrange((index + 1)...) }
+        launchReply(preset: record.messages[index].preset, source: record.messages[index].source, using: generate)
+    }
+
+    /// 回复生成的主干：从最后一条用户消息发起一轮回复（submit 与编辑重发共用）。
+    private func launchReply(preset: AIConversationPreset?, source: AIConversationSource?, using generate: @escaping Generate) {
+        guard let question = record.messages.last(where: { $0.role == .user }) else { return }
+        let message = question.text
         let answer = AIConversationMessage(role: .assistant, text: "", state: .generating)
         record.messages.append(answer)
         let token = UUID(); generation = token
@@ -166,6 +192,7 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
                 let output = try AIConversationOutput.decode(text, preset: preset)
                 self.update(answer.id) { $0.text = output.text; $0.artifacts = output.artifacts; $0.state = .complete }
                 self.isRunning = false; self.worker = nil; self.generation = UUID()
+                self.deliverPendingSteer(using: generate)
             } catch {
                 guard let self, self.generation == token else { return }
                 self.update(answer.id) {
@@ -173,8 +200,22 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
                     $0.error = error is CancellationError ? nil : error.localizedDescription
                 }
                 self.isRunning = false; self.worker = nil; self.generation = UUID()
+                self.deliverPendingSteer(using: generate)
             }
         }
+    }
+
+    /// 生成期间用户仍可输入：排队的话在本轮结束后自动作为新消息发出。
+    func queueSteer(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        pendingSteerText = trimmed
+    }
+    func cancelSteer() { pendingSteerText = nil }
+    private func deliverPendingSteer(using generate: @escaping Generate) {
+        guard let steer = pendingSteerText else { return }
+        pendingSteerText = nil
+        submit(message: steer, files: attachments.take(), source: submittedSource, using: generate)
     }
 
     func stop() {
