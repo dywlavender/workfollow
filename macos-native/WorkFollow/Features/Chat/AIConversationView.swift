@@ -212,6 +212,12 @@ struct AIConversationView: View {
                                 model.retry(message.id, using: generate)
                             }.disabled(model.isRunning)
                         }
+                        if let label = message.completedAtLabel() {
+                            Text(label)
+                                .foregroundStyle(WFColors.tertiaryText)
+                                .help("回复完成时间")
+                                .accessibilityIdentifier("ai.chat.completedAt")
+                        }
                     }.buttonStyle(.plain).font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 }
             }

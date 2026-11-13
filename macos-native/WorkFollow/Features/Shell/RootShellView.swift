@@ -33,7 +33,8 @@ struct RootShellView: View {
                                                           context: environment.weeklyPlanning))
         case .countdown: return AnyView(CountdownWorkspaceView(store: environment.countdownStore))
         case .meetings: return AnyView(MeetingWorkspaceView(store: environment.meetingStore))
-        case .aiChat: return AnyView(AIChatWorkspaceView(store: environment.aiChat))
+        case .aiChat: return AnyView(AIChatWorkspaceView(store: environment.aiChat,
+                                                         briefing: environment.assistantBriefing))
         case .notes, .notesTrash:
             return AnyView(NotesWorkspaceView(notes: environment.notesWorkspace, navigation: pageCache.navigation(for: "notes", appNavigation: navigation, belongsToPage: { $0.isNotes }),
                                              tasks: workspace, navigationVisible: navigationVisible,
@@ -225,16 +226,16 @@ struct RootShellView: View {
                 if let error = environment.storageError {
                     // 保存失败不是"看一眼就好"：重试成功后提示自己消失。
                     HStack(spacing: 8) {
-                        Text(error).font(.caption).foregroundStyle(WFColors.danger)
+                        Text(error).font(WFType.caption).foregroundStyle(WFColors.danger)
                         Button("重试") { environment.retryStorage() }
                             .buttonStyle(.link)
-                            .font(.caption)
+                            .font(WFType.caption)
                     }
                     .padding(8)
                 }
                 if environment.storageNeedsReload {
                     Text("数据已更新，请重新打开应用以加载。")
-                        .font(.caption).foregroundStyle(.secondary).padding(8)
+                        .font(WFType.caption).foregroundStyle(.secondary).padding(8)
                 }
             }
         }
@@ -441,17 +442,10 @@ private struct ModuleShellView: View {
                 Label(navigation.destination.title, systemImage: navigation.destination.symbol)
                     .font(WFType.pageTitle)
             }
-            Spacer()
-            VStack(spacing: WFSpace.md) {
-                Image(systemName: navigation.destination.symbol).font(.largeTitle)
-                Text("这里还没有内容").font(WFType.body)
-            }
-            .foregroundStyle(WFColors.secondaryText)
-            .frame(maxWidth: .infinity)
-            Spacer()
+            WorkspaceEmptyState(symbol: navigation.destination.symbol, title: "这里还没有内容")
         }
         .padding(WFSpace.xl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
     }
 }

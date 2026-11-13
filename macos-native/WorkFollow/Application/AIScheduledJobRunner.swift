@@ -60,7 +60,7 @@ final class AIScheduledJobRunner: ObservableObject {
             let conversation = AIConversationModel(directory: chats.sessionDirectory)
             let run = try store.begin(job.id, manual: manual, conversationID: conversation.record.id)
             model = conversation; runningJobID = job.id; runID = run.id
-            chats.trackBackground(conversation)
+            chats.trackScheduledRun(conversation)
             observation = conversation.objectWillChange.sink { [weak self] in
                 DispatchQueue.main.async { self?.finishIfNeeded() }
             }
@@ -75,12 +75,24 @@ final class AIScheduledJobRunner: ObservableObject {
               answer.role == .assistant, answer.state != .generating,
               let id = runningJobID, let runID else { return }
         let state: AIScheduledRun.State = answer.state == .complete ? .complete : answer.state == .stopped ? .interrupted : .failed
-        observation?.cancel(); observation = nil; self.model = nil; runningJobID = nil; self.runID = nil
-        do {
-            try store.finish(id, runID: runID, state: state,
-                error: state == .interrupted ? "本轮已停止，已完成的操作保留；不会自动重复执行。" : answer.error)
-            arm()
-        } catch { self.error = error.localizedDescription }
+        observation?.cancel(); observation = nil; self.runID = nil
+        let settle: (Error?) -> Void = { [weak self] saveError in
+            guard let self else { return }
+            self.model = nil; self.runningJobID = nil
+            let message = state == .interrupted ? "本轮已停止，已完成的操作保留。" : answer.error
+            do {
+                try self.store.finish(id, runID: runID, state: saveError == nil ? state : .failed,
+                    error: saveError?.localizedDescription ?? message)
+                self.arm()
+            } catch { self.error = error.localizedDescription }
+        }
+        if store.job(id)?.deliverResult == true {
+            chats.flush { error in
+                _Concurrency.Task { @MainActor in settle(error) }
+            }
+        } else {
+            settle(nil)
+        }
     }
 
     private func arm() {

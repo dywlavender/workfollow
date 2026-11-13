@@ -42,6 +42,8 @@ struct NotesWorkspaceView: View {
     @StateObject private var editorHandle = DocumentEditorHandle()
     /// 浮窗打开时原编辑栏改成只读预览；独立身份避免与浮窗争同一份编辑状态。
     @State private var previewDocumentID = UUID()
+    /// 「关联任务」里鼠标当前悬停的那一行；行尾删除按钮只在这一行显形。
+    @State private var hoveredLinkedTaskID: UUID?
     @ObservedObject private var floatingNotes = FloatingNoteWindowController.shared
     private var trash: Bool { navigation.destination == .notesTrash }
     private var rows: [Note] { notes.rows(trash: trash, query: query, folder: nil, favorites: favorites) }
@@ -51,20 +53,21 @@ struct NotesWorkspaceView: View {
         guard !trash, let note = visibleNote,
               let request = notes.searchRevealRequest,
               request.targetID == note.id else { return }
-        scheduleSearchReveal(noteID: note.id, query: request.query, attempts: 15)
+        scheduleSearchReveal(request, attempts: 15)
     }
 
-    private func scheduleSearchReveal(noteID: UUID, query: String, attempts: Int) {
+    private func scheduleSearchReveal(_ request: SearchRevealRequest, attempts: Int) {
         DispatchQueue.main.async {
+            let noteID = request.targetID
             guard !trash, visibleNote?.id == noteID,
-                  notes.searchRevealRequest?.targetID == noteID else { return }
-            switch editorHandle.revealSearchMatch(query, documentID: noteID) {
+                  notes.searchRevealRequest?.token == request.token else { return }
+            switch editorHandle.revealSearchMatch(request.query, documentID: noteID, blockID: request.blockID) {
             case .some:
                 _ = notes.consumeSearchReveal(for: noteID)
             case .none:
                 guard attempts > 0 else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    scheduleSearchReveal(noteID: noteID, query: query, attempts: attempts - 1)
+                    scheduleSearchReveal(request, attempts: attempts - 1)
                 }
             }
         }
@@ -88,7 +91,7 @@ struct NotesWorkspaceView: View {
         .onChange(of: visibleNote?.id) { oldID, _ in
             aiDraftEdit = nil
             // 换笔记后旧笔记的选区事务已经写不回去了，别让「替换」留在它的 AI 栏里。
-            if let oldID { aiConversations.model(for: oldID).clearSelectionTarget() }
+            if let oldID { aiConversations.model(for: oldID).clearSelectionTargets() }
             // AI 会话窗只由 RootShellView 的切页钩子隐藏/恢复；换笔记不在这里关，
             // 应用结果时 AISelectionTarget 会校验文档 ID 与 epoch。
             syncAIExpansion()
@@ -131,7 +134,7 @@ struct NotesWorkspaceView: View {
     private func columnLayout(contentWidth: CGFloat) -> NotesColumnLayout {
         NotesColumnLayoutEngine.layout(
             contentWidth: contentWidth,
-            storedPaneWidth: tasks.taskListPaneWidth,
+            storedPaneWidth: notes.effectiveTreePaneWidth,
             storedAIWidth: CGFloat(aiPaneWidth),
             aiOpen: notes.aiPaneVisible,
             detailOnly: detailOnly,
@@ -193,7 +196,7 @@ struct NotesWorkspaceView: View {
                 }
             }
         }
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
     }
 
     private func listDivider(width: CGFloat, maximum: CGFloat) -> some View {
@@ -206,8 +209,8 @@ struct NotesWorkspaceView: View {
                     .gesture(DragGesture(minimumDistance: 1).onChanged { value in
                         if dragOrigin == nil { dragOrigin = width }
                         let origin = dragOrigin ?? width
-                        tasks.setTaskListPaneWidth(min(max(origin + value.translation.width,
-                            WFMetrics.listMinimum), maximum))
+                        notes.setTreePaneWidth(min(max(origin + value.translation.width,
+                            WFMetrics.notesTreeMinimum), maximum))
                     }.onEnded { _ in dragOrigin = nil })
             }
     }
@@ -298,7 +301,7 @@ struct NotesWorkspaceView: View {
                 if trash {
                     Text(note.title.isEmpty ? "未命名笔记" : note.title).font(WFType.detailTitle).strikethrough().frame(maxWidth: .infinity, alignment: .leading)
                     Text("\(note.folder) · \((note.deletedAt ?? note.updatedAt).formatted(.dateTime.year().month().day().hour().minute().locale(.appDate)))删除")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(WFType.caption).foregroundStyle(.secondary)
                     Divider()
                     let body = note.document.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
                     Text(body.isEmpty ? "还没有正文。" : body).font(WFType.body)
@@ -338,6 +341,7 @@ struct NotesWorkspaceView: View {
                             accessibilityLabel: "笔记标题",
                             onSubmit: { editorHandle.focusFirstLine() },
                             onArrowRightAtEnd: { editorHandle.focusFirstLineStart() })
+                            .id(note.id)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .task(id: note.id) {
                                 titleEditing = note.title.isEmpty
@@ -397,7 +401,8 @@ struct NotesWorkspaceView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background { WorkfollowReadingSurface() }
         } else {
-            Text(trash ? "没有可预览的笔记" : "选择一篇笔记").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            WorkspaceEmptyState(symbol: navigation.destination.symbol,
+                                title: trash ? "没有可预览的笔记" : "选择一篇笔记")
         }
     }
 
@@ -626,8 +631,8 @@ struct NotesWorkspaceView: View {
         if !linked.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text("关联任务").font(.callout).foregroundStyle(.secondary)
-                    Text("\(linked.count)").font(.caption).foregroundStyle(WFColors.tertiaryText)
+                    Text("关联任务").font(WFType.supporting).foregroundStyle(.secondary)
+                    Text("\(linked.count)").font(WFType.caption).foregroundStyle(WFColors.tertiaryText)
                     Spacer()
                 }
                 ForEach(linked) { task in
@@ -662,7 +667,8 @@ struct NotesWorkspaceView: View {
     }
 
     private func linkedTaskRow(_ task: Task) -> some View {
-        HStack(spacing: 10) {
+        let hovered = hoveredLinkedTaskID == task.id
+        return HStack(spacing: 10) {
             Button {
                 if task.isClosed { tasks.restore(task.id) } else { tasks.complete(task.id) }
             } label: {
@@ -678,9 +684,31 @@ struct NotesWorkspaceView: View {
                     Image(systemName: "chevron.right").font(.caption2).foregroundStyle(WFColors.tertiaryText)
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain)
+            // 行尾删除：常驻占位、只切 opacity，标题和箭头不会因悬停重排。
+            // 走 tasks.delete（软删 + HUD 一步撤销），与任务列表/详情同一条链路。
+            Button {
+                _ = tasks.delete(task.id)
+                if hoveredLinkedTaskID == task.id { hoveredLinkedTaskID = nil }
+            } label: {
+                Image(systemName: "trash")
+                    .font(WFType.supporting)
+                    .foregroundStyle(WFColors.secondaryText)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(hovered ? 1 : 0)
+            .allowsHitTesting(hovered)
+            .accessibilityHidden(!hovered)
+            .accessibilityLabel("删除任务：\(task.title.isEmpty ? "无标题" : task.title)")
+            .hoverTip("删除任务")
         }
         .padding(10)
-        .background(WFColors.selection, in: RoundedRectangle(cornerRadius: 8))
+        .rowHoverBackground(cornerRadius: 8, idleFill: WFColors.selection,
+                            onHoverChanged: { inside in
+            if inside { hoveredLinkedTaskID = task.id }
+            else if hoveredLinkedTaskID == task.id { hoveredLinkedTaskID = nil }
+        })
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(WFColors.border))
     }
 
@@ -706,7 +734,7 @@ struct NotesWorkspaceView: View {
             Spacer()
             if let error = environment.storageError {
                 Button("保存失败 · 重试") { environment.flush { _ in } }
-                    .buttonStyle(.plain).font(.caption).foregroundStyle(WFColors.danger).help(error)
+                    .buttonStyle(.plain).font(WFType.caption).foregroundStyle(WFColors.danger).help(error)
             }
             noteActionsMenu(note)
         }

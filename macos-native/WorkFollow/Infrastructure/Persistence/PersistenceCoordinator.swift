@@ -10,6 +10,8 @@ final class PersistenceCoordinator {
     private var pending: NativeWorkspaceSnapshot?
     private var batch = SQLiteWorkspaceRepository.Batch()
     private var work: DispatchWorkItem?
+    private var knowledgeIndexReady: (() -> Void)?
+    private var buildingKnowledgeIndex = false
     /// 当天已尝试过每日备份后不再重复扫描（队列内私有状态）。
     private var lastDailyBackupDay: String?
     var onResult: ((Error?) -> Void)?
@@ -31,6 +33,7 @@ final class PersistenceCoordinator {
     }
 
     func schedule(changes: TaskChangeSet, order: [UUID]? = nil) {
+        repository.knowledgeIndex.track(changes)
         queue.async { [self] in
             for entry in changes.entries {
                 if let previous = batch.tasks[entry.taskID] {
@@ -42,6 +45,31 @@ final class PersistenceCoordinator {
             }
             if let order = order ?? changes.order { batch.taskOrder = order }
             scheduleBatchWrite()
+        }
+    }
+
+    func prepareKnowledgeIndex(onReady: @escaping () -> Void) {
+        queue.async { [self] in
+            knowledgeIndexReady = onReady
+            scheduleKnowledgeIndex()
+        }
+    }
+
+    private func scheduleKnowledgeIndex() {
+        guard knowledgeIndexReady != nil, !buildingKnowledgeIndex, repository.knowledgeIndex.needsBuilding else { return }
+        buildingKnowledgeIndex = true
+        queue.async { [weak self] in self?.buildKnowledgeIndexStep() }
+    }
+
+    private func buildKnowledgeIndexStep() {
+        buildingKnowledgeIndex = false
+        do {
+            if try repository.buildKnowledgeIndexStep(), let ready = knowledgeIndexReady {
+                DispatchQueue.main.async { ready() }
+            } else { scheduleKnowledgeIndex() }
+        } catch {
+            // The regular search path remains available if indexing is unavailable.
+            knowledgeIndexReady = nil
         }
     }
 
@@ -93,6 +121,7 @@ final class PersistenceCoordinator {
             if !batch.isEmpty { try repository.apply(batch) }
             pending = nil
             batch = SQLiteWorkspaceRepository.Batch()
+            scheduleKnowledgeIndex()
             maintainDailyBackupIfNeeded()
             onResult?(nil)
             return nil

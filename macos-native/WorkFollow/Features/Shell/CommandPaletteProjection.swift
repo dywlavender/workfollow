@@ -20,6 +20,9 @@ struct CommandPaletteEntry: Identifiable {
     let action: CommandPaletteAction
     var snippet: String? = nil
     var relevance: Int = 0
+    var searchRank: Double = 0
+    var revealQuery: String? = nil
+    var blockID: UUID? = nil
 }
 
 enum CommandPaletteProjection {
@@ -31,7 +34,8 @@ enum CommandPaletteProjection {
                         now: Date = Date(),
                         calendar: Calendar = .current,
                         taskLimit: Int = 7, noteLimit: Int = 5,
-                        includeAllWhenEmpty: Bool = false) -> [CommandPaletteEntry] {
+                        includeAllWhenEmpty: Bool = false,
+                        indexedHits: [LocalKnowledgeHit]? = nil) -> [CommandPaletteEntry] {
         let commands = commandEntries()
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -47,61 +51,88 @@ enum CommandPaletteProjection {
         if query.isEmpty && !includeAllWhenEmpty { return [create] + commands }
 
         let loweredQuery = query.lowercased()
+        let terms = indexedHits == nil ? [] : [query] + LocalKnowledgeIndex.tokens(query)
+        var indexed = [UUID: LocalKnowledgeHit]()
+        for hit in indexedHits ?? [] {
+            if let prior = indexed[hit.resourceID], prior.excerpt(matching: terms) != nil || hit.excerpt(matching: terms) == nil { continue }
+            indexed[hit.resourceID] = hit
+        }
+        func match(_ id: UUID, document: NativeDocument, prefix: String, suffix: String = "") -> Bool {
+            if indexedHits != nil { return indexed[id] != nil }
+            return document.matches(loweredQuery, prefix: prefix, suffix: suffix, lowercase: true)
+        }
+        func ranked(_ left: (id: UUID, relevance: Int, offset: Int), _ right: (id: UUID, relevance: Int, offset: Int)) -> Bool {
+            if left.relevance != right.relevance { return left.relevance < right.relevance }
+            let lhs = indexed[left.id]?.rank ?? 0, rhs = indexed[right.id]?.rank ?? 0
+            return lhs == rhs ? left.offset < right.offset : lhs < rhs
+        }
+        func decorate(_ entry: CommandPaletteEntry, id: UUID, document: NativeDocument) -> CommandPaletteEntry {
+            var entry = entry
+            if let hit = indexed[id] {
+                let excerpt = hit.excerpt(matching: terms)
+                entry.snippet = excerpt?.text
+                entry.searchRank = hit.rank
+                entry.revealQuery = excerpt?.reveal
+                entry.blockID = excerpt == nil ? nil : hit.blockID
+            } else {
+                entry.snippet = matchingSnippet(in: document, query: query)
+            }
+            return entry
+        }
         let taskResults = tasks
             .filter { !$0.isNoteTask && $0.deletedAt == nil && $0.skippedAt == nil && !$0.isAbandoned && !$0.isConverted }
             .filter {
-                $0.document.matches(loweredQuery, prefix: $0.title + " " + $0.list.name + " ",
-                                    suffix: " " + $0.tags.joined(separator: " "), lowercase: true)
+                match($0.id, document: $0.document, prefix: $0.title + " " + $0.list.name + " ",
+                      suffix: " " + $0.tags.joined(separator: " "))
             }
             .enumerated().sorted { left, right in
                 let lhs = relevance(query: loweredQuery, title: left.element.title,
                     metadata: left.element.list.name + " " + left.element.tags.joined(separator: " "))
                 let rhs = relevance(query: loweredQuery, title: right.element.title,
                     metadata: right.element.list.name + " " + right.element.tags.joined(separator: " "))
-                return lhs == rhs ? left.offset < right.offset : lhs < rhs
+                return ranked((left.element.id, lhs, left.offset), (right.element.id, rhs, right.offset))
             }.prefix(taskLimit).map(\.element)
             .map { task in
                 let time = taskTimeLabel(for: task, now: now, calendar: calendar) ?? "未安排"
-                return CommandPaletteEntry(
+                return decorate(CommandPaletteEntry(
                     id: "task-\(task.id.uuidString)",
                     kind: .task,
                     title: task.title.isEmpty ? "无标题" : task.title,
                     subtitle: "\(task.list.name) · \(time)",
                     symbol: task.isClosed ? "checkmark.square.fill" : "square",
                     action: .openTask(task.id),
-                    snippet: matchingSnippet(in: task.document, query: query),
                     relevance: relevance(query: loweredQuery, title: task.title,
-                        metadata: task.list.name + " " + task.tags.joined(separator: " ")))
+                        metadata: task.list.name + " " + task.tags.joined(separator: " "))), id: task.id, document: task.document)
             }
 
         let noteResults = notes
             .filter { $0.deletedAt == nil }
             .filter {
-                $0.document.matches(loweredQuery, prefix: $0.title + " ", suffix: " " + $0.folder, lowercase: true)
+                match($0.id, document: $0.document, prefix: $0.title + " ", suffix: " " + $0.folder)
             }
             .enumerated().sorted { left, right in
                 let lhs = relevance(query: loweredQuery, title: left.element.title, metadata: left.element.folder)
                 let rhs = relevance(query: loweredQuery, title: right.element.title, metadata: right.element.folder)
-                return lhs == rhs ? left.offset < right.offset : lhs < rhs
+                return ranked((left.element.id, lhs, left.offset), (right.element.id, rhs, right.offset))
             }.prefix(noteLimit).map(\.element)
             .map { note in
-                CommandPaletteEntry(
+                decorate(CommandPaletteEntry(
                     id: "note-\(note.id.uuidString)",
                     kind: .note,
                     title: note.title.isEmpty ? "未命名笔记" : note.title,
                     subtitle: "笔记 · \(note.folder)",
                     symbol: "text.alignleft",
                     action: .openNote(note.id),
-                    snippet: matchingSnippet(in: note.document, query: query),
-                    relevance: relevance(query: loweredQuery, title: note.title, metadata: note.folder))
+                    relevance: relevance(query: loweredQuery, title: note.title, metadata: note.folder)), id: note.id, document: note.document)
             }
 
         let matchingCommands = commands.filter {
             ($0.title + " " + $0.subtitle).localizedLowercase.contains(loweredQuery)
         }
         let results = (taskResults + noteResults).enumerated().sorted { left, right in
-            left.element.relevance == right.element.relevance
-                ? left.offset < right.offset : left.element.relevance < right.element.relevance
+            if left.element.relevance != right.element.relevance { return left.element.relevance < right.element.relevance }
+            if left.element.searchRank != right.element.searchRank { return left.element.searchRank < right.element.searchRank }
+            return left.offset < right.offset
         }.map(\.element)
         return results + matchingCommands + [create]
     }
@@ -151,7 +182,7 @@ enum CommandPaletteProjection {
     @MainActor
     @discardableResult
     static func openTask(_ id: UUID, workspace: TaskWorkspaceModel,
-                         navigation: AppNavigation, query: String = "") -> Bool {
+                         navigation: AppNavigation, query: String = "", blockID: UUID? = nil) -> Bool {
         guard let task = workspace.task(for: id), task.deletedAt == nil,
               task.skippedAt == nil, !task.isAbandoned, !task.isConverted else { return false }
         workspace.clearBulkSelection()
@@ -169,7 +200,7 @@ enum CommandPaletteProjection {
         navigation.taskSelectionToPreserveOnNextNavigation = navigation.destination == destination ? nil : id
         navigation.destination = destination
         workspace.select(id)
-        workspace.requestSearchReveal(taskID: id, query: query)
+        workspace.requestSearchReveal(taskID: id, query: query, blockID: blockID)
         return true
     }
 
@@ -177,7 +208,7 @@ enum CommandPaletteProjection {
     @discardableResult
     static func openNote(_ id: UUID, workspace: NotesWorkspaceModel,
                          taskWorkspace: TaskWorkspaceModel,
-                         navigation: AppNavigation, query: String = "") -> Bool {
+                         navigation: AppNavigation, query: String = "", blockID: UUID? = nil) -> Bool {
         guard workspace.notes.contains(where: { $0.id == id && $0.deletedAt == nil }) else { return false }
         taskWorkspace.clearBulkSelection()
         navigation.destination = .notes
@@ -185,7 +216,7 @@ enum CommandPaletteProjection {
         taskWorkspace.activeTag = nil
         taskWorkspace.select(nil)
         workspace.selectedID = id
-        workspace.requestSearchReveal(noteID: id, query: query)
+        workspace.requestSearchReveal(noteID: id, query: query, blockID: blockID)
         return true
     }
 

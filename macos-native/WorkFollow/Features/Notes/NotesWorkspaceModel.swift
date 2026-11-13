@@ -15,10 +15,10 @@ final class NotesWorkspaceModel: ObservableObject {
         revealRequest = UUID()
     }
 
-    func requestSearchReveal(noteID: UUID, query: String) {
+    func requestSearchReveal(noteID: UUID, query: String, blockID: UUID? = nil) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        searchRevealRequest = SearchRevealRequest(targetID: noteID, query: trimmed)
+        guard !trimmed.isEmpty || blockID != nil else { return }
+        searchRevealRequest = SearchRevealRequest(targetID: noteID, query: trimmed, blockID: blockID)
     }
 
     func consumeSearchReveal(for noteID: UUID) -> SearchRevealRequest? {
@@ -49,6 +49,55 @@ final class NotesWorkspaceModel: ObservableObject {
             layoutDefaults?.set(Array(expandedFolderIDs).sorted(),
                                 forKey: Self.expandedFoldersDefaultsKey)
         }
+    }
+
+    /// 目录栏宽度：用户拖动后的值单独持久化（2026-11-08 起与任务列表宽度解耦，
+    /// 笔记树用不着 320 那么宽）。有效宽度 = max(用户值, 层级需要值)：层级变深
+    /// 自动加宽、删掉深层文件夹自动缩回，不会一直撑大；上限见 notesTreeMaximum。
+    @Published private(set) var treePaneWidth: CGFloat = WFMetrics.notesTreePreferred
+
+    private static let treePaneWidthDefaultsKey = "notes.treePaneWidth"
+
+    func setTreePaneWidth(_ width: CGFloat) {
+        guard width.isFinite else { return }
+        let clamped = min(max(width, WFMetrics.notesTreeMinimum), WFMetrics.notesTreeMaximum)
+        guard clamped != treePaneWidth else { return }
+        treePaneWidth = clamped
+        layoutDefaults?.set(Double(clamped), forKey: Self.treePaneWidthDefaultsKey)
+    }
+
+    /// 目录树当前**可见**的最大层级：「未归档」/ 顶层文件夹 = 0，其下笔记 = 1，
+    /// 子文件夹 = 1、孙笔记 = 2……与 `NotesFolderTreeListView.visibleFolderNodes`
+    /// 的折叠剪枝同口径：折叠的子树不计入需要的宽度。
+    var requiredTreePaneWidth: CGFloat {
+        var hidden = Set<String>()
+        var deepest = 0
+        for node in folderNodes {
+            if let parent = node.parentID, hidden.contains(parent) {
+                hidden.insert(node.id)
+                continue
+            }
+            deepest = max(deepest, node.depth)
+            if !isFolderExpanded(node.id) { hidden.insert(node.id) }
+        }
+        // 文件夹下还挂着笔记，比最深的文件夹再深一级。
+        let levels = deepest + 1
+        return min(WFMetrics.notesTreeMinimum
+            + CGFloat(max(0, levels - 1)) * WFMetrics.notesTreeDepthStep,
+            WFMetrics.notesTreeMaximum)
+    }
+
+    /// 布局实际使用的宽度：拖窄的权利保留（层级浅时可以一直窄下去），
+    /// 层级深了按需要放宽，但任何来源都不越过上限。
+    var effectiveTreePaneWidth: CGFloat {
+        min(max(treePaneWidth, requiredTreePaneWidth), WFMetrics.notesTreeMaximum)
+    }
+
+    private func loadTreePaneWidth() {
+        guard let stored = layoutDefaults?.object(forKey: Self.treePaneWidthDefaultsKey) as? Double
+        else { return }
+        treePaneWidth = min(max(CGFloat(stored), WFMetrics.notesTreeMinimum),
+                            WFMetrics.notesTreeMaximum)
     }
 
     func isFolderExpanded(_ id: String) -> Bool { expandedFolderIDs.contains(id) }
@@ -83,6 +132,7 @@ final class NotesWorkspaceModel: ObservableObject {
         bootstrapFolders(initialNotes: initialNotes)
         bindTaskWorkspace()
         aiPaneVisible = layoutDefaults?.object(forKey: Self.aiPaneVisibleDefaultsKey) as? Bool ?? false
+        loadTreePaneWidth()
         if let stored = layoutDefaults?.stringArray(forKey: Self.expandedFoldersDefaultsKey) {
             expandedFolderIDs = Set(stored)
         } else {
@@ -102,6 +152,7 @@ final class NotesWorkspaceModel: ObservableObject {
         bootstrapFolders(initialNotes: taskWorkspace.noteTasks.map(Note.init(task:)))
         bindTaskWorkspace()
         aiPaneVisible = layoutDefaults?.object(forKey: Self.aiPaneVisibleDefaultsKey) as? Bool ?? false
+        loadTreePaneWidth()
         if let stored = layoutDefaults?.stringArray(forKey: Self.expandedFoldersDefaultsKey) {
             expandedFolderIDs = Set(stored)
         } else {
@@ -188,12 +239,64 @@ final class NotesWorkspaceModel: ObservableObject {
     /// 把文件夹挂到另一个文件夹下（nil = 根目录）。禁止挂到自己或自己的后代。
     @discardableResult
     func moveFolder(id: String, under parentID: String?) -> Bool {
-        guard let index = folderRecords.firstIndex(where: { $0.id == id }),
-              NoteFolderTree.canMove(folderID: id, under: parentID, in: folderRecords) else { return false }
-        let resolved = folderRecords.contains { $0.id == parentID } ? parentID : nil
-        folderRecords[index].parentID = resolved
+        moveFolder(id: id, to: parentID.map(NoteFolderPlacement.inside) ?? .root)
+    }
+
+    @discardableResult
+    func moveFolder(id: String, to placement: NoteFolderPlacement) -> Bool {
+        let sorted = folderRecords.sorted(by: NoteFolderTree.orderedBefore)
+        guard let oldIndex = sorted.firstIndex(where: { $0.id == id }) else { return false }
+        var folder = sorted[oldIndex]
+        var reordered = sorted
+        reordered.remove(at: oldIndex)
+
+        let newParent: String?
+        let newIndex: Int
+        switch placement {
+        case .inside(let parent):
+            guard reordered.contains(where: { $0.id == parent }) else { return false }
+            newParent = parent
+            newIndex = folder.parentID == parent ? oldIndex : reordered.count
+        case .before(let sibling), .after(let sibling):
+            guard let index = reordered.firstIndex(where: { $0.id == sibling }) else { return false }
+            newParent = reordered[index].parentID
+            newIndex = placement == .after(sibling) ? index + 1 : index
+        case .root:
+            newParent = nil
+            newIndex = reordered.count
+        }
+        guard NoteFolderTree.canMove(folderID: id, under: newParent, in: folderRecords) else { return false }
+        folder.parentID = newParent
+        reordered.insert(folder, at: newIndex)
+        if let newParent { expandedFolderIDs.insert(newParent) }
+        guard reordered != sorted else { return true }
+        for index in reordered.indices { reordered[index].sortOrder = index }
+        folderRecords = reordered
         revision += 1
         return true
+    }
+
+    func setFolderIcon(_ icon: String?, for id: String) {
+        guard let index = folderRecords.firstIndex(where: { $0.id == id }),
+              folderRecords[index].icon != icon else { return }
+        folderRecords[index].icon = icon
+        revision += 1
+    }
+
+    /// 文件夹名称字体颜色（#rrggbb）；nil 恢复主题默认墨色。
+    func setFolderNameColor(_ hex: String?, for id: String) {
+        guard let index = folderRecords.firstIndex(where: { $0.id == id }),
+              folderRecords[index].nameColorHex != hex else { return }
+        folderRecords[index].nameColorHex = hex
+        revision += 1
+    }
+
+    func setNoteIcon(_ icon: String?, for id: UUID) {
+        taskWorkspace.editNote(id) { task in
+            var metadata = task.note ?? TaskNoteMetadata()
+            metadata.icon = icon
+            task.note = metadata
+        }
     }
 
     /// 在指定父节点下新建子文件夹，返回新 ID；名字仍要求全局唯一。
@@ -371,6 +474,13 @@ final class NotesWorkspaceModel: ObservableObject {
         taskWorkspace.setChecklistItemReminder(id, line: line, at: date)
     }
 
+    /// 行内日期提醒：除写入块元数据外，还同步创建/更新关联待办任务
+    /// （双向同步 + 可见出口，见 `TaskWorkspaceModel.setInlineDateReminder`）。
+    @discardableResult
+    func setInlineDateReminder(_ id: UUID, line: Int, at date: Date?) -> TaskActionResult {
+        taskWorkspace.setInlineDateReminder(id, line: line, at: date)
+    }
+
     private static func apply(note: Note, to task: inout Task) {
         task.title = note.title
         task.document = note.document
@@ -380,6 +490,7 @@ final class NotesWorkspaceModel: ObservableObject {
         meta.folder = note.folder.isEmpty ? "未归档" : note.folder
         meta.folderID = note.folderID
         meta.isFavorite = note.favorite
+        meta.icon = note.icon
         meta.linkedTaskIDs = note.linkedTaskIDs
         let storedChanged = note.storedOriginalContentForMigration != meta.storedOriginalContentForMigration
         let referenceChanged = note.deferredOriginalReference !== meta.deferredOriginalReference

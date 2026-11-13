@@ -10,6 +10,7 @@ struct TaskNoteMetadata: Equatable, Codable {
     var folderID: String? = nil
     var isFavorite: Bool = false
     var linkedTaskIDs: [UUID] = []
+    var icon: String? = nil
 
     /// New notes keep their protected source in the task metadata. Migrated
     /// notes keep it in the legacy `note_documents` row lazily, so opening the
@@ -19,11 +20,12 @@ struct TaskNoteMetadata: Equatable, Codable {
     private var deferredOriginal: DeferredOriginalContent? = nil
 
     init(folder: String = "未归档", folderID: String? = nil, isFavorite: Bool = false,
-         linkedTaskIDs: [UUID] = [], originalContentJson: String? = nil) {
+         linkedTaskIDs: [UUID] = [], originalContentJson: String? = nil, icon: String? = nil) {
         self.folder = folder.isEmpty ? "未归档" : folder
         self.folderID = folderID
         self.isFavorite = isFavorite
         self.linkedTaskIDs = linkedTaskIDs
+        self.icon = icon
         storedOriginalContent = originalContentJson
         originalPresence = originalContentJson == nil ? nil : true
     }
@@ -74,7 +76,7 @@ struct TaskNoteMetadata: Equatable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case folder, folderID, isFavorite, linkedTaskIDs, originalContentJson, hasOriginalContent
+        case folder, folderID, isFavorite, linkedTaskIDs, originalContentJson, hasOriginalContent, icon
     }
 
     init(from decoder: Decoder) throws {
@@ -84,6 +86,7 @@ struct TaskNoteMetadata: Equatable, Codable {
         folderID = try values.decodeIfPresent(String.self, forKey: .folderID)
         isFavorite = try values.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
         linkedTaskIDs = try values.decodeIfPresent([UUID].self, forKey: .linkedTaskIDs) ?? []
+        icon = try values.decodeIfPresent(String.self, forKey: .icon)
         storedOriginalContent = try values.decodeIfPresent(String.self, forKey: .originalContentJson)
         let presence = try values.decodeIfPresent(Bool.self, forKey: .hasOriginalContent)
         originalPresence = storedOriginalContent == nil ? presence : true
@@ -95,6 +98,7 @@ struct TaskNoteMetadata: Equatable, Codable {
         try values.encodeIfPresent(folderID, forKey: .folderID)
         try values.encode(isFavorite, forKey: .isFavorite)
         try values.encode(linkedTaskIDs, forKey: .linkedTaskIDs)
+        try values.encodeIfPresent(icon, forKey: .icon)
         try values.encodeIfPresent(storedOriginalContent, forKey: .originalContentJson)
         if storedOriginalContent == nil, hasPreservedRichContent {
             try values.encode(true, forKey: .hasOriginalContent)
@@ -103,7 +107,7 @@ struct TaskNoteMetadata: Equatable, Codable {
 
     static func == (lhs: TaskNoteMetadata, rhs: TaskNoteMetadata) -> Bool {
         lhs.folder == rhs.folder && lhs.folderID == rhs.folderID
-            && lhs.isFavorite == rhs.isFavorite && lhs.linkedTaskIDs == rhs.linkedTaskIDs
+            && lhs.isFavorite == rhs.isFavorite && lhs.linkedTaskIDs == rhs.linkedTaskIDs && lhs.icon == rhs.icon
             && lhs.sameOriginalContent(as: rhs)
     }
 }

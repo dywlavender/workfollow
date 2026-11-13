@@ -92,12 +92,20 @@ final class AIConversationTests: XCTestCase {
         XCTAssertNotEqual(store.current.record.id, firstID)
         store.current.input = "第二份虚构问题"; store.current.send { _, _, _, _, _ in "第二答" }
         try await wait { !store.current.isRunning }
+        let project = try XCTUnwrap(store.projects.create("项目甲"))
+        store.projects.move(firstID, to: project)
         await withCheckedContinuation { resume in store.flush { error in XCTAssertNil(error); resume.resume() } }
         let restored = AIChatStore(directory: directory)
         XCTAssertEqual(restored.records.count, 2)
         XCTAssertEqual(restored.current.latestResult, "第二答")
+        XCTAssertEqual(restored.projects.folderID(for: firstID), project)
+        XCTAssertNil(restored.projects.folderID(for: restored.current.record.id))
         restored.select(firstID)
         XCTAssertEqual(restored.current.latestResult, "第一答")
+        restored.projects.remove(project)
+        XCTAssertNil(restored.projects.folderID(for: firstID))
+        XCTAssertEqual(restored.current.latestResult, "第一答")
+        await withCheckedContinuation { resume in restored.flush { error in XCTAssertNil(error); resume.resume() } }
     }
 
     func testSwitchingAndNewConversationKeepBackgroundStreamDraftAndReceipts() async throws {
@@ -149,6 +157,53 @@ final class AIConversationTests: XCTestCase {
         XCTAssertEqual(restored.current.latestResult, "第一答已完成")
         XCTAssertEqual(restored.current.record.messages.last?.actions?.first?.undone, true)
         XCTAssertTrue(restored.runningIDs.isEmpty)
+    }
+
+    /// 后台完成的会话产生未读点：选中即清、手动停止不留点、未读状态跨启动保留。
+    func testBackgroundCompletionMarksUnviewedUntilSelectionAndSurvivesRelaunch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ai-chat-unviewed-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = AIChatStore(directory: directory), first = store.current
+        var resume: CheckedContinuation<String, Never>?
+        var stoppedResume: CheckedContinuation<String, Never>?
+        defer {
+            first.stop()
+            resume?.resume(returning: "清理"); stoppedResume?.resume(returning: "清理")
+        }
+        first.input = "第一问"
+        first.send { _, _, _, _, _ in await withCheckedContinuation { resume = $0 } }
+        try await wait { resume != nil }
+        store.newConversation()
+        let second = store.current
+        second.input = "第二问"; second.send { _, _, _, _, _ in "第二答" }
+        try await wait { !second.isRunning }
+        XCTAssertTrue(store.unviewedIDs.isEmpty, "选中会话完成不应产生未读点")
+        let completion = resume; resume = nil; completion?.resume(returning: "第一答已完成")
+        try await wait { !first.isRunning && store.unviewedIDs.contains(first.record.id) }
+
+        // 点开查看后未读点消失；手动停止只是结束，不算完成输出，不留点。
+        store.select(first.record.id)
+        XCTAssertFalse(store.unviewedIDs.contains(first.record.id))
+        first.input = "第三问"
+        first.send { _, _, _, _, _ in await withCheckedContinuation { stoppedResume = $0 } }
+        try await wait { stoppedResume != nil }
+        store.newConversation()
+        first.stop()
+        try await wait { !first.isRunning && !store.unviewedIDs.contains(first.record.id) }
+        XCTAssertEqual(first.record.messages.last?.state, .stopped)
+
+        // 再跑一轮后台完成，重启后未读点保留，但选中的会话不带点，点开即清。
+        first.input = "第四问"
+        first.send { _, _, _, _, _ in await withCheckedContinuation { resume = $0 } }
+        try await wait { resume != nil }
+        let final = resume; resume = nil; final?.resume(returning: "第四答已完成")
+        try await wait { !first.isRunning && store.unviewedIDs.contains(first.record.id) }
+        await withCheckedContinuation { continuation in store.flush { _ in continuation.resume() } }
+        let restored = AIChatStore(directory: directory)
+        XCTAssertTrue(restored.unviewedIDs.contains(first.record.id), "未读点应跨启动保留")
+        XCTAssertFalse(restored.unviewedIDs.contains(restored.current.record.id), "选中的会话不应带未读点")
+        restored.select(first.record.id)
+        XCTAssertFalse(restored.unviewedIDs.contains(first.record.id))
     }
 
     func testConcurrentConversationsStopAndDeleteOnlyTheirOwnExecution() async throws {
@@ -305,5 +360,68 @@ final class AIConversationTests: XCTestCase {
         _ = try await MilkdownTestSupport.editorAsync(in: host, id: other)
         let rejected = await stale.applyAsync("不能写到其他笔记", inserting: false)
         XCTAssertFalse(rejected)
+    }
+
+    func testCompletedReplyStampsOutputTimeAndSurvivesPersistence() async throws {
+        let model = AIConversationModel()
+        model.input = "第一问"
+        model.send { _, _, _, _, _ in "第一答" }
+        XCTAssertNil(model.record.messages.last?.completedAt)
+        try await wait { !model.isRunning }
+        let reply = try XCTUnwrap(model.record.messages.last)
+        XCTAssertEqual(reply.state, .complete)
+        let stamp = try XCTUnwrap(reply.completedAt)
+        XCTAssertLessThanOrEqual(abs(stamp.timeIntervalSinceNow), 5)
+
+        let data = try JSONEncoder().encode(model.record)
+        let restored = try JSONDecoder().decode(AIConversationRecord.self, from: data)
+        XCTAssertEqual(restored.messages.last?.completedAt, stamp)
+
+        // 旧快照没有 completedAt 键：解码为 nil，不影响其余字段。
+        var legacy = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        var messages = legacy["messages"] as! [[String: Any]]
+        messages[messages.count - 1].removeValue(forKey: "completedAt")
+        legacy["messages"] = messages
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy)
+        let legacyRecord = try JSONDecoder().decode(AIConversationRecord.self, from: legacyData)
+        XCTAssertNil(legacyRecord.messages.last?.completedAt)
+        XCTAssertEqual(legacyRecord.messages.last?.text, "第一答")
+    }
+
+    func testStoppedAndFailedRepliesAlsoStampOutputTime() async throws {
+        let stopped = AIConversationModel()
+        stopped.input = "问"
+        stopped.send { _, _, _, _, updates in
+            updates(.init(kind: "text", text: "部分", message: nil))
+            try await _Concurrency.Task.sleep(for: .milliseconds(200))
+            return "完整"
+        }
+        try await wait { stopped.record.messages.last?.text == "部分" }
+        stopped.stop()
+        XCTAssertNotNil(stopped.record.messages.last?.completedAt)
+
+        let failed = AIConversationModel()
+        failed.input = "问"
+        failed.send { _, _, _, _, _ in throw AIBackendError.disconnected }
+        try await wait { !failed.isRunning }
+        XCTAssertEqual(failed.record.messages.last?.state, .failed)
+        XCTAssertNotNil(failed.record.messages.last?.completedAt)
+    }
+
+    func testCompletedAtLabelScalesFromTimeToDateAcrossDaysAndYears() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 12, hour: 15, minute: 30))!
+        func label(_ components: DateComponents) -> String? {
+            var message = AIConversationMessage(role: .assistant, text: "答")
+            message.completedAt = calendar.date(from: components)
+            return message.completedAtLabel(now: now, calendar: calendar)
+        }
+        XCTAssertEqual(label(DateComponents(year: 2026, month: 11, day: 12, hour: 9, minute: 5)), "09:05")
+        XCTAssertEqual(label(DateComponents(year: 2026, month: 11, day: 11, hour: 23, minute: 59)), "11月11日 23:59")
+        XCTAssertEqual(label(DateComponents(year: 2025, month: 1, day: 2, hour: 8, minute: 0)), "2025年1月2日 08:00")
+        var noStamp = AIConversationMessage(role: .assistant, text: "答")
+        noStamp.completedAt = nil
+        XCTAssertNil(noStamp.completedAtLabel(now: now, calendar: calendar))
     }
 }

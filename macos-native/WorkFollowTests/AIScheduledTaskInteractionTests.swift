@@ -50,15 +50,18 @@ final class AIScheduledTaskInteractionTests: XCTestCase {
         let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1150, height: 800)
         defer { environment.stopAIScheduler(); window.contentView = nil; window.close() }
         func click(_ id: String) async throws {
-            try await wait(id) { anchors[id]?.window?.isVisible == true && anchors[id]?.bounds.isEmpty == false }
+            try await wait(id) {
+                guard let view = anchors[id], let owner = view.window else { return false }
+                return owner.isVisible && !owner.ignoresMouseEvents && owner.alphaValue >= 0.99 && !view.bounds.isEmpty
+            }
             let view = try XCTUnwrap(anchors[id]), owner = try XCTUnwrap(view.window)
             try InspectorPanelTestSupport.click(view.bounds, in: view, window: owner)
         }
         try await click("ai.chat.schedules")
-        try await wait { window.attachedSheet != nil }
+        try await wait("wide schedule manager") { window.attachedSheet != nil }
         let sheet = try XCTUnwrap(window.attachedSheet)
         try await click("ai.schedule.new")
-        try await wait {
+        try await wait("new schedule editor") {
             descendants(sheet.contentView!).contains { ($0 as? NSTextView)?.isEditable == true }
         }
         func enter(_ value: String) async throws {
@@ -71,16 +74,19 @@ final class AIScheduledTaskInteractionTests: XCTestCase {
             InspectorPanelTestSupport.settle(sheet)
         }
         try await enter("汇总虚构松竹项目的未完成事项")
+        try await click("ai.schedule.deliver")
         try await click("ai.schedule.save")
-        try await wait { environment.aiScheduledJobs.jobs.count == 1 }
+        try await wait("new schedule saved") { environment.aiScheduledJobs.jobs.count == 1 }
         let job = try XCTUnwrap(environment.aiScheduledJobs.jobs.first)
         XCTAssertEqual(job.schedule.frequency, .daily)
         XCTAssertEqual(job.instruction, "汇总虚构松竹项目的未完成事项")
+        XCTAssertEqual(job.deliverResult, true)
         try await click("ai.schedule.run.\(job.id)")
-        try await wait { environment.aiScheduledJobs.job(job.id)?.lastRun?.state == .complete }
+        try await wait("scheduled run finished") { environment.aiScheduledJobs.job(job.id)?.lastRun?.state == .complete }
         XCTAssertEqual(environment.aiChat.current.record.id, original)
         XCTAssertEqual(environment.aiChat.current.input, "保留这份未发送的草稿")
         XCTAssertEqual(environment.aiChat.records.first?.messages.last?.text, "虚构定时任务已回复")
+        let delivery = try XCTUnwrap(environment.aiScheduledJobs.deliveries.first)
         try await click("ai.schedule.enabled.\(job.id)")
         XCTAssertFalse(try XCTUnwrap(environment.aiScheduledJobs.job(job.id)).isEnabled)
         try await click("ai.schedule.menu.\(job.id)")
@@ -88,11 +94,16 @@ final class AIScheduledTaskInteractionTests: XCTestCase {
         try await enter("整理虚构松竹项目的会议结论")
         try await click("ai.schedule.save")
         XCTAssertEqual(environment.aiScheduledJobs.job(job.id)?.instruction, "整理虚构松竹项目的会议结论")
+        anchors.removeValue(forKey: "ai.schedule.delete.\(job.id)")
         try await click("ai.schedule.menu.\(job.id)")
         try await click("ai.schedule.delete.\(job.id)")
         try await click("dialog.button.删除")
-        try await wait { environment.aiScheduledJobs.jobs.isEmpty }
+        try await wait("schedule deleted") { environment.aiScheduledJobs.jobs.isEmpty }
         XCTAssertEqual(environment.aiChat.records.count, 1, "删除计划应保留历史结果")
+        try await click("ai.schedule.close")
+        try await wait("schedule manager closed") { window.attachedSheet == nil }
+        try await click("assistant.delivery.open.\(delivery.id)")
+        XCTAssertEqual(environment.aiChat.current.record.id, delivery.run.conversationID)
     }
 
     func testNarrowChatHistoryCanOpenTheSameScheduledTaskManager() async throws {
@@ -106,7 +117,10 @@ final class AIScheduledTaskInteractionTests: XCTestCase {
         try await wait("narrow history trigger") { anchors["ai.chat.history.toggle"]?.window === window }
         let toggle = try XCTUnwrap(anchors["ai.chat.history.toggle"])
         try InspectorPanelTestSupport.click(toggle.bounds, in: toggle, window: window)
-        try await wait("narrow history controls") { anchors["ai.chat.schedules"]?.window?.isVisible == true }
+        try await wait("narrow history controls") {
+            guard let view = anchors["ai.chat.schedules"], let owner = view.window else { return false }
+            return owner.isVisible && !owner.ignoresMouseEvents && owner.alphaValue >= 0.99 && !view.bounds.isEmpty
+        }
         let view = try XCTUnwrap(anchors["ai.chat.schedules"]), owner = try XCTUnwrap(view.window)
         try InspectorPanelTestSupport.click(view.bounds, in: view, window: owner)
         try await wait("narrow schedule manager") { window.attachedSheet != nil && anchors["ai.schedule.new"]?.window === window.attachedSheet }

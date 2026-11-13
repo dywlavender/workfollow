@@ -5,6 +5,7 @@ import Foundation
 final class SQLiteWorkspaceRepository {
     static let filename = "workspace.sqlite"
     let directory: URL
+    let knowledgeIndex: LocalKnowledgeIndex
     var url: URL { directory.appendingPathComponent(Self.filename) }
     var onDocumentFailure: ((Error) -> Void)?
     private let readsLock = NSLock()
@@ -21,7 +22,12 @@ final class SQLiteWorkspaceRepository {
 
     init(directory: URL) {
         self.directory = directory
+        knowledgeIndex = LocalKnowledgeIndex(url: directory.appendingPathComponent(Self.filename))
         encoder.outputFormatting = [.sortedKeys]
+    }
+
+    func buildKnowledgeIndexStep() throws -> Bool {
+        try knowledgeIndex.buildStep(in: database())
     }
 
     private func database() throws -> SQLiteDatabase {
@@ -167,6 +173,7 @@ final class SQLiteWorkspaceRepository {
         defer { invalidateSearch() }
         let db = try database()
         try db.transaction {
+            try knowledgeIndex.invalidate(in: db)
             try db.execute("DELETE FROM tasks")
             try db.execute("DELETE FROM notes")
             for (index, task) in snapshot.tasks.enumerated() { try write(task, position: index, document: true, db: db) }
@@ -192,6 +199,7 @@ final class SQLiteWorkspaceRepository {
         guard !tasks.isEmpty else { return }
         let db = try database()
         try db.transaction {
+            try knowledgeIndex.invalidate(in: db)
             for task in tasks {
                 let id = SQLiteDatabase.Value.text(task.id.uuidString)
                 let exists = try db.rows("SELECT 1 FROM tasks WHERE id=?", [id]).first != nil
@@ -284,7 +292,9 @@ final class SQLiteWorkspaceRepository {
             }
             if let metadata = batch.metadata { try writeMetadata(metadata, db: db) }
             else if try state(db) == nil { try writeMetadata(NativeWorkspaceSnapshot(tasks: [], notes: []), db: db) }
+            try knowledgeIndex.apply(batch.tasks.values, in: db)
         }
+        knowledgeIndex.committed(batch.tasks.values)
     }
 
     private func writeMetadata(_ snapshot: NativeWorkspaceSnapshot, db: SQLiteDatabase) throws {

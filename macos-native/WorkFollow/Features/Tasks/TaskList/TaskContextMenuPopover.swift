@@ -169,8 +169,9 @@ struct TaskContextMenuPopover: View {
                     onCustomDate()
                 } label: {
                     Image(systemName: "calendar")
-                        .font(.system(size: 19))
-                        .frame(width: 32, height: 32)
+                        .font(.system(size: PopupMetrics.quickActionIconSize))
+                        .frame(width: PopupMetrics.quickActionSize,
+                               height: PopupMetrics.quickActionSize)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -184,8 +185,9 @@ struct TaskContextMenuPopover: View {
                     apply { _ = workspace.clearDueDate(task.id) }
                 } label: {
                     Image(systemName: "calendar.badge.xmark")
-                        .font(.system(size: 19))
-                        .frame(width: 32, height: 32)
+                        .font(.system(size: PopupMetrics.quickActionIconSize))
+                        .frame(width: PopupMetrics.quickActionSize,
+                               height: PopupMetrics.quickActionSize)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -393,8 +395,9 @@ struct TaskContextMenuPopover: View {
             apply { _ = workspace.moveDueDate(task.id, to: workspace.dateFromToday(offset)) }
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 19))
-                .frame(width: 32, height: 32)
+                .font(.system(size: PopupMetrics.quickActionIconSize))
+                .frame(width: PopupMetrics.quickActionSize,
+                       height: PopupMetrics.quickActionSize)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -456,9 +459,10 @@ struct TaskContextMenuPopover: View {
             apply { _ = workspace.setPriority(task.id, priority) }
         } label: {
             Image(systemName: priority == .none ? "flag" : "flag.fill")
-                .font(.system(size: 19))
+                .font(.system(size: PopupMetrics.quickActionIconSize))
                 .foregroundStyle(color)
-                .frame(width: 32, height: 32)
+                .frame(width: PopupMetrics.quickActionSize,
+                       height: PopupMetrics.quickActionSize)
                 .background(task.priority == priority ? WFColors.selection : .clear,
                             in: RoundedRectangle(cornerRadius: WFMetrics.corner))
                 .contentShape(Rectangle())

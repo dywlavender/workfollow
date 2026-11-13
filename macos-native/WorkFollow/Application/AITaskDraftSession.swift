@@ -13,6 +13,10 @@ final class AITaskDraftSession: ObservableObject {
     private var running = false
     var selectedCount: Int { drafts.filter { $0.selected && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count }
 
+    init(drafts: [AITaskDraft]? = nil) {
+        if let drafts { self.drafts = drafts; phase = .ready }
+    }
+
     func load(_ text: String, request: AITaskRequest) {
         do { drafts = try AITaskDraft.decode(text, request: request); phase = .ready }
         catch { phase = .failed("未能整理出有效的待办结果，请重新生成。") }

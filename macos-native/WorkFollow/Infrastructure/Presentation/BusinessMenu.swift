@@ -265,7 +265,6 @@ struct BusinessMenuOption: View {
             }
         }
         .accessibilityLabel(title).accessibilityValue(selected ? "已选择" : "未选择")
-        .help(title)
     }
     private var optionLabel: some View {
         HStack(spacing: 8) {
@@ -320,6 +319,12 @@ private extension EnvironmentValues {
     var businessMenuContext: BusinessMenuContext? {
         get { self[BusinessMenuContextKey.self] }
         set { self[BusinessMenuContextKey.self] = newValue }
+    }
+}
+
+extension EnvironmentValues {
+    var dismissBusinessMenus: () -> Void {
+        businessMenuContext?.dismissAll ?? {}
     }
 }
 
@@ -407,7 +412,7 @@ struct BusinessMenuContent<Content: View>: View {
     var body: some View {
         VStack(spacing: 6) {
             if let search {
-                TextField(searchLabel, text: search).textFieldStyle(.roundedBorder)
+                PopupSearchField(placeholder: searchLabel, text: search)
                     .padding(.horizontal, 4).padding(.top, 4)
                     .accessibilityLabel(searchLabel)
             }

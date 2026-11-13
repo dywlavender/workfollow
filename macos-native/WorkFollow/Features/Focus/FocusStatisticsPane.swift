@@ -58,12 +58,12 @@ struct FocusStatisticsPane: View {
                     ForEach(dayTotals, id: \.day) { day in
                         HStack(spacing: 12) {
                             Text(FocusViewLogic.dayLabel(for: day.day, now: store.currentTime, calendar: store.presentationCalendar))
-                                .font(.caption).foregroundStyle(theme.text2).frame(width: 64, alignment: .leading)
+                                .font(WFType.caption).foregroundStyle(theme.text2).frame(width: 64, alignment: .leading)
                             GeometryReader { geo in
                                 Capsule().fill(theme.accent.opacity(0.7))
                                     .frame(width: max(2, geo.size.width * Double(day.seconds) / Double(maxDaySeconds)))
                             }.frame(height: 10)
-                            Text("\(day.seconds / 60) 分").font(.caption).monospacedDigit().frame(width: 70, alignment: .trailing)
+                            Text("\(day.seconds / 60) 分").font(WFType.caption).monospacedDigit().frame(width: 70, alignment: .trailing)
                         }
                     }
                 }
@@ -91,7 +91,7 @@ struct FocusStatisticsPane: View {
     }
     private func statistic(_ label: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.caption).foregroundStyle(theme.text2)
+            Text(label).font(WFType.caption).foregroundStyle(theme.text2)
             Text(value).font(.system(size: 28, weight: .light)).monospacedDigit()
         }
     }

@@ -107,7 +107,7 @@ struct FocusCompactPresentation: View {
                 .font(.system(size: immersive ? 110 : 44, weight: .light)).monospacedDigit()
                 .accessibilityIdentifier("focus-compact-clock")
             Text(store.completionContext?.extraTimeStartedAt != nil ? "追加专注中" : p.phaseTitle)
-                .font(.caption).foregroundStyle(theme.text2)
+                .font(WFType.caption).foregroundStyle(theme.text2)
             HStack(spacing: 12) {
                 ForEach(p.availableActions.filter { $0 != .abandon }, id: \.self) { action in
                     Button(action.title) { _ = store.perform(action) }
@@ -116,7 +116,7 @@ struct FocusCompactPresentation: View {
             }
             if p.availableActions.contains(.abandon) {
                 Button("放弃专注") { _ = store.perform(.abandon) }.buttonStyle(.plain)
-                    .font(.caption).foregroundStyle(theme.text3)
+                    .font(WFType.caption).foregroundStyle(theme.text3)
             }
         }
         .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)

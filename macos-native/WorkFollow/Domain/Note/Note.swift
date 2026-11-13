@@ -9,6 +9,10 @@ struct NoteFolderMeta: Identifiable, Equatable, Codable {
     var sortOrder: Int
     var createdAt: String?
     var updatedAt: String?
+    var icon: String? = nil
+    /// 文件夹名称的字体颜色（#rrggbb，与编辑器文字颜色同一张色板）。
+    /// nil = 跟随主题默认墨色。additive Codable：旧快照无此键解码为 nil。
+    var nameColorHex: String? = nil
 }
 
 struct Note: Identifiable, Equatable, Codable {
@@ -17,6 +21,7 @@ struct Note: Identifiable, Equatable, Codable {
     var document: NativeDocument
     var folder: String
     var folderID: String? = nil
+    var icon: String? = nil
     var favorite = false
     var linkedTaskIDs: [UUID] = []
     var attachments: [NativeAttachment] = []
@@ -39,13 +44,14 @@ struct Note: Identifiable, Equatable, Codable {
     }
     init(id: UUID, title: String, document: NativeDocument, folder: String, folderID: String? = nil,
          favorite: Bool = false, linkedTaskIDs: [UUID] = [], attachments: [NativeAttachment] = [],
-         updatedAt: Date, deletedAt: Date? = nil, originalContentJson: String? = nil) {
+         updatedAt: Date, deletedAt: Date? = nil, originalContentJson: String? = nil, icon: String? = nil) {
         self.id = id; self.title = title; self.document = document; self.folder = folder; self.folderID = folderID
         self.favorite = favorite; self.linkedTaskIDs = linkedTaskIDs; self.attachments = attachments
         self.updatedAt = updatedAt; self.deletedAt = deletedAt; self.originalContent = originalContentJson
+        self.icon = icon
     }
     private enum CodingKeys: String, CodingKey {
-        case id, title, document, folder, folderID, favorite, linkedTaskIDs, attachments, updatedAt, deletedAt, originalContentJson
+        case id, title, document, folder, folderID, favorite, linkedTaskIDs, attachments, updatedAt, deletedAt, originalContentJson, icon
     }
     init(from decoder: Decoder) throws {
         let v = try decoder.container(keyedBy: CodingKeys.self)
@@ -56,6 +62,7 @@ struct Note: Identifiable, Equatable, Codable {
         attachments = try v.decode([NativeAttachment].self, forKey: .attachments)
         updatedAt = try v.decode(Date.self, forKey: .updatedAt); deletedAt = try v.decodeIfPresent(Date.self, forKey: .deletedAt)
         originalContent = try v.decodeIfPresent(String.self, forKey: .originalContentJson)
+        icon = try v.decodeIfPresent(String.self, forKey: .icon)
     }
     func encode(to encoder: Encoder) throws {
         var v = encoder.container(keyedBy: CodingKeys.self)
@@ -66,11 +73,12 @@ struct Note: Identifiable, Equatable, Codable {
         try v.encodeIfPresent(deletedAt, forKey: .deletedAt)
         let original = try originalContentValue()
         try v.encodeIfPresent(original, forKey: .originalContentJson)
+        try v.encodeIfPresent(icon, forKey: .icon)
     }
     static func == (a: Note, b: Note) -> Bool {
         a.id == b.id && a.title == b.title && a.document == b.document && a.folder == b.folder && a.folderID == b.folderID &&
         a.favorite == b.favorite && a.linkedTaskIDs == b.linkedTaskIDs && a.attachments == b.attachments &&
-        a.updatedAt == b.updatedAt && a.deletedAt == b.deletedAt && a.sameOriginalContent(as: b)
+        a.updatedAt == b.updatedAt && a.deletedAt == b.deletedAt && a.icon == b.icon && a.sameOriginalContent(as: b)
     }
 
     /// Flutter hasPreservedRichContent 语义：存在保留的原始内容即视为受保护。
@@ -92,7 +100,7 @@ extension Note {
                   favorite: meta.isFavorite, linkedTaskIDs: meta.linkedTaskIDs,
                   attachments: task.attachments, updatedAt: task.updatedAt,
                   deletedAt: task.deletedAt,
-                  originalContentJson: meta.storedOriginalContentForMigration)
+                  originalContentJson: meta.storedOriginalContentForMigration, icon: meta.icon)
         deferredOriginal = meta.deferredOriginalReference
     }
 
@@ -106,7 +114,7 @@ extension Note {
         task.kind = .note
         var meta = TaskNoteMetadata(folder: folder, folderID: folderID, isFavorite: favorite,
                                     linkedTaskIDs: linkedTaskIDs,
-                                    originalContentJson: storedOriginalContentForMigration)
+                                    originalContentJson: storedOriginalContentForMigration, icon: icon)
         if storedOriginalContentForMigration == nil, let reference = deferredOriginal {
             meta.deferOriginalContent(reference)
         }

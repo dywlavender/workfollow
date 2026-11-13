@@ -82,6 +82,8 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
     private var scrollObserver: Any?
     private var clipObserver: NSObjectProtocol?
     private var spellingObserver: NSObjectProtocol?
+    private var reminderInkObserver: NSObjectProtocol?
+    private var shortcutObserver: AnyCancellable?
     private var internalScrollRegions: [NSRect] = []
     private var reportedHeight: CGFloat = 56
     private var assetVersion = 0
@@ -244,6 +246,8 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
         if let scrollObserver { NSEvent.removeMonitor(scrollObserver) }; scrollObserver = nil
         if let clipObserver { NotificationCenter.default.removeObserver(clipObserver) }; clipObserver = nil
         if let spellingObserver { NotificationCenter.default.removeObserver(spellingObserver) }; spellingObserver = nil
+        if let reminderInkObserver { NotificationCenter.default.removeObserver(reminderInkObserver) }; reminderInkObserver = nil
+        shortcutObserver = nil
         reminderPanel?.dismiss(); reminderPanel = nil
         menuPresenter.dismiss()
         diagramEditor?.close(); diagramEditor = nil
@@ -386,6 +390,10 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
             "mentions": profile.mentionCandidates().map { ["id": $0.id.uuidString, "kind": $0.kind.rawValue, "title": $0.title] },
             "checklistReminders": profile.checklistRemindersEnabled,
             "inlineDateReminders": true,
+            "inlineDateTaskLink": profile.setInlineDateReminder != nil,
+            "editorShortcuts": AppShortcutStore.shared.webBindings(),
+            "removedEditorShortcuts": AppShortcutStore.shared.webBindings(removedDefaults: true),
+            "reminderInk": EditorPreferences.reminderInk,
             "ghostEnabled": AISelectionWindowController.shared.isAvailable,
             "spellChecking": EditorPreferences.spellCheckingEnabled,
             "textColor": Self.cssColor(NSColor(WFColors.documentText), appearance: effectiveAppearance),
@@ -400,9 +408,16 @@ final class MilkdownWebView: NSView, WKNavigationDelegate {
         _Concurrency.Task { [weak self] in _ = try? await self?.call("configure", next) }
     }
     private func installRouting() {
+        shortcutObserver = AppShortcutStore.shared.$overrides.dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.configure() }
+        }
         spellingObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.spellCheckingDidChange,
             object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.configure() }
+            }
+        reminderInkObserver = NotificationCenter.default.addObserver(forName: EditorPreferences.reminderInkDidChange,
+            object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.configurationData = nil; self?.configure() }
             }
         focusObserver = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self, EditorHostScrollRouting.contains(event, in: self) else { return event }

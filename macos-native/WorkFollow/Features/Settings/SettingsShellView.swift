@@ -2,11 +2,12 @@ import SwiftUI
 import ServiceManagement
 
 enum SettingsSection: String, CaseIterable, Hashable {
-    case general, ai, assistant, data, appleSync, localNotifications
+    case general, shortcuts, ai, assistant, data, appleSync, localNotifications
 
     var title: String {
         switch self {
         case .general: return "通用"
+        case .shortcuts: return "快捷键"
         case .ai: return "AI 模型"
         case .assistant: return "助手记忆"
         case .data: return "数据"
@@ -18,6 +19,7 @@ enum SettingsSection: String, CaseIterable, Hashable {
     var symbol: String {
         switch self {
         case .general: return "gearshape"
+        case .shortcuts: return "keyboard"
         case .ai: return "sparkles"
         case .assistant: return "brain.head.profile"
         case .data: return "externaldrive"
@@ -31,6 +33,7 @@ struct SettingsShellView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var aiCatalog: PiModelCatalog? = nil
+    var quickAdd: GlobalQuickAddController? = nil
 
     private var glassActive: Bool {
         WFGlassSupport.isActive(environment.appearanceMaterial,
@@ -79,12 +82,14 @@ struct SettingsShellView: View {
         switch environment.settingsSection {
         case .general:
             SettingsGeneralView()
+        case .shortcuts:
+            SettingsShortcutsView(store: .shared, quickAdd: quickAdd)
         case .ai:
             SettingsAIModelsView(store: environment.meetingStore, models: environment.aiModels,
                                  catalog: aiCatalog)
         case .assistant:
             SettingsAssistantMemoryView(memories: environment.assistantMemories,
-                briefing: environment.assistantBriefing) {
+                briefing: environment.assistantBriefing, followUps: environment.meetingFollowUps) {
                     environment.refreshAssistantBriefingAutomatically()
                 }.disabled(!environment.canSeedWelcomeGuide)
         case .data:
@@ -280,6 +285,8 @@ private struct SettingsGeneralView: View {
     @State private var loginError: String?
     @AppStorage(EditorPreferences.bodyFontSizeKey)
     private var bodyFontSize = Double(EditorPreferences.defaultBodyFontSize)
+    @State private var reminderInk = EditorPreferences.reminderInk
+    @State private var showReminderInkPicker = false
 
     var body: some View {
         SettingsPage {
@@ -321,8 +328,11 @@ private struct SettingsGeneralView: View {
                         .padding(.bottom, 10)
                 }
             }
+            SettingsGroup("软件更新", footnote: "更新目录指向另一台电脑同步过来的发布目录（含 manifest.json）；应用会校验哈希后自动落位并重启。") {
+                SelfUpdateSettingsSection(model: environment.selfUpdate)
+            }
             SettingsGroup("编辑", footnote: "只改变编辑栏里没有单独设置字号的“正文”；已选“正文 1/2/3”、标题、代码与列表保持原样，存量笔记立即生效。") {
-                WFFormRow("正文字号", showsDivider: false) {
+                WFFormRow("正文字号") {
                     SettingsNumberStepper(value: $bodyFontSize, range: bodyFontSizeRange, unit: "pt")
                         .accessibilityIdentifier("settings.body.fontSize")
                 }
@@ -332,7 +342,51 @@ private struct SettingsGeneralView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, WFSpace.md)
                     .padding(.top, 2)
-                    .padding(.bottom, 12)
+                WFFormRow("提醒日期高亮色", showsDivider: false) {
+                    Button { showReminderInkPicker = true } label: {
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(nsColor: NSColor(documentHex: reminderInk) ?? .controlAccentColor))
+                                .frame(width: 14, height: 14)
+                                .overlay(RoundedRectangle(cornerRadius: 4)
+                                    .stroke(WFColors.border, lineWidth: 0.5))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(WFColors.secondaryText)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.editor.reminderInk")
+                    .popover(isPresented: $showReminderInkPicker, arrowEdge: .bottom) {
+                        DocumentColorPickerCard(
+                            title: "提醒日期高亮色",
+                            defaultTitle: "恢复默认金黄",
+                            selectedHex: reminderInk == EditorPreferences.defaultReminderInk ? nil : reminderInk,
+                            onPick: { hex in
+                                EditorPreferences.setReminderInk(hex ?? EditorPreferences.defaultReminderInk)
+                                reminderInk = EditorPreferences.reminderInk
+                            })
+                            .padding(10)
+                            .frame(width: 268)
+                    }
+                }
+                HStack(spacing: 4) {
+                    Text("笔记里设置了提醒的日期会显示成：")
+                        .font(WFType.supporting)
+                        .foregroundStyle(WFColors.secondaryText)
+                    Text("11月8日")
+                        .font(WFType.body)
+                        .foregroundStyle(Color(nsColor: NSColor(documentHex: reminderInk) ?? .controlAccentColor))
+                        .underline(true, pattern: .dot, color: Color(nsColor: NSColor(documentHex: reminderInk) ?? .controlAccentColor))
+                    Text("♧")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color(nsColor: NSColor(documentHex: reminderInk) ?? .controlAccentColor))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, WFSpace.md)
+                .padding(.top, 2)
+                .padding(.bottom, 12)
             }
             SettingsGroup("背景", footnote: "侧栏、列表、各页面留白和弹窗都会带上主题色；正文与卡片保持纯色。液态玻璃需要 macOS 26 及以上，系统开启“降低透明度”时会自动回退经典材质。") {
                 BackgroundThemePreview()

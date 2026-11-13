@@ -9,7 +9,7 @@ from functools import wraps
 import pytest
 
 from app.ai_runtime.pi_engine import PiEngine
-from app.ai_runtime.prompts import minutes_prompt, summary_prompt, task_prompt
+from app.ai_runtime.prompts import MINUTES_RULES, minutes_prompt, summary_prompt, task_prompt
 from app.ai_runtime.server import Runtime
 
 
@@ -78,8 +78,13 @@ def test_scenario_prompts_keep_facts_options_and_complete_source():
     assert "本期成果、进展与调整、本期复盘、下一周期任务" in monthly
     task = task_prompt({"action": "extract_tasks", "content": "明天整理报价", "existingTitles": ["已存在"]})
     assert "quote 必须是输入中的连续原文" in task and "已存在" in task
-    minutes = minutes_prompt({"lines": [{"speaker": "片段 1 · 暂定讲话人1", "text": "改成周五交付"}]})
-    assert "后续发言推翻结论时修正" in minutes and "身份待确认" in minutes and "周五交付" in minutes
+    lines = [{"speaker": "片段 1 · 暂定讲话人1", "text": "改成周五交付", "id": "fixture-line", "offset": 42}]
+    rules, payload = minutes_prompt({"lines": lines, "minutes": "旧稿周四交付"}).split("\n\n本次资料（JSON）\n")
+    assert rules == MINUTES_RULES
+    assert "每件事只出现一次" in rules and "有内容才输出" in rules
+    assert "全文最多 6 条" in rules and "控制在 300 字以内" in rules
+    assert json.loads(payload) == {"previousMinutes": "旧稿周四交付",
+                                  "lines": [{"speaker": lines[0]["speaker"], "text": lines[0]["text"]}]}
 
 
 @run_async

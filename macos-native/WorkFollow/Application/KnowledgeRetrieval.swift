@@ -17,7 +17,40 @@ struct KnowledgePassage: Identifiable, Equatable, Sendable {
     let date: Date
     var location: String
     var position: Double = 0
+    var blockID: UUID?
+    var revealQuery: String?
     var parameters: [String: String] { ["id": id, "title": String(title.prefix(300)), "content": content] }
+
+    var url: URL? {
+        var components = URLComponents()
+        components.scheme = "workfollow"
+        components.host = kind.rawValue
+        components.path = "/" + resourceID.uuidString
+        var items: [URLQueryItem] = []
+        if let lineID { items.append(.init(name: "line", value: lineID.uuidString)) }
+        if let blockID { items.append(.init(name: "block", value: blockID.uuidString)) }
+        if let revealQuery { items.append(.init(name: "match", value: revealQuery)) }
+        components.queryItems = items.isEmpty ? nil : items
+        return components.url
+    }
+}
+
+enum KnowledgeTaskDateField: String {
+    case schedule, deadline, completed
+    func date(in task: Task) -> Date? {
+        switch self {
+        case .schedule: task.schedule.dueAt
+        case .deadline: task.schedule.deadlineAt
+        case .completed: task.completedAt
+        }
+    }
+}
+
+struct KnowledgeScope {
+    var kind: KnowledgeKind?
+    var list: String?
+    var folder: String?
+    var tag: String?
 }
 
 struct KnowledgeSearchResult: Sendable {
@@ -35,68 +68,87 @@ struct KnowledgeCorpus: @unchecked Sendable {
     var currentList: String?
     var now = Date()
     var calendar = Calendar.current
+    var index: LocalKnowledgeIndex?
 
-    func search(_ rawQuestion: String) throws -> KnowledgeSearchResult {
+    func search(_ rawQuestion: String, scope: KnowledgeScope = .init()) throws -> KnowledgeSearchResult {
         var question = rawQuestion
         if let currentList {
             question = question.replacingOccurrences(of: "这个项目", with: currentList)
                 .replacingOccurrences(of: "当前清单", with: currentList)
         }
-        let filter = KnowledgeQuery(question, now: now, calendar: calendar)
-        var candidates: [(passage: KnowledgePassage, score: Int)] = []
+        var filter = KnowledgeQuery(question, now: now, calendar: calendar)
+        if let kind = scope.kind { filter.kinds = [kind] }
+        let indexed = index?.search(filter.terms).map { Dictionary(grouping: $0, by: \.resourceID) }
+        var candidates: [(passage: KnowledgePassage, score: Int, rank: Double)] = []
         var result = KnowledgeSearchResult()
         func append(kind: KnowledgeKind, id: UUID, title: String, metadata: String, body: String,
-                    date: Date, location: String, lineID: UUID? = nil, position: Double = 0) throws {
-            for (index, chunk) in Self.chunks(body).enumerated() {
+                    date: Date, location: String, lineID: UUID? = nil, position: Double = 0,
+                    hit: LocalKnowledgeHit? = nil) throws {
+            for (index, chunk) in (hit == nil ? Self.chunks(body) : [body]).enumerated() {
                 try _Concurrency.Task.checkCancellation()
-                let score = filter.score(title: title + " " + location, body: chunk)
+                let score = filter.score(title: title + " " + location + " " + (hit?.heading ?? ""), body: chunk)
                 guard score > 0 else { continue }
                 let content = String((metadata + "\n" + chunk).prefix(2400))
                 candidates.append((KnowledgePassage(id: "\(kind.rawValue)-\(id)-\(lineID?.uuidString ?? "body")-\(index)",
                     kind: kind, resourceID: id, lineID: lineID, title: title, content: content,
-                    date: date, location: location, position: position + Double(index)), score))
+                    date: date, location: location, position: position + Double(index),
+                    blockID: hit?.blockID, revealQuery: hit?.excerpt(matching: filter.terms)?.reveal), score, hit?.rank ?? 0))
+            }
+        }
+        func appendRecord(kind: KnowledgeKind, id: UUID, title: String, metadata: String,
+                          document: NativeDocument, date: Date, location: String) throws {
+            if let indexed {
+                for hit in indexed[id] ?? [] {
+                    try append(kind: kind, id: id, title: title, metadata: metadata, body: hit.body,
+                               date: date, location: location, position: Double(hit.position), hit: hit)
+                }
+            } else if filter.couldMatch(document, title: title + " " + location) {
+                let body = try document.materialized().plainText
+                try append(kind: kind, id: id, title: title, metadata: metadata,
+                           body: body, date: date, location: location)
             }
         }
         let formatter = DateFormatter()
         formatter.calendar = calendar; formatter.timeZone = calendar.timeZone
         formatter.locale = Locale(identifier: "en_US_POSIX"); formatter.dateFormat = "yyyy-MM-dd HH:mm"
         func date(_ value: Date?) -> String { value.map { formatter.string(from: $0) } ?? "未设置" }
-        if filter.includes(kind: .task) {
+        if filter.includes(kind: .task), scope.folder == nil {
             for task in tasks where !task.isNoteTask && task.deletedAt == nil && task.skippedAt == nil && !task.isConverted && !task.isAbandoned {
                 try _Concurrency.Task.checkCancellation()
+                if let indexed, indexed[task.id] == nil { continue }
+                guard scope.list == nil || task.list.name == scope.list,
+                      scope.tag == nil || task.tags.contains(scope.tag ?? "") else { continue }
                 guard filter.completed == nil || (task.status == .completed) == filter.completed else { continue }
-                let relevantDate = filter.completed == true ? task.completedAt : task.schedule.dueAt ?? task.schedule.deadlineAt
+                let relevantDate = filter.dateField.map { $0.date(in: task) }
+                    ?? (filter.completed == true ? task.completedAt : task.schedule.dueAt ?? task.schedule.deadlineAt)
                 guard filter.includes(relevantDate) else { continue }
-                guard filter.couldMatch(task.document, title: task.title + " " + task.list.name) else { continue }
                 do {
-                    let body = try task.document.materialized().plainText
                     let title = task.title.isEmpty ? "无标题任务" : task.title
                     let metadata = "任务：\(String(title.prefix(200)))\n清单：\(String(task.list.name.prefix(150)))\n状态：\(task.isClosed ? "已完成" : "未完成")\n重要性：\(task.priority.title)\n安排日期：\(date(task.schedule.dueAt))\n截止日期：\(date(task.schedule.deadlineAt))\n完成时间：\(date(task.completedAt))"
-                    try append(kind: .task, id: task.id, title: title, metadata: metadata,
-                        body: body.isEmpty ? "任务标题：" + title : body,
-                        date: task.updatedAt, location: task.list.name)
+                    try appendRecord(kind: .task, id: task.id, title: title, metadata: metadata, document: task.document,
+                        date: task.updatedAt, location: ([task.list.name] + task.tags).joined(separator: " "))
                 } catch is CancellationError { throw CancellationError() }
                 catch { result.unreadableDocuments += 1 }
             }
         }
-        if filter.includes(kind: .note) {
+        if filter.includes(kind: .note), scope.list == nil, scope.tag == nil {
             for note in notes where note.deletedAt == nil {
                 try _Concurrency.Task.checkCancellation()
-                guard filter.includes(note.updatedAt) else { continue }
-                guard filter.couldMatch(note.document, title: note.title + " " + note.folder) else { continue }
+                if let indexed, indexed[note.id] == nil { continue }
+                guard scope.folder == nil || note.folder == scope.folder else { continue }
+                guard filter.intervalOnlyAppliesToTasks || filter.includes(note.updatedAt) else { continue }
                 do {
-                    let body = try note.document.materialized().plainText
-                    try append(kind: .note, id: note.id, title: note.title.isEmpty ? "未命名笔记" : note.title,
+                    try appendRecord(kind: .note, id: note.id, title: note.title.isEmpty ? "未命名笔记" : note.title,
                         metadata: "笔记：\(String(note.title.prefix(200)))\n文件夹：\(String(note.folder.prefix(150)))\n编辑时间：\(date(note.updatedAt))",
-                        body: body, date: note.updatedAt, location: note.folder)
+                        document: note.document, date: note.updatedAt, location: note.folder)
                 } catch is CancellationError { throw CancellationError() }
                 catch { result.unreadableDocuments += 1 }
             }
         }
-        if filter.includes(kind: .meeting) {
+        if filter.includes(kind: .meeting), scope.list == nil, scope.folder == nil, scope.tag == nil {
             for meeting in meetings {
                 try _Concurrency.Task.checkCancellation()
-                guard filter.includes(meeting.createdAt) else { continue }
+                guard filter.intervalOnlyAppliesToTasks || filter.includes(meeting.createdAt) else { continue }
                 let metadata = "会议：\(String(meeting.title.prefix(200)))\n会议时间：\(date(meeting.createdAt))"
                 if !meeting.minutes.isEmpty {
                     try append(kind: .meeting, id: meeting.id, title: meeting.title,
@@ -116,6 +168,7 @@ struct KnowledgeCorpus: @unchecked Sendable {
         }
         candidates.sort {
             if $0.score != $1.score { return $0.score > $1.score }
+            if $0.rank != $1.rank { return $0.rank < $1.rank }
             if $0.passage.date != $1.passage.date { return $0.passage.date > $1.passage.date }
             if $0.passage.resourceID == $1.passage.resourceID {
                 if $0.passage.kind == .meeting {
@@ -162,6 +215,8 @@ private struct KnowledgeQuery {
     var kinds: Set<KnowledgeKind> = []
     var completed: Bool?
     var interval: DateInterval?
+    var dateField: KnowledgeTaskDateField?
+    var intervalOnlyAppliesToTasks = false
     var latestMeeting = false
     var terms: [String] = []
     var scopeTerms: [String] = []
@@ -184,7 +239,12 @@ private struct KnowledgeQuery {
         // held in other resources. Do not let one task clause hide that evidence.
         let clauses = question.components(separatedBy: CharacterSet(charactersIn: "，,？?；;。"))
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        if completed == nil && kinds == [.task] && clauses.count > 1 { kinds = [] }
+        if kinds == [.task] && clauses.count > 1 {
+            intervalOnlyAppliesToTasks = true
+            kinds = []
+        }
+        if question.contains("截止") { dateField = .deadline }
+        else if question.contains("安排") { dateField = .schedule }
         latestMeeting = ["上次会议", "上一次会议", "最近一次会议"].contains(where: question.contains) && kinds == [.meeting]
         if question.contains("今天") { interval = calendar.dateInterval(of: .day, for: now) }
         else if question.contains("昨天"), let previous = calendar.date(byAdding: .day, value: -1, to: now) {
@@ -194,7 +254,7 @@ private struct KnowledgeQuery {
         } else if question.contains("本周") || question.contains("这周") { interval = calendar.dateInterval(of: .weekOfYear, for: now) }
         else if question.contains("本月") || question.contains("这个月") { interval = calendar.dateInterval(of: .month, for: now) }
         var text = question.lowercased()
-        for phrase in openWords + ["已经完成", "已完成", "做完了", "待办", "上一次会议", "最近一次会议", "上次会议", "本周", "这周", "上周", "本月", "这个月", "今天", "昨天"] {
+        for phrase in openWords + ["已经完成", "已完成", "做完了", "待办", "上一次会议", "最近一次会议", "上次会议", "本周", "这周", "上周", "本月", "这个月", "今天", "昨天", "截止"] {
             text = text.replacingOccurrences(of: phrase, with: " ")
         }
         let stop: Set<String> = ["我", "我们", "的", "了", "有", "在", "和", "与", "是", "还", "要", "定", "做", "什么", "哪些", "怎么", "如何", "怎样", "一下", "帮我", "请", "告诉", "告诉我", "目前", "现在", "还有", "有没有", "是否", "关于", "这个", "这些", "所有", "全部", "项目", "进展", "情况", "内容", "任务", "待办", "笔记", "会议", "发言", "确定", "决定", "总结", "整理", "列出", "查询", "查找", "最近", "上次", "一次", "何时", "什么时候", "时候", "为什么", "需要", "事情", "事项", "项", "可以", "能", "帮", "看看", "个", "之前", "后", "前", "中", "记录", "相关", "最后", "结论"]

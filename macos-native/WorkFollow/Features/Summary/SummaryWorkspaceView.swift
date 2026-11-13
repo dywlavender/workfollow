@@ -125,7 +125,7 @@ struct SummaryWorkspaceView: View {
                 }
             }
         }
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
         .onAppear { reloadDocument(); loadJournal() }
         .onDisappear {
             cancelAI()
@@ -231,11 +231,10 @@ struct SummaryWorkspaceView: View {
     }
 
     private func pageHeader(showsInspector: Bool) -> some View {
-        HStack(spacing: 12) {
+        WorkspacePageHeader(title: journalMode ? "每日手记" : "摘要", leading: {
             Button { environment.toggleSidebar() } label: { Image(systemName: "sidebar.left") }
                 .hoverTip("显示或隐藏侧栏").accessibilityLabel("显示或隐藏侧栏")
-            Text(journalMode ? "每日手记" : "摘要").font(WFType.detailTitle).foregroundStyle(WFColors.text)
-            Spacer()
+        }, trailing: {
             WFGlassControlGroup(spacing: 12) {
                 if !journalMode {
                     if !showsInspector {
@@ -256,9 +255,8 @@ struct SummaryWorkspaceView: View {
                     .hoverTip("摘要更多操作")
                     .accessibilityLabel("摘要更多操作")
             }
-        }
+        })
         .buttonStyle(.borderless).foregroundStyle(WFColors.secondaryText)
-        .padding(.horizontal, 22).frame(height: 52)
     }
 
     private func weeklyEditor(compact: Bool) -> some View {

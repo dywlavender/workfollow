@@ -3,6 +3,25 @@ import XCTest
 
 @MainActor
 final class NoteDragDropTests: XCTestCase {
+    func testFolderRowEdgePromotesSubtreeToSiblingAndMiddleNestsItAgain() throws {
+        let notes = NotesWorkspaceModel()
+        let parent = try XCTUnwrap(notes.addFolder("工作", parentID: nil))
+        let peer = try XCTUnwrap(notes.addFolder("归档", parentID: nil))
+        let child = try XCTUnwrap(notes.addFolder("周报", parentID: parent))
+        let grandchild = try XCTUnwrap(notes.addFolder("历史", parentID: child))
+        let note = notes.create(folder: "周报", title: "本周记录")
+
+        let edge = try XCTUnwrap(NoteDirectoryDropDelegate.folderPlacement(rowID: peer, y: 2))
+        XCTAssertTrue(notes.moveFolder(id: child, to: edge))
+        XCTAssertEqual(notes.folderNodes.filter { $0.depth == 0 }.map(\.id), [parent, child, peer])
+        XCTAssertEqual(notes.folderNodes.first { $0.id == grandchild }?.parentID, child)
+        XCTAssertEqual(notes.notes.first { $0.id == note }?.folderID, child)
+
+        let middle = try XCTUnwrap(NoteDirectoryDropDelegate.folderPlacement(rowID: parent, y: 15))
+        XCTAssertTrue(notes.moveFolder(id: child, to: middle))
+        XCTAssertEqual(notes.folderPath(named: "历史"), ["工作", "周报", "历史"])
+    }
+
     private func makeModel() -> (NotesWorkspaceModel, Note) {
         let note = Note(id: UUID(), title: "会议记录", document: .empty, folder: "未归档",
                         updatedAt: Date(timeIntervalSince1970: 10))

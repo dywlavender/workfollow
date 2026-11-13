@@ -101,4 +101,22 @@ final class AssistantBriefingTests: XCTestCase {
         XCTAssertEqual(store.current?.text, "手动刷新成功")
         XCTAssertNil(store.error)
     }
+
+    /// 「今日简报」卡的收起状态要跨启动保留（用户反馈卡片「一直」在），
+    /// 且简报本身的其它写盘（提醒分钟、自动生成开关）不能把收起状态洗掉。
+    func testCardHiddenPersistsAcrossReloadsAndOtherWrites() throws {
+        let directory = try root()
+        let store = AssistantBriefingStore(directory: directory, clock: { self.date(3, 8) }, calendar: calendar)
+        XCTAssertFalse(store.cardHidden)
+        try store.setCardHidden(true)
+        try store.setDefaultReminderMinutes(15)
+        try store.setAutomaticEnabled(false)
+        let reopened = AssistantBriefingStore(directory: directory, clock: { self.date(3, 8) }, calendar: calendar)
+        XCTAssertTrue(reopened.cardHidden, "收起状态应跨启动保留")
+        XCTAssertEqual(reopened.defaultReminderMinutes, 15)
+        XCTAssertEqual(reopened.automaticEnabled, false)
+        try reopened.setCardHidden(false)
+        let restored = AssistantBriefingStore(directory: directory, clock: { self.date(3, 8) }, calendar: calendar)
+        XCTAssertFalse(restored.cardHidden)
+    }
 }

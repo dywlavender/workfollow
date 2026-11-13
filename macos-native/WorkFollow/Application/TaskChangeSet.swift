@@ -67,10 +67,12 @@ struct TaskChangeSet: Equatable {
                 return true
             case .update:
                 if !entry.changedFields.isDisjoint(with: reminderFields) { return true }
-                // 检查项提醒挂在正文行属性里：只有清单任务的正文变更才需要
-                // 重排通知，普通任务打字不触发提醒对账。
+                // 检查项提醒挂在正文行属性里：清单任务与笔记（行内日期提醒的
+                // 宿主）的正文变更才需要重排通知，且只在提醒投影真的变了时——
+                // 普通打字不会触发提醒对账。
                 if entry.changedFields.contains(.document),
-                   entry.before?.kind == .checklist || entry.after?.kind == .checklist {
+                   entry.before?.kind == .checklist || entry.after?.kind == .checklist
+                   || entry.before?.kind == .note || entry.after?.kind == .note {
                     let before = entry.before?.document.checklistSummary?.reminders ?? []
                     let after = entry.after?.document.checklistSummary?.reminders ?? []
                     return before != after

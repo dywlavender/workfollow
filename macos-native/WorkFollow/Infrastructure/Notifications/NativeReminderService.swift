@@ -277,6 +277,9 @@ final class NativeReminderService: ObservableObject, ModuleStoreFlushable {
 
     @discardableResult
     private func present(_ value: ReminderDelivery, playSound: Bool) -> Bool {
+        // 「仅系统横幅」前台样式：面板不接管；willPresent 收到 false 后系统
+        // 按默认选项呈现横幅（带一次铃声），应用内面板与循环铃声都不出现。
+        guard !state.snapshot.preferences.foregroundBannerOnly else { return false }
         guard value.kind == .test || deliveries.contains(where: { $0.id == value.id }) else { return false }
         presentedIDs.insert(value.id)
         return presenter.show(value, preferences: state.snapshot.preferences, playSound: playSound,

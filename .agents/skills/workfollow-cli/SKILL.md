@@ -15,8 +15,8 @@ App 内对话会提供 `WORKFOLLOW_CLI` 和 `WORKFOLLOW_APP` 环境变量，优�
 
 - 用户问“有哪些待办”“之前记了什么”“根据笔记分析”时，先查询实际记录；聊天里的旧内容不能代替当前 App 数据。查询或分析请求只读取，用户明确要求记录、安排或修改时再写入；已经明确的操作直接执行。
 - 用 `task list --query 关键词` / `note list --query 关键词` 查找；搜索不到时换用较短关键词。返回 `total` 大于已读条目时，按 `--limit`、`--offset` 翻页；需要原文再按 ID `get`，不要一次读取整个笔记库。
-- 查今天、明天或某段时间的任务时，用 `task list --from YYYY-MM-DD --to YYYY-MM-DD --completed false`；`--to` 包含结束当天。查询完成统计时用 `--completed true`，范围按完成时间过滤。准确数量使用 `task count`，不要把分页条数或检索片段数当成总数。
-- 查会议先用 `meeting list --query 关键词`，再 `meeting get --id UUID` 读取纪要与定稿发言；可用 `--query` 缩小发言范围。`knowledge search --query 问题` 复用 App 的跨待办、笔记、会议检索，返回相关片段与实际链接；它是相关资料检索，不是全库统计。回答会议问题时优先依据定稿发言，用返回的时间定位链接引用来源。
+- 查某段时间的任务时，用 `task list --from YYYY-MM-DD --to YYYY-MM-DD --completed false`，`--to` 包含结束当天。用 `--date-field schedule` 查安排日期，`--date-field deadline` 查截止日期，`--date-field completed` 查完成时间。`task list/count` 支持 `--list` 和 `--tag`，准确数量使用 `task count`。
+- `knowledge search --query 问题` 复用 App 的检索索引，返回相关原文和定位链接。可用 `--kind task|note|meeting`、`--list`、`--folder` 或 `--tag` 限定范围。复合问题分别查询任务列表与原文依据。查会议可先用 `meeting list --query 关键词`，再用 `meeting get --id UUID` 读取定稿发言，引用时保留返回的定位链接。
 - 只使用用户给出的或已查到的事实。新建前查询同名或相关记录，避免重复；负责人、日期或目标记录不明确时再追问。
 - 时间按对话提供的日期、时区解释；“明天下午三点开会”是安排时间，使用 `--date`；“周五前提交”是截止时间，使用 `--due`。不要丢掉用户明确给出的时刻。
 - 用户明确让你保存后，执行写入并读取结果；不要只给一段指令让用户自行运行。回复简洁说明实际保存的标题、日期，并用 `[标题](workfollow://task/ID)` 或 `[标题](workfollow://note/ID)` 提供可点击链接。命令、`ok` 字段和版本号用于内部核对，除非用户排查问题，否则不展示。写入失败时如实说明，不声称已经完成。
@@ -26,7 +26,7 @@ App 内对话会提供 `WORKFOLLOW_CLI` 和 `WORKFOLLOW_APP` 环境变量，优�
 
 - 到点自动让 AI 查询、总结或执行一段指令，用 `schedule`；普通的通知提醒仍用 `task` 的提醒字段。不要用一个普通待办冒充已经设置好 AI 定时执行。
 - `schedule list` 搜索已有计划，`schedule get --id UUID` 读取指令和版本；新建用 `schedule add --title TEXT --content TEXT --at ISO8601 --repeat once|daily|weekdays|weekly`。`--at` 包含时刻和时区，`--time-zone` 可明确地区时区，默认沿用 App 的本地时区；`weekdays` 是周一至周五。长指令可以用 `--content-file`。
-- 修改用 `schedule update --id UUID --version VERSION`，支持 `--content`、`--title`、`--at`、`--repeat`、`--time-zone` 和 `--enabled true|false`；删除用 `schedule delete --id UUID --version VERSION`。明确要求立即执行时用 `schedule run --id UUID`；返回 `queued=true` 只表示已触发，不代表执行完成，结果在对话历史查看。
+- 修改用 `schedule update --id UUID --version VERSION`，支持 `--content`、`--title`、`--at`、`--repeat`、`--time-zone` 和 `--enabled true|false`。用户明确要求执行后告诉他时，给 `schedule add/update` 传 `--deliver-result true`，结果会出现在今日简报。删除用 `schedule delete --id UUID --version VERSION`。`schedule run --id UUID` 返回 `queued=true` 表示已触发，完成状态以实际运行结果为准。
 - 计划在 App 运行时执行，退出或休眠后恢复只补最近错过的一轮。只在用户明确要求设置、调整或删除时改计划；当前是在执行已经保存的定时指令时，不要再次注册同一个计划。修改或删除前先 get 获取最新版本。
 
 - 用户明确说“记住”“以后默认”某个长期偏好时，用 `memory list` 查询已有偏好，再用 `memory add --content TEXT` 保存；修改用 `memory update --id UUID --version VERSION --content TEXT`，忘记用 `memory delete --id UUID --version VERSION`。只在返回 `ok=true` 后说明已记住、已更新或已忘记。记忆是 App 的独立本地数据，新对话仍会读取。

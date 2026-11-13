@@ -23,10 +23,14 @@ struct NotesFolderTreeListView: View {
     @Environment(\.workfollowMaterial) private var material
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    /// 拖放悬停的文件夹节点。笔记与文件夹共用 String 负载，只挂一个
-    /// dropDestination，按前缀在闭包里分派，避免同类型落点互相抢事件。
-    @State private var dropTargetID: String?
+    @State private var dropTarget: NoteFolderPlacement?
+    /// 鼠标悬停的文件夹行：悬停时计数换成「新建子文件夹」小方钮。
+    @State private var hoveredFolderID: String?
     @State private var showNoteTemplatePicker = false
+    /// 「从模板新建」的目标文件夹：nil = 头部入口（落在当前选中文件夹）。
+    @State private var templateTargetFolder: String?
+    /// 右键「编辑文件夹」的目标节点：非 nil 时弹出图标 + 名称颜色编辑弹窗。
+    @State private var editingFolder: NoteFolderNode?
     @ObservedObject private var floatingNotes = FloatingNoteWindowController.shared
 
     // MARK: - 统一的非阻塞弹窗
@@ -105,14 +109,21 @@ struct NotesFolderTreeListView: View {
             header
             if !trash { searchBar }
             if !trash { scopePicker }
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    if trash { trashRows } else { treeRows }
+            GeometryReader { viewport in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        LazyVStack(spacing: 0) {
+                            if trash { trashRows } else { treeRows }
+                        }
+                        if !trash { rootDropArea }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: viewport.size.height, alignment: .topLeading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .compactScrollbars()
             }
-            .compactScrollbars()
-            footer
+            // 垃圾桶固定在侧栏底部：不随树滚动，常驻可达（此前挂在树尾，
+            // 列表一长就够不着）；树尾那段已并入这里。
+            if !trash { trashEntry }
         }
         .padding(.horizontal, 10).padding(.bottom, 16)
         .accessibilityIdentifier("note.folderTree")
@@ -127,12 +138,24 @@ struct NotesFolderTreeListView: View {
         .sheet(isPresented: $showNoteTemplatePicker) {
             TaskTemplateGalleryView(
                 templateStore: TemplateStore.shared,
-                apply: { self.applyNoteTemplate($0) },
+                apply: { self.applyNoteTemplate($0, folder: templateTargetFolder) },
                 title: "笔记模板",
                 kind: .note,
                 builtIns: BuiltInNoteTemplates.all,
-                onDismiss: { showNoteTemplatePicker = false },
+                onDismiss: { showNoteTemplatePicker = false; templateTargetFolder = nil },
                 onApplied: { _ in detailOnly = true })
+        }
+        .sheet(item: $editingFolder) { node in
+            NoteFolderEditSheet(
+                folderName: node.name,
+                initialIcon: node.icon,
+                initialColorHex: node.nameColorHex,
+                onSave: { icon, colorHex in
+                    notes.setFolderIcon(icon, for: node.id)
+                    notes.setFolderNameColor(colorHex, for: node.id)
+                    editingFolder = nil
+                },
+                onCancel: { editingFolder = nil })
         }
     }
 
@@ -160,6 +183,14 @@ struct NotesFolderTreeListView: View {
                 .disabled(!notes.notes.contains { $0.deletedAt != nil })
             } else {
                 Button {
+                    presentNewSubfolder(under: nil, name: "")
+                } label: {
+                    Image(systemName: "folder.badge.plus").frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain).foregroundStyle(WFColors.accent)
+                .hoverTip("新建文件夹")
+                .accessibilityLabel("新建文件夹")
+                Button {
                     showNoteTemplatePicker = true
                 } label: {
                     Image(systemName: "doc.badge.plus").frame(width: 28, height: 28)
@@ -180,20 +211,28 @@ struct NotesFolderTreeListView: View {
 
     private var searchBar: some View {
         HStack(spacing: 4) {
-            if backgroundTheme.isThemed || glassActive {
+            HStack(spacing: 5) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(WFColors.tertiaryText)
                 TextField("搜索笔记", text: $query)
                     .textFieldStyle(.plain)
-                    .padding(.horizontal, 8)
+                    .font(WFType.body)
+                    .padding(.leading, -1)
                     .frame(height: 28)
-                    .background {
-                        WFGlassSurface(shape: RoundedRectangle(cornerRadius: 6),
-                                       fallback: backgroundTheme.inputFill)
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6).strokeBorder(WFColors.border, lineWidth: 1)
-                    }
-            } else {
-                TextField("搜索笔记", text: $query).textFieldStyle(.roundedBorder)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background {
+                if backgroundTheme.isThemed || glassActive {
+                    WFGlassSurface(shape: RoundedRectangle(cornerRadius: 6),
+                                   fallback: backgroundTheme.inputFill)
+                } else {
+                    RoundedRectangle(cornerRadius: 6).fill(backgroundTheme.inputFill)
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6).strokeBorder(WFColors.border, lineWidth: 1)
             }
             WFGlassControlGroup(spacing: 0) {
                 BusinessMenu {
@@ -227,6 +266,12 @@ struct NotesFolderTreeListView: View {
                     RoundedRectangle(cornerRadius: 5)
                         .fill(selected ? WFColors.content : Color.clear)
                 )
+                // 选中段白底 + 描边（分段控件标准画法），未选中保持素底。
+                .overlay {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 5).stroke(WFColors.border)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
@@ -249,7 +294,8 @@ struct NotesFolderTreeListView: View {
         ForEach(visibleFolderNodes) { node in
             let expanded = notes.isFolderExpanded(node.id)
             folderRow(name: node.name, nodeID: node.id,
-                      depth: node.depth, expanded: expanded, real: true,
+                      depth: node.depth, expanded: expanded, real: true, icon: node.icon,
+                      nameColorHex: node.nameColorHex,
                       toggle: { notes.setFolderExpanded(node.id, !expanded) })
             if expanded {
                 noteChildren(notes.notes(inFolderNamed: node.name,
@@ -257,26 +303,59 @@ struct NotesFolderTreeListView: View {
                              depth: node.depth + 1)
             }
         }
+    }
 
-        Divider().padding(.vertical, 10)
-        Button {
-            environment.navigate(to: .notesTrash)
-        } label: {
-            HStack(spacing: WFSpace.sm) {
-                Image(systemName: "trash").frame(width: 15)
-                Text("垃圾桶").font(WFType.navigation)
-                Spacer()
-                Text("\(notes.notes.filter { $0.deletedAt != nil }.count)")
-                    .font(WFType.sidebarBadge).foregroundStyle(WFColors.taskMetaText)
-            }
-            .padding(.horizontal, WFSpace.sm)
-            .frame(height: NavigationMetrics.rowHeight)
+    private var rootDropArea: some View {
+        let target = NoteDirectoryDropDelegate(notes: notes, rowID: nil, folderName: nil, indicator: $dropTarget)
+        return Color.clear
+            .frame(maxWidth: .infinity, minHeight: 22)
             .contentShape(Rectangle())
+            .overlay(alignment: .top) {
+                if dropTarget == .root { insertionLine(depth: 0) }
+            }
+            .onDrop(of: target.types, delegate: target)
+    }
+
+    private func insertionLine(depth: Int) -> some View {
+        Capsule().fill(WFColors.accent).frame(height: 2)
+            .padding(.leading, CGFloat(depth) * 16 + 6)
+            .padding(.trailing, WFSpace.sm)
+            .allowsHitTesting(false)
+    }
+
+    /// 垃圾桶入口：固定在侧栏底部（分隔线 + 单行），与树滚动区分离。
+    private var trashEntry: some View {
+        VStack(spacing: 0) {
+            Divider().padding(.bottom, 6)
+            Button {
+                environment.navigate(to: .notesTrash)
+            } label: {
+                HStack(spacing: WFSpace.sm) {
+                    Image(systemName: "trash").font(.system(size: 12)).frame(width: 15)
+                    Text("垃圾桶").font(WFType.navigation)
+                    Spacer()
+                    countBadge(notes.notes.filter { $0.deletedAt != nil }.count)
+                }
+                .padding(.horizontal, WFSpace.sm)
+                .frame(height: 30)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(WFColors.secondaryText)
+            .rowHoverBackground(selected: false, cornerRadius: 6)
+            .accessibilityLabel("垃圾桶")
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(WFColors.secondaryText)
-        .rowHoverBackground(selected: false)
-        .accessibilityLabel("垃圾桶")
+    }
+
+    /// 圆角胶囊计数：文件夹与垃圾桶统一口径（此前是裸的灰色小数字）。
+    private func countBadge(_ count: Int) -> some View {
+        Text("\(count)")
+            .font(WFType.sidebarBadge)
+            .monospacedDigit()
+            .foregroundStyle(WFColors.secondaryText)
+            .padding(.horizontal, 7)
+            .frame(minWidth: 20, minHeight: 16)
+            .background(WFColors.quickAddIdleFill, in: Capsule())
     }
 
     @ViewBuilder
@@ -289,9 +368,13 @@ struct NotesFolderTreeListView: View {
 
     @ViewBuilder
     private func folderRow(name: String, nodeID: String, depth: Int,
-                           expanded: Bool, real: Bool,
+                           expanded: Bool, real: Bool, icon: String? = nil,
+                           nameColorHex: String? = nil,
                            toggle: @escaping () -> Void) -> some View {
         let count = notes.notes(inFolderNamed: name, query: query, favorites: favorites).count
+        let hovered = hoveredFolderID == nodeID
+        let symbol = NoteDirectoryIcon.resolve(icon)?.rawValue ?? (real ? "folder" : "tray")
+        let target = NoteDirectoryDropDelegate(notes: notes, rowID: nodeID, folderName: name, indicator: $dropTarget)
         HStack(spacing: 5) {
             // 行主体用真正的 Button，不给整个 HStack 挂 onTapGesture。
             // 之前「+」按钮嵌在手势视图里，点它启动的同步模态会被手势跟踪吞事件。
@@ -302,93 +385,117 @@ struct NotesFolderTreeListView: View {
                         .frame(width: 12, height: 12)
                         .rotationEffect(.degrees(expanded ? 0 : -90))
                         .foregroundStyle(WFColors.tertiaryText)
-                    Image(systemName: "folder").font(.system(size: 13))
-                        .frame(width: 15).foregroundStyle(WFColors.secondaryText)
+                    NoteDirectoryGlyph(icon: NoteDirectoryIcon.resolve(icon),
+                                       symbol: real ? "folder" : "tray", size: 16)
                     Text(name).font(WFType.navigation).lineLimit(1)
+                        .ifLet(nameColorHex.flatMap { NSColor(documentHex: $0) }) { text, color in
+                            text.foregroundStyle(Color(nsColor: color))
+                        }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .firstMouseAction(toggle)
             Spacer(minLength: 4)
-            if real {
+            // 悬停时计数换成「新建子文件夹」小方钮；「未归档」没有子文件夹
+            // 概念，恒显计数胶囊。
+            if real, hovered {
                 Button {
                     presentNewSubfolder(under: nodeID, name: name)
                 } label: {
-                    Image(systemName: "plus").font(.system(size: 10))
-                        .frame(width: 16, height: 16).contentShape(Rectangle())
+                    Image(systemName: "plus").font(.system(size: 10, weight: .medium))
+                        .frame(width: 18, height: 18).contentShape(Rectangle())
+                        .background(WFColors.content, in: RoundedRectangle(cornerRadius: 4.5))
+                        .overlay(RoundedRectangle(cornerRadius: 4.5).stroke(WFColors.border))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(WFColors.tertiaryText)
+                .foregroundStyle(WFColors.secondaryText)
                 .hoverTip("新建子文件夹")
+            } else {
+                countBadge(count)
             }
-            Text("\(count)").font(WFType.sidebarBadge).foregroundStyle(WFColors.tertiaryText)
         }
         .padding(.leading, CGFloat(depth) * 16 + 6)
         .padding(.trailing, WFSpace.sm)
-        .frame(height: NavigationMetrics.rowHeight)
+        .frame(height: NoteDirectoryDropDelegate.rowHeight)
         .contentShape(Rectangle())
-        .rowHoverBackground(selected: dropTargetID == nodeID, cornerRadius: 6)
+        .onHover { inside in
+            if inside { hoveredFolderID = nodeID }
+            else if hoveredFolderID == nodeID { hoveredFolderID = nil }
+        }
+        .rowHoverBackground(selected: dropTarget == .inside(nodeID), cornerRadius: 6)
         .overlay {
-            if dropTargetID == nodeID {
+            if dropTarget == .inside(nodeID) {
                 RoundedRectangle(cornerRadius: 6).stroke(WFColors.accent, lineWidth: 1.5)
+                    .allowsHitTesting(false)
             }
+        }
+        .overlay(alignment: .top) {
+            if dropTarget == .before(nodeID) { insertionLine(depth: depth) }
+        }
+        .overlay(alignment: .bottom) {
+            if dropTarget == .after(nodeID) { insertionLine(depth: depth) }
         }
         .accessibilityLabel(name)
         .accessibilityValue(expanded ? "已展开" : "已折叠")
         .accessibilityIdentifier(real ? "note.folder.\(nodeID)" : "note.folder.unfiled")
-        .dropDestination(for: String.self) { values, _ in
-            guard let payload = values.first else { return false }
-            if let source = NoteFolderDragPayload.decode(payload) {
-                // 「未归档」是伪节点，不能作为父文件夹。
-                return real ? notes.moveFolder(id: source, under: nodeID) : false
-            }
-            return NoteFolderDrop.move(payload: payload, to: name, notes: notes)
-        } isTargeted: { inside in
-            dropTargetID = inside ? nodeID : nil
-        }
+        .onDrop(of: target.types, delegate: target)
         .ifLet(real ? nodeID : nil) { view, id in
-            view.modifier(NoteFolderDragSource(id: id))
+            view.modifier(NoteFolderDragSource(id: id, name: name,
+                                               icon: NoteDirectoryIcon.resolve(icon),
+                                               symbol: symbol))
         }
-        .ifLet(real ? name : nil) { view, folderName in
-            view.businessContextMenu {
-                Button("新建子文件夹…") { presentNewSubfolder(under: nodeID, name: folderName) }
-                Button("移到根目录") { _ = notes.moveFolder(id: nodeID, under: nil) }
+        .businessContextMenu {
+            if real {
+                Button("新建文件") { createNote(in: name) }
+                Button("从模板新建…") {
+                    templateTargetFolder = name
+                    showNoteTemplatePicker = true
+                }
+                Divider()
+                Button("新建子文件夹…") { presentNewSubfolder(under: nodeID, name: name) }
+                if depth > 0 {
+                    Button("移到根目录") { notes.moveFolder(id: nodeID, under: nil) }
+                }
+                NoteDirectoryIconMenu(icon: icon) { notes.setFolderIcon($0, for: nodeID) }
+                Button("编辑文件夹…") {
+                    editingFolder = notes.folderNodes.first { $0.id == nodeID }
+                }
                 Button("重命名文件夹…") {
                     present(DialogRequest(title: "重命名文件夹", placeholder: "文件夹名称",
-                                          initialText: folderName, confirm: "保存") { value in
-                        guard !value.isEmpty, value != folderName else { return }
-                        if !self.notes.renameFolder(folderName, to: value) {
+                                          initialText: name, confirm: "保存") { value in
+                        guard !value.isEmpty, value != name else { return }
+                        if !self.notes.renameFolder(name, to: value) {
                             self.presentNotice("名称为空或已存在")
                         }
                     })
                 }
                 Button("删除文件夹…") {
                     present(DialogRequest(
-                        title: "删除文件夹“\(folderName)”？",
+                        title: "删除文件夹“\(name)”？",
                         message: "其中的笔记会移到“未归档”，子文件夹会移到根目录。",
                         confirm: "删除", destructive: true) { _ in
-                        self.notes.removeFolder(folderName)
+                        self.notes.removeFolder(name)
                     })
                 }
+            } else {
+                // 「未归档」伪节点：右键补一个顶层文件夹入口（此前树里无处新建顶层文件夹）。
+                Button("新建文件夹…") { presentNewSubfolder(under: nil, name: name) }
             }
         }
     }
 
     @ViewBuilder
     private func noteRow(_ note: Note, depth: Int) -> some View {
+        let selected = selectedNoteID == note.id
         let openNote = {
             notes.selectedID = note.id
             detailOnly = true
         }
-        HStack(spacing: 6) {
-            if note.favorite {
-                Image(systemName: "star.fill").font(.system(size: 9))
-                    .foregroundStyle(.orange).frame(width: 10)
-            } else {
-                Circle().fill(WFColors.tertiaryText).frame(width: 4, height: 4)
-                    .frame(width: 10)
-            }
+        HStack(spacing: 5) {
+            NoteDirectoryGlyph(icon: NoteDirectoryIcon.resolve(note.icon),
+                               symbol: "doc.text", size: 15)
+                .foregroundStyle(selected ? WFColors.accent : WFColors.secondaryText)
             if floatingNotes.isOpen(note.id) {
                 Image(systemName: "rectangle.on.rectangle").font(.caption2)
                     .foregroundStyle(WFColors.accent)
@@ -396,13 +503,17 @@ struct NotesFolderTreeListView: View {
             Text(note.title.isEmpty ? "未命名笔记" : note.title)
                 .font(WFType.navigation).lineLimit(1)
                 .foregroundStyle(WFColors.text)
+            if note.favorite {
+                Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(.orange)
+            }
             Spacer(minLength: 2)
         }
-        .padding(.leading, CGFloat(depth) * 16 + 8)
+        // 预留展开箭头的空间，让同层文件夹与笔记的图标对齐。
+        .padding(.leading, CGFloat(depth) * 16 + 23)
         .padding(.trailing, WFSpace.sm)
         .frame(height: 28)
         .contentShape(Rectangle())
-        .rowHoverBackground(selected: selectedNoteID == note.id, cornerRadius: 6)
+        .rowHoverBackground(selected: selected, cornerRadius: 6)
         .onTapGesture(perform: openNote)
         .firstMouseAction(openNote)
         .accessibilityLabel(note.title.isEmpty ? "未命名笔记" : note.title)
@@ -443,25 +554,16 @@ struct NotesFolderTreeListView: View {
         }
     }
 
-    private var footer: some View {
-        HStack(spacing: 6) {
-            if !trash {
-                Image(systemName: "folder").font(.system(size: 10))
-                Text(favorites ? "只显示收藏" : "文件夹可折叠 · 正文看编辑栏")
-            }
-            Spacer()
-            Text("\(rows.count) 篇")
-        }
-        .font(.system(size: 10.5))
-        .foregroundStyle(WFColors.tertiaryText)
-    }
-
     // MARK: - 动作
 
     private func createNote() {
+        createNote(in: notes.selected?.folder ?? NoteFolderTree.unfiledName)
+    }
+
+    /// 在指定文件夹里新建笔记并选中（头部「+」与文件夹右键菜单共用）。
+    private func createNote(in folder: String) {
         query = ""
         notes.favoritesOnly = false
-        let folder = notes.selected?.folder ?? NoteFolderTree.unfiledName
         notes.create(folder: folder)
         notes.expandAncestors(ofFolderNamed: folder)
         detailOnly = true
@@ -469,10 +571,10 @@ struct NotesFolderTreeListView: View {
 
     /// 套用笔记模板：正文与标题原样写进新笔记，落在当前选中的文件夹并选中。
     @discardableResult
-    private func applyNoteTemplate(_ template: TaskTemplate) -> UUID? {
+    private func applyNoteTemplate(_ template: TaskTemplate, folder: String? = nil) -> UUID? {
         query = ""
         notes.favoritesOnly = false
-        let folder = notes.selected?.folder ?? NoteFolderTree.unfiledName
+        let folder = folder ?? notes.selected?.folder ?? NoteFolderTree.unfiledName
         let title = template.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let id = notes.create(folder: folder, title: title, document: template.document)
         notes.expandAncestors(ofFolderNamed: folder)
@@ -490,8 +592,6 @@ struct NotesFolderTreeListView: View {
         })
     }
 
-    /// 与原笔记列表右键菜单保持同样的 6 行结构（打开 / 收藏 / 移动到 /
-    /// 复制正文 / 转换为任务 / 移到垃圾桶），树化不该悄悄改掉行为契约。
     @ViewBuilder
     private func noteRowMenu(_ note: Note) -> some View {
         Button("打开笔记") { notes.selectedID = note.id; detailOnly = true }
@@ -516,6 +616,7 @@ struct NotesFolderTreeListView: View {
                 })
             }
         }
+        NoteDirectoryIconMenu(icon: note.icon) { notes.setNoteIcon($0, for: note.id) }
         Divider()
         Button("复制笔记正文") { copyPlainText(note) }
         if note.hasPreservedRichContent {

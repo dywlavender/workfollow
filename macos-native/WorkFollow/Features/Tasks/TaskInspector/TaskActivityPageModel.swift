@@ -47,7 +47,7 @@ struct TaskActivityPageControls: View {
             ProgressView().controlSize(.small).padding(8)
         } else if let error = history.error {
             VStack(spacing: 8) {
-                Text("读取动态失败：\(error)").font(.caption).foregroundStyle(WFColors.secondaryText)
+                Text("读取动态失败：\(error)").font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                 Button("重试") { _Concurrency.Task { await load() } }
             }
         } else if history.hasMore {

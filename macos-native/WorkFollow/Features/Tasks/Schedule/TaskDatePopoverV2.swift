@@ -211,6 +211,7 @@ struct TaskDatePopoverV2: View {
     }
 
     init(task: Task, workspace: TaskWorkspaceModel, deadline: Bool = false, initialPage: Page = .main,
+         defaultReminderMinutes: Int? = nil,
          draftCommit: ((TaskDateDraftModel.CommitPlan) -> Void)? = nil,
          onClose: @escaping () -> Void) {
         taskID = task.id
@@ -222,7 +223,8 @@ struct TaskDatePopoverV2: View {
         availableHeight = NSScreen.main?.visibleFrame.height ?? 900
         self.onClose = onClose
         let draftModel = TaskDateDraftModel(
-            task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline)
+            task: task, calendar: workspace.calendar, now: workspace.clock, deadline: deadline,
+            defaultReminderMinutes: defaultReminderMinutes)
         _model = StateObject(wrappedValue: draftModel)
         _presentation = State(initialValue: SchedulePanelPresentationState(expandedProperty: initialPage == .time ? .time
             : initialPage == .reminder ? .reminder

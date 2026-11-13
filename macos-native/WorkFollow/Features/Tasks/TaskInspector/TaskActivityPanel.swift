@@ -24,7 +24,7 @@ struct TaskActivityPanel: View {
                     VStack(spacing: 8) {
                         Text("暂无任务动态").foregroundStyle(WFColors.text)
                         Text("仅记录启用后的任务变更，不补造历史记录。")
-                            .font(.caption).foregroundStyle(WFColors.secondaryText)
+                            .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                     }
                     .padding(24)
                 }
@@ -38,12 +38,12 @@ struct TaskActivityPanel: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(event.title).foregroundStyle(WFColors.text)
                                 if let detail = event.detail {
-                                    Text(detail).font(.callout)
+                                    Text(detail).font(WFType.supporting)
                                         .foregroundStyle(WFColors.secondaryText)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Text(event.occurredAt, format: .dateTime.year().month().day().hour().minute())
-                                    .font(.caption).foregroundStyle(WFColors.secondaryText)
+                                    .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }

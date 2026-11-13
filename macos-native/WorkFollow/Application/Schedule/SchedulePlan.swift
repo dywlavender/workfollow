@@ -10,7 +10,7 @@ import Foundation
 /// 少传一个就是"功能只做了一半"（`dueEndAt`、`reminderOffsets`、`rule.month` 都这样丢过）。
 /// 现在宿主只负责产出 plan，字段映射只有一处；
 /// `ScheduleWriteMatrixTests` 锁住"每个通道都带全字段"。
-struct SchedulePlan: Equatable {
+struct SchedulePlan: Codable, Equatable {
     var schedule: TaskSchedule
     var reminder: Date?
     /// 分钟，0 = 准时，负数 = 提前；**空数组 = 清除**多级提醒（旧式 `reminderAt` 生效）。

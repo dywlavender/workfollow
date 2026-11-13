@@ -45,10 +45,6 @@ struct GlobalQuickAddComposer {
 @MainActor
 final class GlobalQuickAddController: NSObject, ObservableObject {
     static let enabledDefaultsKey = "globalQuickAddEnabled"
-    static let keyCodeDefaultsKey = "globalQuickAddKeyCode"
-    static let modifiersDefaultsKey = "globalQuickAddModifiers"
-    static let defaultKeyCode = UInt32(kVK_ANSI_A)
-    static let defaultModifiers = UInt32(cmdKey | shiftKey)
 
     /// 面板宽度固定；高度由 SwiftUI 内容实测上报——描述行、候选列表、批量提示
     /// 都会把面板撑高。写死高度会让候选列表被窗口边缘裁掉，而给一个「够大」的
@@ -66,35 +62,52 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
     let draft: GlobalQuickAddDraft
 
     private let defaults: UserDefaults
+    private let shortcuts: AppShortcutStore
     private var panel: NSPanel?
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
+    private var recordingShortcut = false
 
-    init(workspace: TaskWorkspaceModel, defaults: UserDefaults = .standard) {
+    init(workspace: TaskWorkspaceModel, defaults: UserDefaults = .standard, shortcuts: AppShortcutStore? = nil) {
         self.composer = GlobalQuickAddComposer(workspace: workspace)
         self.defaults = defaults
+        self.shortcuts = shortcuts ?? AppShortcutStore(defaults: defaults)
         self.draft = GlobalQuickAddDraft(defaults: defaults)
         self.isEnabled = defaults.bool(forKey: Self.enabledDefaultsKey)
         super.init()
-        if isEnabled { registerHotKey() }
+        if isEnabled { registerHotKey(self.shortcuts.chord(for: .globalQuickAdd)) }
     }
 
     // MARK: 开关（菜单项驱动，状态落 UserDefaults）
 
-    func setEnabled(_ enabled: Bool) {
-        guard enabled != isEnabled else { return }
+    @discardableResult
+    func setEnabled(_ enabled: Bool) -> Bool {
+        guard enabled != isEnabled else { return true }
+        if enabled, !recordingShortcut, !registerHotKey(shortcuts.chord(for: .globalQuickAdd)) { return false }
         isEnabled = enabled
         defaults.set(enabled, forKey: Self.enabledDefaultsKey)
-        if enabled { registerHotKey() } else { hidePanel(); unregisterHotKey() }
+        if !enabled { hidePanel(); unregisterHotKey() }
+        return true
     }
 
     // MARK: 全局热键
 
-    private var hotKeyCode: UInt32 {
-        UInt32(defaults.object(forKey: Self.keyCodeDefaultsKey) as? Int ?? Int(Self.defaultKeyCode))
+    func setShortcutRecording(_ active: Bool) {
+        guard active != recordingShortcut else { return }
+        recordingShortcut = active
+        if active {
+            unregisterHotKey()
+        } else if isEnabled {
+            registerHotKey(shortcuts.chord(for: .globalQuickAdd))
+        }
     }
-    private var hotKeyModifiers: UInt32 {
-        UInt32(defaults.object(forKey: Self.modifiersDefaultsKey) as? Int ?? Int(Self.defaultModifiers))
+
+    func rebindShortcut(_ chord: AppShortcutChord) -> Bool {
+        guard isEnabled else { return true }
+        unregisterHotKey()
+        if registerHotKey(chord) { return true }
+        if !recordingShortcut { registerHotKey(shortcuts.chord(for: .globalQuickAdd)) }
+        return false
     }
 
     /// C 回调里拿不到上下文，经 Unmanaged 取回控制器后派发回主线程弹出/隐藏面板。
@@ -107,20 +120,25 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
         return noErr
     }
 
-    private func registerHotKey() {
-        guard hotKeyRef == nil else { return }
+    @discardableResult
+    private func registerHotKey(_ chord: AppShortcutChord) -> Bool {
+        guard hotKeyRef == nil else { return true }
+        guard let code = chord.keyCode else { return false }
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
                                       eventKind: UInt32(kEventHotKeyPressed))
         var handlerRef: EventHandlerRef?
         let installed = InstallEventHandler(GetApplicationEventTarget(), Self.hotKeyEventHandler,
                                             1, &eventType,
                                             Unmanaged.passUnretained(self).toOpaque(), &handlerRef)
-        if installed == noErr { eventHandlerRef = handlerRef }
+        guard installed == noErr else { return false }
+        eventHandlerRef = handlerRef
         var registered: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: Self.hotKeySignature, id: Self.hotKeyID)
-        let status = RegisterEventHotKey(hotKeyCode, hotKeyModifiers, hotKeyID,
+        let status = RegisterEventHotKey(UInt32(code), chord.carbonModifiers, hotKeyID,
                                          GetApplicationEventTarget(), 0, &registered)
-        if status == noErr { hotKeyRef = registered }
+        guard status == noErr, let registered else { unregisterHotKey(); return false }
+        hotKeyRef = registered
+        return true
     }
 
     private func unregisterHotKey() {
@@ -131,7 +149,7 @@ final class GlobalQuickAddController: NSObject, ObservableObject {
     }
 
     func handleHotKeyPressed() {
-        guard isEnabled else { return }
+        guard isEnabled, !recordingShortcut else { return }
         if panel?.isVisible == true { hidePanel() } else { showPanel() }
     }
 
@@ -446,6 +464,9 @@ private struct GlobalQuickAddPanelView: View {
                 onSelectionChange: { if inputSelection != $0 { inputSelection = $0 } },
                 requestedSelection: $requestedInputSelection
             )
+            .background {
+                QuickAddDescriptionShortcut(focused: inputFocused, action: openDescription)
+            }
             .frame(maxWidth: .infinity)
             Button { schedulePage = .main; showSchedule = true } label: {
                 Image(systemName: "calendar")

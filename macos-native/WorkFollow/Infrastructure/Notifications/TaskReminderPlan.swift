@@ -48,8 +48,11 @@ struct TaskReminderPreferences: Codable, Equatable {
     var soundEnabled = true
     var bell = "Jingle"
     var snoozeMinutes = 10
+    /// 前台到点的提醒样式：false = 应用内提醒面板（默认，循环响铃、按钮齐全），
+    /// true = 只弹系统横幅（前台由 willPresent 走系统默认横幅 + 一次铃声）。
+    var foregroundBannerOnly = false
 
-    enum CodingKeys: String, CodingKey { case enabled, soundEnabled, bell, snoozeMinutes }
+    enum CodingKeys: String, CodingKey { case enabled, soundEnabled, bell, snoozeMinutes, foregroundBannerOnly }
     init() {}
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -57,6 +60,7 @@ struct TaskReminderPreferences: Codable, Equatable {
         soundEnabled = try container.decode(Bool.self, forKey: .soundEnabled)
         bell = Self.normalizedBell(try container.decodeIfPresent(String.self, forKey: .bell))
         snoozeMinutes = try container.decode(Int.self, forKey: .snoozeMinutes)
+        foregroundBannerOnly = try container.decodeIfPresent(Bool.self, forKey: .foregroundBannerOnly) ?? false
     }
 }
 
@@ -130,9 +134,11 @@ enum TaskReminderPlanner {
 
     /// 未勾选、带提醒的检查项，以及正文里带提醒的普通段落。摘要只投影
     /// 未完成项：勾选、删除、切回文本或完成任务后，下一次对账自然不再生成投递。
+    /// 项级提醒只属于清单任务与笔记正文；普通任务（.text）的正文清单块不排程。
     private static func appendChecklistItems(of task: Task,
                                              decisions: [String: ReminderDecision],
                                              into values: inout [ReminderDelivery]) {
+        guard task.kind == .checklist || task.kind == .note else { return }
         guard task.isActiveSeriesOccurrence,
               let reminders = task.document.checklistSummary?.reminders else { return }
         for item in reminders {

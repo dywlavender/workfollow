@@ -74,7 +74,7 @@ final class TaskDateDraftModel: ObservableObject {
     let deadline: Bool
     private let now: () -> Date
 
-    init(task: Task, calendar: Calendar, now: @escaping () -> Date, deadline: Bool) {
+    init(task: Task, calendar: Calendar, now: @escaping () -> Date, deadline: Bool, defaultReminderMinutes: Int? = nil) {
         self.calendar = calendar
         self.now = now
         self.deadline = deadline
@@ -93,7 +93,9 @@ final class TaskDateDraftModel: ObservableObject {
         _displayedMonth = Published(initialValue: calendar.date(from: calendar.dateComponents([.year, .month], from: anchor)) ?? anchor)
         _hasTime = Published(initialValue: !deadline && task.schedule.hasTime)
 
-        let storedOffsets = Set(task.reminderOffsets ?? [])
+        let offsets = task.reminderOffsets ?? []
+        let storedOffsets = offsets.isEmpty && task.reminderAt == nil
+            ? Set(defaultReminderMinutes.map { [-$0] } ?? []) : Set(offsets)
         _reminderOffsets = Published(initialValue: storedOffsets)
         if let reminderAt = task.reminderAt {
             _customReminder = Published(initialValue: reminderAt)

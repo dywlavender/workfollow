@@ -47,6 +47,12 @@ extension NativeAutomationService {
 
     func filteredTasks(_ args: [String: String]) throws -> [Task] {
         let completed = try boolean(args["completed"])
+        let dateField = try args["date-field"].map { value in
+            guard let field = KnowledgeTaskDateField(rawValue: value) else {
+                throw AutomationFailure.argument("date-field 须为 schedule、deadline 或 completed。")
+            }
+            return field
+        }
         let section = try args["section"].map { try automationSection($0, inList: args["list"]) }
         let priority = try args["priority"].map(priority)
         let from = try args["from"].map(date)
@@ -55,11 +61,14 @@ extension NativeAutomationService {
             return raw.contains("T") ? value : tasks.calendar.date(byAdding: .day, value: 1, to: value) ?? value
         }
         return tasks.allTasks.filter {
-            let time = completed == true ? $0.completedAt : $0.schedule.dueAt ?? $0.schedule.deadlineAt
+            let task = $0
+            let time = dateField.map { $0.date(in: task) }
+                ?? (completed == true ? task.completedAt : task.schedule.dueAt ?? task.schedule.deadlineAt)
             return !$0.isNoteTask && $0.deletedAt == nil && $0.skippedAt == nil && !$0.isConverted && !$0.isAbandoned &&
                 (completed == nil || ($0.status == .completed) == completed) &&
                 (args["list"] == nil || $0.list.name == args["list"]) &&
                 (section == nil || $0.sectionID == section?.id) && (priority == nil || $0.priority == priority) &&
+                (args["tag"].map { task.tags.contains($0) } ?? true) &&
                 (from == nil || time.map { $0 >= from! } == true) &&
                 (to == nil || time.map { $0 < to! } == true) &&
                 (args["query"] == nil || $0.document.matches(args["query"]!, prefix: $0.title))
@@ -70,14 +79,19 @@ extension NativeAutomationService {
         let args = request.arguments
         if request.operation == "knowledge.search" {
             let query = try nonempty(args["query"], name: "query")
+            let kind = try args["kind"].map { value in
+                guard let kind = KnowledgeKind(rawValue: value) else {
+                    throw AutomationFailure.argument("kind 须为 task、note 或 meeting。")
+                }
+                return kind
+            }
             let found = try KnowledgeCorpus(tasks: tasks.allTasks, notes: notes.notes,
                 meetings: meetings?.meetings ?? [], currentList: tasks.activeList,
-                now: tasks.clock(), calendar: tasks.calendar).search(query)
+                now: tasks.clock(), calendar: tasks.calendar, index: knowledgeIndex)
+                .search(query, scope: .init(kind: kind, list: args["list"], folder: args["folder"], tag: args["tag"]))
             return .object(["matchingPassages": .number(Double(found.matchingPassages)), "sources": .array(found.sources.map { source in
-                var url = "workfollow://\(source.kind.rawValue)/\(source.resourceID)"
-                if let line = source.lineID { url += "?line=\(line)" }
                 return .object(["title": .string(source.title), "kind": .string(source.kind.rawValue),
-                    "content": .string(source.content), "url": .string(url)])
+                    "content": .string(source.content), "url": .string(source.url?.absoluteString ?? "")])
             })])
         }
         let all = meetings?.meetings ?? []

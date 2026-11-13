@@ -7,6 +7,7 @@ extension NativeAutomationService {
         func value(_ job: AIScheduledJob, body: Bool = true) -> AutomationValue {
             var fields: [String: AutomationValue] = ["id": .string(job.id.uuidString), "title": .string(job.title),
                 "version": .string(String(job.version)), "enabled": .bool(job.isEnabled),
+                "deliverResult": .bool(job.deliverResult == true),
                 "at": .string(ISO8601DateFormatter().string(from: job.schedule.firstRunAt)),
                 "repeat": .string(job.schedule.frequency.rawValue), "timeZone": .string(job.schedule.timeZoneID),
                 "schedule": .string(job.schedule.summary),
@@ -44,7 +45,8 @@ extension NativeAutomationService {
         }
         if request.operation == "schedule.add" {
             return value(try scheduledJobs.add(title: args["title"] ?? "", instruction: args["content"] ?? "",
-                schedule: schedule(), enabled: boolean(args["enabled"]) ?? true))
+                schedule: schedule(), enabled: boolean(args["enabled"]) ?? true,
+                deliverResult: boolean(args["deliver-result"]) ?? false))
         }
         guard let raw = args["id"], let id = UUID(uuidString: raw), let current = scheduledJobs.job(id) else {
             throw AutomationFailure(code: "not_found", message: "定时任务已不存在。")
@@ -63,7 +65,8 @@ extension NativeAutomationService {
         if request.operation == "schedule.update" {
             let changedSchedule = !Set(args.keys).isDisjoint(with: ["at", "repeat", "time-zone"])
             return value(try scheduledJobs.update(id, version: version, title: args["title"], instruction: args["content"],
-                schedule: changedSchedule ? schedule(current.schedule) : nil, enabled: boolean(args["enabled"])))
+                schedule: changedSchedule ? schedule(current.schedule) : nil, enabled: boolean(args["enabled"]),
+                deliverResult: boolean(args["deliver-result"])))
         }
         throw AutomationFailure.argument("未知 AI 定时任务操作。")
     }

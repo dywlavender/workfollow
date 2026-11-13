@@ -3,7 +3,12 @@ import Foundation
 
 @MainActor
 final class AIScheduledJobStore: ObservableObject {
+    private struct Snapshot: Codable {
+        let jobs: [AIScheduledJob]
+        let deliveries: [AIScheduledDelivery]
+    }
     @Published private(set) var jobs: [AIScheduledJob] = []
+    @Published private(set) var deliveries: [AIScheduledDelivery] = []
     @Published private(set) var storageError: String?
     var onChange: (() -> Void)?
     private let file: URL
@@ -13,14 +18,19 @@ final class AIScheduledJobStore: ObservableObject {
         file = directory.appendingPathComponent("ai-scheduled-tasks.json"); self.clock = clock
         if FileManager.default.fileExists(atPath: file.path) {
             do {
-                jobs = try JSONDecoder().decode([AIScheduledJob].self, from: Data(contentsOf: file))
-                var recovered = jobs
-                for index in recovered.indices where recovered[index].lastRun?.state == .running {
-                    recovered[index].lastRun?.state = .interrupted
-                    recovered[index].lastRun?.finishedAt = clock()
-                    recovered[index].lastRun?.error = "上次执行随 App 退出而中断，可查看结果或手动重试。"
+                let data = try Data(contentsOf: file)
+                let decoder = JSONDecoder()
+                if let snapshot = try? decoder.decode(Snapshot.self, from: data) {
+                    jobs = snapshot.jobs
+                    deliveries = snapshot.deliveries
+                } else {
+                    jobs = try decoder.decode([AIScheduledJob].self, from: data)
                 }
-                if recovered != jobs { try persist(recovered) }
+                for job in jobs {
+                    guard let run = job.lastRun, run.state == .running else { continue }
+                    try finish(job.id, runID: run.id, state: .interrupted,
+                        error: "上次执行随 App 退出而中断，可查看结果或手动重试。")
+                }
             } catch { storageError = "定时任务读取失败：" + error.localizedDescription }
         }
     }
@@ -28,24 +38,26 @@ final class AIScheduledJobStore: ObservableObject {
     func job(_ id: UUID) -> AIScheduledJob? { jobs.first { $0.id == id } }
 
     @discardableResult
-    func add(title: String = "", instruction: String, schedule: AIJobSchedule, enabled: Bool = true) throws -> AIScheduledJob {
+    func add(title: String = "", instruction: String, schedule: AIJobSchedule, enabled: Bool = true,
+             deliverResult: Bool = false) throws -> AIScheduledJob {
         let text = try content(instruction)
         try validate(schedule)
         let next = enabled ? try nextDate(schedule) : nil
         let job = AIScheduledJob(title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(text.prefix(28)) : title,
-            instruction: text, schedule: schedule, isEnabled: enabled, nextRunAt: next)
+            instruction: text, schedule: schedule, isEnabled: enabled, nextRunAt: next, deliverResult: deliverResult)
         try persist(jobs + [job]); return job
     }
 
     @discardableResult
     func update(_ id: UUID, version: Int, title: String? = nil, instruction: String? = nil,
-                schedule: AIJobSchedule? = nil, enabled: Bool? = nil) throws -> AIScheduledJob {
+                schedule: AIJobSchedule? = nil, enabled: Bool? = nil, deliverResult: Bool? = nil) throws -> AIScheduledJob {
         let index = try checkedIndex(id, version: version)
         var next = jobs
         if let title { next[index].title = try content(title) }
         if let instruction { next[index].instruction = try content(instruction) }
         if let schedule { try validate(schedule); next[index].schedule = schedule }
         if let enabled { next[index].isEnabled = enabled }
+        if let deliverResult { next[index].deliverResult = deliverResult }
         if !next[index].isEnabled { next[index].nextRunAt = nil }
         else if schedule != nil || jobs[index].isEnabled == false { next[index].nextRunAt = try nextDate(next[index].schedule) }
         next[index].version += 1
@@ -76,11 +88,18 @@ final class AIScheduledJobStore: ObservableObject {
     }
 
     func finish(_ id: UUID, runID: UUID, state: AIScheduledRun.State, error: String? = nil) throws {
-        guard let index = jobs.firstIndex(where: { $0.id == id }), jobs[index].lastRun?.id == runID else { return }
+        guard let index = jobs.firstIndex(where: { $0.id == id }), var run = jobs[index].lastRun,
+              run.id == runID, run.state == .running else { return }
         var next = jobs
-        next[index].lastRun?.state = state; next[index].lastRun?.finishedAt = clock()
-        next[index].lastRun?.error = error
-        try persist(next)
+        run.state = state; run.finishedAt = clock(); run.error = error
+        next[index].lastRun = run
+        var results = deliveries
+        if next[index].deliverResult == true { results.insert(.init(title: next[index].title, run: run), at: 0) }
+        try persist(next, deliveries: results)
+    }
+
+    func dismissDelivery(_ id: UUID) throws {
+        try persist(jobs, deliveries: deliveries.filter { $0.id != id })
     }
 
     private func checkedIndex(_ id: UUID, version: Int) throws -> Int {
@@ -103,10 +122,12 @@ final class AIScheduledJobStore: ObservableObject {
         guard let date = schedule.next(after: clock()) else { throw AutomationFailure.argument("请选择未来的执行时间。") }
         return date
     }
-    private func persist(_ next: [AIScheduledJob]) throws {
+    private func persist(_ next: [AIScheduledJob], deliveries nextDeliveries: [AIScheduledDelivery]? = nil) throws {
         if let storageError { throw AutomationFailure(code: "storage_unavailable", message: storageError) }
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(next).write(to: file, options: .atomic)
+        let results = nextDeliveries ?? deliveries
+        try JSONEncoder().encode(Snapshot(jobs: next, deliveries: results)).write(to: file, options: .atomic)
+        deliveries = results
         jobs = next; onChange?()
     }
 }

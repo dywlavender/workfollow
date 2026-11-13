@@ -16,29 +16,28 @@ struct MeetingTranscriptEditor: View {
         self.save = save; _text = State(initialValue: line.text); _speaker = State(initialValue: line.speakerDisplayName)
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: WFSpace.lg) {
-            Text("校正对话").font(WFType.detailTitle)
-            WFFormSection {
-                WFFormRow("讲话人") {
-                    TextField("讲话人", text: $speaker).textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: .infinity)
+        SheetDialog(title: "校正对话",
+                    width: SheetDialogMetrics.compactWidth,
+                    contentHeight: 220,
+                    canSubmit: !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    primaryIdentifier: "meeting.correction.save",
+                    onCancel: { dismiss() },
+                    onSubmit: { save(text, speaker, renameAll); dismiss() }) {
+            VStack(alignment: .leading, spacing: WFSpace.lg) {
+                WFFormSection {
+                    WFFormRow("讲话人") {
+                        TextField("讲话人", text: $speaker).textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: .infinity)
+                    }
+                    WFFormToggleRow("同时修改该讲话人的其他片段", isOn: $renameAll, showsDivider: false)
                 }
-                WFFormToggleRow("同时修改该讲话人的其他片段", isOn: $renameAll, showsDivider: false)
+                WFFormSection("内容") {
+                    TextEditor(text: $text).font(WFType.body).frame(minHeight: 150)
+                        .compactTextEditorScrollbars()
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(WFColors.border))
+                        .padding(.horizontal, WFSpace.md)
+                }
             }
-            WFFormSection("内容") {
-                TextEditor(text: $text).font(WFType.body).frame(minHeight: 150)
-                    .compactTextEditorScrollbars()
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(WFColors.border))
-                    .padding(.horizontal, WFSpace.md)
-            }
-            HStack {
-                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("保存") { save(text, speaker, renameAll); dismiss() }
-                    .workflowActionAnchor("meeting.correction.save")
-                    .keyboardShortcut(.defaultAction).disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-        }.padding(22).frame(width: 500)
-            .workfollowPopupSurface(fallback: WFColors.canvas)
+        }
     }
 }

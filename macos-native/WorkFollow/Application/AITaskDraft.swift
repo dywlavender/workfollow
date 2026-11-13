@@ -32,14 +32,15 @@ struct AITaskRequest: Identifiable {
 
 }
 
-struct AITaskDraft: Identifiable {
-    let id = UUID()
+struct AITaskDraft: Codable, Identifiable {
+    let id: UUID
     var selected = true
     var title: String
     /// 候选项可编辑的完整日程（含提醒/重复），创建时原样写入任务。
     var plan: SchedulePlan
     var priority: TaskPriority = .none
     var quote = ""
+    var sourceLineID: UUID?
     /// 候选任务正文。提取结果以原文引用作为初稿，之后可在候选浮层里直接编辑。
     var document: NativeDocument
 
@@ -50,6 +51,7 @@ struct AITaskDraft: Identifiable {
 
     init(title: String, schedule: TaskSchedule = TaskSchedule(),
          priority: TaskPriority = .none, quote: String = "") {
+        self.id = UUID()
         self.title = title
         self.plan = SchedulePlan(schedule: schedule, reminder: nil, reminderOffsets: [],
                                  frequency: .never, recurrenceRule: nil)
@@ -60,6 +62,7 @@ struct AITaskDraft: Identifiable {
 
     init(title: String, plan: SchedulePlan,
          priority: TaskPriority = .none, quote: String = "") {
+        self.id = UUID()
         self.title = title
         self.plan = plan
         self.priority = priority
@@ -119,9 +122,14 @@ struct AITaskDraft: Identifiable {
 
     func document(for request: AITaskRequest) -> NativeDocument {
         var blocks = [DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "来源："),
-            DocumentRun(text: request.title, marks: [.link(request.sourceURL.absoluteString)])])]
+            DocumentRun(text: request.title, marks: [.link(sourceURL(for: request).absoluteString)])])]
         if !document.isEmpty { blocks.append(contentsOf: document.blocks) }
         return NativeDocument(blocks: blocks)
+    }
+
+    func sourceURL(for request: AITaskRequest) -> URL {
+        guard case .meeting = request.source, let sourceLineID else { return request.sourceURL }
+        return request.sourceURL.appending(queryItems: [URLQueryItem(name: "line", value: sourceLineID.uuidString)])
     }
 }
 

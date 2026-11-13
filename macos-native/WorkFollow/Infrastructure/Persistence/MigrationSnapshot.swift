@@ -55,6 +55,7 @@ struct MigrationFolderRecord: Equatable {
     let sortOrder: Int
     let createdAt: String?
     let updatedAt: String?
+    var icon: String? = nil
 }
 
 /// v1/v2 的旧版子任务（只读兼容；v3 导出永远写 parentTaskId/childOrder）。
@@ -121,6 +122,7 @@ struct MigrationNoteRecord: Equatable {
     let deletedAt: String?
     /// contentJson/originalContentJson 非空时为 true：原生只保留纯文本投影。
     let hasRichContent: Bool
+    var icon: String? = nil
 }
 
 struct MigrationBundle: Equatable {
@@ -241,7 +243,8 @@ enum MigrationSnapshot {
             name: try requiredString(json, "name"),
             sortOrder: intValue(json["sortOrder"]),
             createdAt: nullableString(json["createdAt"]),
-            updatedAt: nullableString(json["updatedAt"])
+            updatedAt: nullableString(json["updatedAt"]),
+            icon: nullableString(json["icon"])
         )
     }
 
@@ -335,7 +338,8 @@ enum MigrationSnapshot {
             createdAt: nullableString(json["createdAt"]),
             updatedAt: nullableString(json["updatedAt"]),
             deletedAt: nullableString(json["deletedAt"]),
-            hasRichContent: hasRichContent
+            hasRichContent: hasRichContent,
+            icon: nullableString(json["icon"])
         )
     }
 
@@ -873,13 +877,14 @@ enum MigrationSnapshot {
             folderID: folderIDOverride ?? record.folderId,
             favorite: record.isFavorite,
             updatedAt: parseDate(record.updatedAt) ?? now,
-            deletedAt: parseDate(record.deletedAt))
+            deletedAt: parseDate(record.deletedAt),
+            icon: record.icon)
     }
 
     private static func noteFolderMeta(from record: MigrationFolderRecord) -> NoteFolderMeta {
         NoteFolderMeta(id: record.id, parentID: record.parentID, name: record.name,
                        sortOrder: record.sortOrder, createdAt: record.createdAt,
-                       updatedAt: record.updatedAt)
+                       updatedAt: record.updatedAt, icon: record.icon)
     }
 
     private static func importedFolderID(_ folderID: String?,
@@ -1025,7 +1030,7 @@ enum MigrationSnapshot {
         let folderIDsByName = Dictionary(orderedFolderRecords.map { ($0.name, $0.id) },
                                          uniquingKeysWith: { current, _ in current })
         let folders: [[String: Any]] = orderedFolderRecords.map { record in
-            [
+            var value: [String: Any] = [
                 "id": record.id,
                 "parentId": record.parentID.map { $0 as Any } ?? NSNull(),
                 "name": record.name,
@@ -1033,6 +1038,8 @@ enum MigrationSnapshot {
                 "createdAt": record.createdAt.map { $0 as Any } ?? NSNull(),
                 "updatedAt": record.updatedAt.map { $0 as Any } ?? NSNull(),
             ]
+            if let icon = record.icon { value["icon"] = icon }
+            return value
         }
 
         var payload: [String: Any] = [
@@ -1146,7 +1153,7 @@ enum MigrationSnapshot {
         } else {
             folderID = NSNull()
         }
-        return [
+        var record: [String: Any] = [
             "id": note.id.uuidString,
             "folderId": folderID,
             "title": note.title,
@@ -1157,6 +1164,8 @@ enum MigrationSnapshot {
             "updatedAt": formatDate(note.updatedAt),
             "deletedAt": note.deletedAt.map(formatDate) ?? NSNull(),
         ]
+        if let icon = note.icon { record["icon"] = icon }
+        return record
     }
 
     /// 原生纯文本 -> 最简 ProseMirror 形状，导入回 Flutter 端时可读。

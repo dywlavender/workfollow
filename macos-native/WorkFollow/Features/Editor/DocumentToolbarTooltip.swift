@@ -307,7 +307,7 @@ struct DocumentColorPickerCard: View {
                         if inside { hovering = swatch.id }
                         else if hovering == swatch.id { hovering = nil }
                     }
-                    .help(swatch.hex)
+                    .hoverTip(swatch.hex)
                 }
             }
             Spacer(minLength: 0)

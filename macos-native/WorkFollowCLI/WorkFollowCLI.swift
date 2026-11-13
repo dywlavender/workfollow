@@ -7,6 +7,11 @@ struct WorkFollowCLI {
     @MainActor
     static func main() async {
         let tokens = Array(CommandLine.arguments.dropFirst())
+        // 自更新执行器是独立分支：不需要 App 在跑（恰恰要等它退出），
+        // 也不走自动化通道。App 从暂存区拉起本 CLI 的副本。
+        if tokens.first == "apply-update" {
+            exit(SelfUpdateApplier.run(arguments: Array(tokens.dropFirst())))
+        }
         var request = AutomationRequest(operation: "status", arguments: [:])
         var json = tokens.contains("--json")
         do {

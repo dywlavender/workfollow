@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import WebKit
 import UniformTypeIdentifiers
 
@@ -23,6 +24,7 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
     private var resourceTask: _Concurrency.Task<Void, Never>?
     private var timeoutTask: _Concurrency.Task<Void, Never>?
     private var hasClosed = false
+    private var shortcutSubscription: AnyCancellable?
     private(set) var isReady = false
     private(set) var isModified = false
     private(set) var lastError: String?
@@ -64,8 +66,10 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
         for button in [importButton, exportButton, saveButton, cancelButton] {
             button.focusRingType = .none
         }
-        saveButton.keyEquivalent = "s"
-        saveButton.keyEquivalentModifierMask = .command
+        updateSaveShortcut()
+        shortcutSubscription = AppShortcutStore.shared.$overrides.dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateSaveShortcut() }
+        }
         cancelButton.keyEquivalent = "\u{1b}"
         importButton.bezelStyle = .rounded; exportButton.bezelStyle = .rounded
         let spacer = NSView()
@@ -100,6 +104,12 @@ final class DrawioEditorWindowController: NSWindowController, WKScriptMessageHan
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(diagram:onSave:onClose:)") }
+
+    private func updateSaveShortcut() {
+        let chord = AppShortcutStore.shared.chord(for: .saveDrawing)
+        saveButton.keyEquivalent = chord.key
+        saveButton.keyEquivalentModifierMask = chord.appKitModifiers
+    }
 
     func present(asSheetOf parent: NSWindow) {
         guard let window else { return }

@@ -110,7 +110,7 @@ struct TaskTrashView: View {
             .compactScrollbars()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
     }
 
     @ViewBuilder
@@ -139,7 +139,7 @@ struct TaskTrashView: View {
             }
             .foregroundStyle(WFColors.secondaryText)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .workfollowPageSurface(0.90)
+            .workfollowPageSurface()
         }
     }
 }

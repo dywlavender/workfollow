@@ -13,7 +13,7 @@ extension AppEnvironment {
     func knowledgeCorpus() -> KnowledgeCorpus {
         KnowledgeCorpus(tasks: taskWorkspace.allTasks, notes: notesWorkspace.notes,
             meetings: meetingStore.meetings, currentList: taskWorkspace.activeList,
-            now: taskWorkspace.clock(), calendar: taskWorkspace.calendar)
+            now: taskWorkspace.clock(), calendar: taskWorkspace.calendar, index: knowledgeIndex)
     }
 
     @discardableResult
@@ -28,7 +28,11 @@ extension AppEnvironment {
             navigation: navigation, meetings: meetingStore) else {
             feedback.show(FeedbackEvent(kind: .error, message: "这份来源已不可用，请重新提问。")); return false
         }
-        if source.kind == .meeting { meetingStore.revealTranscript(meetingID: source.resourceID, lineID: source.lineID) }
+        switch source.kind {
+        case .meeting: meetingStore.revealTranscript(meetingID: source.resourceID, lineID: source.lineID)
+        case .task: taskWorkspace.requestSearchReveal(taskID: source.resourceID, query: source.revealQuery ?? "", blockID: source.blockID)
+        case .note: notesWorkspace.requestSearchReveal(noteID: source.resourceID, query: source.revealQuery ?? "", blockID: source.blockID)
+        }
         commandPalettePresented = false
         feedback.show(FeedbackEvent(kind: .navigation, message: "已打开「\(source.title)」",
             destinationTitle: "返回问答", destinationAction: { [weak self] in self?.commandPalettePresented = true }))

@@ -14,6 +14,7 @@ final class WorkspaceSearchSession: ObservableObject {
     @Published var selectedIndex = 0
     @Published var askingAI = false
     let knowledge = KnowledgeAnswerSession()
+    var knowledgeIndex: LocalKnowledgeIndex?
     @Published private var recent: [Recent] = []
     private let defaults: UserDefaults
     private static let key = "recentWorkspaceResources.v1"
@@ -54,10 +55,11 @@ final class WorkspaceSearchSession: ObservableObject {
                 navigation: navigation).taskID != nil else { return false }
         case .openTask(let id):
             guard CommandPaletteProjection.openTask(id, workspace: environment.taskWorkspace,
-                navigation: navigation, query: query) else { return false }
+                navigation: navigation, query: entry.revealQuery ?? query, blockID: entry.blockID) else { return false }
         case .openNote(let id):
             guard CommandPaletteProjection.openNote(id, workspace: environment.notesWorkspace,
-                taskWorkspace: environment.taskWorkspace, navigation: navigation, query: query) else { return false }
+                taskWorkspace: environment.taskWorkspace, navigation: navigation,
+                query: entry.revealQuery ?? query, blockID: entry.blockID) else { return false }
         case .navigate(let destination): environment.navigate(to: destination)
         case .toggleAppearance: environment.appearance = CommandPaletteProjection.nextAppearance(after: environment.appearance)
         }
@@ -84,6 +86,7 @@ final class WorkspaceSearchSession: ObservableObject {
     }
     private var cachedResults: (ResultStamp, [CommandPaletteEntry])?
     private(set) var projectionBuildCount = 0
+    func indexReady() { cachedResults = nil; objectWillChange.send() }
     func entries(workspace: TaskWorkspaceModel, notes: NotesWorkspaceModel, destination: NativeDestination) -> [CommandPaletteEntry] {
         let stamp = ResultStamp(query: query, showAll: showAll, content: content, status: status, list: list,
             sourceList: workspace.activeList, taskRevision: workspace.revision, noteRevision: notes.revision,
@@ -95,6 +98,8 @@ final class WorkspaceSearchSession: ObservableObject {
         return result
     }
     private func buildEntries(workspace: TaskWorkspaceModel, notes: [Note], destination: NativeDestination) -> [CommandPaletteEntry] {
+        let literal = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hits = knowledgeIndex?.search([literal], literal: literal.isEmpty ? nil : literal)
         let tasks = workspace.allTasks.filter {
             !$0.isNoteTask
                 && (!showAll || list == nil || $0.list.name == list)
@@ -105,7 +110,8 @@ final class WorkspaceSearchSession: ObservableObject {
             notes: showAll && (content == .tasks || (content != .notes && (list != nil || status != .all))) ? [] : notes,
             creationList: workspace.activeList ?? TaskList.inbox.name,
             schedulesForToday: destination == .today, now: workspace.clock(), calendar: workspace.calendar,
-            taskLimit: showAll ? .max : 7, noteLimit: showAll ? .max : 5, includeAllWhenEmpty: showAll)
+            taskLimit: showAll ? .max : 7, noteLimit: showAll ? .max : 5, includeAllWhenEmpty: showAll,
+            indexedHits: literal.isEmpty ? nil : hits)
         if showAll { return values.filter { $0.kind == .task || $0.kind == .note } }
         guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return values }
         return recentEntries(tasks: workspace.allTasks, notes: notes) + values

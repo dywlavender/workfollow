@@ -64,6 +64,20 @@ final class AIScheduledJobTests: XCTestCase {
         XCTAssertNil(store.job(job.id)?.nextRunAt)
     }
 
+    func testOptedInDeliveryPersistsOnceAndDismissalSurvivesRestart() throws {
+        let root = try directory()
+        let store = AIScheduledJobStore(directory: root, clock: { self.date(3, 8) })
+        let job = try store.add(instruction: "整理完后告诉我", schedule: schedule(), deliverResult: true)
+        let run = try store.begin(job.id, manual: true, conversationID: UUID())
+        try store.finish(job.id, runID: run.id, state: .complete)
+        try store.finish(job.id, runID: run.id, state: .complete)
+        let reopened = AIScheduledJobStore(directory: root)
+        XCTAssertEqual(reopened.deliveries.map(\.id), [run.id])
+        XCTAssertEqual(reopened.deliveries.first?.run.conversationID, run.conversationID)
+        try reopened.dismissDelivery(run.id)
+        XCTAssertTrue(AIScheduledJobStore(directory: root).deliveries.isEmpty)
+    }
+
     func testEditingAndPausingUseVersionsAndKeepCurrentRunState() throws {
         let store = AIScheduledJobStore(directory: try directory(), clock: { self.date(3, 8) })
         let job = try store.add(instruction: "虚构原指令", schedule: schedule())
@@ -154,6 +168,9 @@ final class AIScheduledJobTests: XCTestCase {
         XCTAssertTrue(chats.runningIDs.isEmpty); XCTAssertFalse(chats.isAnyRunning)
         await withCheckedContinuation { continuation in chats.flush { error in XCTAssertNil(error); continuation.resume() } }
         let restored = AIChatStore(directory: root)
+        let folder = try XCTUnwrap(restored.projects.folders.first)
+        XCTAssertEqual(folder.name, "定时任务")
+        XCTAssertEqual(restored.projects.folderID(for: id), folder.id)
         restored.select(id)
         XCTAssertEqual(restored.current.latestResult, "后台任务已完成")
         XCTAssertEqual(restored.current.record.messages.last?.actions?.first?.title, "虚构已保存笔记")

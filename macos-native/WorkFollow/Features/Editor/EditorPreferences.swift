@@ -32,4 +32,20 @@ enum EditorPreferences {
     static func clampedBodyFontSize(_ size: CGFloat) -> CGFloat {
         min(max(size, bodyFontSizeRange.lowerBound), bodyFontSizeRange.upperBound)
     }
+
+    /// 行内日期提醒的高亮墨色（色板 `#rrggbb` 值）。默认金黄——提醒日期的
+    /// 文字、虚线下划线与 ♧ 小标共用这一色；设置页用与字体颜色同一张色卡选择。
+    static let reminderInkKey = "workfollow.editor.reminderInk"
+    static let defaultReminderInk = "#d49f00"
+    static let reminderInkDidChange = Notification.Name("workfollow.editor.reminderInkDidChange")
+
+    static var reminderInk: String {
+        UserDefaults.standard.string(forKey: reminderInkKey) ?? defaultReminderInk
+    }
+
+    static func setReminderInk(_ hex: String) {
+        guard hex != reminderInk else { return }
+        UserDefaults.standard.set(hex, forKey: reminderInkKey)
+        NotificationCenter.default.post(name: reminderInkDidChange, object: nil)
+    }
 }

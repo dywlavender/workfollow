@@ -7,8 +7,8 @@ import XCTest
 ///
 /// 一边量一边把「未进 `PopupMetrics` 的裸字面量」逐个收编：这轮的产物是
 /// `PopupMetrics` 里新增的 `sortOptionWidth` / `settingsSheetWidth` /
-/// `activitySheetWidth` / `templateNoteWidth` / `rhythmPopoverWidth` /
-/// `goalPopoverWidth` / `symbolPickerWidth`。
+/// `templateNoteWidth` / `rhythmPopoverWidth` / `goalPopoverWidth` /
+/// `symbolPickerWidth`；清单动态 Sheet 后改走 `SheetDialogMetrics.narrowWidth`。
 @MainActor
 final class PopupWidthCoverageTests: XCTestCase {
 
@@ -50,8 +50,8 @@ final class PopupWidthCoverageTests: XCTestCase {
 
     func testActivitySheet() throws {
         let (environment, _) = try environment()
-        try add("清单动态 Sheet", source: "PopupMetrics.activitySheetWidth",
-                width: PopupMetrics.activitySheetWidth) {
+        try add("清单动态 Sheet", source: "SheetDialogMetrics.narrowWidth",
+                width: SheetDialogMetrics.narrowWidth) {
             ListActivitySheet(listName: TaskList.inbox.name,
                               workspace: environment.taskWorkspace,
                               activity: environment.taskActivityStore,

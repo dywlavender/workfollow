@@ -119,12 +119,12 @@ struct FloatingNoteView: View {
     private func closeAI() {
         aiOpen = false
         aiDraftEdit = nil
-        NoteAIConversationStore.shared.model(for: noteID).clearSelectionTarget()
+        NoteAIConversationStore.shared.model(for: noteID).clearSelectionTargets()
         aiExpansion.collapse()
     }
 
     private func closePanel() {
-        NoteAIConversationStore.shared.model(for: noteID).clearSelectionTarget()
+        NoteAIConversationStore.shared.model(for: noteID).clearSelectionTargets()
         aiExpansion.collapse()
         onClose()
     }

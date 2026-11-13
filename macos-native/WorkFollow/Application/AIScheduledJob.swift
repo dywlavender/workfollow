@@ -86,4 +86,11 @@ struct AIScheduledJob: Identifiable, Codable, Equatable, Sendable {
     var nextRunAt: Date?
     var lastRun: AIScheduledRun?
     var version = 1
+    var deliverResult: Bool?
+}
+
+struct AIScheduledDelivery: Codable, Equatable, Identifiable {
+    var id: UUID { run.id }
+    let title: String
+    let run: AIScheduledRun
 }

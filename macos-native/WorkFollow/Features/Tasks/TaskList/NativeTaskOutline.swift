@@ -159,12 +159,12 @@ struct NativeTaskOutline: NSViewRepresentable {
         var onKey: (TaskOutlineKey) -> Bool = { _ in false }
 
         override func keyDown(with event: NSEvent) {
+            if AppShortcutStore.shared.matches(.toggleTaskCompletion, event: event), onKey(.space) { return }
             let key: TaskOutlineKey?
             switch event.keyCode {
             case 126: key = .up
             case 125: key = .down
             case 36, 76: key = .enter
-            case 49: key = .space
             case 53: key = .escape
             default: key = nil
             }

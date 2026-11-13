@@ -17,6 +17,8 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
     /// 日期文本（nil 不显示）。
     let dateLabel: (Task) -> String?
     let onComplete: (UUID) -> Void
+    /// 行尾 hover 删除按钮：宿主接任务存储的软删（自带 HUD 撤销，会级联该子任务的下级）。
+    var onDelete: (UUID) -> Void = { _ in }
     let onOpen: (UUID) -> Void
     let onRename: (UUID, String) -> Void
     /// 拖拽落点：`(被拖任务, 移除自己之后的兄弟下标)`；等于兄弟数即拖到末尾。
@@ -43,6 +45,7 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         coordinator.completionSize = completionSize
         coordinator.dateLabel = dateLabel
         coordinator.onComplete = onComplete
+        coordinator.onDelete = onDelete
         coordinator.onOpen = onOpen
         coordinator.onRename = onRename
         coordinator.onReorder = onReorder
@@ -73,6 +76,7 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         var autoEditingID: UUID?
         var dateLabel: (Task) -> String? = { _ in nil }
         var onComplete: (UUID) -> Void = { _ in }
+        var onDelete: (UUID) -> Void = { _ in }
         var onOpen: (UUID) -> Void = { _ in }
         var onRename: (UUID, String) -> Void = { _, _ in }
         var onReorder: (UUID, Int) -> Void = { _, _ in }
@@ -298,6 +302,7 @@ struct AppKitSubtaskOutlineView: NSViewRepresentable {
         // MARK: Row interaction
 
         func completeTapped(_ task: Task) { onComplete(task.id) }
+        func deleteTapped(_ task: Task) { onDelete(task.id) }
         func openTapped(_ task: Task) { onOpen(task.id) }
 
         func beginEditing(taskID: UUID) {
@@ -402,6 +407,11 @@ final class SubtaskRowView: NSTableCellView {
     private let titleField = SubtaskTitleField()
     private let dateField = NSTextField(labelWithString: "")
     private let completionButton = NSButton()
+    /// 行尾删除按钮：常驻占位、hover 才显示。用 isHidden 切换而不是增删 subview，
+    /// 布局坐标固定，标题不会因悬停重排。
+    private let deleteButton = NSButton()
+    /// 行尾跳转箭头：常驻显示，点它打开该子任务的详情（与「关联任务」行的 chevron 同语义）。
+    private let openButton = NSButton()
     private let indicatorStack = NSStackView()
     private var trackingArea: NSTrackingArea?
     /// 供测试断言：当前行渲染了几个迷你标记。
@@ -435,6 +445,31 @@ final class SubtaskRowView: NSTableCellView {
         dateField.isBordered = false
         dateField.drawsBackground = false
 
+        deleteButton.image = NSImage(systemSymbolName: "trash", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .regular))
+        deleteButton.imageScaling = .scaleProportionallyDown
+        deleteButton.contentTintColor = .secondaryLabelColor
+        deleteButton.isBordered = false
+        deleteButton.bezelStyle = .inline
+        deleteButton.focusRingType = .none
+        deleteButton.target = self
+        deleteButton.action = #selector(deleteClicked)
+        deleteButton.toolTip = "删除子任务"
+        deleteButton.setAccessibilityLabel("删除子任务")
+        deleteButton.isHidden = true
+
+        openButton.image = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
+        openButton.imageScaling = .scaleProportionallyDown
+        openButton.contentTintColor = .tertiaryLabelColor
+        openButton.isBordered = false
+        openButton.bezelStyle = .inline
+        openButton.focusRingType = .none
+        openButton.target = self
+        openButton.action = #selector(openClicked)
+        openButton.toolTip = "打开子任务"
+        openButton.setAccessibilityLabel("打开子任务")
+
         indicatorStack.orientation = .horizontal
         indicatorStack.spacing = 4
         indicatorStack.alignment = .centerY
@@ -446,6 +481,8 @@ final class SubtaskRowView: NSTableCellView {
         addSubview(titleField)
         addSubview(indicatorStack)
         addSubview(dateField)
+        addSubview(openButton)
+        addSubview(deleteButton)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -478,11 +515,13 @@ final class SubtaskRowView: NSTableCellView {
 
     override func mouseEntered(with event: NSEvent) {
         hovering = true
+        deleteButton.isHidden = false
         needsDisplay = true
     }
 
     override func mouseExited(with event: NSEvent) {
         hovering = false
+        deleteButton.isHidden = true
         needsDisplay = true
     }
 
@@ -501,8 +540,10 @@ final class SubtaskRowView: NSTableCellView {
     func configure(task: Task, completionSize: CGFloat, dateText: String?) {
         self.task = task
         self.taskID = task.id
-        // cell 复用时重置悬停态，避免复用带 hover 高亮的旧 cell。
+        // cell 复用时重置悬停态，避免复用带 hover 高亮 / 删除按钮的旧 cell。
         hovering = false
+        deleteButton.isHidden = true
+        deleteButton.setAccessibilityLabel("删除子任务：\(task.title.isEmpty ? "未命名子任务" : task.title)")
         needsDisplay = true
         completionBox.size = completionSize
         completionBox.completed = task.isClosed
@@ -568,6 +609,16 @@ final class SubtaskRowView: NSTableCellView {
         coordinator?.completeTapped(task)
     }
 
+    @objc private func deleteClicked() {
+        guard let task else { return }
+        coordinator?.deleteTapped(task)
+    }
+
+    @objc private func openClicked() {
+        guard let task else { return }
+        coordinator?.openTapped(task)
+    }
+
     @objc private func titleCommitted() {
         // End native editing; the delegate owns the one rename submission for
         // both Return and focus handoff. Keep the field editable for the next click.
@@ -583,12 +634,21 @@ final class SubtaskRowView: NSTableCellView {
         completionButton.frame = NSRect(x: 0, y: 0, width: 30, height: bounds.height)
         completionBox.frame = NSRect(x: 5, y: (bounds.height - completionSize) / 2,
                                      width: completionSize, height: completionSize)
+        // 行尾常驻预留「跳转箭头 + 删除按钮」两个位置：箭头常显、删除按钮 hover 才显，
+        // 两者都不改布局，标题 / 日期 / 标记的坐标不随悬停变化。
+        // 删除按钮与笔记正文检查项同几何（24pt、右缘留 10pt）。
+        let trailingInset: CGFloat = 58
+        deleteButton.frame = NSRect(x: bounds.width - 34, y: (bounds.height - 24) / 2,
+                                    width: 24, height: 24)
+        openButton.frame = NSRect(x: bounds.width - trailingInset, y: (bounds.height - 18) / 2,
+                                  width: 18, height: 18)
         let titleX: CGFloat = 34
+        let trailingEdge = bounds.width - trailingInset - 4
         let dateWidth: CGFloat = dateField.isHidden ? 0 : 90
         let indicatorCount = indicatorStack.isHidden ? 0 : indicatorStack.arrangedSubviews.count
         let indicatorWidth: CGFloat = indicatorCount == 0
             ? 0 : CGFloat(indicatorCount) * 14 + CGFloat(indicatorCount - 1) * 4
-        let indicatorsX = max(titleX + 40, bounds.width - 12 - dateWidth
+        let indicatorsX = max(titleX + 40, trailingEdge - dateWidth
             - (dateWidth > 0 ? 8 : 0) - indicatorWidth)
         let titleWidth = max(40, indicatorsX - titleX - 8)
         titleField.frame = NSRect(x: titleX, y: (bounds.height - 20) / 2,
@@ -596,7 +656,7 @@ final class SubtaskRowView: NSTableCellView {
         indicatorStack.frame = NSRect(x: indicatorsX, y: (bounds.height - 14) / 2,
                                       width: indicatorWidth, height: 14)
         if !dateField.isHidden {
-            dateField.frame = NSRect(x: bounds.width - 12 - dateWidth,
+            dateField.frame = NSRect(x: trailingEdge - dateWidth,
                                      y: (bounds.height - 18) / 2,
                                      width: dateWidth, height: 18)
         }

@@ -87,6 +87,30 @@ final class MilkdownEditorRuntimeTests: XCTestCase {
         XCTAssertEqual((try? MilkdownTestSupport.range(view))?.location, 8, "光标不应移动")
     }
 
+    /// 选中样式条常驻时按 Esc：只收起样式条，不向宿主上报 escapePressed。
+    func testEscapeDismissesSelectionToolbar() async throws {
+        var profile = DocumentProfile()
+        profile.selectionToolbarEnabled = true
+        let (_, view, _) = try await fixture(document: NativeDocument(plainText: "第一行正文\n第二行正文"), profile: profile)
+        try MilkdownTestSupport.select(view, NSRange(location: 0, length: 3))
+        try await wait("选区浮条没有出现") {
+            guard let value = try? MilkdownTestSupport.script(view, "document.getElementById('wf-selection').hidden"),
+                  let hidden = value as? Bool else { return false }
+            return !hidden
+        }
+        try MilkdownTestSupport.script(view, """
+            document.querySelector('.ProseMirror').dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+            """)
+        try await wait("Esc 没有收起样式条") {
+            guard let value = try? MilkdownTestSupport.script(view, "document.getElementById('wf-selection').hidden"),
+                  let hidden = value as? Bool else { return false }
+            return hidden
+        }
+        try MilkdownTestSupport.call(view, "configure", ["viewport": ["top": 0, "bottom": 460]])
+        XCTAssertEqual(try MilkdownTestSupport.script(view, "document.getElementById('wf-selection').hidden") as? Bool, true)
+    }
+
     /// 第一行选字时上方放不下浮条，应翻到选区下方，不压住第一行文字。
     func testSelectionToolbarClearsFirstLine() async throws {
         var profile = DocumentProfile()
@@ -110,6 +134,24 @@ final class MilkdownEditorRuntimeTests: XCTestCase {
             "选区浮条不应覆盖第一行文字（浮条 \(barTop)-\(barBottom)，文字 \(textTop)-\(textBottom)）")
     }
 
+    func testSelectionToolbarStaysClearWhenSelectionFillsTheViewport() async throws {
+        var profile = DocumentProfile()
+        profile.selectionToolbarEnabled = true
+        let text = "第一行正文\n第二行正文\n第三行正文"
+        let (_, view, _) = try await fixture(document: NativeDocument(plainText: text), profile: profile)
+        try MilkdownTestSupport.command(view, "focus")
+        try MilkdownTestSupport.select(view, NSRange(location: 0, length: text.utf16.count))
+        let geometry = try XCTUnwrap(MilkdownTestSupport.script(view, """
+            (() => { const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
+              return {top: r.top, bottom: r.bottom}; })()
+            """) as? [String: CGFloat])
+        try MilkdownTestSupport.call(view, "configure", ["viewport": geometry])
+        let hidden = "document.getElementById('wf-selection').hidden"
+        XCTAssertEqual(try MilkdownTestSupport.script(view, hidden) as? Bool, true)
+        try MilkdownTestSupport.call(view, "configure", ["viewport": ["top": 0, "bottom": 460]])
+        XCTAssertEqual(try MilkdownTestSupport.script(view, hidden) as? Bool, false)
+    }
+
     func testProductionBodyLoadsEditsAndUsesItsOwnUndoHistory() async throws {
         let (model, view, _) = try await fixture()
         let original = model.document
@@ -122,6 +164,30 @@ final class MilkdownEditorRuntimeTests: XCTestCase {
         _ = try await view.call("command", ["name": "redo"]); await view.flush()
         XCTAssertTrue(model.document.blocks[0].runs.contains { $0.marks.contains(.bold) })
         XCTAssertEqual(model.document.blocks[0].id, original.blocks[0].id)
+    }
+
+    func testChangedBoldShortcutUsesTheNewKeyInTheEditor() async throws {
+        let store = AppShortcutStore.shared
+        let original = store.chord(for: .bold)
+        try store.set(AppShortcutChord("b", [.command, .shift]), for: .bold)
+        defer { try? store.set(original, for: .bold) }
+        let (model, view, _) = try await fixture()
+        try MilkdownTestSupport.select(view, NSRange(location: 0, length: 2))
+        let before = model.document
+
+        try MilkdownTestSupport.script(view, """
+            document.querySelector('.ProseMirror').dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'b', metaKey: true, bubbles: true, cancelable: true }))
+            """)
+        await view.flush()
+        XCTAssertEqual(model.document, before, "改键后旧组合键不再加粗")
+
+        try MilkdownTestSupport.script(view, """
+            document.querySelector('.ProseMirror').dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'B', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }))
+            """)
+        await view.flush()
+        XCTAssertTrue(model.document.blocks[0].runs.contains { $0.marks.contains(.bold) })
     }
     func testReadOnlyBodyRejectsEditing() async throws {
         let (model, view, _) = try await fixture(readOnly: true)
@@ -197,6 +263,14 @@ final class MilkdownEditorRuntimeTests: XCTestCase {
         let document = NativeDocument(blocks: [.init(kind: .checklist(false), runs: [.init(text: "检查项")],
             checklist: .init(reminderAt: reminder))])
         let (model, view, _) = try await fixture(document: document)
+        let offset = try XCTUnwrap(MilkdownTestSupport.script(view, """
+            (() => { const content = document.querySelector('.wf-checklist > .wf-block-content');
+              const checkbox = document.querySelector('[role=checkbox]').getBoundingClientRect();
+              const lineHeight = parseFloat(getComputedStyle(content).lineHeight);
+              return checkbox.top + checkbox.height / 2 - content.getBoundingClientRect().top - lineHeight / 2;
+            })()
+            """) as? Double)
+        XCTAssertEqual(offset, 0, accuracy: 0.5, "复选框应居中对齐首行文字")
         try MilkdownTestSupport.script(view, "document.querySelector('.wf-marker').click()")
         await view.flush()
         XCTAssertEqual(model.document.blocks[0].kind, .checklist(true))
@@ -465,6 +539,34 @@ final class MilkdownEditorRuntimeTests: XCTestCase {
         XCTAssertEqual(model.document.plainText, "首块\n中间改\n尾块")
         let delta = (try XCTUnwrap(MilkdownTestSupport.script(view, "window.workfollowEditor.serializeCount()") as? Int)) - baseline
         XCTAssertEqual(delta, 1, "编辑一个块只应重新序列化这一个块，实际 \(delta)")
+    }
+
+    /// 代码块高亮契约：语言按块缓存后，连续击键不再重复跑 highlightAuto 全语言扫描。
+    func testCodeBlockTypingDoesNotRescanHighlightLanguages() async throws {
+        let document = NativeDocument(blocks: [
+            DocumentBlock(id: UUID(), kind: .code, runs: [DocumentRun(text: String(repeating: "const sum = a + b;\n", count: 8))]),
+        ])
+        let (_, view, _) = try await fixture(document: document)
+        _ = try await view.call("getDoc") // 预热：首帧高亮已完成语言检测
+        try MilkdownTestSupport.command(view, "select", ["from": 20])
+        let baseline = try XCTUnwrap(MilkdownTestSupport.script(view, "window.workfollowEditor.highlightAutoCount()") as? Int)
+        try MilkdownTestSupport.command(view, "insertText", ["text": "2"])
+        await view.flush()
+        let delta = (try XCTUnwrap(MilkdownTestSupport.script(view, "window.workfollowEditor.highlightAutoCount()") as? Int)) - baseline
+        XCTAssertEqual(delta, 0, "连续击键不应重复全语言扫描，实际 \(delta)")
+    }
+
+    /// 跨行选区不把块外操作件画进选区：把手/序号/提醒/删除一律 user-select:none，
+    /// 跨块 range 途经时的底色由 ::selection 透明兜底（无法在测试里断言绘制）。
+    func testBlockChromeIsNotSelectable() async throws {
+        let (_, view, _) = try await fixture(document: NativeDocument(plainText: "第一行\n第二行\n第三行"))
+        let states = try XCTUnwrap(MilkdownTestSupport.script(view, """
+          ['wf-block-handle','wf-marker','wf-reminder','wf-delete'].map(name => {
+            const el = document.querySelector('.' + name);
+            return el ? String(getComputedStyle(el).webkitUserSelect) : 'missing';
+          }).join(',')
+        """) as? String)
+        XCTAssertEqual(states, "none,none,none,none", "块外操作件必须不参与选区：\(states)")
     }
 
     /// 搜索走按块缓存的 plainText：块被编辑后缓存必须失效，命中位置按新文本算。

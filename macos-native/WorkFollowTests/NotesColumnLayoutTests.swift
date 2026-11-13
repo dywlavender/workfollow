@@ -126,7 +126,21 @@ final class NotesColumnLayoutTests: XCTestCase {
 
     func testListWidthClampsToAvailableWidth() {
         let result = layout(700, aiOpen: false)
+        // 上限同时受「可用宽度」与目录栏自身上限（notesTreeMaximum）约束。
         XCTAssertEqual(result.maximumPaneWidth,
-                       700 - WFMetrics.inspectorMinimum - WFMetrics.divider)
+                       min(700 - WFMetrics.inspectorMinimum - WFMetrics.divider,
+                           WFMetrics.notesTreeMaximum))
+    }
+
+    func testTreePaneUsesItsOwnNarrowBounds() {
+        // 目录栏不再吃任务列表的 300/470：默认 236，过窄夹回 208，旧的 470 夹到 336。
+        func layout(_ stored: CGFloat) -> NotesColumnLayout {
+            NotesColumnLayoutEngine.layout(contentWidth: 1200, storedPaneWidth: stored,
+                storedAIWidth: 360, aiOpen: false, detailOnly: false,
+                noteExists: true, trash: false)
+        }
+        XCTAssertEqual(layout(WFMetrics.notesTreePreferred).paneWidth, WFMetrics.notesTreePreferred)
+        XCTAssertEqual(layout(150).paneWidth, WFMetrics.notesTreeMinimum)
+        XCTAssertEqual(layout(WFMetrics.listMaximum).paneWidth, WFMetrics.notesTreeMaximum)
     }
 }

@@ -14,6 +14,107 @@ final class TaskWorkspaceModelTests: XCTestCase {
             XCTAssertNil(model.task(for: id)?.sourceNoteID)
         }
     }
+
+    // MARK: - 行内日期提醒 ↔ 关联待办任务（双向同步）
+
+    /// 笔记行内日期设提醒 → 收集箱自动创建关联待办（标题取块文本、提醒同步、
+    /// sourceNoteID 回链）；已链接的行不再由正文投影排程通知，避免双响。
+    func testInlineDateReminderCreatesLinkedTaskWithSyncedReminder() async throws {
+        try await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let noteID = model.createTask(title: "提醒笔记", in: .inbox).taskID!
+            model.setKind(noteID, .note)
+            let reminder = self.calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 9))!
+            _ = model.commitEditorReference(noteID, document: NativeDocument(blocks: [
+                DocumentBlock(kind: .checklist(false), runs: [DocumentRun(text: "普通清单项")]),
+                DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "11月8日 交房租")]),
+            ]), sourceNoteID: nil)
+            // 先落一条纯文档提醒（无关联任务），投影会排程它。
+            _ = model.setChecklistItemReminder(noteID, line: 1, at: reminder)
+            XCTAssertEqual(model.task(for: noteID)?.document.checklistSummary?.reminders.count, 1)
+
+            _ = model.setInlineDateReminder(noteID, line: 1, at: reminder)
+
+            let linkedID = try XCTUnwrap(
+                model.task(for: noteID)?.document.materialized().blocks[1].checklist?.reminderTaskID,
+                "设置行内提醒应创建关联待办并回写块元数据")
+            let linked = try XCTUnwrap(model.task(for: linkedID))
+            XCTAssertEqual(linked.title, "11月8日 交房租")
+            XCTAssertEqual(linked.reminderAt, reminder)
+            XCTAssertEqual(linked.sourceNoteID, noteID)
+            XCTAssertEqual(linked.list, .inbox)
+            // 已关联的行交给任务侧排程，正文投影跳过避免双响。
+            XCTAssertTrue(model.task(for: noteID)?.document.checklistSummary?.reminders.isEmpty == true)
+        }
+    }
+
+    /// 关联待办被移入垃圾桶：块解除链接、提醒保留（正文扫描的通知接管），
+    /// 悬浮菜单随后出现「设置待办任务」，可重建一条带同一提醒时间的新待办。
+    func testTrashingLinkedTaskUnlinksButKeepsReminder() async throws {
+        try await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let noteID = model.createTask(title: "提醒笔记", in: .inbox).taskID!
+            model.setKind(noteID, .note)
+            _ = model.commitEditorReference(noteID, document: NativeDocument(blocks: [
+                DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "11月8日 交房租")])]), sourceNoteID: nil)
+            let reminder = self.calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 9))!
+            _ = model.setInlineDateReminder(noteID, line: 0, at: reminder)
+            let linkedID = try XCTUnwrap(
+                model.task(for: noteID)?.document.materialized().blocks[0].checklist?.reminderTaskID)
+
+            _ = model.delete(linkedID)
+
+            let unlinked = try model.task(for: noteID)!.document.materialized()
+            XCTAssertNil(unlinked.blocks[0].checklist?.reminderTaskID, "进垃圾桶即解除链接")
+            XCTAssertEqual(unlinked.blocks[0].checklist?.reminderAt, reminder, "块提醒保留，正文扫描接管")
+
+            // 「设置待办任务」：重建一条新待办，带同一提醒时间并回链笔记。
+            _ = model.setInlineDateReminder(noteID, line: 0, at: unlinked.blocks[0].checklist?.reminderAt)
+            let recreatedID = try XCTUnwrap(
+                model.task(for: noteID)?.document.materialized().blocks[0].checklist?.reminderTaskID)
+            XCTAssertNotEqual(recreatedID, linkedID)
+            XCTAssertEqual(model.task(for: recreatedID)?.reminderAt, reminder)
+            XCTAssertEqual(model.task(for: recreatedID)?.sourceNoteID, noteID)
+        }
+    }
+
+    /// 任务侧改/清提醒回写正文块；笔记侧清提醒只清任务的提醒、任务保留。
+    func testInlineDateReminderSyncsBothWays() async throws {
+        try await MainActor.run {
+            let model = TaskWorkspaceModel(clock: { self.now }, calendar: self.calendar, seedDemoData: false)
+            let noteID = model.createTask(title: "提醒笔记", in: .inbox).taskID!
+            model.setKind(noteID, .note)
+            _ = model.commitEditorReference(noteID, document: NativeDocument(blocks: [
+                DocumentBlock(kind: .paragraph, runs: [DocumentRun(text: "11月8日 交房租")])]), sourceNoteID: nil)
+            let first = self.calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 9))!
+            _ = model.setInlineDateReminder(noteID, line: 0, at: first)
+            let linkedID = try XCTUnwrap(
+                model.task(for: noteID)?.document.materialized().blocks[0].checklist?.reminderTaskID)
+
+            // 任务侧改提醒 → 回写正文块。
+            let second = self.calendar.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 18))!
+            model.setReminder(linkedID, second)
+            XCTAssertEqual(model.task(for: linkedID)?.reminderAt, second)
+            let mirrored = try model.task(for: noteID)!.document.materialized()
+            XCTAssertEqual(mirrored.blocks[0].checklist?.reminderAt, second)
+
+            // 笔记侧清空提醒 → 任务只清提醒，任务保留（不替用户做删除决定）。
+            _ = model.setInlineDateReminder(noteID, line: 0, at: nil)
+            XCTAssertNil(model.task(for: linkedID)?.reminderAt)
+            XCTAssertNotNil(model.task(for: linkedID), "清提醒不删除关联待办")
+            let cleared = try model.task(for: noteID)!.document.materialized()
+            XCTAssertNil(cleared.blocks[0].checklist?.reminderAt)
+        }
+    }
+
+    func testInlineReminderTaskTitleTruncatesBlockText() {
+        let long = String(repeating: "房租", count: 30)
+        XCTAssertEqual(TaskWorkspaceModel.inlineReminderTaskTitle(from: "  11月8日 交房租  "), "11月8日 交房租")
+        XCTAssertEqual(TaskWorkspaceModel.inlineReminderTaskTitle(from: "   "), "来自笔记的提醒")
+        let truncated = TaskWorkspaceModel.inlineReminderTaskTitle(from: long)
+        XCTAssertEqual(truncated.count, 41)
+        XCTAssertTrue(truncated.hasSuffix("…"))
+    }
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
     private var calendar: Calendar {
         var value = Calendar(identifier: .gregorian)

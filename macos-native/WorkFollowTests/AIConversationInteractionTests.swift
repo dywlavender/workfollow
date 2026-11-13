@@ -221,6 +221,7 @@ final class AIConversationInteractionTests: XCTestCase {
             XCTAssertFalse(spinnerFrame.intersects(trashFrame), "转圈不能遮挡删除按钮")
             XCTAssertLessThanOrEqual(spinnerFrame.width, 20, "历史行应使用小号原生转圈")
             XCTAssertFalse(visible("ai.chat.running.\(other.record.id)"), "已完成会话不应有转圈")
+            XCTAssertFalse(store.unviewedIDs.contains(other.record.id), "选中状态下完成不应产生未读点")
             XCTAssertTrue(running.isRunning)
             XCTAssertEqual(reply.starts, 1, "切换不得重启同一轮请求")
         }
@@ -285,11 +286,29 @@ final class AIConversationInteractionTests: XCTestCase {
         XCTAssertEqual(draft.input, "保留新会话的未发送草稿")
         XCTAssertEqual(running.latestResult, "虚构长任务已完成")
         XCTAssertTrue(visible(rowID), "完成仅移除转圈，不应移除历史行")
+
+        // 后台完成且用户停在别的会话：转圈换成标题前的蓝点，位置同槽、点行查看后消失。
+        let dotID = "ai.chat.unviewed.\(running.record.id)"
+        try await wait("unviewed dot replaces spinner") { visible(dotID) }
+        let dot = try XCTUnwrap(anchors[dotID])
+        let dotRow = try XCTUnwrap(anchors[rowID]), dotTrash = try XCTUnwrap(anchors[deleteID])
+        let dotFrame = dot.convert(dot.bounds, to: nil)
+        let dotRowFrame = dotRow.convert(dotRow.bounds, to: nil)
+        let dotTrashFrame = dotTrash.convert(dotTrash.bounds, to: nil)
+        XCTAssertTrue(dotRowFrame.insetBy(dx: -1, dy: -1).contains(dotFrame), "蓝点应在可点击选择区域内")
+        XCTAssertFalse(dotFrame.intersects(dotTrashFrame), "蓝点不能遮挡删除按钮")
+        XCTAssertLessThanOrEqual(dotFrame.width, 20, "蓝点应与转圈同用小号槽位")
+        XCTAssertLessThan(dotFrame.maxX, dotRowFrame.midX, "蓝点应在标题前面")
+        XCTAssertTrue(store.unviewedIDs.contains(running.record.id))
+        XCTAssertFalse(store.unviewedIDs.contains(other.record.id), "选中会话完成后不应出现蓝点")
         try await click(rowID)
-        try await wait("return to completed conversation") { store.current === running }
+        try await wait("viewing clears unviewed dot") {
+            store.current === running && !store.unviewedIDs.contains(running.record.id) && !visible(dotID)
+        }
         XCTAssertEqual(store.current.latestResult, "虚构长任务已完成")
         try await openHistory()
         XCTAssertFalse(visible(spinnerID), "重新打开历史不应恢复过期转圈")
+        XCTAssertFalse(visible(dotID), "查看后蓝点不应恢复")
     }
 
     /// 选区 AI 不再弹独立浮窗：结果落在笔记右侧 AI 栏，「替换」写回原选区且可撤销。

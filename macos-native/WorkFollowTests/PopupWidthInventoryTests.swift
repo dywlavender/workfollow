@@ -179,8 +179,8 @@ final class PopupWidthInventoryTests: XCTestCase {
     // MARK: - Sheet / 对话框
 
     func testListActivitySheet() throws {
-        try add("清单动态 Sheet", source: "PopupMetrics.activitySheetWidth",
-                width: PopupMetrics.activitySheetWidth) {
+        try add("清单动态 Sheet", source: "SheetDialogMetrics.narrowWidth",
+                width: SheetDialogMetrics.narrowWidth) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("清单动态").font(WFType.pageTitle)
                 ForEach(0..<5, id: \.self) { index in

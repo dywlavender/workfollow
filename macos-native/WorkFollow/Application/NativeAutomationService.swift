@@ -8,13 +8,16 @@ final class NativeAutomationService {
     let meetings: MeetingStore?
     let memories: AssistantMemoryStore
     let scheduledJobs: AIScheduledJobStore
+    let knowledgeIndex: LocalKnowledgeIndex?
     let runScheduledJob: ((UUID) throws -> Void)?
     init(tasks: TaskWorkspaceModel, notes: NotesWorkspaceModel, directory: URL, meetings: MeetingStore? = nil,
          memories: AssistantMemoryStore? = nil, scheduledJobs: AIScheduledJobStore? = nil,
+         knowledgeIndex: LocalKnowledgeIndex? = nil,
          runScheduledJob: ((UUID) throws -> Void)? = nil) {
         self.tasks = tasks; self.notes = notes; self.directory = directory; self.meetings = meetings
         self.memories = memories ?? AssistantMemoryStore(directory: directory.appendingPathComponent("modules"))
         self.scheduledJobs = scheduledJobs ?? AIScheduledJobStore(directory: directory.appendingPathComponent("modules"))
+        self.knowledgeIndex = knowledgeIndex
         self.runScheduledJob = runScheduledJob
     }
     func execute(_ request: AutomationRequest) throws -> AutomationValue {

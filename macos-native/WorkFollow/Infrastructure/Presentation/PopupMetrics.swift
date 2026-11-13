@@ -12,6 +12,8 @@ enum PopupMetrics {
     static let actionSpacing: CGFloat = 12
     static let compactButtonHeight: CGFloat = 26
     static let buttonCornerRadius: CGFloat = 6
+    /// 菜单/面板搜索框行高（PopupSearchField）。
+    static let searchFieldHeight: CGFloat = 30
     /// 表单弹框的内边距（标题栏与内容区共用）。
     /// 原 24 在 400pt 宽弹框里四周留白 96pt（占 24%），内容显得空。
     /// 收到 18 后留白降到 14%，正文可用宽度多 12pt。
@@ -37,6 +39,9 @@ enum PopupMetrics {
     /// 菜单行图标边长。跟着行高一起收：行高 40 时图标约 17，
     /// 行高 30 后同步降到 15，保持图标与文字视觉平衡。
     static let menuIconSize: CGFloat = 15
+    /// 菜单内图标快捷钮（日期/优先级快选）：与页头控制组同档 30×30、图标 16。
+    static let quickActionSize: CGFloat = 30
+    static let quickActionIconSize: CGFloat = 16
     static let menuInset: CGFloat = 6
     /// 菜单最大高度。行高从 40 降到 30 后，384 能放 12 行；
     /// 任务右键菜单常有 18~22 项，频繁触发滚动。放到 480 能容 16 行，
@@ -88,9 +93,6 @@ enum PopupMetrics {
     static let symbolPickerWidth: CGFloat = 240
     /// Sheet 类宽度（原先都是裸字面量，散在各视图里）。
     static let settingsSheetWidth = relationPickerWidth
-    /// 清单动态：列表型 Sheet，行内 `maxWidth: .infinity` 会撑满，
-    /// 再窄任务名与时间就挤。原 360 收到 300（实测墨迹贴边 = 已到紧的下限）。
-    static let activitySheetWidth: CGFloat = 300
     static let templateNoteWidth: CGFloat = 380
     /// AI 面板「历史对话」弹层。内容行是 `maxWidth: .infinity` 的列表，
     /// 无法按内容自然宽推导（见 `AnchoredPropertyPanel.width` 的说明），只能给口径。

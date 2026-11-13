@@ -5,6 +5,7 @@ import SwiftUI
 /// `workspace` 为可选的任务关联入口。
 struct FocusWorkspaceView: View {
     @ObservedObject var store: FocusStore
+    @ObservedObject private var shortcuts = AppShortcutStore.shared
     let workspace: TaskWorkspaceModel?
     let onSelectRecordTask: ((UUID) -> Void)?
     @Environment(\.colorScheme) private var colorScheme
@@ -39,8 +40,7 @@ struct FocusWorkspaceView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let dialogScale = Self.scale(for: geo.size)
-            content(dialogScale: dialogScale, width: geo.size.width)
+            content(width: geo.size.width)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
         .frame(minWidth: FocusLayoutMetrics.minimumWorkspaceWidth)
@@ -48,14 +48,9 @@ struct FocusWorkspaceView: View {
         .environment(\.timeZone, store.presentationCalendar.timeZone)
     }
 
-    /// 仅保留常用专注创建弹框的既有缩放；左右 pane 尺寸均由固定 point 契约控制。
-    static func scale(for size: CGSize) -> CGFloat {
-        min(1.2, max(0.6, min(size.height / 982, size.width / 1512)))
-    }
-
     // MARK: - 骨架
 
-    private func content(dialogScale s: CGFloat, width: CGFloat) -> some View {
+    private func content(width: CGFloat) -> some View {
         let leftWidth = FocusLayoutMetrics.focusPaneWidth(availableWidth: width,
             isCompleted: store.completionContext != nil || store.workspacePage == .library)
         return HStack(spacing: 0) {
@@ -104,11 +99,11 @@ struct FocusWorkspaceView: View {
                         case .idle: break
                         }
                     }
-                    .keyboardShortcut(.space, modifiers: [])
+                    .keyboardShortcut(shortcuts.chord(for: .pauseFocus).swiftUIShortcut)
                     Button("专注Esc键") {
                         if store.phase == .focusing { showGiveUpConfirmation = true }
                     }
-                    .keyboardShortcut(.escape, modifiers: [])
+                    .keyboardShortcut(shortcuts.chord(for: .endFocus).swiftUIShortcut)
                 }
                 .frame(width: 0, height: 0)
                 .opacity(0)
@@ -116,7 +111,7 @@ struct FocusWorkspaceView: View {
         }
         .overlay {
             if showAddTimer {
-                addTimerDialog(s: s)
+                addTimerDialog
             }
         }
         .onAppear {
@@ -128,40 +123,41 @@ struct FocusWorkspaceView: View {
     }
 
     /// 添加常用专注对话框：emoji 头像 + 名称 + 计时模式（不压暗页面，对齐滴答）。
-    private func addTimerDialog(s: CGFloat) -> some View {
+    /// 结构与 SheetDialog 同口径：DialogHeader + Divider + 内容 + DialogFooter；
+    /// 字号固定走令牌，不再按窗口比例缩放。
+    private var addTimerDialog: some View {
         let nameValid = !addTimerName.trimmingCharacters(in: .whitespaces).isEmpty
-        return ZStack {
-            VStack(spacing: 16 * s) {
-                Text("添加常用专注")
-                    .font(.system(size: 20 * s, weight: .semibold))
-                    .foregroundStyle(theme.text)
-                HStack(spacing: 14 * s) {
+        return VStack(spacing: 0) {
+            DialogHeader(title: "添加常用专注")
+            Divider()
+            VStack(alignment: .leading, spacing: WFSpace.lg) {
+                HStack(spacing: 14) {
                     Button { showEmojiPicker.toggle() } label: {
                         ZStack(alignment: .bottomTrailing) {
                             Circle()
                                 .fill(theme.avatarBackground)
-                                .frame(width: 48 * s, height: 48 * s)
+                                .frame(width: 48, height: 48)
                             Text(addTimerEmoji)
-                                .font(.system(size: 26 * s))
+                                .font(.system(size: 26))
                             Circle()
                                 .fill(theme.canvas)
-                                .frame(width: 16 * s, height: 16 * s)
+                                .frame(width: 16, height: 16)
                                 .overlay(Image(systemName: "pencil")
-                                    .font(.system(size: 9 * s, weight: .semibold))
+                                    .font(.system(size: 9, weight: .semibold))
                                     .foregroundStyle(theme.text2))
-                                .offset(x: 2 * s, y: 2 * s)
+                                .offset(x: 2, y: 2)
                         }
                     }
                     .buttonStyle(.plain)
                     .hoverTip("选择表情")
                     TextField("名称", text: $addTimerName)
                         .textFieldStyle(.plain)
-                        .font(.system(size: 16 * s))
+                        .font(WFType.body)
                         .foregroundStyle(theme.text)
-                        .padding(.horizontal, 12 * s)
-                        .padding(.vertical, 10 * s)
-                        .background(RoundedRectangle(cornerRadius: 10 * s)
-                            .stroke(theme.hairline, lineWidth: 1.5))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius)
+                            .stroke(theme.hairline, lineWidth: 1))
                 }
                 if let workspace {
                     BusinessPicker("关联任务", selection: $addTimerTaskID, options:
@@ -171,15 +167,15 @@ struct FocusWorkspaceView: View {
                 }
                 if showEmojiPicker {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10 * s) {
+                        HStack(spacing: 10) {
                             ForEach(FocusTheme.emojiChoices, id: \.self) { emoji in
                                 Button {
                                     addTimerEmoji = emoji
                                     showEmojiPicker = false
                                 } label: {
                                     Text(emoji)
-                                        .font(.system(size: 26 * s))
-                                        .frame(width: 44 * s, height: 44 * s)
+                                        .font(.system(size: 26))
+                                        .frame(width: 44, height: 44)
                                         .background(Circle().fill(
                                             addTimerEmoji == emoji ? theme.accentSoft : theme.chipBackground))
                                 }
@@ -188,16 +184,16 @@ struct FocusWorkspaceView: View {
                         }
                     }
                 }
-                VStack(alignment: .leading, spacing: 12 * s) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("计时模式")
-                        .font(.system(size: 16 * s, weight: .semibold))
+                        .font(WFType.controlLabelStrong)
                         .foregroundStyle(theme.text)
-                    HStack(spacing: 12 * s) {
+                    HStack(spacing: 12) {
                         Button { addTimerStopwatch = false } label: {
-                            HStack(spacing: 9 * s) {
-                                radioCircle(selected: !addTimerStopwatch, s: s)
+                            HStack(spacing: 9) {
+                                radioCircle(selected: !addTimerStopwatch)
                                 Text("番茄计时")
-                                    .font(.system(size: 16 * s))
+                                    .font(WFType.body)
                                     .foregroundStyle(theme.text)
                             }
                         }
@@ -205,74 +201,57 @@ struct FocusWorkspaceView: View {
                         if !addTimerStopwatch {
                             TextField("25", text: $addTimerMinutes)
                                 .textFieldStyle(.plain)
-                                .font(.system(size: 16 * s))
+                                .font(WFType.controlLarge)
                                 .monospacedDigit()
                                 .multilineTextAlignment(.center)
                                 .foregroundStyle(theme.text)
-                                .frame(width: 72 * s)
-                                .padding(.vertical, 7 * s)
-                                .background(RoundedRectangle(cornerRadius: 7 * s).fill(theme.chipBackground))
+                                .frame(width: 72)
+                                .padding(.vertical, 7)
+                                .background(RoundedRectangle(cornerRadius: PopupMetrics.buttonCornerRadius)
+                                    .fill(theme.chipBackground))
                             Text("分钟")
-                                .font(.system(size: 15 * s))
+                                .font(WFType.bodyLarge)
                                 .foregroundStyle(theme.text2)
                         }
                     }
                     Button { addTimerStopwatch = true } label: {
-                        HStack(spacing: 9 * s) {
-                            radioCircle(selected: addTimerStopwatch, s: s)
+                        HStack(spacing: 9) {
+                            radioCircle(selected: addTimerStopwatch)
                             Text("正计时")
-                                .font(.system(size: 16 * s))
+                                .font(WFType.body)
                                 .foregroundStyle(theme.text)
                         }
                     }
                     .buttonStyle(.plain)
                 }
-                HStack {
-                    Spacer()
-                    Button { showAddTimer = false } label: {
-                        Text("取消")
-                            .font(.system(size: 15 * s))
-                            .foregroundStyle(theme.text2)
-                            .frame(width: 92 * s, height: 36 * s)
-                            .background(RoundedRectangle(cornerRadius: 8 * s)
-                                .fill(theme.canvas)
-                                .overlay(RoundedRectangle(cornerRadius: 8 * s)
-                                    .stroke(theme.hairline, lineWidth: 1.5)))
-                    }
-                    .buttonStyle(.plain)
-                    Button { submitAddTimer() } label: {
-                        Text("确定")
-                            .font(.system(size: 15 * s, weight: .semibold))
-                            .foregroundStyle(WFColors.onAccent)
-                            .frame(width: 92 * s, height: 36 * s)
-                            .background(RoundedRectangle(cornerRadius: 8 * s)
-                                .fill(theme.accent.opacity(nameValid ? 1 : 0.45)))
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!nameValid)
+            }
+            .padding(PopupMetrics.formInset)
+            DialogFooter(primaryTitle: "确定", canSubmit: nameValid,
+                         onCancel: { showAddTimer = false }, onSubmit: submitAddTimer) {
+                if let addTimerHint {
+                    Text(addTimerHint).foregroundStyle(WFColors.danger)
                 }
             }
-            .padding(28 * s)
-            .frame(width: 560 * s)
-            .background {
-                WFGlassSurface(shape: RoundedRectangle(cornerRadius: 16 * s),
-                               fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
-                    .shadow(color: .black.opacity(0.16), radius: 30 * s)
-            }
-            .overlay(RoundedRectangle(cornerRadius: 16 * s).stroke(theme.hairline, lineWidth: 1))
-            .background(FocusOutsideClickObserver { showAddTimer = false })
-            .background(PopupEscapeRouter(depth: 1) { showAddTimer = false })
         }
+        .frame(width: SheetDialogMetrics.regularWidth)
+        .background {
+            WFGlassSurface(shape: RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius),
+                           fallback: backgroundTheme.popupFillOrFallback(theme.canvas, for: colorScheme))
+                .shadow(color: .black.opacity(colorScheme == .dark ? 0.30 : 0.16), radius: 24, x: 0, y: 5)
+        }
+        .overlay(RoundedRectangle(cornerRadius: PopupMetrics.cornerRadius).stroke(theme.hairline, lineWidth: 1))
+        .background(FocusOutsideClickObserver { showAddTimer = false })
+        .background(PopupEscapeRouter(depth: 1) { showAddTimer = false })
     }
 
-    private func radioCircle(selected: Bool, s: CGFloat) -> some View {
+    private func radioCircle(selected: Bool) -> some View {
         ZStack {
             Circle().stroke(selected ? theme.accent : theme.text3, lineWidth: 1.5)
             if selected {
-                Circle().fill(theme.accent).padding(3 * s)
+                Circle().fill(theme.accent).padding(3)
             }
         }
-        .frame(width: 16 * s, height: 16 * s)
+        .frame(width: 16, height: 16)
     }
 
     private func prepareAddTimer() {

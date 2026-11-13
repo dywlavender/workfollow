@@ -19,7 +19,7 @@ struct WorkFollowApp: App {
         // 也算 self 访问；lifecycle 的接线放在最后）。
         _windowLaunch = StateObject(wrappedValue: windowLaunch)
         _environment = StateObject(wrappedValue: environment)
-        let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace)
+        let quickAdd = GlobalQuickAddController(workspace: environment.taskWorkspace, shortcuts: .shared)
         _quickAdd = StateObject(wrappedValue: quickAdd)
         _statusItem = StateObject(wrappedValue: StatusItemController(quickAdd: quickAdd,
                                                                     focusStore: environment.focusStore,
@@ -42,7 +42,7 @@ struct WorkFollowApp: App {
         configuredMainWindow
 
         Settings {
-            SettingsShellView()
+            SettingsShellView(quickAdd: quickAdd)
                 .environmentObject(environment)
                 .tint(WFColors.accent)
         }
@@ -120,6 +120,7 @@ final class NativeLifecycleDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         environment?.assistantBriefing.stop()
+        environment?.meetingFollowUps.stop()
         environment?.stopAIScheduler()
         AIBackendBridge.shared.shutdown()
     }

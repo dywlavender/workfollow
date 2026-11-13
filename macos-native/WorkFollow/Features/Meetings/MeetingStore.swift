@@ -12,8 +12,10 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private struct Snapshot: Codable {
         var meetings: [MeetingRecord]
         var configuration: MeetingPiConfiguration
+        var projects: ProjectFolders?
     }
     @Published private(set) var meetings: [MeetingRecord] = []
+    @Published var projects = ProjectFolders() { didSet { save() } }
     @Published var selectedID: UUID?
     @Published private(set) var recordingID: UUID?
     @Published private(set) var requestingPermission = false
@@ -30,6 +32,8 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     @Published private(set) var transcriptRevealRequest: MeetingTranscriptReveal?
     @Published var error: String?
     @Published var configuration = MeetingPiConfiguration() { didSet { save() } }
+    var onFinalizedForFollowUp: ((MeetingRecord) -> Void)?
+    private var followUpStops = Set<UUID>()
     private let persistence: JSONFileStore<Snapshot>
     private let storageDirectory: URL
     private let ai: MeetingAIClient
@@ -48,7 +52,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     private let turnTracker = MeetingSpeechTurnTracker()
     private var finalDeadlineTasks: [String: _Concurrency.Task<Void, Never>] = [:]
     private var minutesTask: _Concurrency.Task<Void, Never>?
-    static let automaticMinutesInterval: TimeInterval = 5 * 60
+    static let automaticMinutesInterval: TimeInterval = 30 * 60
     private let automaticallyUpdateMinutes: Bool
     private let minutesTimer: (TimeInterval) -> AnyPublisher<Date, Never>
     private var automaticMinutesMeetingID: UUID?
@@ -73,6 +77,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         persistence = JSONFileStore(filename: "meetings.json", directory: directory)
         if let snapshot = persistence.load() {
             meetings = snapshot.meetings
+            projects = snapshot.projects ?? ProjectFolders()
             configuration = snapshot.configuration
         }
         selectedID = meetings.first?.id
@@ -102,6 +107,18 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         Int(recordingID == meeting.id ? max(meeting.duration, recordingOffset + recorder.currentDuration) : meeting.duration)
     }
 
+    /// 录音时长的可读文本：不足 1 分钟只显示秒，不足 1 小时显示「X 分 Y 秒」，
+    /// 更长显示「X 小时 Y 分 Z 秒」。此前直接堆总秒数，长录音根本读不出量级。
+    static func durationText(_ seconds: Int) -> String {
+        let total = max(0, seconds)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secs = total % 60
+        if hours > 0 { return "\(hours) 小时 \(minutes) 分 \(secs) 秒" }
+        if minutes > 0 { return "\(minutes) 分 \(secs) 秒" }
+        return "\(secs) 秒"
+    }
+
     func create() {
         let meeting = MeetingRecord()
         meetings.insert(meeting, at: 0); selectedID = meeting.id; save()
@@ -122,6 +139,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         if selectedID == id {
             selectedID = meetings.isEmpty ? nil : meetings[min(index, meetings.count - 1)].id
         }
+        if projects.folderID(for: id) != nil { projects.move(id, to: nil) }
         save()
         return true
     }
@@ -138,7 +156,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         minutesEditRevisions[meetingID, default: 0] += 1
         let replacement = speaker == previous.speakerDisplayName ? previous.speaker : speaker
-        change(meetingID) { value in
+        change(meetingID, evidenceChanged: true) { value in
             value.previousTranscript = value.transcript
             for index in value.transcript.indices {
                 if value.transcript[index].id == lineID { value.transcript[index].text = text }
@@ -152,7 +170,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func restoreTranscript(_ id: UUID) {
         guard recordingID != id, retranscribingID != id else { return }
         minutesEditRevisions[id, default: 0] += 1
-        change(id) { value in
+        change(id, evidenceChanged: true) { value in
             guard let previous = value.previousTranscript else { return }
             value.transcript = previous; value.previousTranscript = nil; value.summarizedLineIDs = []
         }
@@ -225,7 +243,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
                 guard !lines.isEmpty else { throw MeetingPiError.invalidResult }
                 guard self.minutesEditRevisions[id, default: 0] == revision else { return }
                 self.minutesEditRevisions[id, default: 0] += 1
-                self.change(id) { value in
+                self.change(id, evidenceChanged: true) { value in
                     value.previousTranscript = value.transcript; value.transcript = lines.sorted { $0.offset < $1.offset }
                     value.summarizedLineIDs = []
                 }
@@ -295,12 +313,21 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
     }
 
+    func finishForFollowUp(_ id: UUID) {
+        guard onFinalizedForFollowUp != nil, retranscribingID != id,
+              meetings.contains(where: { $0.id == id }) else { return }
+        followUpStops.insert(id)
+        if recordingID == id { stopRecording() }
+        else { publishFinalizedMeeting(id) }
+    }
+
     func stopRecording() {
         stopAutomaticMinutes()
         if requestingPermission && inputStream == nil { streamToken = UUID() }
         permissionGeneration += 1; requestingPermission = false
         let saved = localRecording; localRecording = nil
         let duration = recorder.currentDuration
+        let stoppedID = recordingID
         recordingID = nil
         if let writer = recorder.stop(), let saved {
             savingRecordingIDs.insert(saved.meetingID)
@@ -309,7 +336,10 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
                 if let index = meeting.audio.firstIndex(where: { $0.id == saved.chunkID }) { meeting.audio[index].duration = duration }
             }
             _Concurrency.Task { [self] in
-                defer { savingRecordingIDs.remove(saved.meetingID) }
+                defer {
+                    savingRecordingIDs.remove(saved.meetingID)
+                    publishFinalizedMeeting(saved.meetingID)
+                }
                 do {
                     let result = try await writer.finish()
                     change(saved.meetingID) { meeting in
@@ -322,6 +352,24 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         }
         transport?.stopAccepting()
         if inputStream != nil { streamStopping = true; transport?.stopAccepting(); return }
+        if let stoppedID { publishFinalizedMeeting(stoppedID) }
+    }
+
+    private func publishFinalizedMeeting(_ id: UUID) {
+        guard followUpStops.contains(id), recordingID != id, inputStream?.meetingID != id,
+              transportMeetingID != id || transport?.isBusy != true,
+              !savingRecordingIDs.contains(id) else { return }
+        followUpStops.remove(id)
+        guard !blockedAudio.contains(id), let meeting = meetings.first(where: { $0.id == id }),
+              !meeting.transcript.isEmpty else { return }
+        persistence.flush { [weak self] error in
+            guard error == nil else { return }
+            _Concurrency.Task { @MainActor in
+                guard let self, self.recordingID != id,
+                      self.meetings.first(where: { $0.id == id })?.evidenceRevision == meeting.evidenceRevision else { return }
+                self.onFinalizedForFollowUp?(meeting)
+            }
+        }
     }
 
     /// Separate connection lifecycle from microphone capture; also permits deterministic transport tests.
@@ -403,7 +451,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         } else if event.kind == MeetingStreamKind.finalText {
             streamFinalIDs.insert(item); streamDrafts[meetingID]?.removeValue(forKey: item)
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                change(meetingID) { $0.transcript.append(line); $0.transcript.sort { $0.offset < $1.offset } }
+                change(meetingID, evidenceChanged: true) { $0.transcript.append(line); $0.transcript.sort { $0.offset < $1.offset } }
             }
         }
     }
@@ -420,7 +468,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     func appendTranscriptForTesting(_ text: String, speaker: String) {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, let id = selectedID else { return }
-        change(id) { meeting in
+        change(id, evidenceChanged: true) { meeting in
             meeting.transcript.append(MeetingTranscriptLine(
                 speaker: speaker, text: value,
                 offset: TimeInterval(recordedSeconds(meeting))))
@@ -466,7 +514,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         guard let id = selectedID else { return }
         minutesEditRevisions[id, default: 0] += 1
         if automaticMinutesMeetingID == id { heartbeat?.cancel(); heartbeat = nil }
-        change(id) {
+        change(id, evidenceChanged: selected?.transcript.isEmpty == true) {
             $0.minutes = text
             $0.minutesEditedByUser = true
         }
@@ -528,6 +576,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
             _Concurrency.Task { @MainActor [weak self, weak transport] in
                 guard let self, let transport, self.transport === transport else { return }
                 self.transcribing = false
+                self.publishFinalizedMeeting(meetingID)
             }
         }
     }
@@ -570,7 +619,7 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
     /// 批量路径：一次性转写返回的文字行落进对话记录（原 pumpAudio 成功分支）。
     private func receiveTranscribed(lines: [MeetingTranscriptLine], packet: MeetingAudioPacket,
                                     meetingID: UUID) {
-        change(meetingID) {
+        change(meetingID, evidenceChanged: !lines.isEmpty) {
             $0.transcript.append(contentsOf: lines)
             $0.transcript.sort { $0.offset < $1.offset }
         }
@@ -644,11 +693,15 @@ final class MeetingStore: ObservableObject, ModuleStoreFlushable {
         return true
     }
 
-    private func change(_ id: UUID, _ mutation: (inout MeetingRecord) -> Void) {
+    private func change(_ id: UUID, evidenceChanged: Bool = false, _ mutation: (inout MeetingRecord) -> Void) {
         guard let index = meetings.firstIndex(where: { $0.id == id }) else { return }
-        mutation(&meetings[index]); save()
+        mutation(&meetings[index])
+        if evidenceChanged { meetings[index].followUpRevision = UUID() }
+        save()
     }
-    private func save() { persistence.schedule(Snapshot(meetings: meetings, configuration: configuration)) }
+    private func save() {
+        persistence.schedule(Snapshot(meetings: meetings, configuration: configuration, projects: projects))
+    }
     func flush(_ completion: @escaping (Error?) -> Void) {
         cancelRetranscription()
         if recordingID != nil { stopRecording() }

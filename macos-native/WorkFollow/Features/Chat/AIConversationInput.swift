@@ -51,8 +51,7 @@ struct AIConversationInput: NSViewRepresentable {
         }
 
         override func keyDown(with event: NSEvent) {
-            if (event.keyCode == 36 || event.keyCode == 76), !hasMarkedText(),
-               event.modifierFlags.intersection([.shift, .option, .control]).isEmpty {
+            if !hasMarkedText(), AppShortcutStore.shared.matches(.sendAI, event: event) {
                 submit(); return
             }
             super.keyDown(with: event)

@@ -438,6 +438,33 @@ Component
 - AppKit 自建 `NSButton` 统一设置 `focusRingType = .none`，与既有的图标按钮、标题输入框保持一致。
 - 系统拥有的菜单栏、`NSAlert`、打开/存储面板保持原生行为，不在此规范内。
 
+### 8.10 规范例外白名单
+
+以下偏离是**刻意保留**的，审计与归口时不得"修复"；新增例外必须先登记再落地。
+
+**系统语义字级（保留 `.headline` / `.caption` 等系统 text style，不转 WFType 固定 pt）**
+
+- `TaskReminderPresenter` 通知横幅：系统语义环境，跟随系统无障碍字号缩放。
+- `AppleSyncStatusButton` 同步状态面板：同上，固定 pt 会让大字号用户看不清状态。
+- `SystemCalendarEventView` 系统日程详情：跟随系统字号，与 Apple 日历原生样式一致。
+
+**图标尺寸（`Image` 上的 `.largeTitle` / `.title2` / `.caption2` 等）**
+
+- 字级归口只约束文字；图标上的语义字级实际充当尺寸，保持现状。
+
+**版式与流程**
+
+- `TaskDisplaySettingsView`：居中标题 + 左上红色关闭点是滴答「显示设置」的既有样式，不并入统一页头（代码内已有白名单注释）。
+- `AITaskComposerView`：流式生成工作流，按生成态布局，不套静态弹框模板。
+- 模板库、命令面板、设置整窗：自有整窗版式，不套 `SheetDialog` / `WorkspacePageHeader`。
+
+**空态**
+
+- 页面级空态统一走 `WorkspaceEmptyState`（符号 + 标题 + 可选说明 + 可选主行动，全部 `secondaryText` 居中）：倒数纪念日、会议纪要、笔记未选中、占位目的地。
+- 任务侧空态是独立插画范式 `TaskEmptyStateView`（线稿插画 + 分视图文案），不并入 `WorkspaceEmptyState`。
+- AI 对话空消息流显示「今天想处理什么？」引导语（`detailTitle` 居中）：对话产品的开场 prompt，不是图标空态。
+- 侧栏/列表内的「暂无笔记」「暂无对话」是行内提示文字，不是页面空态。
+
 ## 9. 动效语言
 
 动效的关键词是 **跟手、短促、连续、可打断**。

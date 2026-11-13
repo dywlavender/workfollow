@@ -104,7 +104,10 @@ extension MilkdownWebView {
         case "tagInserted": if let value = payload["value"] as? String { context.profile.onTagInserted(value) }
         case "listInserted": if let value = payload["value"] as? String { context.profile.onListInserted(value) }
         case "reminder": showReminder(payload)
-        case "inlineDateReminder": showReminder(payload, suggested: Self.suggestedDate(for: payload["text"] as? String ?? ""))
+        case "inlineDateReminder":
+            showReminder(payload, suggested: Self.suggestedDate(for: payload["text"] as? String ?? ""),
+                         inlineDate: true)
+        case "inlineDateReminderTask": createReminderTask(payload)
         case "ghostRequest": requestGhost(payload)
         case "editDiagram": editDiagram(id: (payload["id"] as? String).flatMap(UUID.init(uuidString:)))
         case "previewImage":
@@ -297,7 +300,7 @@ extension MilkdownWebView {
         }
     }
 
-    private func showReminder(_ payload: [String: Any], suggested: Date? = nil) {
+    private func showReminder(_ payload: [String: Any], suggested: Date? = nil, inlineDate: Bool = false) {
         guard !isReadOnly, let window, let context = active,
               let id = (payload["blockID"] as? String).flatMap(UUID.init(uuidString:)),
               let index = document.blocks.firstIndex(where: { $0.id == id }),
@@ -313,7 +316,23 @@ extension MilkdownWebView {
             current: document.blocks[index].checklist?.reminderAt ?? suggested, notice: context.profile.checklistReminderNotice(),
             onSelect: { [weak self] date in
                 guard let self, documentIdentity == identity, let index = document.blocks.firstIndex(where: { $0.id == id }) else { return }
-                context.profile.setChecklistReminder(index, date)
+                // 行内日期流同步关联待办任务（双向同步的可见出口）；清单铃铛流
+                // 保持本地提醒，不重复建任务。
+                if inlineDate, let setInline = context.profile.setInlineDateReminder {
+                    setInline(index, date)
+                } else {
+                    context.profile.setChecklistReminder(index, date)
+                }
             }, onDismiss: { [weak self] in self?.reminderPanel = nil })
+    }
+
+    /// 行内日期提醒的「设置待办任务」：关联任务被删除（或移入垃圾桶）后从
+    /// 悬浮菜单重建关联；提醒时间沿用块上已有的 reminderAt，走同一条
+    /// `setInlineDateReminder` 幂等链路（无链接即创建，已链接只同步提醒）。
+    private func createReminderTask(_ payload: [String: Any]) {
+        guard !isReadOnly, let context = active,
+              let id = (payload["blockID"] as? String).flatMap(UUID.init(uuidString:)),
+              let index = document.blocks.firstIndex(where: { $0.id == id }) else { return }
+        context.profile.setInlineDateReminder?(index, document.blocks[index].checklist?.reminderAt)
     }
 }

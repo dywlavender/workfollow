@@ -103,7 +103,7 @@ struct CalendarWorkspaceView: View {
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
         .modifier(CalendarSwipeGestureModifier { direction in step(direction) })
         .coordinateSpace(name: PlanningCoordinateSpace.name)
         .sheet(isPresented: $showDisplayOptions) {

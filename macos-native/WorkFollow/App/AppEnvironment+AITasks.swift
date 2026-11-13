@@ -1,6 +1,24 @@
 import Foundation
 
 extension AppEnvironment {
+    func generateMeetingFollowUp(_ meeting: MeetingRecord, retry: Bool = false) {
+        guard canSeedWelcomeGuide else { return }
+        var request = aiTaskRequest(for: meeting)
+        request.instruction = "提取会议已明确承诺、仍需跟进的行动。明确的交付截止时间写入截止日期。"
+        meetingFollowUps.generate(for: meeting, request: request, retry: retry, isCurrent: { [weak self] in
+            self?.meetingStore.meetings.first(where: { $0.id == meeting.id })?.evidenceRevision == meeting.evidenceRevision
+        }) { [weak self] request in
+            guard let self else { throw AIBackendError.unavailable }
+            return try await self.textAIClient().generateTasks(request) { _ in }
+        }
+    }
+
+    func followUpRequest(for batch: MeetingFollowUp) -> AITaskRequest? {
+        guard let meeting = meetingStore.meetings.first(where: { $0.id == batch.id }),
+              meeting.evidenceRevision == batch.revision else { return nil }
+        return aiTaskRequest(for: meeting)
+    }
+
     func aiTaskRequest(for note: Note) throws -> AITaskRequest {
         AITaskRequest(source: .note(note.id), title: note.title.isEmpty ? "未命名笔记" : note.title,
             content: try note.document.materialized().plainText, referenceDate: note.updatedAt,

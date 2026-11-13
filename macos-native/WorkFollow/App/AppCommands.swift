@@ -3,23 +3,27 @@ import SwiftUI
 
 struct AppCommands: Commands {
     @ObservedObject private var editorSession = MilkdownEditorRegistry.shared
+    @ObservedObject private var shortcuts = AppShortcutStore.shared
     @ObservedObject var environment: AppEnvironment
     @ObservedObject var quickAdd: GlobalQuickAddController
-    @AppStorage("globalQuickAddEnabled") private var globalQuickAddEnabled = false
 
     var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            SettingsLink { Text("设置…") }
+                .keyboardShortcut(shortcuts.chord(for: .openSettings).swiftUIShortcut)
+        }
         CommandGroup(replacing: .newItem) {
             Button("新建任务") { environment.newTask() }
-                .keyboardShortcut("n", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .newTask).swiftUIShortcut)
             Button("新建悬浮笔记") { environment.newFloatingNote() }
-                .keyboardShortcut("n", modifiers: [.command, .option])
+                .keyboardShortcut(shortcuts.chord(for: .newFloatingNote).swiftUIShortcut)
         }
         CommandGroup(replacing: .undoRedo) {
             Button("撤销") { routeHistory(redo: false) }
-                .keyboardShortcut("z", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .undo).swiftUIShortcut)
                 .disabled(!canUndo)
             Button("重做") { routeHistory(redo: true) }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
+                .keyboardShortcut(shortcuts.chord(for: .redo).swiftUIShortcut)
                 .disabled(!canRedo)
         }
         CommandGroup(after: .textEditing) {
@@ -29,16 +33,19 @@ struct AppCommands: Commands {
                 NSApp.sendAction(#selector(NSTextView.performFindPanelAction(_:)),
                                  to: nil, from: item)
             }
-            .keyboardShortcut("f", modifiers: .command)
+            .keyboardShortcut(shortcuts.chord(for: .findBody).swiftUIShortcut)
         }
         CommandMenu("导航") {
             Button("快速打开…") { environment.commandPalettePresented = true }
-                .keyboardShortcut("k", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .quickOpen).swiftUIShortcut)
             Divider()
-            Toggle("启用全局快速添加（⌘⇧A）", isOn: $globalQuickAddEnabled)
-                .onChange(of: globalQuickAddEnabled) { _, enabled in
-                    quickAdd.setEnabled(enabled)
+            Toggle("启用全局快速添加（\(shortcuts.chord(for: .globalQuickAdd).label)）",
+                   isOn: Binding(get: { quickAdd.isEnabled }, set: { enabled in
+                if !quickAdd.setEnabled(enabled) {
+                    environment.feedback.show(FeedbackEvent(kind: .error,
+                        message: AppShortcutError.globalUnavailable.localizedDescription))
                 }
+            }))
         }
         // 清单菜单：智能清单导航（对齐 Flutter 清单菜单；快捷键集中在视图菜单，
         // 避免与 ⌘1…9 的键位在两个菜单间竞争）。
@@ -78,18 +85,18 @@ struct AppCommands: Commands {
                 .disabled(!hasSelectedTask)
             Button("清除当前日期") { clearSelectedDate() }
                 .disabled(!hasSelectedTask)
-                .keyboardShortcut("0", modifiers: [.command, .shift])
+                .keyboardShortcut(shortcuts.chord(for: .clearTaskDate).swiftUIShortcut)
             // 滴答同款三档快设日期（滴答用 ⌘1/2/3；这里 ⌘1/2 已是视图导航，
             // 挪到 ⌘⇧ 档，语义不变：选中任务后一键改期）。
             Button("设为今天") { setDayOffset(0) }
                 .disabled(!hasSelectedTask)
-                .keyboardShortcut("1", modifiers: [.command, .shift])
+                .keyboardShortcut(shortcuts.chord(for: .taskToday).swiftUIShortcut)
             Button("设为明天") { setDayOffset(1) }
                 .disabled(!hasSelectedTask)
-                .keyboardShortcut("2", modifiers: [.command, .shift])
+                .keyboardShortcut(shortcuts.chord(for: .taskTomorrow).swiftUIShortcut)
             Button("设为下周") { setNextWeek() }
                 .disabled(!hasSelectedTask)
-                .keyboardShortcut("3", modifiers: [.command, .shift])
+                .keyboardShortcut(shortcuts.chord(for: .taskNextWeek).swiftUIShortcut)
             Divider()
             Button("设为高优先级") { setPriority(.high) }
             Button("设为中优先级") { setPriority(.medium) }
@@ -98,20 +105,20 @@ struct AppCommands: Commands {
         }
         CommandMenu("视图") {
             Button("今天") { environment.navigate(to: .today) }
-                .keyboardShortcut("1", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .today).swiftUIShortcut)
             Button("收集箱") { environment.navigate(to: .inbox) }
-                .keyboardShortcut("2", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .inbox).swiftUIShortcut)
             Button("最近 7 天") { environment.navigate(to: .nextSevenDays) }
-                .keyboardShortcut("9", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .nextSevenDays).swiftUIShortcut)
             Button("日历") { environment.navigate(to: .calendar) }
-                .keyboardShortcut("4", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .calendar).swiftUIShortcut)
             Button("笔记") { environment.navigate(to: .notes) }
-                .keyboardShortcut("5", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .notes).swiftUIShortcut)
             Button("四象限") { environment.navigate(to: .matrix) }
-                .keyboardShortcut("6", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .matrix).swiftUIShortcut)
             Divider()
             Button("显示或隐藏侧栏") { environment.toggleSidebar() }
-                .keyboardShortcut("\\", modifiers: .command)
+                .keyboardShortcut(shortcuts.chord(for: .toggleSidebar).swiftUIShortcut)
         }
         CommandGroup(after: .help) {
             Divider()

@@ -22,10 +22,11 @@ struct NativeDocument: Equatable, Codable {
 
     /// 清单进度/提醒的快路径：延迟文档只读摘要；内存文档才从块计算。
     /// 不得为了拿摘要而调用 `materialized()`，否则列表会逐条水合正文。
+    /// 纯段落但带提醒的正文也要产出摘要——提醒排程读的就是它。
     var checklistSummary: ChecklistSummary? {
         if let deferred { return deferred.summary.checklist }
         let summary = ChecklistSummary(blocks: storedBlocks)
-        return summary.total > 0 ? summary : nil
+        return summary.total > 0 || !summary.reminders.isEmpty ? summary : nil
     }
 
     init(deferred: DeferredDocument) { storedBlocks = []; self.deferred = deferred }
@@ -133,21 +134,27 @@ struct ChecklistItemMeta: Equatable, Codable {
     var completedAt: Date?
     var reminderAt: Date?
     var allDay: Bool
+    /// 行内日期提醒的关联待办任务；nil = 纯文档提醒（正文扫描排程通知）。
+    /// 有链接时提醒由任务侧排程，正文投影跳过该行避免双响。
+    var reminderTaskID: UUID?
 
-    init(completedAt: Date? = nil, reminderAt: Date? = nil, allDay: Bool = false) {
+    init(completedAt: Date? = nil, reminderAt: Date? = nil, allDay: Bool = false,
+         reminderTaskID: UUID? = nil) {
         self.completedAt = completedAt
         self.reminderAt = reminderAt
         self.allDay = allDay
+        self.reminderTaskID = reminderTaskID
     }
 
-    var isEmpty: Bool { completedAt == nil && reminderAt == nil }
+    var isEmpty: Bool { completedAt == nil && reminderAt == nil && reminderTaskID == nil }
 
-    private enum CodingKeys: String, CodingKey { case completedAt, reminderAt, allDay }
+    private enum CodingKeys: String, CodingKey { case completedAt, reminderAt, allDay, reminderTaskID }
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         completedAt = try values.decodeIfPresent(Date.self, forKey: .completedAt)
         reminderAt = try values.decodeIfPresent(Date.self, forKey: .reminderAt)
         allDay = try values.decodeIfPresent(Bool.self, forKey: .allDay) ?? false
+        reminderTaskID = try values.decodeIfPresent(UUID.self, forKey: .reminderTaskID)
     }
 }
 

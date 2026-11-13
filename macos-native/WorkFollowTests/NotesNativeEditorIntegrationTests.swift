@@ -108,6 +108,40 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         XCTAssertEqual(reopened.tasks.first { $0.id == second }?.document.plainText, "乙续写")
     }
 
+    func testSwitchingNotesWhileComposingATitleKeepsEachNotesOwnTitle() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        let first = notes.create()
+        let second = notes.create()
+        notes.edit(first) { $0.title = "第一篇" }
+        notes.edit(second) { $0.title = "第二篇" }
+        notes.selectedID = first
+        let host = host(environment)
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.contentView = nil; window.close() }
+
+        func titleField(in view: NSView) -> HeightTrackingTextField? {
+            if let field = view as? HeightTrackingTextField { return field }
+            return view.subviews.lazy.compactMap { titleField(in: $0) }.first
+        }
+
+        let title = try XCTUnwrap(titleField(in: host))
+        XCTAssertTrue(window.makeFirstResponder(title))
+        InspectorPanelTestSupport.settle(window)
+        let editor = try XCTUnwrap(title.currentEditor() as? NSTextView)
+        let end = NSRange(location: editor.string.utf16.count, length: 0)
+        editor.setSelectedRange(end)
+        editor.setMarkedText("gengxin", selectedRange: NSRange(location: 7, length: 0), replacementRange: end)
+        XCTAssertTrue(editor.hasMarkedText())
+
+        notes.selectedID = second
+        InspectorPanelTestSupport.settle(window)
+
+        let nextTitle = try XCTUnwrap(titleField(in: host))
+        XCTAssertEqual(nextTitle.stringValue, "第二篇")
+        XCTAssertEqual(notes.notes.first { $0.id == second }?.title, "第二篇")
+    }
+
     func testNoteActionsMenuConvertsNoteToTaskInPlace() throws {
         let environment = fixture()
         let notes = environment.notesWorkspace
@@ -122,8 +156,8 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
 
         try InspectorPanelTestSupport.click(try XCTUnwrap(menuTriggers["笔记操作"]), in: host, window: window)
         let menu = try InspectorPanelTestSupport.panel(title: "笔记操作", below: window)
-        XCTAssertEqual(menuRows.count, 4)
-        // Rows: 收藏 / 复制笔记正文 / 转换为任务 / 移到垃圾桶.
+        // Rows: 收藏 / 复制笔记正文 / 保存为笔记模板 / 转换为任务 / 移到垃圾桶.
+        XCTAssertEqual(menuRows.count, 5)
         let convert = try XCTUnwrap(menuRows.dropLast().last)
         try InspectorPanelTestSupport.click(convert.rect,
                                             in: try XCTUnwrap(menu.contentView), window: menu)
@@ -172,8 +206,8 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
         try rightClickFirstNoteRow(in: window)
         let menu = try InspectorPanelTestSupport.panel(title: "操作菜单", below: window)
         XCTAssertEqual(notes.selectedID, first, "右键先选中目标行")
-        // 打开笔记 / 收藏 / 移动到 / 复制笔记正文 / 转换为任务 / 移到垃圾桶
-        XCTAssertEqual(menuRows.count, 6)
+        // 打开笔记 / 收藏 / 移动到 / 更换图标 / 复制笔记正文 / 转换为任务 / 移到垃圾桶
+        XCTAssertEqual(menuRows.count, 7)
         try InspectorPanelTestSupport.click(menuRows[1].rect,
                                             in: try XCTUnwrap(menu.contentView), window: menu)
         XCTAssertEqual(notes.notes.first { $0.id == first }?.favorite, true)
@@ -204,6 +238,30 @@ final class NotesNativeEditorIntegrationTests: XCTestCase {
 
         XCTAssertEqual(notes.notes.first { $0.id == id }?.folder, "会议")
         XCTAssertEqual(notes.notes.first { $0.id == id }?.folderID, notes.folderID(named: "会议"))
+    }
+
+    func testNoteRowContextMenuAppliesDirectoryIcon() throws {
+        let environment = fixture()
+        let notes = environment.notesWorkspace
+        let id = notes.create(title: "图标测试")
+        var menuRows: [BusinessMenuRowFrame] = []
+        let host = host(environment, onPopupRows: { menuRows = $0 })
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 1100, height: 720)
+        defer { window.close() }
+        window.appearance = NSAppearance(named: .darkAqua)
+
+        try rightClickFirstNoteRow(in: window)
+        let menu = try InspectorPanelTestSupport.panel(title: "操作菜单", below: window)
+        try InspectorPanelTestSupport.click(try XCTUnwrap(menuRows.dropFirst(3).first).rect,
+                                            in: try XCTUnwrap(menu.contentView), window: menu)
+        let palette = try InspectorPanelTestSupport.panel(title: "更换图标", below: window)
+        // SwiftUI 的网格按钮不出现在测试宿主的 AX 树中。点第一行的「会议」图标。
+        try InspectorPanelTestSupport.click(CGRect(x: 139, y: 23, width: 12, height: 12),
+                                            in: try XCTUnwrap(palette.contentView), window: palette)
+
+        XCTAssertEqual(notes.notes.first { $0.id == id }?.icon, "person.2")
+        XCTAssertFalse(palette.isVisible)
+        XCTAssertFalse(menu.isVisible)
     }
 
     func testLongNoteUsesOuterCompactScrollView() throws {

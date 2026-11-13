@@ -33,15 +33,13 @@ enum FocusTaskPickerMetrics {
     static let width: CGFloat = 312
     static let height: CGFloat = 460
     static let outerPadding: CGFloat = 16
-    static let searchHeight: CGFloat = 34
-    static let scopeRowHeight: CGFloat = 34
+    static let searchHeight = PopupMetrics.searchFieldHeight
+    static let scopeRowHeight = PopupMetrics.menuRowHeight
     static let groupHeaderHeight: CGFloat = 26
-    static let taskRowHeight: CGFloat = 36
+    static let taskRowHeight = PopupMetrics.menuRowHeight
     static let checkboxSize: CGFloat = 14
-    static let taskFontSize: CGFloat = 13
-    static let dateFontSize: CGFloat = 11
     static let scopeWidth: CGFloat = 172
-    static let scopeRowHeightCompact: CGFloat = 34
+    static let scopeRowHeightCompact = PopupMetrics.menuRowHeight
     static let scopeHorizontalPadding: CGFloat = 12
     static let scopeIconSize: CGFloat = 15
 }
@@ -74,7 +72,6 @@ struct FocusTaskPickerPopover: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
-    @FocusState private var searchFocused: Bool
     @State private var isScopeHovered = false
 
     private var theme: FocusTheme { FocusTheme(colorScheme) }
@@ -105,7 +102,7 @@ struct FocusTaskPickerPopover: View {
                 if groups.isEmpty {
                     Text(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                          ? "没有任务" : "没有匹配的任务")
-                        .font(.system(size: FocusTaskPickerMetrics.taskFontSize))
+                        .font(WFType.body)
                         .foregroundStyle(theme.text3)
                         .frame(maxWidth: .infinity, minHeight: 104)
                         .compactScrollbars()
@@ -134,7 +131,7 @@ struct FocusTaskPickerPopover: View {
                 Divider().padding(.top, 6)
                 Button(action: onClearTask) {
                     Label("不关联", systemImage: "xmark.circle")
-                        .font(.system(size: FocusTaskPickerMetrics.taskFontSize))
+                        .font(WFType.body)
                         .foregroundStyle(theme.text2)
                         .frame(maxWidth: .infinity, minHeight: FocusTaskPickerMetrics.taskRowHeight,
                                alignment: .leading)
@@ -149,23 +146,12 @@ struct FocusTaskPickerPopover: View {
         .frame(width: FocusTaskPickerMetrics.width, height: FocusTaskPickerMetrics.height,
                alignment: .topLeading)
         .coordinateSpace(name: "focus-task-picker")
-        .onAppear { DispatchQueue.main.async { searchFocused = true } }
     }
 
     private var searchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(theme.text3)
-            TextField("搜索", text: $query)
-                .textFieldStyle(.plain)
-                .font(.system(size: FocusTaskPickerMetrics.taskFontSize))
-                .focused($searchFocused)
-                .accessibilityIdentifier("focus-task-picker-search")
-        }
-        .padding(.horizontal, 10)
-        .frame(height: FocusTaskPickerMetrics.searchHeight)
-        .background(RoundedRectangle(cornerRadius: 8).fill(theme.chipBackground))
+        PopupSearchField(text: $query, height: FocusTaskPickerMetrics.searchHeight,
+                         autofocus: true)
+            .accessibilityIdentifier("focus-task-picker-search")
     }
 
     private var scopeButton: some View {
@@ -175,7 +161,7 @@ struct FocusTaskPickerPopover: View {
             HStack(spacing: 8) {
                 scopeIcon(scope)
                 Text(scope.title)
-                    .font(.system(size: FocusTaskPickerMetrics.taskFontSize, weight: .medium))
+                    .font(WFType.listTitleMedium)
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 4)
@@ -232,13 +218,13 @@ struct FocusTaskPickerPopover: View {
                     .frame(width: FocusTaskPickerMetrics.checkboxSize,
                            height: FocusTaskPickerMetrics.checkboxSize)
                 Text(FocusTaskPickerProjection.displayTitle(for: task))
-                    .font(.system(size: FocusTaskPickerMetrics.taskFontSize))
+                    .font(WFType.menu)
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if let date = FocusTaskPickerProjection.date(for: task) {
                     Text(dateText(date, task: task))
-                        .font(.system(size: FocusTaskPickerMetrics.dateFontSize))
+                        .font(WFType.caption)
                         .foregroundStyle(dateIsOverdue(date, task: task) ? theme.warn : theme.text3)
                         .lineLimit(1)
                         .fixedSize()

@@ -231,14 +231,9 @@ struct CountdownWorkspaceView: View {
     /// 空态文案取自参照物语言包：`no_countdowns` = 记录你的重要时刻，
     /// `no_countdown_message` = 让回忆和期待都有迹可循。
     private var emptyState: some View {
-        VStack(spacing: WFSpace.md) {
-            Image(systemName: NativeDestination.countdown.symbol).font(.largeTitle)
-            Text("记录你的重要时刻").font(WFType.body)
-            Text("让回忆和期待都有迹可循")
-                .font(WFType.supporting)
-        }
-        .foregroundStyle(WFColors.secondaryText)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WorkspaceEmptyState(symbol: NativeDestination.countdown.symbol,
+                            title: "记录你的重要时刻",
+                            message: "让回忆和期待都有迹可循")
     }
 
     /// 卡片在**未过滤**的完整列表里的位置，供上移/下移用。

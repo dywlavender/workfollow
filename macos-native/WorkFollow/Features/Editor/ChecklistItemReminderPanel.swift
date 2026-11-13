@@ -9,10 +9,16 @@ final class ChecklistItemReminderPanel: NSPanel {
     private let onDismiss: () -> Void
     private let now: Date
     private let anchorRect: NSRect
-    private let screenBounds: NSRect
+    /// 面板允许出现的范围：所属窗口的内容区。不能用整块屏幕——屏幕范围会把
+    /// 「上方可用空间」算到 app 窗口之外，笔记顶部的日期就把面板顶出窗口了。
+    private let placementBounds: NSRect
     private var hostView: NSView?
     private var interactionRegistration: UUID?
     private var isDismissing = false
+    /// 首次贴位定死的朝向与位置：预设页 ↔ 日历页切换只沿锚点侧边缘伸缩，
+    /// 不再重新选边（否则日历页放不下就翻到另一侧，看起来像弹框消失后在别处出现）。
+    private var anchorSide: EditorPopupGeometry.Side?
+    private var placedFrame: NSRect?
 
     override var canBecomeKey: Bool { true }
 
@@ -24,7 +30,7 @@ final class ChecklistItemReminderPanel: NSPanel {
         self.onDismiss = onDismiss
         self.now = now
         anchorRect = anchor
-        screenBounds = owner.screen?.visibleFrame ?? EditorPopupGeometry.bounds(in: owner)
+        placementBounds = EditorPopupGeometry.bounds(in: owner)
         super.init(contentRect: .zero,
                    styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
@@ -62,16 +68,35 @@ final class ChecklistItemReminderPanel: NSPanel {
         }, dismiss: { [weak self] _ in self?.dismiss() })
     }
 
-    /// 预设页与日历页高度不同：切换后按新内容高度重新贴回铃铛上方。
+    /// 预设页与日历页高度不同：切换后按新内容高度在原位伸缩。
     func resizeToFit(animated: Bool = true) {
         guard let host = hostView else { return }
         host.layoutSubtreeIfNeeded()
         let size = host.fittingSize
         guard size.width > 0, size.height > 0 else { return }
-        let frame = EditorPopupGeometry.frame(anchor: anchorRect, size: size, bounds: screenBounds,
+        let frame: NSRect
+        if let side = anchorSide, let placed = placedFrame {
+            frame = Self.pinnedFrame(placed: placed, size: size, side: side, bounds: placementBounds)
+        } else {
+            frame = EditorPopupGeometry.frame(anchor: anchorRect, size: size, bounds: placementBounds,
                                               preferredSide: .above, alignment: .trailing,
                                               gap: PopupMetrics.controlGap)
+            anchorSide = frame.midY > anchorRect.midY ? .above : .below
+            placedFrame = frame
+        }
         setFrame(frame, display: true, animate: animated)
+    }
+
+    /// 保持打开时的朝向：锚点在上方则底边贴住锚点向上长，在下方则顶边贴住向下长；
+    /// 越出窗口内容区时整体挤回，不再换侧。
+    static func pinnedFrame(placed: NSRect, size: CGSize, side: EditorPopupGeometry.Side,
+                            bounds: NSRect) -> NSRect {
+        let safe = bounds.insetBy(dx: EditorPopupGeometry.inset, dy: EditorPopupGeometry.inset)
+        var frame = placed
+        frame.size = CGSize(width: placed.width, height: min(max(0, size.height), max(0, safe.height)))
+        frame.origin.y = side == .above ? placed.minY : placed.maxY - frame.height
+        frame.origin.y = min(max(frame.minY, safe.minY), max(safe.minY, safe.maxY - frame.height))
+        return frame
     }
 
     override func cancelOperation(_ sender: Any?) {

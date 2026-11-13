@@ -66,6 +66,23 @@ struct AssistantBriefingFacts: Codable, Sendable {
         // A Codable projection keeps the backend independent of native domain models.
         (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(self))) as? [String: Any] ?? [:]
     }
+
+    var actionableTasks: [Item] {
+        func urgency(_ item: Item) -> Int {
+            if item.categories.contains("overdue") { return 0 }
+            if item.categories.contains("deadline") { return 1 }
+            return item.categories.contains("today") ? 2 : 3
+        }
+        return tasks.sorted { lhs, rhs in
+            let left = urgency(lhs), right = urgency(rhs)
+            if left != right { return left < right }
+            let leftDate = left == 1 ? lhs.deadline : lhs.date
+            let rightDate = right == 1 ? rhs.deadline : rhs.date
+            if leftDate != rightDate { return (leftDate ?? "~") < (rightDate ?? "~") }
+            if lhs.priority != rhs.priority { return lhs.priority == "high" }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
+    }
 }
 
 struct AssistantDailyBriefing: Codable, Sendable {
@@ -79,9 +96,21 @@ struct AssistantDailyBriefing: Codable, Sendable {
 @MainActor
 final class AssistantBriefingStore: ObservableObject {
     typealias Generate = (@escaping @Sendable (AITextUpdate) -> Void) async throws -> (AssistantBriefingFacts, String)
-    private struct Snapshot: Codable { var automaticEnabled = true; var record: AssistantDailyBriefing? }
+    private struct Snapshot: Codable {
+        var automaticEnabled = true
+        var record: AssistantDailyBriefing?
+        var defaultReminderMinutes: Int?
+        /// **可选**：存量快照没有这个键，非可选会在解码时抛 `keyNotFound`
+        /// （Swift 合成的 Codable 不用属性默认值填缺键，与 `MeetingRecord.minutesEditedByUser` 同坑）。
+        var cardHidden: Bool?
+    }
     @Published private(set) var record: AssistantDailyBriefing?
+    @Published private(set) var today: [AssistantBriefingFacts.Item] = []
     @Published private(set) var automaticEnabled = true
+    @Published private(set) var defaultReminderMinutes: Int?
+    /// AI 对话页「今日简报」卡片是否被用户收起。只影响卡片显示；
+    /// 简报照常生成——正文仍作为会话上下文注入（`context`）。
+    @Published private(set) var cardHidden = false
     @Published private(set) var isRunning = false
     @Published private(set) var preview = ""
     @Published private(set) var error: String?
@@ -91,6 +120,7 @@ final class AssistantBriefingStore: ObservableObject {
     private var loadFailed = false
     private var attemptedDay: String?
     private var worker: _Concurrency.Task<Void, Never>?
+    private var todayWorker: _Concurrency.Task<Void, Never>?
     private var token = UUID()
 
     init(directory: URL, clock: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
@@ -100,6 +130,8 @@ final class AssistantBriefingStore: ObservableObject {
             do {
                 let saved = try JSONDecoder().decode(Snapshot.self, from: Data(contentsOf: file))
                 record = saved.record; automaticEnabled = saved.automaticEnabled
+                defaultReminderMinutes = saved.defaultReminderMinutes
+                cardHidden = saved.cardHidden ?? false
             } catch { loadFailed = true; self.error = "今日简报读取失败：" + error.localizedDescription }
         }
     }
@@ -118,9 +150,33 @@ final class AssistantBriefingStore: ObservableObject {
     }
 
     func setAutomaticEnabled(_ enabled: Bool) throws {
-        try persist(Snapshot(automaticEnabled: enabled, record: record))
+        try persist(Snapshot(automaticEnabled: enabled, record: record,
+                             defaultReminderMinutes: defaultReminderMinutes, cardHidden: cardHidden))
         automaticEnabled = enabled
         if !enabled { stop() }
+    }
+
+    func setDefaultReminderMinutes(_ value: Int?) throws {
+        try persist(Snapshot(automaticEnabled: automaticEnabled, record: record,
+                             defaultReminderMinutes: value, cardHidden: cardHidden))
+        defaultReminderMinutes = value
+    }
+
+    /// 收起/恢复「今日简报」卡片。落盘是为了跨启动记住——不然下次打开又回来，
+    /// 就成了用户抱怨的「一直今日简报」。
+    func setCardHidden(_ hidden: Bool) throws {
+        try persist(Snapshot(automaticEnabled: automaticEnabled, record: record,
+                             defaultReminderMinutes: defaultReminderMinutes, cardHidden: hidden))
+        cardHidden = hidden
+    }
+
+    func updateToday(_ read: @escaping @Sendable () -> AssistantBriefingFacts) {
+        todayWorker?.cancel()
+        todayWorker = _Concurrency.Task { [weak self] in
+            let items = await _Concurrency.Task.detached(priority: .utility) { read().actionableTasks }.value
+            guard !_Concurrency.Task.isCancelled else { return }
+            self?.today = items
+        }
     }
 
     func refresh(force: Bool = false, generate: @escaping Generate) {
@@ -141,7 +197,9 @@ final class AssistantBriefingStore: ObservableObject {
                 guard let self, self.token == request else { return }
                 guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw AIBackendError.invalidResponse }
                 let next = AssistantDailyBriefing(day: day, timeZone: zone, generatedAt: self.clock(), facts: facts, text: text)
-                try self.persist(Snapshot(automaticEnabled: self.automaticEnabled, record: next))
+                try self.persist(Snapshot(automaticEnabled: self.automaticEnabled, record: next,
+                                          defaultReminderMinutes: self.defaultReminderMinutes,
+                                          cardHidden: self.cardHidden))
                 self.record = next
                 self.finish()
             } catch {

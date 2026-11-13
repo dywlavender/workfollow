@@ -38,10 +38,21 @@ extension AppEnvironment {
         }
         if !NativeResourceLinkRouter.open(link, tasks: taskWorkspace, notes: notesWorkspace, navigation: navigation, meetings: meetingStore) {
             feedback.show(FeedbackEvent(kind: .error, message: "链接目标不存在或已不可用"))
-        } else if case let .meeting(id) = link,
-                  let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "line" })?.value,
-                  let line = UUID(uuidString: raw) {
-            meetingStore.revealTranscript(meetingID: id, lineID: line)
+        } else if let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+            let blockID = items.first(where: { $0.name == "block" })?.value.flatMap(UUID.init(uuidString:))
+            let query = items.first(where: { $0.name == "match" })?.value ?? ""
+            switch link {
+            case .task(let id):
+                if taskWorkspace.task(for: id)?.isNoteTask == true {
+                    notesWorkspace.requestSearchReveal(noteID: id, query: query, blockID: blockID)
+                } else { taskWorkspace.requestSearchReveal(taskID: id, query: query, blockID: blockID) }
+            case .note(let id):
+                notesWorkspace.requestSearchReveal(noteID: id, query: query, blockID: blockID)
+            case .meeting(let id):
+                if let line = items.first(where: { $0.name == "line" })?.value.flatMap(UUID.init(uuidString:)) {
+                    meetingStore.revealTranscript(meetingID: id, lineID: line)
+                }
+            }
         }
         return true
     }

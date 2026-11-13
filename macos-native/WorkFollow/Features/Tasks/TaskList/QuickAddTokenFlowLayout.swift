@@ -348,6 +348,7 @@ struct QuickAddTextField: NSViewRepresentable {
             }
             // Shift+↩︎ 走的是另一个 selector（见 StandardKeyBinding.dict 的 `~\r`）。
             if commandSelector == #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)) {
+                guard AppShortcutStore.shared.isDefault(.quickAddDescription) else { return false }
                 parent.onShiftReturn()
                 return true
             }
@@ -361,6 +362,25 @@ struct QuickAddTextField: NSViewRepresentable {
                 return parent.pastePreservingNewlines(control as? NSTextField, editor: textView)
             }
             return false
+        }
+    }
+}
+
+struct QuickAddDescriptionShortcut: View {
+    @ObservedObject private var shortcuts = AppShortcutStore.shared
+    let focused: Bool
+    let action: () -> Void
+
+    var body: some View {
+        if focused, !shortcuts.isDefault(.quickAddDescription) {
+            Button("添加任务描述") {
+                guard (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() != true else { return }
+                action()
+            }
+            .keyboardShortcut(shortcuts.chord(for: .quickAddDescription).swiftUIShortcut)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
         }
     }
 }

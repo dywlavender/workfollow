@@ -13,13 +13,10 @@ struct TaskKanbanSettingsView: View {
         })
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                Text("显示设置").font(WFType.section)
-                Spacer()
-                Button { dismiss() } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).hoverTip("关闭显示设置").accessibilityLabel("关闭显示设置")
-            }
+        SheetSettingsPanel(title: "显示设置",
+                           width: SheetDialogMetrics.compactWidth,
+                           contentHeight: 180,
+                           onDone: { dismiss() }) {
             WFFormSection {
                 WFFormRow("看板尺寸") {
                     BusinessPicker("看板尺寸", selection: value(\.size), options:
@@ -32,8 +29,7 @@ struct TaskKanbanSettingsView: View {
                         TaskDateDisplayMode.menuOrder.map { BusinessChoice($0.rawValue, $0.title) }).labelsHidden()
                 }
             }
-        }.padding(24).frame(width: 420)
-            .workfollowPopupSurface()
-            .onExitCommand { dismiss() }
+        }
+        .onExitCommand { dismiss() }
     }
 }

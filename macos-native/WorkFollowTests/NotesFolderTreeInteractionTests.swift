@@ -35,13 +35,17 @@ final class NotesFolderTreeInteractionTests: XCTestCase {
 
         XCTAssertFalse(notes.favoritesOnly)
         // SwiftUI 树节点不暴露 AX 元素，按列布局定位：作用域条距顶 94..122，
-        // 左栏 320 内两个按钮均分，「全部」中心 x≈85、「收藏」中心 x≈235。
-        // 走真实鼠标事件，而不是直接改状态。
-        try InspectorPanelTestSupport.click(CGRect(x: 229, y: 102, width: 12, height: 12),
+        // 目录栏（2026-11-08 起独立宽度，默认 236）内两个按钮均分。
+        // 宽度从模型现算，别再硬编码——宽度自适应后会变。走真实鼠标事件。
+        let pane = notes.effectiveTreePaneWidth
+        let buttonSpan = (pane - 20 - 4) / 2   // 两侧 padding 10 + 分段内边距 2×2
+        let allCenterX = 10 + 2 + buttonSpan / 2
+        let favoriteCenterX = 10 + 2 + buttonSpan * 1.5
+        try InspectorPanelTestSupport.click(CGRect(x: favoriteCenterX - 6, y: 102, width: 12, height: 12),
                                             in: view, window: window)
         XCTAssertTrue(notes.favoritesOnly)
 
-        try InspectorPanelTestSupport.click(CGRect(x: 79, y: 102, width: 12, height: 12),
+        try InspectorPanelTestSupport.click(CGRect(x: allCenterX - 6, y: 102, width: 12, height: 12),
                                             in: view, window: window)
         XCTAssertFalse(notes.favoritesOnly)
     }

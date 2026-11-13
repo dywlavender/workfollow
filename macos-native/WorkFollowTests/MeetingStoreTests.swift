@@ -70,6 +70,10 @@ final class MeetingStoreTests: XCTestCase {
         store.create(); let oldest = try XCTUnwrap(store.selectedID)
         store.create(); let middle = try XCTUnwrap(store.selectedID)
         store.create(); let newest = try XCTUnwrap(store.selectedID)
+        let project = try XCTUnwrap(store.projects.create("访谈"))
+        store.projects.move(oldest, to: project)
+        store.projects.move(middle, to: project)
+        XCTAssertTrue(store.projects.rename(project, to: "访谈项目"))
         XCTAssertTrue(store.delete(middle))
         XCTAssertEqual(store.selectedID, newest, "删除未选中记录不应切换详情")
         XCTAssertTrue(store.delete(newest))
@@ -77,6 +81,9 @@ final class MeetingStoreTests: XCTestCase {
         await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in store.flush { _ in c.resume() } }
         let restored = MeetingStore(directory: root, ai: ai, automaticallyUpdate: false)
         XCTAssertEqual(restored.meetings.map(\.id), [oldest])
+        XCTAssertEqual(restored.projects.folders.first?.name, "访谈项目")
+        XCTAssertEqual(restored.projects.folderID(for: oldest), project)
+        XCTAssertNil(restored.projects.folderID(for: middle))
         XCTAssertTrue(store.delete(oldest))
         XCTAssertNil(store.selectedID)
         XCTAssertTrue(store.meetings.isEmpty)
@@ -246,5 +253,16 @@ final class MeetingStoreTests: XCTestCase {
         XCTAssertEqual(lines.map(\.offset), [15, 18])
         XCTAssertEqual(lines.map(\.speaker), ["未区分", "B"])
         XCTAssertThrowsError(try MeetingPiClient.decodeAudioResult("{}", offset: 0))
+    }
+
+    func testRecordingDurationTextScalesSecondsIntoMinutesAndHours() {
+        XCTAssertEqual(MeetingStore.durationText(0), "0 秒")
+        XCTAssertEqual(MeetingStore.durationText(45), "45 秒")
+        XCTAssertEqual(MeetingStore.durationText(60), "1 分 0 秒")
+        XCTAssertEqual(MeetingStore.durationText(125), "2 分 5 秒")
+        XCTAssertEqual(MeetingStore.durationText(3599), "59 分 59 秒")
+        XCTAssertEqual(MeetingStore.durationText(3600), "1 小时 0 分 0 秒")
+        XCTAssertEqual(MeetingStore.durationText(3725), "1 小时 2 分 5 秒")
+        XCTAssertEqual(MeetingStore.durationText(-3), "0 秒")
     }
 }

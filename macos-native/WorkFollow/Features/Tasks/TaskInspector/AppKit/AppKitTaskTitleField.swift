@@ -52,17 +52,18 @@ struct AppKitTaskTitleField: NSViewRepresentable {
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         field.stringValue = text
         field.setAccessibilityLabel(accessibilityLabel)
-        field.onBeginEditing = { [weak coordinator = context.coordinator] in
-            coordinator?.noteEditingBegan()
+        field.onBeginEditing = { [weak field, weak coordinator = context.coordinator] in
+            guard let field else { return }
+            coordinator?.reportFocus(field)
         }
         return field
     }
 
     func updateNSView(_ field: HeightTrackingTextField, context: Context) {
         context.coordinator.parent = self
-        field.isEditable = !readOnly
-        if field.stringValue != text { field.stringValue = text }
-        if (field.placeholderString as String?) != placeholder {
+        if field.isEditable == readOnly { field.isEditable = !readOnly }
+        synchronizeText(field)
+        if field.placeholderAttributedString?.string != placeholder {
             field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [
                 .foregroundColor: QuickAddBarStyle.placeholderNSColor,
                 .font: font
@@ -73,38 +74,20 @@ struct AppKitTaskTitleField: NSViewRepresentable {
             field.preferredMaxLayoutWidth = field.bounds.width
             field.invalidateIntrinsicContentSize()
         }
-        syncFirstResponder(field)
+        context.coordinator.synchronizeFocus(field)
     }
 
-    /// `isEditing` 是外部的唯一真值：外部要求编辑就聚焦，外部结束就失焦。
-    /// 只在状态不符时操作，避免每次 SwiftUI 更新都重设 firstResponder（会打断输入法）。
-    private func syncFirstResponder(_ field: HeightTrackingTextField) {
-        guard field.window != nil else { return }
-        if readOnly {
-            if field.currentEditor() != nil {
-                DispatchQueue.main.async { [weak field] in
-                    guard let field, !field.isEditable, field.currentEditor() != nil else { return }
-                    field.window?.makeFirstResponder(nil)
-                }
-            }
-            return
-        }
-        let editing = field.currentEditor() != nil
-        if isEditing, !editing {
-            DispatchQueue.main.async {
-                guard self.isEditing, field.currentEditor() == nil else { return }
-                field.window?.makeFirstResponder(field)
-                // 程序化聚焦把光标放到文本末尾：正文左方向键回跳标题时落在「最右边」，
-                // 再按右方向键就能原路返回正文（点击/Tab 聚焦不经过这里，行为不变）。
-                if let editor = field.currentEditor() {
-                    editor.selectedRange = NSRange(location: (field.stringValue as NSString).length, length: 0)
-                }
-            }
-        } else if !isEditing, editing {
-            DispatchQueue.main.async {
-                guard !self.isEditing, field.currentEditor() != nil else { return }
-                field.window?.makeFirstResponder(nil)
-            }
+    private func synchronizeText(_ field: HeightTrackingTextField) {
+        if let editor = field.currentEditor() as? NSTextView {
+            // 读取 NSTextField.stringValue 会校验当前编辑，提前结束输入法组合。
+            guard !editor.hasMarkedText(), editor.string != text else { return }
+            let selection = editor.selectedRange()
+            let length = text.utf16.count
+            let location = min(selection.location, length)
+            editor.string = text
+            editor.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
+        } else if field.stringValue != text {
+            field.stringValue = text
         }
     }
 
@@ -113,36 +96,54 @@ struct AppKitTaskTitleField: NSViewRepresentable {
 
         init(_ parent: AppKitTaskTitleField) { self.parent = parent }
 
-        /// 非 key 窗口的点击会先把焦点交给字段、再发事件；这一拍 AppKit 不一定
-        /// 补 `controlTextDidBeginEditing`。若状态仍停在 false，下一轮
-        /// `syncFirstResponder` 会把刚拿到的焦点当成“外部要求结束编辑”清掉。
-        func noteEditingBegan() {
-            guard !parent.isEditing else { return }
-            DispatchQueue.main.async { [parent] in
-                guard !parent.isEditing else { return }
-                parent.isEditing = true
+        func synchronizeFocus(_ field: HeightTrackingTextField) {
+            let shouldEdit = parent.isEditing && !parent.readOnly
+            guard field.window != nil, shouldEdit != field.hasEditingFocus else { return }
+            DispatchQueue.main.async { [weak self, weak field] in
+                guard let self, let field, let window = field.window else { return }
+                let shouldEdit = self.parent.isEditing && !self.parent.readOnly
+                guard shouldEdit != field.hasEditingFocus else { return }
+                if shouldEdit {
+                    window.makeFirstResponder(field)
+                    if let editor = field.currentEditor() as? NSTextView {
+                        // 正文左键回到标题时落在末尾。
+                        editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+                    }
+                } else {
+                    window.makeFirstResponder(nil)
+                }
+            }
+        }
+
+        /// 通知可能在 AppKit 切换 firstResponder 期间发出，等切换完成后再读实际焦点。
+        func reportFocus(_ field: HeightTrackingTextField) {
+            DispatchQueue.main.async { [weak self, weak field] in
+                guard let self, let field, field.window != nil else { return }
+                let isEditing = field.hasEditingFocus
+                if self.parent.isEditing != isEditing { self.parent.isEditing = isEditing }
             }
         }
 
         func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else { return }
-            if parent.text != field.stringValue { parent.text = field.stringValue }
+            guard let field = notification.object as? NSTextField,
+                  let editor = field.currentEditor() as? NSTextView, !editor.hasMarkedText() else { return }
+            if parent.text != editor.string { parent.text = editor.string }
         }
 
         func controlTextDidBeginEditing(_ notification: Notification) {
-            noteEditingBegan()
+            if let field = notification.object as? HeightTrackingTextField { reportFocus(field) }
         }
 
         func controlTextDidEndEditing(_ notification: Notification) {
-            if let field = notification.object as? NSTextField, parent.text != field.stringValue {
-                parent.text = field.stringValue
-            }
-            guard parent.isEditing else { return }
-            DispatchQueue.main.async { [parent] in parent.isEditing = false }
+            guard let field = notification.object as? HeightTrackingTextField else { return }
+            let value = field.stringValue
+            if parent.text != value { parent.text = value }
+            reportFocus(field)
         }
 
         func control(_ control: NSControl, textView: NSTextView,
                      doCommandBy commandSelector: Selector) -> Bool {
+            guard !textView.hasMarkedText() else { return false }
             // Return：结束标题编辑，并把焦点接力给正文（滴答 `focusOnContentIfNeeded`）。
             // 有 `onSubmit` 时不再 `makeFirstResponder(nil)`——那会先把焦点交给窗口，
             // 下一拍再抢回正文，中间闪一下且可能被 SwiftUI 更新打断。
@@ -186,6 +187,11 @@ struct AppKitTaskTitleField: NSViewRepresentable {
 /// 默认 `NSTextField` 的 intrinsic 高度只按单行算，长标题会被裁掉。
 final class HeightTrackingTextField: NSTextField {
     var onBeginEditing: (() -> Void)?
+
+    var hasEditingFocus: Bool {
+        guard let responder = window?.firstResponder else { return false }
+        return responder === self || responder === currentEditor()
+    }
 
     /// 与列表行标题一致：非 key 窗口的第一次点击也要落进输入框。
     /// 默认 NSTextField 会把这一拍只用于激活窗口，标题看着点了却不进编辑。

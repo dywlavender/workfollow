@@ -19,10 +19,12 @@ enum NotesColumnLayoutEngine {
     ///   - detailOnly: 窄栏下是否只看正文（列表/正文单栏切换）。
     static func layout(contentWidth: CGFloat, storedPaneWidth: CGFloat, storedAIWidth: CGFloat,
                        aiOpen: Bool, detailOnly: Bool, noteExists: Bool, trash: Bool) -> NotesColumnLayout {
-        let maximum = max(WFMetrics.listMinimum,
-                          min(WFMetrics.listMaximum,
+        // 目录栏用 notesTree 自己的窄口径（2026-11-08 与任务列表宽度解耦），
+        // 不再吃 listMinimum/listMaximum 的 300/470。
+        let maximum = max(WFMetrics.notesTreeMinimum,
+                          min(WFMetrics.notesTreeMaximum,
                               contentWidth - WFMetrics.inspectorMinimum - WFMetrics.divider))
-        let paneWidth = min(max(storedPaneWidth, WFMetrics.listMinimum), maximum)
+        let paneWidth = min(max(storedPaneWidth, WFMetrics.notesTreeMinimum), maximum)
         let wantsAI = aiOpen && noteExists && !trash
         let wide = contentWidth >= WFMetrics.splitMinimum
         let aiVisible = wantsAI && (wide || detailOnly)

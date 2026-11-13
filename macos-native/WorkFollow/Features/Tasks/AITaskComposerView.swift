@@ -3,17 +3,21 @@ import SwiftUI
 
 struct AITaskComposerView: View {
     let request: AITaskRequest
+    let followUp: MeetingFollowUp?
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.dismiss) private var dismiss
     @StateObject private var session: AITaskDraftSession
+    @ObservedObject private var shortcuts = AppShortcutStore.shared
     @State private var attempt = 0
     @State private var list = TaskList.inbox.name
     @State private var sectionID: String?
     @State private var applyError: String?
+    @State private var applying = false
 
-    init(request: AITaskRequest, session: AITaskDraftSession? = nil) {
+    init(request: AITaskRequest, session: AITaskDraftSession? = nil, followUp: MeetingFollowUp? = nil) {
         self.request = request
-        _session = StateObject(wrappedValue: session ?? AITaskDraftSession())
+        self.followUp = followUp
+        _session = StateObject(wrappedValue: session ?? AITaskDraftSession(drafts: followUp?.drafts))
     }
 
     var body: some View {
@@ -33,14 +37,17 @@ struct AITaskComposerView: View {
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(request.isBreakdown ? "添加 \(session.selectedCount) 个子任务" : "创建 \(session.selectedCount) 项待办") { apply() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.return, modifiers: .command)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(shortcuts.chord(for: .applyAITasks).swiftUIShortcut)
                     .tint(WFColors.accent)
-                    .disabled(!isReady || session.selectedCount == 0)
+                    .disabled(applying || !isReady || session.selectedCount == 0)
+                    .workflowActionAnchor("ai-task-composer.apply")
             }.padding(16)
         }
         .frame(width: 560, height: 500)
         .workfollowPopupSurface()
         .task(id: attempt) {
+            guard followUp == nil else { return }
             await session.generate(request: request) { source, updates in
                 try await environment.textAIClient().generateTasks(source, updates: updates)
             }
@@ -68,7 +75,10 @@ struct AITaskComposerView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach($session.drafts) { $draft in
-                            AITaskDraftRow(draft: $draft, destination: list)
+                            AITaskDraftRow(draft: $draft, destination: list, openSource: followUp == nil ? nil : { draft in
+                                dismiss()
+                                environment.openResourceLink(draft.sourceURL(for: request))
+                            })
                             Divider()
                         }
                     }.padding(.horizontal, 20)
@@ -99,8 +109,22 @@ struct AITaskComposerView: View {
 
     private func apply() {
         do {
+            if let followUp, environment.followUpRequest(for: followUp) == nil {
+                applyError = "会议资料已更新，请返回今日简报重新提取。"
+                return
+            }
             try environment.applyAITasks(session.drafts, request: request, list: list, sectionID: sectionID)
-            dismiss()
+            if let followUp {
+                applying = true
+                environment.flushAssistantTaskChanges { error in
+                    applying = false
+                    if let error { applyError = error.localizedDescription; return }
+                    do {
+                        try environment.meetingFollowUps.dismiss(followUp)
+                        dismiss()
+                    } catch { applyError = error.localizedDescription }
+                }
+            } else { dismiss() }
         } catch { applyError = error.localizedDescription }
     }
 }
@@ -108,15 +132,18 @@ struct AITaskComposerView: View {
 struct AITaskDraftRow: View {
     @Binding var draft: AITaskDraft
     let destination: String
+    var openSource: ((AITaskDraft) -> Void)?
     @EnvironmentObject private var environment: AppEnvironment
     @State private var expanded: Bool
     @State private var activeDateField: DateField?
 
     private enum DateField: Equatable { case due, deadline }
 
-    init(draft: Binding<AITaskDraft>, destination: String, initiallyExpanded: Bool = false) {
+    init(draft: Binding<AITaskDraft>, destination: String, initiallyExpanded: Bool = false,
+         openSource: ((AITaskDraft) -> Void)? = nil) {
         _draft = draft
         self.destination = destination
+        self.openSource = openSource
         _expanded = State(initialValue: initiallyExpanded)
     }
 
@@ -197,10 +224,18 @@ struct AITaskDraftRow: View {
                                 }
                             } label: { Text(draft.priority.title) }
                         }
-                        if !draft.quote.isEmpty { Text("原文：" + draft.quote).lineLimit(3).foregroundStyle(WFColors.secondaryText).textSelection(.enabled) }
+                        if openSource == nil && !draft.quote.isEmpty {
+                            Text("原文：" + draft.quote).lineLimit(3).foregroundStyle(WFColors.secondaryText).textSelection(.enabled)
+                        }
                     }.padding(.top, 8).font(WFType.supporting)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } label: { Text(summary).font(WFType.caption).foregroundStyle(WFColors.secondaryText) }
+                if let openSource, !draft.quote.isEmpty {
+                    Button { openSource(draft) } label: {
+                        Label(draft.quote, systemImage: "arrow.up.right.square").lineLimit(2)
+                    }.buttonStyle(.plain).foregroundStyle(WFColors.accent).font(WFType.supporting)
+                        .accessibilityHint("打开会议原文")
+                }
             }
         }.padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)

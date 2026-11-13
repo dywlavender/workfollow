@@ -16,6 +16,9 @@ private struct TaskOutlineRowState: Equatable {
     let day: Date
     let dateRevision: Int
     let dateDisplay: TaskDateDisplayMode
+    /// 标签胶囊的颜色在 configure 时才从标签目录现查（NativeTaskRowView.updateTags），
+    /// 不进状态的话改标签颜色不会触发行重渲染，只能等 60 秒 dateRevision 兜底。
+    let tagColors: [UInt32?]
 }
 
 private struct TaskOutlineRowLayout: Equatable {
@@ -255,7 +258,7 @@ struct TaskListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
         .onReceive(NotificationCenter.default.publisher(for: .workspaceOrganizationRenamed)) { notification in
             quickAddTagsOverride = QuickAddPropertiesOverrides.renamedTags(quickAddTagsOverride, notification: notification)
         }
@@ -640,6 +643,9 @@ struct TaskListView: View {
                     onSelectionChange: { if inputSelection != $0 { inputSelection = $0 } },
                     requestedSelection: $requestedInputSelection
                 )
+                .background {
+                    QuickAddDescriptionShortcut(focused: quickAddFocused, action: openQuickAddDescription)
+                }
                 .frame(maxWidth: .infinity)
                 if quickAddExpanded {
                     let timing = quickAddScheduleOverride ?? currentQuickAddSchedule(for: scope, parsed: parsed)
@@ -1425,7 +1431,8 @@ struct TaskListView: View {
                         progress: workspace.checklistProgress(for: node.task)
                             ?? workspace.subtaskProgress(for: node.task.id),
                         day: workspace.calendar.startOfDay(for: workspace.clock()), dateRevision: workspace.dateRevision,
-                        dateDisplay: TaskDateDisplayMode(rawValue: rowDateDisplayRaw) ?? .taskTime)
+                        dateDisplay: TaskDateDisplayMode(rawValue: rowDateDisplayRaw) ?? .taskTime,
+                        tagColors: node.task.tags.map { workspace.tag(named: $0)?.colorARGB })
                     let hasTags = !state.hidesDetails && !state.hiddenFields.contains(.tags)
                         && !node.task.tags.isEmpty
                     let layout = TaskOutlineRowLayout(hasPreview: preview != nil, hasTags: hasTags,
@@ -1499,7 +1506,10 @@ struct TaskListView: View {
         .onKeyPress(.upArrow) { handleOutlineKey(.up) ? .handled : .ignored }
         .onKeyPress(.downArrow) { handleOutlineKey(.down) ? .handled : .ignored }
         .onKeyPress(.return) { handleOutlineKey(.enter) ? .handled : .ignored }
-        .onKeyPress(.space) { handleOutlineKey(.space) ? .handled : .ignored }
+        .onKeyPress(phases: .down) { press in
+            guard AppShortcutStore.shared.chord(for: .toggleTaskCompletion).matches(press) else { return .ignored }
+            return handleOutlineKey(.space) ? .handled : .ignored
+        }
         .onKeyPress(.escape) { handleOutlineKey(.escape) ? .handled : .ignored }
     }
 

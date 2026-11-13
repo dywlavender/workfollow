@@ -5,11 +5,13 @@ import Foundation
 struct SearchRevealRequest: Equatable {
     let targetID: UUID
     let query: String
+    let blockID: UUID?
     let token: UUID
 
-    init(targetID: UUID, query: String) {
+    init(targetID: UUID, query: String, blockID: UUID? = nil) {
         self.targetID = targetID
         self.query = query
+        self.blockID = blockID
         token = UUID()
     }
 }

@@ -157,7 +157,7 @@ struct FocusOverviewPane: View {
             if store.historyLoading {
                 ProgressView().controlSize(.small).padding()
             } else if let error = store.historyError {
-                Text("读取记录失败：\(error)").font(.caption).foregroundStyle(theme.text3)
+                Text("读取记录失败：\(error)").font(WFType.caption).foregroundStyle(theme.text3)
                 Button("重试") { _Concurrency.Task { await store.loadMoreHistory() } }
             } else if store.historyHasMore {
                 Button("加载更多") { _Concurrency.Task { await store.loadMoreHistory() } }

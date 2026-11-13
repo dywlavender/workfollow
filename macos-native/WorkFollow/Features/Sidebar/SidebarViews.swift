@@ -3,6 +3,7 @@ import SwiftUI
 struct IconRailView: View {
     @TaskDataObserved var workspace: TaskWorkspaceModel
     @ObservedObject var navigation: AppNavigation
+    @ObservedObject private var shortcuts = AppShortcutStore.shared
     let onNavigate: (NativeDestination) -> Void
     let onOpenQuickOpen: () -> Void
     var sync: RemindersSyncCoordinator? = nil
@@ -67,14 +68,14 @@ struct IconRailView: View {
                     .font(.system(size: RailMetrics.iconSize))
                     .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
             }
-            .railTooltip("快速打开（⌘K）", state: tooltips)
+            .railTooltip("快速打开（\(shortcuts.chord(for: .quickOpen).label)）", state: tooltips)
             .accessibilityLabel("快速打开")
             Button { tooltips.dismiss(); openSettings() } label: {
                 Image(systemName: "slider.horizontal.3")
                     .font(.system(size: RailMetrics.iconSize))
                     .frame(width: RailMetrics.hitSize, height: RailMetrics.hitSize)
             }
-            .railTooltip("设置（⌘,）", state: tooltips)
+            .railTooltip("设置（\(shortcuts.chord(for: .openSettings).label)）", state: tooltips)
             .accessibilityLabel("设置")
         }
         .buttonStyle(.plain)

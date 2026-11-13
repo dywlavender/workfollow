@@ -191,7 +191,7 @@ private struct CalendarAllDayHeightHandle: View {
                 hovering = entered
                 (entered ? NSCursor.resizeUpDown : NSCursor.arrow).set()
             }
-            .help("拖动调整全天区域高度")
+            .hoverTip("拖动调整全天区域高度")
             .accessibilityLabel("调整全天区域高度")
             .accessibilityIdentifier("calendar.all-day-height-handle")
     }
@@ -467,7 +467,7 @@ private struct CalendarTimelineDay: View {
                 Button { onOpenEvent(placement.event) } label: {
                     VStack(alignment: .leading, spacing: 3) {
                         Label(placement.event.fields.title, systemImage: "calendar").lineLimit(2)
-                        Text(placement.event.calendarTitle).font(.caption2).foregroundStyle(.secondary)
+                        Text(placement.event.calendarTitle).font(WFType.caption).foregroundStyle(.secondary)
                         Spacer(minLength: 0)
                     }.font(WFType.listMeta).padding(5)
                         .frame(maxWidth: .infinity, alignment: .leading)

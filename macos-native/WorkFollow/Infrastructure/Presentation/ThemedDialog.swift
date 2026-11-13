@@ -518,6 +518,7 @@ private struct WorkfollowDialogCard: View {
                     .font(WFType.controlLabel)
                     .focused($fieldFocused)
                     .onChange(of: text) { _, value in onTextChange(value) }
+                    .workflowActionAnchor("dialog.field")
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)

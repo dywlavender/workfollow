@@ -39,12 +39,25 @@ struct SettingsCalendarReminderView: View {
                         .hoverTip("试听铃声")
                     }.disabled(!reminders.state.snapshot.preferences.soundEnabled)
                 }
+                WFFormRow("前台提醒样式") {
+                    BusinessPicker("", selection: Binding(
+                        get: { reminders.state.snapshot.preferences.foregroundBannerOnly },
+                        set: { value in reminders.state.updatePreferences { $0.foregroundBannerOnly = value } }),
+                        options: [BusinessChoice(false, "提醒面板"), BusinessChoice(true, "仅系统横幅")])
+                        .labelsHidden()
+                }
                 WFFormRow("默认稍后提醒", showsDivider: false) {
                     BusinessPicker("", selection: Binding(get: { reminders.state.snapshot.preferences.snoozeMinutes },
                         set: { minutes in reminders.state.updatePreferences { $0.snoozeMinutes = minutes } }), options:
                         [5, 10, 15, 30, 60].map { BusinessChoice($0, "\($0) 分钟") })
                         .labelsHidden()
                 }
+                Text("前台样式只影响应用在前台时到点的弹窗；应用在后台或退出后，始终由系统通知提醒。")
+                    .font(WFType.caption)
+                    .foregroundStyle(WFColors.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, WFSpace.md)
+                    .padding(.bottom, 10)
                 if let message = reminders.message {
                     Text(message).foregroundStyle(WFColors.danger).font(WFType.supporting)
                         .padding(.horizontal, WFSpace.md)

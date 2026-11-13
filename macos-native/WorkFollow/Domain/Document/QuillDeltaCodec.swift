@@ -62,6 +62,9 @@ enum QuillDeltaCodec {
                 attributes["wf-checklist-reminder-at"] = .number(Self.milliseconds(reminderAt))
             }
             if checklist.allDay { attributes["wf-checklist-all-day"] = .bool(true) }
+            if let reminderTaskID = checklist.reminderTaskID {
+                attributes["wf-checklist-reminder-task-id"] = .string(reminderTaskID.uuidString)
+            }
         }
         switch block.kind {
         case .paragraph, .divider: break
@@ -348,7 +351,9 @@ enum QuillDeltaCodec {
         let reminderAt = attributes["wf-checklist-reminder-at"]?.doubleValue
             .map { Date(timeIntervalSince1970: $0 / 1000) }
         let allDay = attributes["wf-checklist-all-day"]?.boolValue == true
-        guard completedAt != nil || reminderAt != nil else { return nil }
-        return ChecklistItemMeta(completedAt: completedAt, reminderAt: reminderAt, allDay: allDay)
+        let reminderTaskID = attributes["wf-checklist-reminder-task-id"]?.stringValue.flatMap(UUID.init(uuidString:))
+        guard completedAt != nil || reminderAt != nil || reminderTaskID != nil else { return nil }
+        return ChecklistItemMeta(completedAt: completedAt, reminderAt: reminderAt, allDay: allDay,
+                                 reminderTaskID: reminderTaskID)
     }
 }

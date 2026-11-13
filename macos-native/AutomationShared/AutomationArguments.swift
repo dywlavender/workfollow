@@ -11,14 +11,14 @@ struct AutomationInvocation {
         "memory.list": [], "memory.add": ["content"],
         "memory.update": ["id", "version", "content"], "memory.delete": ["id", "version"],
         "schedule.list": ["query", "limit", "offset"], "schedule.get": ["id"],
-        "schedule.add": ["title", "content", "at", "repeat", "time-zone", "enabled"],
-        "schedule.update": ["id", "version", "title", "content", "at", "repeat", "time-zone", "enabled"],
+        "schedule.add": ["title", "content", "at", "repeat", "time-zone", "enabled", "deliver-result"],
+        "schedule.update": ["id", "version", "title", "content", "at", "repeat", "time-zone", "enabled", "deliver-result"],
         "schedule.delete": ["id", "version"], "schedule.run": ["id"],
         "task.add": ["title", "list", "section", "priority", "date", "due", "content", "reminder", "reminder-offsets", "repeat", "repeat-interval", "repeat-weekdays", "repeat-until", "repeat-count"],
-        "task.list": ["query", "list", "section", "completed", "from", "to", "priority", "limit", "offset"],
-        "task.count": ["query", "list", "completed", "from", "to", "priority"],
+        "task.list": ["query", "list", "section", "tag", "completed", "from", "to", "date-field", "priority", "limit", "offset"],
+        "task.count": ["query", "list", "tag", "completed", "from", "to", "date-field", "priority"],
         "meeting.list": ["query", "limit", "offset"], "meeting.get": ["id", "query"],
-        "knowledge.search": ["query"], "operation.undo": ["id"],
+        "knowledge.search": ["query", "kind", "list", "folder", "tag"], "operation.undo": ["id"],
         "task.lists": [], "task.get": ["id"],
         "task.update": ["id", "version", "title", "list", "section", "clear-section", "priority", "date", "due", "clear-date", "clear-due", "content", "reminder", "reminder-offsets", "clear-reminder", "repeat", "repeat-interval", "repeat-weekdays", "repeat-until", "repeat-count", "clear-repeat"],
         "task.complete": ["id", "version"], "task.reopen": ["id", "version"],
@@ -48,14 +48,17 @@ struct AutomationInvocation {
       schedule list [--query TEXT] [--limit N] [--offset N]
       schedule get --id UUID
       schedule add --content TEXT --at ISO8601 [--title TEXT] [--repeat once|daily|weekdays|weekly]
-                   [--time-zone Asia/Shanghai] [--enabled true|false]
+                   [--time-zone Asia/Shanghai] [--enabled true|false] [--deliver-result true|false]
       schedule update --id UUID --version VERSION [--content TEXT] [--at ISO8601] [--repeat VALUE] [--enabled true|false]
+                      [--deliver-result true|false]
       schedule delete --id UUID --version VERSION
       schedule run --id UUID
       task add --title TEXT [--list NAME] [--section ID] [--priority none|low|medium|high]
                [--date YYYY-MM-DD|ISO8601] [--due YYYY-MM-DD|ISO8601] [--content TEXT]
       task list [--query TEXT] [--list NAME] [--section ID] [--completed true|false] [--limit N] [--offset N]
+                [--from DATE] [--to DATE] [--date-field schedule|deadline|completed] [--tag NAME]
       task count [--from DATE] [--to DATE] [--completed true|false] [--list NAME] [--priority VALUE]
+                 [--date-field schedule|deadline|completed] [--tag NAME]
       task lists
       task get --id UUID
       task update --id UUID --version VERSION [--title TEXT] [--list NAME] [--priority VALUE]
@@ -64,7 +67,7 @@ struct AutomationInvocation {
       task trash --id UUID（移入垃圾桶，删除语义与 App 内一致，可撤销）
       meeting list [--query TEXT] [--limit N] [--offset N]
       meeting get --id UUID [--query TEXT]
-      knowledge search --query TEXT
+      knowledge search --query TEXT [--kind task|note|meeting] [--list NAME] [--folder NAME] [--tag NAME]
       operation undo --id UNDO_ID
       note create [--title TEXT] [--folder NAME] [--content TEXT]
       note list [--query TEXT] [--folder NAME] [--limit N] [--offset N]

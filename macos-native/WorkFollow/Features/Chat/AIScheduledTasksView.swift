@@ -21,14 +21,15 @@ struct AIScheduledTasksView: View {
                     Button("新建", systemImage: "plus") { editing = nil; showingEditor = true }
                         .workflowActionAnchor("ai.schedule.new")
                     Button("完成", action: close).keyboardShortcut(.cancelAction)
+                        .workflowActionAnchor("ai.schedule.close")
                 }
             }
             if showingEditor {
-                AIJobEditor(job: editing, now: store.clock()) { instruction, schedule, enabled in
+                AIJobEditor(job: editing, now: store.clock()) { instruction, schedule, enabled, deliverResult in
                     if let editing {
                         try store.update(editing.id, version: editing.version, title: String(instruction.prefix(28)),
-                            instruction: instruction, schedule: schedule, enabled: enabled)
-                    } else { try store.add(instruction: instruction, schedule: schedule, enabled: enabled) }
+                            instruction: instruction, schedule: schedule, enabled: enabled, deliverResult: deliverResult)
+                    } else { try store.add(instruction: instruction, schedule: schedule, enabled: enabled, deliverResult: deliverResult) }
                     error = nil; showingEditor = false
                 } cancel: { showingEditor = false }
             } else {
@@ -120,17 +121,19 @@ struct AIScheduledTasksView: View {
 private struct AIJobEditor: View {
     let job: AIScheduledJob?
     let now: Date
-    let save: (String, AIJobSchedule, Bool) throws -> Void
+    let save: (String, AIJobSchedule, Bool, Bool) throws -> Void
     let cancel: () -> Void
     @State private var instruction: String
     @State private var frequency: AIJobSchedule.Frequency
     @State private var firstRunAt: Date
     @State private var weekday: Int
     @State private var enabled: Bool
+    @State private var deliverResult: Bool
     @State private var error: String?
     private let timeZoneID: String
 
-    init(job: AIScheduledJob?, now: Date, save: @escaping (String, AIJobSchedule, Bool) throws -> Void, cancel: @escaping () -> Void) {
+    init(job: AIScheduledJob?, now: Date, save: @escaping (String, AIJobSchedule, Bool, Bool) throws -> Void,
+         cancel: @escaping () -> Void) {
         self.job = job; self.now = now; self.save = save; self.cancel = cancel
         let zone = job?.schedule.timeZoneID ?? TimeZone.current.identifier
         timeZoneID = zone
@@ -141,6 +144,7 @@ private struct AIJobEditor: View {
         _firstRunAt = State(initialValue: date)
         _weekday = State(initialValue: cal.component(.weekday, from: date))
         _enabled = State(initialValue: job?.isEnabled ?? true)
+        _deliverResult = State(initialValue: job?.deliverResult ?? false)
     }
 
     private var schedule: AIJobSchedule {
@@ -184,7 +188,15 @@ private struct AIJobEditor: View {
                     .labelsHidden().environment(\.timeZone, TimeZone(identifier: timeZoneID) ?? .current)
                     .fixedSize().accessibilityIdentifier("ai.schedule.time")
             }
-            Toggle("启用", isOn: $enabled).toggleStyle(.switch)
+            HStack {
+                Toggle("启用", isOn: $enabled).toggleStyle(.switch)
+                Spacer()
+                Toggle("完成后告诉我", isOn: $deliverResult)
+                    .toggleStyle(.checkbox)
+                    .fixedSize()
+                    .accessibilityIdentifier("ai.schedule.deliver")
+                    .workflowActionAnchor("ai.schedule.deliver")
+            }
             if enabled, let next = schedule.next(after: now) {
                 Text("下次 " + next.formatted(date: .abbreviated, time: .shortened))
                     .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
@@ -195,7 +207,7 @@ private struct AIJobEditor: View {
                 Spacer()
                 Button("取消", action: cancel).keyboardShortcut(.cancelAction)
                 Button("保存") {
-                    do { try save(instruction.trimmingCharacters(in: .whitespacesAndNewlines), schedule, enabled) }
+                    do { try save(instruction.trimmingCharacters(in: .whitespacesAndNewlines), schedule, enabled, deliverResult) }
                     catch { self.error = error.localizedDescription }
                 }.keyboardShortcut(.defaultAction)
                     .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

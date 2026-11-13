@@ -19,6 +19,9 @@ struct NoteEditorHostActions {
     /// 行内日期/清单提醒的写入。默认由 make 接到笔记自己的任务存储；
     /// 直接构造（预览/测试宿主）不接则为空操作。
     var setChecklistReminder: (Int, Date?) -> Void = { _, _ in }
+    /// 行内日期悬浮面板的提醒写入：额外同步创建/更新关联待办任务。
+    /// 清单铃铛流不走这里（提醒状态已有铃铛可见，不重复建任务）。
+    var setInlineDateReminder: (Int, Date?) -> Void = { _, _ in }
     /// 未授权通知时提醒面板底部的说明；nil 不显示。
     var checklistReminderNotice: () -> String? = { nil }
 
@@ -28,7 +31,7 @@ struct NoteEditorHostActions {
                      runSelectionAI: @escaping (AISelectionTarget, AIConversationPreset) -> Bool = { _, _ in false },
                      openLink: ((String) -> Bool)? = nil,
                      checklistReminderNotice: @escaping () -> String? = { nil }) -> Self {
-        Self(createTaskFromSelection: { text in
+        var host = Self(createTaskFromSelection: { text in
             // 多行选区每行一条；任务侧回链 sourceNoteID，不再写 linkedTaskIDs
             // （关联任务区两侧都是 union 显示，AI 提取待办同一条回链语义）。
             _ = tasks.createTasksFromSelection(text, noteID: noteID)
@@ -52,6 +55,10 @@ struct NoteEditorHostActions {
                // 提醒服务按正文扫描（检查项与带提醒的普通段落都覆盖）。
                _ = notes.setChecklistItemReminder(noteID, line: line, at: date)
            }, checklistReminderNotice: checklistReminderNotice)
+        host.setInlineDateReminder = { line, date in
+            _ = notes.setInlineDateReminder(noteID, line: line, at: date)
+        }
+        return host
     }
 }
 
@@ -73,6 +80,7 @@ enum NoteDocumentProfile {
         profile.onOpenLink = host.openLink
         profile.onSelectionAI = host.runSelectionAI
         profile.setChecklistReminder = host.setChecklistReminder
+        profile.setInlineDateReminder = host.setInlineDateReminder
         profile.checklistReminderNotice = host.checklistReminderNotice
         return profile
     }

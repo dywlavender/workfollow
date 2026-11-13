@@ -42,6 +42,27 @@ struct AIConversationMessage: Identifiable, Codable, Equatable {
     var preset: AIConversationPreset? = nil
     var source: AIConversationSource? = nil
     var artifacts: [AIConversationArtifact]? = nil
+    /// 本条回复结束输出（完成/停止/失败）的时刻。回看历史时据此知道回答时间；
+    /// 旧快照没有该键，解码为 nil，界面不显示时间。
+    var completedAt: Date? = nil
+}
+
+extension AIConversationMessage {
+    /// 回复完成时间的展示文本：当天只显「时:分」，当年跨天补「月日」，
+    /// 跨年再补年份。没有完成时间（旧快照/仍在生成）返回 nil。
+    func completedAtLabel(now: Date = Date(), calendar: Calendar = .current) -> String? {
+        guard let completedAt else { return nil }
+        let time = String(format: "%02d:%02d",
+                          calendar.component(.hour, from: completedAt),
+                          calendar.component(.minute, from: completedAt))
+        if calendar.isDate(completedAt, inSameDayAs: now) { return time }
+        let month = calendar.component(.month, from: completedAt)
+        let day = calendar.component(.day, from: completedAt)
+        if calendar.component(.year, from: completedAt) == calendar.component(.year, from: now) {
+            return "\(month)月\(day)日 \(time)"
+        }
+        return "\(calendar.component(.year, from: completedAt))年\(month)月\(day)日 \(time)"
+    }
 }
 
 struct AIConversationRecord: Identifiable, Codable, Equatable {
@@ -190,7 +211,7 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
                 guard let self, self.generation == token else { return }
                 guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SummaryPiError.emptyResult }
                 let output = try AIConversationOutput.decode(text, preset: preset)
-                self.update(answer.id) { $0.text = output.text; $0.artifacts = output.artifacts; $0.state = .complete }
+                self.update(answer.id) { $0.text = output.text; $0.artifacts = output.artifacts; $0.state = .complete; $0.completedAt = Date() }
                 self.isRunning = false; self.worker = nil; self.generation = UUID()
                 self.deliverPendingSteer(using: generate)
             } catch {
@@ -198,6 +219,7 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
                 self.update(answer.id) {
                     $0.state = error is CancellationError ? .stopped : .failed
                     $0.error = error is CancellationError ? nil : error.localizedDescription
+                    $0.completedAt = Date()
                 }
                 self.isRunning = false; self.worker = nil; self.generation = UUID()
                 self.deliverPendingSteer(using: generate)
@@ -220,8 +242,10 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
 
     func stop() {
         guard isRunning else { return }
-        generation = UUID(); worker?.cancel(); worker = nil; isRunning = false
-        if let id = record.messages.last?.id { update(id) { $0.state = .stopped } }
+        generation = UUID(); worker?.cancel(); worker = nil
+        // 先落 .stopped 再关 isRunning：后台会话被停止时，未读点据此区分“手动停止”与“完成输出”。
+        if let id = record.messages.last?.id { update(id) { $0.state = .stopped; $0.completedAt = Date() } }
+        isRunning = false
     }
 
     private func update(_ id: UUID, _ action: (inout AIConversationMessage) -> Void) {
@@ -233,15 +257,26 @@ final class AIConversationModel: ObservableObject, AIConversationComposing {
 
 @MainActor
 final class AIChatStore: ObservableObject, ModuleStoreFlushable {
-    private struct Snapshot: Codable { var selectedID: UUID; var records: [AIConversationRecord] }
+    private struct Snapshot: Codable {
+        var selectedID: UUID
+        var records: [AIConversationRecord]
+        var projects: ProjectFolders?
+        var scheduledFolderID: UUID?
+        /// 完成输出但还没点开看过的会话；跨启动保留，选中即清。
+        var unviewedIDs: [UUID]? = nil
+    }
     @Published private(set) var current: AIConversationModel
     @Published private(set) var records: [AIConversationRecord]
+    @Published var projects = ProjectFolders() { didSet { save() } }
     @Published private(set) var storageError: String?
     @Published private(set) var deletingIDs: Set<UUID> = []
     @Published private(set) var runningIDs: Set<UUID> = []
+    /// 后台完成输出、尚未点开查看的会话：历史行标题前显示蓝点，选中即清。
+    @Published private(set) var unviewedIDs: Set<UUID> = []
     @Published private(set) var isAnyRunning = false
     let sessionDirectory: URL
     private let persistence: JSONFileStore<Snapshot>
+    private var scheduledFolderID: UUID?
     private var models: [UUID: AIConversationModel] = [:]
     private var observations: [UUID: AnyCancellable] = [:]
 
@@ -257,6 +292,10 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
         }
         records = restored
         current = AIConversationModel(record: restored.first(where: { $0.id == saved?.selectedID }) ?? .init(), directory: sessionDirectory)
+        projects = saved?.projects ?? ProjectFolders()
+        scheduledFolderID = saved?.scheduledFolderID
+        unviewedIDs = Set((saved?.unviewedIDs ?? []).filter { id in restored.contains { $0.id == id } })
+        unviewedIDs.remove(current.record.id)
         connect(current)
     }
     func newConversation() {
@@ -268,7 +307,9 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
     func select(_ id: UUID) {
         guard id != current.record.id, !deletingIDs.contains(id),
               let record = records.first(where: { $0.id == id }) else { return }
-        current = model(for: record); save()
+        current = model(for: record)
+        unviewedIDs.remove(id)
+        save()
     }
     func delete(_ id: UUID, using removeSession: (UUID) async throws -> Void) async {
         guard records.contains(where: { $0.id == id }), deletingIDs.insert(id).inserted else { return }
@@ -284,10 +325,22 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
         if current.record.id == id {
             current = self.model(for: records.max(by: { $0.updatedAt < $1.updatedAt }) ?? .init())
         }
+        if projects.folderID(for: id) != nil { projects.move(id, to: nil) }
+        unviewedIDs.remove(id)
         storageError = nil; save()
     }
     /// A scheduled run writes to history without replacing the selected chat or draft.
-    func trackBackground(_ model: AIConversationModel) { connect(model) }
+    func trackScheduledRun(_ model: AIConversationModel) {
+        connect(model)
+        var folders = projects
+        let name = "定时任务"
+        let folderID = folders.folders.first { $0.id == scheduledFolderID }?.id
+            ?? folders.folders.first { $0.name == name }?.id
+            ?? folders.create(name)
+        scheduledFolderID = folderID
+        folders.move(model.record.id, to: folderID)
+        projects = folders
+    }
     func recordAction(_ receipt: AIActionReceipt, conversationID: UUID) {
         if let model = models[conversationID] { model.appendAction(receipt); return }
         guard let index = records.firstIndex(where: { $0.id == conversationID }),
@@ -323,15 +376,26 @@ final class AIChatStore: ObservableObject, ModuleStoreFlushable {
             else { self.records.append(value) }
             self.save()
         }
-        observations[id] = model.$isRunning.removeDuplicates().sink { [weak self] running in
+        observations[id] = model.$isRunning.removeDuplicates().sink { [weak self, weak model] running in
             guard let self else { return }
+            let wasRunning = self.runningIDs.contains(id)
             var ids = self.runningIDs
             if running { ids.insert(id) } else { ids.remove(id) }
             if ids != self.runningIDs { self.runningIDs = ids }
             if self.isAnyRunning != !ids.isEmpty { self.isAnyRunning = !ids.isEmpty }
+            // 一轮在用户没停留的会话里结束：历史行标题前的转圈换成蓝点，点开才清。
+            // 手动停止不算完成输出，不留点。
+            if wasRunning && !running, id != self.current.record.id,
+               model?.record.messages.last?.state != .stopped,
+               self.records.contains(where: { $0.id == id }),
+               self.unviewedIDs.insert(id).inserted { self.save() }
         }
     }
-    private func save() { persistence.schedule(Snapshot(selectedID: current.record.id, records: records)) }
+    private func save() {
+        persistence.schedule(Snapshot(selectedID: current.record.id, records: records,
+                                      projects: projects, scheduledFolderID: scheduledFolderID,
+                                      unviewedIDs: Array(unviewedIDs)))
+    }
     func flush(_ completion: @escaping (Error?) -> Void) {
         persistence.flush { [weak self] error in
             _Concurrency.Task { @MainActor in self?.storageError = error?.localizedDescription }

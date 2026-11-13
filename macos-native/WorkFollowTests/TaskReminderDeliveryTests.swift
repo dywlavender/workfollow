@@ -29,6 +29,28 @@ final class TaskReminderDeliveryTests: XCTestCase {
         XCTAssertEqual(chosen.bell, "Knock")
     }
 
+    func testForegroundReminderStyleDefaultsToPanelAndRoundTrips() throws {
+        let legacy = try JSONDecoder().decode(TaskReminderPreferences.self,
+            from: Data("{\"soundEnabled\":true,\"bell\":\"Knock\",\"snoozeMinutes\":10}".utf8))
+        XCTAssertFalse(legacy.foregroundBannerOnly)
+        let banner = try JSONDecoder().decode(TaskReminderPreferences.self,
+            from: Data("{\"soundEnabled\":true,\"bell\":\"Knock\",\"snoozeMinutes\":10,\"foregroundBannerOnly\":true}".utf8))
+        XCTAssertTrue(banner.foregroundBannerOnly)
+    }
+
+    func testForegroundBannerOnlyLeavesRemindersToTheSystemBanner() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let client = FakeTaskNotificationClient()
+        let service = NativeReminderService(clock: { self.now }, calendar: calendar, directory: folder, client: client)
+        service.reconcile([task()]); await service.waitForReconciliation()
+        let delivery = try XCTUnwrap(service.deliveries.first)
+        // 「仅系统横幅」：即使声音开着，面板也不接管（show 返回“是否在循环响铃”，
+        // 接管时会走到播放并返回 true）；false 让 willPresent 走系统默认横幅。
+        service.state.updatePreferences { $0.soundEnabled = true; $0.foregroundBannerOnly = true }
+        XCTAssertFalse(service.notifications.onPresent?(delivery) == true)
+        await service.handle(delivery, snoozeMinutes: nil)
+    }
+
     func testSnoozeSurvivesRestartWithoutChangingTaskSchedule() async throws {
         let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
         let source = task(); let client = FakeTaskNotificationClient()

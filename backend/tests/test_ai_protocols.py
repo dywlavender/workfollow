@@ -234,11 +234,12 @@ async def test_keyless_local_compatible_model_and_direct_meeting_minutes(tmp_pat
         runtime = Runtime(tmp_path, lambda _: None)
         config = {"ai_enabled": True, "ai_base_url": url + "/v1", "ai_model": "local-model"}
         response = await runtime.dispatch("meeting.minutes", {"engine": "langchain", "configuration": config,
-            "lines": [{"speaker": "片段 1 · 暂定讲话人1", "text": "周五提交方案", "offset": 0}]})
+            "lines": [{"speaker": "片段 1 · 暂定讲话人1", "text": "周五提交方案", "offset": 0, "id": "fixture-line"}]})
         assert response["text"] == "OK"
         sent = json.dumps(requests[0][2], ensure_ascii=False)
         assert "周五提交方案" in sent and "暂定讲话人1" in sent
-        assert "会议纪要编辑器" in sent and "身份待确认" in sent
+        assert "会议纪要编辑器" in sent and "每件事只出现一次" in sent and "有内容才输出" in sent
+        assert "fixture-line" not in sent
 
 
 def test_api_bases_retain_gateway_paths():

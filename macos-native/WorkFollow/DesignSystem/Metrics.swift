@@ -99,6 +99,17 @@ enum WFMetrics {
     static let listMinimum: CGFloat = 300
     static let listPreferred: CGFloat = 320
     static let listMaximum: CGFloat = 470
+
+    /// 笔记页目录栏（NotesFolderTreeListView）。2026-11-08 起与任务列表宽度解耦：
+    /// 树里只有文件夹名与笔记标题，用不着任务列表那么宽；层级变深时由模型按
+    /// `notesTreeDepthStep` 自动放宽（见 `NotesWorkspaceModel.requiredTreePaneWidth`），
+    /// 上限收紧避免吃掉正文宽度。此前两栏共用一个宽度是防「切页时中栏跳宽」，
+    /// 目录栏改为层级自适应后跳宽本身就是预期行为，旧的约束作废。
+    static let notesTreeMinimum: CGFloat = 208
+    static let notesTreePreferred: CGFloat = 236
+    static let notesTreeMaximum: CGFloat = 336
+    /// 每深一级（行首缩进 16 + 余量），目录栏需要的最小宽度增量。
+    static let notesTreeDepthStep: CGFloat = 28
     static let inspectorMinimum: CGFloat = 320
     static let divider: CGFloat = 1
     static let splitMinimum = listMinimum + inspectorMinimum + divider

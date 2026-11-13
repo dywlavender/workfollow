@@ -61,8 +61,7 @@ struct FocusTaskScopePopover: View {
                         .frame(width: FocusTaskPickerMetrics.scopeIconSize)
                 }
                 Text(scope.title)
-                    .font(.system(size: FocusTaskPickerMetrics.taskFontSize,
-                                  weight: selected ? .medium : .regular))
+                    .font(selected ? WFType.listTitleMedium : WFType.menu)
                     .foregroundStyle(selected ? theme.accent : theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)

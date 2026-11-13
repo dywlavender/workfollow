@@ -34,7 +34,7 @@ struct CompanionPerchView: View {
                                 size: CompanionLayout.perchMascotSize)
                 .contentShape(Rectangle())
                 .onTapGesture { director.pet() }
-                .help("摸摸小伙伴")
+                .hoverTip("摸摸小伙伴")
                 .accessibilityElement()
                 .accessibilityLabel("小伙伴")
                 .accessibilityHint("点一下互动")

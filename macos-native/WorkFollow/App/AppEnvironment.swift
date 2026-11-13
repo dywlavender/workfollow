@@ -27,6 +27,8 @@ final class AppEnvironment: ObservableObject {
     let taskWorkspace: TaskWorkspaceModel
     let notesWorkspace: NotesWorkspaceModel
     let reminders: NativeReminderService
+    /// 应用内自更新（本地目录通道）：设置页配置通道，启动时静默检查一次。
+    let selfUpdate: SelfUpdateModel
     let systemCalendar: CalendarSyncCoordinator
     let systemReminders: RemindersSyncCoordinator
     let focusStore: FocusStore
@@ -41,6 +43,7 @@ final class AppEnvironment: ObservableObject {
     let aiChat: AIChatStore
     let assistantMemories: AssistantMemoryStore
     let assistantBriefing: AssistantBriefingStore
+    let meetingFollowUps: MeetingFollowUpStore
     let aiScheduledJobs: AIScheduledJobStore
     var assistantStarted = false
     var aiSchedulerStarted = false
@@ -77,6 +80,7 @@ final class AppEnvironment: ObservableObject {
     /// 避免窗口变宽后突然出现原本没有的文件夹列。不落盘。
     @Published var notesAIFrozenWindowWidth: CGFloat?
     private let repository: NativePreviewRepository
+    var knowledgeIndex: LocalKnowledgeIndex { repository.knowledgeIndex }
     private let persistence: PersistenceCoordinator
     private var taskWidget: TaskWidgetBridge?
     private var automation: NativeAutomationBridge?
@@ -145,6 +149,14 @@ final class AppEnvironment: ObservableObject {
         repository = NativePreviewRepository(directory: directory)
         persistence = PersistenceCoordinator(repository: repository)
         reminders = NativeReminderService(clock: clock, calendar: calendar, directory: directory.appendingPathComponent("modules"))
+        selfUpdate = SelfUpdateModel()
+        selfUpdate.consumeHelperStatus()
+        // 启动稍作等待再静默检查：目录可能在同步中，启动即读容易扑空。
+        // （领域模型 Task 遮蔽了并发 Task，本模块一律写 _Concurrency.Task。）
+        _Concurrency.Task { [selfUpdate] in
+            try? await _Concurrency.Task.sleep(nanoseconds: 2_500_000_000)
+            selfUpdate.checkSilently()
+        }
         systemCalendar = CalendarSyncCoordinator(directory: directory.appendingPathComponent("modules"))
         systemReminders = RemindersSyncCoordinator(directory: directory.appendingPathComponent("modules"), clock: clock, calendar: calendar)
         let preferences = UserDefaults.standard
@@ -216,6 +228,7 @@ final class AppEnvironment: ObservableObject {
         aiChat = AIChatStore(directory: directory.appendingPathComponent("modules"))
         assistantMemories = AssistantMemoryStore(directory: directory.appendingPathComponent("modules"))
         assistantBriefing = AssistantBriefingStore(directory: directory.appendingPathComponent("modules"), clock: clock, calendar: calendar)
+        meetingFollowUps = MeetingFollowUpStore(directory: directory.appendingPathComponent("modules"), clock: clock)
         aiScheduledJobs = AIScheduledJobStore(directory: directory.appendingPathComponent("modules"), clock: clock)
         meetingStore = MeetingStore(directory: directory.appendingPathComponent("modules"),
             ai: MeetingPiClient(textModel: { try aiModels.request() }))
@@ -347,6 +360,7 @@ final class AppEnvironment: ObservableObject {
             guard let self, !self.loadFailed else { return }
             self.reminders.reconcile(self.taskWorkspace.tasksForLocalReminders)
             self.calendarNeedsSync = true
+            if self.assistantStarted { self.refreshAssistantToday() }
             DispatchQueue.main.async { [weak self] in self?.flushThenSyncReminders() }
         }.store(in: &subscriptions)
         taskWorkspace.listSettingsChanges.sink { [weak self] _ in
@@ -359,6 +373,13 @@ final class AppEnvironment: ObservableObject {
             guard let self, !self.loadFailed, !self.storageReplacementPending, !self.storageNeedsReload else { return }
             if changes.affectsReminders || changes.entries.contains(where: { !$0.changedFields.isDisjoint(with: [.priority, .parentID]) }) { self.calendarNeedsSync = true }
             self.persistence.schedule(changes: changes)
+            let briefingFields: Set<TaskChangeSet.Field> = [
+                .title, .kind, .list, .schedule, .priority, .status, .recurrence, .recurrenceRule,
+                .occurrence, .deletedAt, .skippedAt, .convertedNoteID, .isAbandoned
+            ]
+            if self.assistantStarted && changes.entries.contains(where: {
+                $0.operation != .update || !$0.changedFields.isDisjoint(with: briefingFields)
+            }) { self.refreshAssistantToday() }
         }.store(in: &subscriptions)
         taskWorkspace.$selectedTaskID.compactMap { $0 }.sink { [weak self] id in
             self?.searchSession.recordTask(id)
@@ -405,10 +426,13 @@ final class AppEnvironment: ObservableObject {
             } else if let initial = makePreviewSnapshot() {
                 persistence.schedule(initial)
             }
+            searchSession.knowledgeIndex = repository.knowledgeIndex
+            persistence.prepareKnowledgeIndex { [weak searchSession] in searchSession?.indexReady() }
         }
         for name in [NSWorkspace.didWakeNotification] {
             NSWorkspace.shared.notificationCenter.publisher(for: name).sink { [weak self] _ in
                 self?.refreshSystemIntegrations()
+                self?.refreshAssistantBriefingAutomatically()
                 self?.checkAIScheduledJobs()
             }.store(in: &subscriptions)
         }
@@ -422,6 +446,7 @@ final class AppEnvironment: ObservableObject {
         automation = NativeAutomationBridge(channel: AutomationChannel(workspaceDirectory: directory),
             service: NativeAutomationService(tasks: taskWorkspace, notes: notesWorkspace, directory: directory,
                 meetings: meetingStore, memories: assistantMemories, scheduledJobs: aiScheduledJobs,
+                knowledgeIndex: repository.knowledgeIndex,
                 runScheduledJob: { [weak self] id in
                     guard let self else { throw AIBackendError.unavailable }
                     try self.runAIScheduledJob(id)
@@ -433,6 +458,7 @@ final class AppEnvironment: ObservableObject {
                 guard let self else { completion(AutomationFailure(code: "unavailable", message: "App 已关闭。")); return }
                 self.persistence.flush(completion: completion)
             }, onSuccess: { [weak self] request, data in self?.recordAIAction(request, data: data) })
+        meetingStore.onFinalizedForFollowUp = { [weak self] meeting in self?.generateMeetingFollowUp(meeting) }
         if !loadFailed {
             // Acceptance and unit-test workspaces never publish real data to
             // the system widget's shared container.
@@ -713,10 +739,15 @@ final class AppEnvironment: ObservableObject {
     /// disable workspace autosave until restart so termination cannot overwrite it.
     func prepareStorageReplacement(completion: @escaping (Error?) -> Void) {
         assistantBriefing.stop()
+        meetingFollowUps.stop()
         stopAIScheduler()
         flushMetadata()
         storageReplacementPending = true
         flush(completion: completion)
+    }
+
+    func flushAssistantTaskChanges(_ completion: @escaping (Error?) -> Void) {
+        persistence.flush(completion: completion)
     }
 
     func finishStorageReplacement(succeeded: Bool) {

@@ -33,6 +33,8 @@ struct ChecklistSummary: Codable, Equatable {
                 }
             }
             guard let reminderAt = block.checklist?.reminderAt else { continue }
+            // 已关联待办任务的行内提醒由任务侧排程通知，这里跳过避免双响。
+            if block.checklist?.reminderTaskID != nil { continue }
             let title = block.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
             reminders.append(ChecklistReminderSummary(
                 blockID: block.id,
@@ -65,7 +67,8 @@ struct DocumentSummary: Codable {
         length = text.count; isEmpty = document.isEmpty
         firstLine = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }.map { String($0.prefix(160)) }
         let summary = ChecklistSummary(blocks: document.blocks)
-        checklist = summary.total > 0 ? summary : nil
+        // 纯段落但带提醒的正文同样产出摘要，提醒排程（TaskReminderPlan）读它。
+        checklist = summary.total > 0 || !summary.reminders.isEmpty ? summary : nil
     }
 }
 

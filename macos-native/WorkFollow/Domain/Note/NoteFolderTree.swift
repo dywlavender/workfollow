@@ -8,6 +8,15 @@ struct NoteFolderNode: Identifiable, Equatable {
     var parentID: String?
     var sortOrder: Int
     var depth: Int
+    var icon: String?
+    var nameColorHex: String?
+}
+
+enum NoteFolderPlacement: Equatable {
+    case inside(String)
+    case before(String)
+    case after(String)
+    case root
 }
 
 /// 笔记文件夹的层级投影：把扁平的 `NoteFolderMeta` 整理成深度优先序列。
@@ -66,22 +75,24 @@ enum NoteFolderTree {
                 roots.append(record)
             }
         }
-        let order: (NoteFolderMeta, NoteFolderMeta) -> Bool = { lhs, rhs in
-            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
-            return lhs.name.localizedCompare(rhs.name) == .orderedAscending
-        }
         var result: [NoteFolderNode] = []
         func visit(_ record: NoteFolderMeta, _ depth: Int) {
             guard depth <= maxDepth else { return }
             result.append(NoteFolderNode(id: record.id, name: record.name,
                                          parentID: record.parentID,
-                                         sortOrder: record.sortOrder, depth: depth))
-            for child in (children[record.id] ?? []).sorted(by: order) {
+                                         sortOrder: record.sortOrder, depth: depth, icon: record.icon,
+                                         nameColorHex: record.nameColorHex))
+            for child in (children[record.id] ?? []).sorted(by: orderedBefore) {
                 visit(child, depth + 1)
             }
         }
-        for root in roots.sorted(by: order) { visit(root, 0) }
+        for root in roots.sorted(by: orderedBefore) { visit(root, 0) }
         return result
+    }
+
+    static func orderedBefore(_ lhs: NoteFolderMeta, _ rhs: NoteFolderMeta) -> Bool {
+        if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
+        return lhs.name.localizedCompare(rhs.name) == .orderedAscending
     }
 
     /// `id` 的全部后代（不含自己）。移动父级时用来挡住「挂到自己子树下」。

@@ -6,6 +6,82 @@ import XCTest
 /// TI2-22 焦点接力：标题 Return → 正文；新建空任务自动聚焦标题。
 @MainActor
 final class FocusRelayTests: XCTestCase {
+    @MainActor private final class TitleModel: ObservableObject {
+        @Published var title = "工作计划"
+        @Published var editing = false
+        @Published var placeholder = "标题"
+    }
+
+    private struct TitleHost: View {
+        @ObservedObject var model: TitleModel
+
+        var body: some View {
+            AppKitTaskTitleField(text: $model.title, isEditing: $model.editing,
+                                 placeholder: model.placeholder)
+                .frame(width: 400)
+        }
+    }
+
+    func testTitleKeepsCompositionAndCaretDuringViewRefresh() throws {
+        let model = TitleModel()
+        let host = NSHostingView(rootView: TitleHost(model: model))
+        let window = InspectorPanelTestSupport.ownerWindow(for: host, width: 420, height: 150)
+        defer { window.contentView = nil; window.close() }
+        let title = try XCTUnwrap(firstResponderField(in: host))
+        XCTAssertTrue(window.makeFirstResponder(title))
+        InspectorPanelTestSupport.settle(window)
+        let editor = try XCTUnwrap(title.currentEditor() as? NSTextView)
+        let end = NSRange(location: (model.title as NSString).length, length: 0)
+        editor.setSelectedRange(end)
+        editor.setMarkedText("gengxin", selectedRange: NSRange(location: 7, length: 0), replacementRange: end)
+        XCTAssertTrue(editor.hasMarkedText())
+        let selection = editor.selectedRange()
+
+        model.placeholder = "任务标题"
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(title.placeholderAttributedString?.string, "任务标题")
+        XCTAssertTrue(window.firstResponder === editor)
+        XCTAssertTrue(editor.hasMarkedText(), "外层刷新期间要保留正在选词的组合串")
+        XCTAssertEqual(editor.string, "工作计划gengxin")
+        XCTAssertEqual(editor.selectedRange(), selection)
+        XCTAssertEqual(model.title, "工作计划")
+
+        editor.insertText("更新", replacementRange: editor.markedRange())
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(model.title, "工作计划更新")
+        XCTAssertTrue(window.firstResponder === editor)
+
+        editor.setSelectedRange(NSRange(location: 2, length: 0))
+        editor.insertText("v2", replacementRange: editor.selectedRange())
+        let caretAfterInsertion = editor.selectedRange()
+        InspectorPanelTestSupport.settle(window)
+        XCTAssertEqual(model.title, "工作v2计划更新")
+        XCTAssertEqual(editor.selectedRange(), caretAfterInsertion)
+        XCTAssertTrue(window.firstResponder === editor)
+    }
+
+    func testTitleFocusFollowsTheLatestHandoff() throws {
+        let (_, _, window, host) = try makeShell()
+        defer { window.contentView = nil; window.close() }
+        let title = try XCTUnwrap(firstResponderField(in: host))
+        let body = try MilkdownTestSupport.editor(in: host)
+
+        XCTAssertTrue(window.makeFirstResponder(title))
+        XCTAssertNotNil(title.currentEditor())
+        body.focus()
+        InspectorPanelTestSupport.settle(window)
+
+        XCTAssertTrue(MilkdownTestSupport.isFocused(body), "过期的标题编辑通知不能从正文抢回焦点")
+        XCTAssertNil(title.currentEditor())
+
+        XCTAssertTrue(window.makeFirstResponder(title))
+        InspectorPanelTestSupport.settle(window)
+        body.focus()
+        XCTAssertTrue(window.makeFirstResponder(title))
+        InspectorPanelTestSupport.settle(window)
+
+        XCTAssertNotNil(title.currentEditor(), "重新点进标题后，上一轮离开标题的通知不能清掉当前焦点")
+    }
 
     func testTitleReturnRelaysFocusToBody() throws {
         let (environment, id, window, host) = try makeShell()

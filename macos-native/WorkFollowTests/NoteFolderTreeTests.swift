@@ -56,6 +56,23 @@ final class NoteFolderTreeTests: XCTestCase {
         XCTAssertEqual(NoteFolderTree.path(toID: "c", in: records), ["工作", "2026"])
         XCTAssertEqual(NoteFolderTree.path(toID: "a", in: records), [])
     }
+
+    func testNameColorHexFlowsIntoNodesAndSurvivesCoding() throws {
+        var meta = record("a", "工作", nil, 0)
+        meta.nameColorHex = "#0b7bff"
+        let nodes = NoteFolderTree.nodes(from: [meta])
+        XCTAssertEqual(nodes.first?.nameColorHex, "#0b7bff")
+
+        let data = try JSONEncoder().encode([meta])
+        let restored = try JSONDecoder().decode([NoteFolderMeta].self, from: data)
+        XCTAssertEqual(restored.first?.nameColorHex, "#0b7bff")
+
+        // 旧快照没有 nameColorHex 键：解码为 nil，不影响其余字段。
+        let legacy = try JSONDecoder().decode([NoteFolderMeta].self, from: Data(
+            #"[{"id":"a","name":"工作","sortOrder":0}]"#.utf8))
+        XCTAssertNil(legacy.first?.nameColorHex)
+        XCTAssertEqual(legacy.first?.name, "工作")
+    }
 }
 
 @MainActor

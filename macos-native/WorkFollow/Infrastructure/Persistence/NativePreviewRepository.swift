@@ -60,6 +60,8 @@ final class NativePreviewRepository {
         self.directory = directory; database = SQLiteWorkspaceRepository(directory: directory)
     }
     private let database: SQLiteWorkspaceRepository
+    var knowledgeIndex: LocalKnowledgeIndex { database.knowledgeIndex }
+    func buildKnowledgeIndexStep() throws -> Bool { try database.buildKnowledgeIndexStep() }
     var documentReadCount: Int { database.documentReadCount }
     var originalContentReadCount: Int { database.originalContentReadCount }
     var onDocumentFailure: ((Error) -> Void)? {

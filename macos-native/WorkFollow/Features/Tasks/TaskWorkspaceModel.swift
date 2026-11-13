@@ -171,7 +171,11 @@ final class TaskWorkspaceModel: ObservableObject {
         store.prepareTaskCommit = { before, after in
             TaskWeeklyPlanning.recording(before: before, after: after, at: clock(), calendar: calendar)
         }
-        store.onTaskChanges = { [weak self] changes in self?.taskChanges.send(changes) }
+        store.onTaskChanges = { [weak self] changes in
+            self?.taskChanges.send(changes)
+            // 任务侧提醒变化回写正文关联的行内日期提醒（任务→笔记 双向同步）。
+            self?.syncInlineDateReminders(from: changes)
+        }
         store.onListArchiveChange = { [weak self] names in self?.listArchiveChanges.send(names) }
         store.onListSettingsChange = { [weak self] in self?.listSettingsChanges.send(()) }
         store.onOrganizationRename = { [weak self] change in
@@ -1635,10 +1639,10 @@ final class TaskWorkspaceModel: ObservableObject {
         return pendingChecklistReveal?.blockID
     }
 
-    func requestSearchReveal(taskID: UUID, query: String) {
+    func requestSearchReveal(taskID: UUID, query: String, blockID: UUID? = nil) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        searchRevealRequest = SearchRevealRequest(targetID: taskID, query: trimmed)
+        guard !trimmed.isEmpty || blockID != nil else { return }
+        searchRevealRequest = SearchRevealRequest(targetID: taskID, query: trimmed, blockID: blockID)
     }
 
     func consumeSearchReveal(for taskID: UUID) -> SearchRevealRequest? {
@@ -1844,6 +1848,79 @@ final class TaskWorkspaceModel: ObservableObject {
         let result = withMaterializedTask(id) { actions.setDocument($0, document) }
         didMutate(result)
         return result
+    }
+
+    /// 行内日期提醒（悬浮面板写入）：提醒写入块元数据的同时，同步到关联的
+    /// 待办任务——已有链接任务就更新其 reminderAt；没有则创建（标题取块文本、
+    /// sourceNoteID 回链笔记，任务正文带可点回笔记的来源链接）。任务列表与
+    /// 笔记「关联任务」区因此成为行内提醒的可见出口；通知由任务侧排程，
+    /// 正文投影跳过已链接的行避免双响。
+    /// 清空提醒只清任务的提醒，任务本身保留（不替用户做删除决定）。
+    @discardableResult
+    func setInlineDateReminder(_ id: UUID, line: Int, at date: Date?) -> TaskActionResult {
+        guard let noteTask = task(for: id), noteTask.isNoteTask, noteTask.deletedAt == nil,
+              var document = try? noteTask.document.materialized(),
+              document.blocks.indices.contains(line) else { return .failure(.missingTask) }
+        var meta = document.blocks[line].checklist ?? ChecklistItemMeta()
+        // 链接任务已被删除/转换就视为未关联，重新创建。
+        if let linkedID = meta.reminderTaskID,
+           task(for: linkedID).map({ $0.deletedAt != nil || $0.isNoteTask }) != false {
+            meta.reminderTaskID = nil
+        }
+        // 先落块元数据，再更新任务提醒：任务侧的回写钩子按 reminderAt 幂等，
+        // 顺序保证回写总是空转，不会把中间状态写回正文。
+        if meta.reminderTaskID == nil, date != nil {
+            let title = Self.inlineReminderTaskTitle(from: document.blocks[line].plainText)
+            let created = actions.createSelectionTasks(titles: [title], noteID: id)
+            guard let taskID = created.first else { return .failure(.missingTask) }
+            meta.reminderTaskID = taskID
+            report(FeedbackEvent(kind: .success,
+                message: "已创建待办「\(title)」并同步提醒，可在收集箱查看",
+                coalesceKey: "inline.reminder.task"))
+        }
+        meta.reminderAt = date
+        if date != nil { meta.allDay = false }
+        document.blocks[line].checklist = meta
+        let result = withMaterializedTask(id) { actions.setDocument($0, document) }
+        didMutate(result)
+        if let linkedID = meta.reminderTaskID { setReminder(linkedID, date) }
+        return result
+    }
+
+    /// 关联待办的标题：取块文本，超长截断；空行兜底。
+    nonisolated static func inlineReminderTaskTitle(from text: String, limit: Int = 40) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "来自笔记的提醒" }
+        return trimmed.count > limit ? trimmed.prefix(limit) + "…" : trimmed
+    }
+
+    /// 任务→笔记 方向的提醒同步：任务的 reminderAt 变化（含撤销、批量）回写
+    /// 正文里 reminderTaskID 指向它的块；任务被删除时保留块提醒、解除链接，
+    /// 让正文扫描的通知无缝接管。文档侧写入按 reminderAt 幂等，无回环。
+    private func syncInlineDateReminders(from changes: TaskChangeSet) {
+        for entry in changes.entries {
+            guard let noteID = (entry.after ?? entry.before)?.sourceNoteID,
+                  let noteTask = task(for: noteID), noteTask.isNoteTask, noteTask.deletedAt == nil,
+                  var document = try? noteTask.document.materialized(),
+                  let index = document.blocks.firstIndex(where: { $0.checklist?.reminderTaskID == entry.taskID })
+            else { continue }
+            var meta = document.blocks[index].checklist ?? ChecklistItemMeta()
+            let nextReminder = entry.after?.reminderAt
+            if entry.operation == .delete {
+                guard meta.reminderTaskID != nil else { continue }
+                meta.reminderTaskID = nil
+            } else if entry.changedFields.contains(.deletedAt), entry.after?.deletedAt != nil {
+                // 任务被移入垃圾桶：解除链接、保留块提醒（正文扫描的通知接管），
+                // 悬浮菜单随后出现「设置待办任务」供重建；恢复任务不自动回链。
+                guard meta.reminderTaskID != nil else { continue }
+                meta.reminderTaskID = nil
+            } else {
+                guard entry.changedFields.contains(.reminderAt), meta.reminderAt != nextReminder else { continue }
+                meta.reminderAt = nextReminder
+            }
+            document.blocks[index].checklist = meta
+            didMutate(withMaterializedTask(noteID) { actions.setDocument($0, document) })
+        }
     }
 
     /// 任务形态切换（TI2-05b），内容映射见 `TaskActions.document(_:convertingTo:)`。

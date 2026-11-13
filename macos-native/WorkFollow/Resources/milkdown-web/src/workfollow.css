@@ -22,18 +22,28 @@ body.wf-grows { height:auto; overflow:hidden; }
 .wf-heading { margin-bottom:8px; }
 .wf-marker { display:none; position:absolute; left:calc(var(--indent,0)*20px); top:1px; padding:0; font-size:inherit; line-height:inherit; width:17px; text-align:left; }
 .wf-bullet,.wf-ordered,.wf-quote { margin-bottom:2px; }
-.wf-bullet,.wf-ordered,.wf-quote,.wf-checklist { font-size:14px; line-height:18px; }
+.wf-bullet,.wf-ordered,.wf-quote { font-size:14px; line-height:18px; }
 .wf-bullet>.wf-block-content,.wf-ordered>.wf-block-content { margin-left:17px; }
 .wf-bullet>.wf-marker,.wf-ordered>.wf-marker { display:block; }
-.wf-checklist { margin-bottom:19px; padding-right:24px; }
+/* 行尾操作区常驻预留两个按钮位（删除 22pt + 铃铛 22pt + 间距）。
+   固定预留而不按铃铛显隐切换：NodeView 首次构造可能早于 bridge 配置，
+   且 hover 只切 opacity，文字不会因悬停重排（布局跳动契约）。 */
+.wf-checklist { --wf-checklist-line-height:18px; --wf-checkbox-size:17px; font-size:14px; line-height:var(--wf-checklist-line-height); margin-bottom:19px; padding-right:50px; }
 .wf-checklist>.wf-block-content { margin-left:24px; }
-.wf-checklist>.wf-marker { display:block; top:3px; width:17px; height:17px; border:1.5px solid var(--wf-border); border-radius:4px; line-height:14px; font-size:13px; text-align:center; cursor:pointer; }
+.wf-checklist>.wf-marker { display:grid; place-items:center; top:calc((var(--wf-checklist-line-height) - var(--wf-checkbox-size))/2); width:var(--wf-checkbox-size); height:var(--wf-checkbox-size); border:1.5px solid var(--wf-border); border-radius:4px; line-height:1; font-size:13px; cursor:pointer; }
 .wf-checked>.wf-marker { color:white; background:var(--wf-accent); border-color:var(--wf-accent); }
 .wf-checked>.wf-block-content { color:var(--wf-muted); text-decoration:line-through; }
 .wf-checklist:after { content:''; position:absolute; left:24px; right:0; bottom:-9px; height:1px; background:var(--wf-border); opacity:.45; }
-.wf-reminder { position:absolute; right:2px; top:1px; width:22px; height:22px; padding:0; color:var(--wf-muted); opacity:0; }
+.wf-reminder { position:absolute; right:26px; top:1px; width:22px; height:22px; padding:0; color:var(--wf-muted); opacity:0; }
 .wf-block:hover>.wf-reminder,.wf-reminder.has-reminder { opacity:1; }
 .wf-reminder.has-reminder { color:var(--wf-accent); }
+/* 检查项行尾删除按钮：悬停哪一行就在哪一行出现，与旧 NativeTextView 的 24pt 命中区同位置。 */
+.wf-delete { position:absolute; right:2px; top:1px; width:22px; height:22px; padding:0; display:flex; align-items:center; justify-content:center; color:var(--wf-muted); opacity:0; pointer-events:none; }
+.wf-block:hover>.wf-delete,.wf-delete:focus-visible { opacity:1; pointer-events:auto; }
+.wf-delete svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:1.3; stroke-linecap:round; stroke-linejoin:round; }
+.wf-delete:hover { color:#df5d69; }
+/* 只读预览不显示删除入口；显隐不挂 JS 的 editable()，避免构造时序把它锁死。 */
+.wf-readonly .wf-delete { display:none; }
 .wf-quote>.wf-block-content { border-left:2px solid var(--wf-border); padding-left:14px; }
 .wf-code>.wf-block-content { background:var(--wf-fill); border:1px solid var(--wf-border); border-radius:6px; padding:7px 12px; font:13px/1.5 'SFMono-Regular',Menlo,monospace; tab-size:4; white-space:pre-wrap; }
 .wf-code { margin-bottom:2px; }
@@ -72,4 +82,22 @@ button:hover { background:var(--wf-fill); } button:disabled { cursor:default; }
 /* 行内日期与 AI 续写建议都只在视图层，不写进文档模型。 */
 .wf-inline-date { text-decoration:underline dotted; text-underline-offset:2px; text-decoration-color:var(--wf-border); }
 .wf-inline-date:hover { background:var(--wf-fill); }
+/* 已设提醒的日期：文字与下划线用提醒墨色（设置页可选，默认金黄，回退强调色）
+   + 检查项提醒同款 ♧ 小标（不进文档模型；文字本身的墨色/高亮标记在内层，优先级更高）。 */
+.wf-inline-date-reminded { color:var(--wf-reminder-ink, var(--wf-accent)); text-decoration-color:var(--wf-reminder-ink, var(--wf-accent)); }
+.wf-inline-date-reminded::after { content:"♧"; color:var(--wf-reminder-ink, var(--wf-accent)); font-size:.68em; margin-left:2px; vertical-align:.1em; }
 .wf-ghost { color:var(--wf-muted); opacity:.7; pointer-events:none; user-select:none; }
+
+/* 块拖拽重排：把手兼作拖拽源；指示线固定定位，画在两块共用的间隙里。 */
+.wf-block-handle { cursor:grab; user-select:none; -webkit-user-select:none; -webkit-user-drag:none; touch-action:none; }
+/* 块外操作件（序号/提醒/删除/图片缩放/表格增删）不参与选区：跨行拖选的 DOM
+   range 会途经这些元素，WebKit 可能把字形也画上选区底色；直选由 user-select
+   拦下，跨块 range 途经时再由 ::selection 透明兜底。color 必须继承，否则
+   WebKit 默认选中色会把字形涂白。复制走文档模型，与此无关。 */
+.wf-marker,.wf-reminder,.wf-delete,.wf-image-resize,.wf-embed-controls { user-select:none; -webkit-user-select:none; }
+.wf-block-handle::selection,.wf-marker::selection,.wf-reminder::selection,.wf-delete::selection,.wf-image-resize::selection,.wf-embed-controls::selection { background:transparent; color:inherit; }
+body.wf-dragging, body.wf-dragging * { user-select:none!important; -webkit-user-select:none!important; cursor:grabbing!important; }
+.wf-block.wf-drag-source { opacity:.4; }
+#wf-drop-indicator { position:fixed; z-index:110; height:2px; border-radius:1px; background:var(--wf-accent); pointer-events:none; }
+#wf-drop-indicator:before { content:''; position:absolute; left:-3px; top:-3px; width:8px; height:8px; border-radius:50%; background:var(--wf-accent); }
+.wf-readonly .wf-block-handle { cursor:default; }

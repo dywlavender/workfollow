@@ -16,7 +16,7 @@ final class NoteTemplateTests: XCTestCase {
             userTemplates: [task, summary, note],
             builtIns: BuiltInNoteTemplates.all,
             kind: .note)
-        XCTAssertEqual(noteItems.map(\.source), [.builtIn, .builtIn, .builtIn, .user])
+        XCTAssertEqual(noteItems.map(\.source), [.builtIn, .builtIn, .builtIn, .builtIn, .builtIn, .user])
         XCTAssertEqual(noteItems.last?.id, note.id)
         XCTAssertTrue(noteItems.allSatisfy { $0.template.templateKind == .note })
 
@@ -68,14 +68,17 @@ final class NoteTemplateTests: XCTestCase {
         let items = TaskTemplateCatalog.items(userTemplates: store.templates,
                                               builtIns: BuiltInNoteTemplates.all,
                                               kind: .note)
-        XCTAssertEqual(items.map(\.source), Array(repeating: .builtIn, count: 3))
+        XCTAssertEqual(items.map(\.source), Array(repeating: .builtIn, count: 5))
         XCTAssertEqual(store.templates.count, 0)
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: directory.appendingPathComponent("templates.json").path))
 
+        // 目录按内置数组的声明顺序展示（会议纪要、周报、每日记录、读书笔记、项目复盘）。
         XCTAssertEqual(BuiltInNoteTemplates.all.map(\.id), [
             UUID(uuidString: "30000000-0000-4000-8000-000000000001")!,
+            UUID(uuidString: "30000000-0000-4000-8000-000000000004")!,
             UUID(uuidString: "30000000-0000-4000-8000-000000000002")!,
+            UUID(uuidString: "30000000-0000-4000-8000-000000000005")!,
             UUID(uuidString: "30000000-0000-4000-8000-000000000003")!
         ])
         XCTAssertTrue(BuiltInNoteTemplates.all.allSatisfy { $0.isNoteTemplate })

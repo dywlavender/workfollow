@@ -62,6 +62,7 @@ struct MeetingRecord: Codable, Equatable, Identifiable {
     var duration: TimeInterval { capturedDuration ?? audio.reduce(0) { $0 + $1.duration } }
     var transcript: [MeetingTranscriptLine] = []
     var previousTranscript: [MeetingTranscriptLine]?
+    var followUpRevision: UUID?
     var minutes = ""
     var summarizedLineIDs: [UUID] = []
     var summarizedLineCount: Int { summarizedLineIDs.count }
@@ -75,6 +76,7 @@ struct MeetingRecord: Codable, Equatable, Identifiable {
     /// 与 `CountdownEvent.displayUnit` 同一个套路。
     var minutesEditedByUser: Bool?
     var minutesIsManual: Bool { minutesEditedByUser == true }
+    var evidenceRevision: UUID { followUpRevision ?? id }
 }
 
 struct MeetingPiConfiguration: Codable, Equatable {

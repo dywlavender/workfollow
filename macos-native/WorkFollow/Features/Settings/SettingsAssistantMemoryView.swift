@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsAssistantMemoryView: View {
     @ObservedObject var memories: AssistantMemoryStore
     @ObservedObject var briefing: AssistantBriefingStore
+    @ObservedObject var followUps: MeetingFollowUpStore
     var onAutomaticChanged: () -> Void = {}
     @State private var draft = ""
     @State private var editing: AssistantMemory?
@@ -54,6 +55,22 @@ struct SettingsAssistantMemoryView: View {
                     catch { self.error = error.localizedDescription }
                 })).toggleStyle(.switch).padding(14)
                     .accessibilityIdentifier("assistant.briefing.automatic")
+                Toggle("会后提取待办", isOn: Binding(get: { followUps.enabled }, set: { enabled in
+                    do { try followUps.setEnabled(enabled); error = nil }
+                    catch { self.error = error.localizedDescription }
+                })).toggleStyle(.switch).padding(14)
+                    .accessibilityIdentifier("assistant.meeting.followUp")
+                Picker("助手默认提醒", selection: Binding(get: { briefing.defaultReminderMinutes }, set: { value in
+                    do { try briefing.setDefaultReminderMinutes(value); error = nil }
+                    catch { self.error = error.localizedDescription }
+                })) {
+                    Text("手动选择").tag(nil as Int?)
+                    Text("准时").tag(0 as Int?)
+                    ForEach([5, 10, 15, 30, 60], id: \.self) { minutes in
+                        Text("提前 \(minutes) 分钟").tag(Optional(minutes))
+                    }
+                }.padding(14)
+                    .accessibilityIdentifier("assistant.reminder.default")
             }
         }.accessibilityIdentifier("assistant.memory.page")
     }

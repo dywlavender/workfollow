@@ -325,9 +325,21 @@ final class DocumentEditorHandle: ObservableObject {
 
     /// `nil` 表示编辑器还没换上目标文档（调用方可稍后重试）；`false` 表示正文
     /// 里没有该词（例如只命中标题），无需继续等待。
-    func revealSearchMatch(_ query: String, documentID: UUID) -> Bool? {
+    func revealSearchMatch(_ query: String, documentID: UUID, blockID: UUID? = nil) -> Bool? {
         if let webView {
             guard webView.documentIdentity == documentID, webView.isDocumentReady else { return nil }
+            if let blockID {
+                let blocks = webView.document.blocks
+                if let index = blocks.firstIndex(where: { $0.id == blockID }) {
+                    if !query.isEmpty && blocks.firstIndex(where: { $0.plainText.localizedCaseInsensitiveContains(query) }) == index {
+                        webView.perform("search", payload: ["query": query])
+                    } else {
+                        webView.perform("revealBlock", payload: ["index": index])
+                    }
+                    return true
+                }
+            }
+            guard !query.isEmpty else { return false }
             guard webView.document.plainText.localizedCaseInsensitiveContains(query) else { return false }
             webView.perform("search", payload: ["query": query]); return true
         }

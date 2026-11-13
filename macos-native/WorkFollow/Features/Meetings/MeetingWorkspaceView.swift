@@ -1,6 +1,20 @@
 import AppKit
 import SwiftUI
 
+private struct MeetingFinishFollowUpButton: View {
+    @ObservedObject var followUps: MeetingFollowUpStore
+    let meeting: MeetingRecord
+    let canFinish: Bool
+    let finish: () -> Void
+
+    var body: some View {
+        if followUps.enabled && canFinish && !followUps.hasProcessed(meeting) {
+            Button("结束会议", action: finish).controlSize(.small)
+                .workflowActionAnchor("assistant.meeting.finish.\(meeting.id)")
+        }
+    }
+}
+
 struct MeetingMinutesButtonFrameKey: PreferenceKey {
     static let defaultValue = CGRect.zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
@@ -20,7 +34,7 @@ struct MeetingMinutesButtonFrameKey: PreferenceKey {
 /// 更新纪要的），核对时要对着看，tab 强制你来回切。数据里的 `summarizedLineIDs`
 /// 还让「哪些行还没进纪要」本来就可识别——分栏之后这条信息才用得上。
 ///
-/// 右栏纪要可直接编辑。录音中每五分钟或点击按钮时，AI 根据全部定稿重新编写；
+/// 右栏纪要默认 Markdown 渲染展示，「编辑」切到源码编辑器。录音中每五分钟或点击按钮时，AI 根据全部定稿重新编写；
 /// 两种触发互斥，手动编辑暂停自动替换。
 ///
 /// 这一页在 `RootShellView` 里是 **rail-only 目的地**（和日历 / 四象限 / 倒数一样，
@@ -32,6 +46,8 @@ struct MeetingWorkspaceView: View {
     @State private var aiTaskRequest: AITaskRequest?
     @State private var transcriptQuery = ""
     @State private var minutesEditorIsEmpty = true
+    /// 纪要双模式：默认 Markdown 渲染展示，「编辑」切到源码编辑器。
+    @State private var editingMinutes = false
     @StateObject private var audioPlayer = MeetingAudioPlayer()
     @State private var correction: MeetingCorrectionTarget?
     @State private var retranscriptionTarget: UUID?
@@ -42,7 +58,9 @@ struct MeetingWorkspaceView: View {
 
     // 列表列与详情栏之间那条线
     @State private var listDragOrigin: CGFloat?
-    @State private var paneWidth = WFMetrics.listPreferred
+    /// 默认宽度与拖动下限都取 `MeetingMetrics.listWidth`（与 AI 对话侧栏同宽），
+    /// 不再取 `WFMetrics.listPreferred`——两页文件栏忽宽忽窄是用户点名的问题。
+    @State private var paneWidth = MeetingMetrics.listWidth
 
     // 详情栏内部那条线：横向时是左栏宽度占比，纵向时是上栏高度占比
     @State private var splitDragOrigin: CGFloat?
@@ -79,11 +97,13 @@ struct MeetingWorkspaceView: View {
     var body: some View {
         GeometryReader { geometry in
             // 门槛与任务页/笔记页共用同一个值。内容区宽度不够两栏时退化成单栏，
-            // 否则列表列会被 `maximum` 顶到 listMinimum、详情栏被挤成负宽度。
+            // 否则列表列会被 `maximum` 顶到最小值、详情栏被挤成负宽度。
+            // 两栏门槛仍用全局 `splitMinimum`：列表列下限降到 224 后它虽然偏保守
+            // （真下限是 224+320+1=545），但代价只是窄窗口下晚一点出双栏。
             let wide = geometry.size.width >= WFMetrics.splitMinimum
-            let maximum = max(WFMetrics.listMinimum, min(WFMetrics.listMaximum,
+            let maximum = max(MeetingMetrics.listWidth, min(WFMetrics.listMaximum,
                 geometry.size.width - WFMetrics.inspectorMinimum - WFMetrics.divider))
-            let width = min(max(paneWidth, WFMetrics.listMinimum), maximum)
+            let width = min(max(paneWidth, MeetingMetrics.listWidth), maximum)
             HStack(spacing: 0) {
                 if wide || !detailOnly || store.selected == nil {
                     list(compact: !wide).frame(width: wide ? width : nil)
@@ -96,7 +116,7 @@ struct MeetingWorkspaceView: View {
             }
         }
         .coordinateSpace(name: "meeting-minutes-workspace")
-        .workfollowPageSurface(0.90)
+        .workfollowPageSurface()
         .sheet(item: $aiTaskRequest) { AITaskComposerView(request: $0) }
         .sheet(item: $correction) { target in
             MeetingTranscriptEditor(line: target.line) { text, speaker, all in
@@ -178,37 +198,37 @@ struct MeetingWorkspaceView: View {
 
     private func list(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: WFSpace.sm) {
-            WorkspacePageHeader(title: "会议纪要", leading: {
-                if compact, store.selected != nil {
-                    Button { detailOnly = false } label: { Image(systemName: "chevron.left") }
-                        .buttonStyle(.plain).hoverTip("返回会议列表")
-                }
-            }, trailing: {
-                // 与笔记页的「新建」同一个样式：28×28、白字、accent 底、圆角 6。
-                Button { store.create() } label: {
-                    Image(systemName: "plus").frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain).foregroundStyle(WFColors.onAccent)
-                .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6))
-                .hoverTip("新建会议").accessibilityLabel("新建会议")
-            })
-
-            ScrollView {
-                // 行距 0：与任务列表、笔记列表同口径（分割线画在行内底边，不占行距）。
-                LazyVStack(spacing: 0) {
-                    if store.meetings.isEmpty {
-                        Text("还没有会议记录")
-                            .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, WFSpace.md)
-                            .padding(.top, WFSpace.xl)
+            ProjectFolderList(projects: $store.projects, records: store.meetings, selectedID: store.selectedID) { addFolder in
+                WorkspacePageHeader(title: "会议纪要", leading: {
+                    if compact, store.selected != nil {
+                        Button { detailOnly = false } label: { Image(systemName: "chevron.left") }
+                            .buttonStyle(.plain).hoverTip("返回会议列表")
                     }
-                    ForEach(store.meetings) { meeting in
-                        row(meeting)
+                }, trailing: {
+                    HStack(spacing: WFSpace.sm) {
+                        addFolder
+                        Button { store.create() } label: {
+                            Image(systemName: "plus").frame(width: 28, height: 28)
+                        }
+                        .buttonStyle(.plain).foregroundStyle(WFColors.onAccent)
+                        .background(WFColors.accent, in: RoundedRectangle(cornerRadius: 6))
+                        .hoverTip("新建会议").accessibilityLabel("新建会议")
                     }
+                })
+                .padding(.bottom, WFSpace.sm)
+            } empty: {
+                Text("还没有会议记录")
+                    .font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, WFSpace.md)
+                    .padding(.top, WFSpace.xl)
+            } row: { meeting, moveMenu in
+                if moveMenu.folders.isEmpty {
+                    row(meeting)
+                } else {
+                    row(meeting).businessContextMenu { moveMenu }
                 }
             }
-            .compactScrollbars()
 
             Divider().padding(.horizontal, WFSpace.md)
 
@@ -231,6 +251,9 @@ struct MeetingWorkspaceView: View {
         }
         .padding(.horizontal, WFSpace.control)
         .padding(.bottom, WFSpace.lg)
+        // 文件栏宽度锚点：运行时测试用它量列表列的实际宽度，
+        // 与 AI 对话页「ai.chat.history」锚点对齐，断言两页文件栏同宽。
+        .accessibilityIdentifier("meeting.list").workflowActionAnchor("meeting.list")
     }
 
     private func row(_ meeting: MeetingRecord) -> some View {
@@ -263,6 +286,7 @@ struct MeetingWorkspaceView: View {
             .contentShape(Rectangle())
           }
           .buttonStyle(.plain)
+          .accessibilityIdentifier("meeting.history.\(meeting.id)")
           Button {
               if store.delete(meeting.id) { hoveredMeetingID = nil }
           } label: {
@@ -306,21 +330,12 @@ struct MeetingWorkspaceView: View {
         }
     }
 
-    /// 空态对齐倒数纪念日页的范式（同为 rail-only 目的地）：符号 + 标题 + 说明，
-    /// 全部 `secondaryText`，居中。
+    /// 空态走全站统一范式 `WorkspaceEmptyState`（符号 + 标题 + 说明 + 主行动）。
     private var emptyState: some View {
-        VStack(spacing: WFSpace.md) {
-            VStack(spacing: WFSpace.md) {
-                Image(systemName: NativeDestination.meetings.symbol).font(.largeTitle)
-                Text("记录对话，持续整理同一份纪要").font(WFType.body)
-                Text("录音保存在本地；配置 Pi 可同时进行实时转写。").font(WFType.supporting)
-            }
-            .foregroundStyle(WFColors.secondaryText)
-            Button("新建会议") { store.create() }
-                .buttonStyle(.borderedProminent).controlSize(.large)
-                .padding(.top, WFSpace.sm)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WorkspaceEmptyState(symbol: NativeDestination.meetings.symbol,
+                            title: "记录对话，持续整理同一份纪要",
+                            message: "录音保存在本地；配置 Pi 可同时进行实时转写。",
+                            actionTitle: "新建会议", action: { store.create() })
     }
 
     private func detail(_ meeting: MeetingRecord) -> some View {
@@ -404,13 +419,19 @@ struct MeetingWorkspaceView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(store.recordingID != nil || store.requestingPermission || store.transcribing || store.retranscribingID != nil || !store.savingRecordingIDs.isEmpty)
             }
+            MeetingFinishFollowUpButton(followUps: environment.meetingFollowUps, meeting: meeting,
+                canFinish: store.recordingID == meeting.id || (!meeting.transcript.isEmpty
+                    && store.recordingID == nil && !store.transcribing && store.retranscribingID == nil
+                    && !store.savingRecordingIDs.contains(meeting.id))) {
+                store.finishForFollowUp(meeting.id)
+            }
             if store.requestingPermission {
                 ProgressView().controlSize(.small)
                 Text("正在准备录音").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
                 Button("取消等待") { store.stopRecording() }.controlSize(.small)
             }
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                Text("已采集 \(store.recordedSeconds(meeting)) 秒")
+                Text("已采集 \(MeetingStore.durationText(store.recordedSeconds(meeting)))")
                     .font(WFType.listMeta).foregroundStyle(WFColors.secondaryText)
                     .monospacedDigit()
             }
@@ -461,15 +482,13 @@ struct MeetingWorkspaceView: View {
             Text(meeting.createdAt.formatted(
                 .dateTime.year().month().day().hour().minute().locale(.appDate)))
                 .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
-            Text(store.audioConfigured
-                 ? (store.configuration.usesHTTPTranscription
-                    ? "分段转写：每 3 秒提交音频，等待整段识别结果。讲话人标签仅在当前片段内有效；纪要使用独立模型生成。"
-                    : (!store.configuration.audioExtension.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                       ? "使用自定义音频扩展进行分段转写。录音保存在本地，录音中每 5 分钟自动编写纪要，也可手动触发。"
-                       : "实时转写：文字随讲话更新，定稿后保存。原始录音及转写输入 WAV 保存在本地；讲话人暂未区分。"))
-                 : "本地录音可用。配置 Pi 音频扩展后可同时转写；录音文件可用于回放和复测。")
-                .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
-                .padding(.top, WFSpace.xs)
+            // 转写模式的实现细节（提交节奏/存储格式/讲话人）不再常驻标题下；
+            // 只在未配置 Pi 音频扩展时保留一句可行动的引导。
+            if !store.audioConfigured {
+                Text("本地录音可用。配置 Pi 音频扩展后可同时转写；录音文件可用于回放和复测。")
+                    .font(WFType.caption).foregroundStyle(WFColors.secondaryText)
+                    .padding(.top, WFSpace.xs)
+            }
         }
     }
 
@@ -725,13 +744,21 @@ struct MeetingWorkspaceView: View {
                 if store.updatingMinutes && store.minutesPreviewID == meeting.id {
                     Button("停止") { store.cancelMinutes() }.controlSize(.small)
                 }
+                if !(store.updatingMinutes && store.minutesPreviewID == meeting.id) {
+                    Button(editingMinutes ? "完成" : "编辑") {
+                        editingMinutes.toggle()
+                    }
+                    .controlSize(.small)
+                    .accessibilityIdentifier("meeting.edit-minutes")
+                    .help(editingMinutes ? "结束编辑，回到渲染视图" : "编辑 Markdown 源码")
+                }
                 Button(store.updatingMinutes ? "AI 编写中…" : "AI 编写纪要") {
                     store.updateMinutesNow()
                 }
                 .controlSize(.small)
                 .disabled(!store.canGenerateMinutes(for: meeting))
                 .accessibilityIdentifier("meeting.generate-minutes")
-                .help("根据全部已定稿对话重新编写完整纪要；生成期间暂停定时任务，完成后重新计时 5 分钟")
+                .help("根据全部已定稿对话重新编写完整纪要；生成期间暂停定时任务，完成后重新计时 30 分钟")
                 .background(GeometryReader { geometry in
                     Color.clear.preference(key: MeetingMinutesButtonFrameKey.self,
                         value: geometry.frame(in: .named("meeting-minutes-workspace")))
@@ -742,10 +769,46 @@ struct MeetingWorkspaceView: View {
             Divider()
             if store.updatingMinutes && store.minutesPreviewID == meeting.id {
                 AIStreamingTextView(text: store.minutesPreview, status: store.minutesStatus)
-            } else { minutesEditor(meeting) }
+            } else if editingMinutes {
+                minutesEditor(meeting)
+            } else {
+                minutesRendered(meeting)
+            }
             Divider()
             minutesFooter(meeting)
         }
+        // AI 重新编写完成（或被停止）后回到渲染视图，让新纪要以成稿形式出现。
+        .onChange(of: store.updatingMinutes) { _, updating in
+            if !updating { editingMinutes = false }
+        }
+        // 切换会议时退出编辑态，避免把上一场会议的编辑框带给下一场。
+        .onChange(of: store.selected?.id) { _, _ in
+            editingMinutes = false
+        }
+    }
+
+    /// 纪要展示：Markdown 渲染成标题/列表/代码块富文本，与 AI 回复同一渲染器
+    /// （连续选区、段落排版）。外层 ScrollView 负责滚动——AIMessageContent
+    /// 自适应高度，不能再套内部滚动。
+    private func minutesRendered(_ meeting: MeetingRecord) -> some View {
+        Group {
+            if meeting.minutes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                VStack(alignment: .leading, spacing: WFSpace.sm) {
+                    Text("还没有纪要。").font(WFType.body).foregroundStyle(WFColors.secondaryText)
+                    Text("点击「AI 编写纪要」根据对话生成，或点「编辑」手动记录。")
+                        .font(WFType.supporting).foregroundStyle(WFColors.tertiaryText)
+                }
+                .padding(WFSpace.md)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                ScrollView {
+                    AIMessageContent(text: meeting.minutes)
+                        .padding(WFSpace.md)
+                }
+                .background { WorkfollowReadingSurface() }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     /// 表头右侧：自动模式下报「更新于 hh:mm」，手动接管后改成说明状态。
@@ -757,13 +820,11 @@ struct MeetingWorkspaceView: View {
         }
     }
 
-    /// 纪要正文：**直接可编辑**，不再是一个只读投影 + 「更新纪要」按钮。
+    /// 纪要源码编辑器（「编辑」模式下才出现；默认是 Markdown 渲染展示）。
     ///
     /// 自己就是一块 `TextEditor`，所以**外面不要再套 `ScrollView`**——两者都带滚动条，
-    /// 套起来会出现「外层滚不动、内层滚到头」的夹层手感。
-    ///
-    /// 代价：`TextEditor` 显示的是 Markdown 源码，原来那套渲染过的标题/项目符号没有了。
-    /// 这是「可编辑」换来的，取舍点在这里。
+    /// 套起来会出现「外层滚不动、内层滚到头」的夹层手感。渲染视图负责成稿展示，
+    /// 编辑视图负责改源码，两者共用同一份 minutes 存储。
     private func minutesEditor(_ meeting: MeetingRecord) -> some View {
         ZStack(alignment: .topLeading) {
             // `LiveTextEditor` 负责回传实时空态：输入法的拼音还没上屏时，
@@ -779,7 +840,7 @@ struct MeetingWorkspaceView: View {
             // 阅读面。原来这里是不透明底，同一页里会出现两种白。
             .background { WorkfollowReadingSurface() }
             if meeting.minutes.isEmpty && minutesEditorIsEmpty {
-                Text("有定稿文字后，点击“AI 编写纪要”；录音中每 5 分钟自动编写，也可以直接在这里写。")
+                Text("有定稿文字后，点击“AI 编写纪要”；录音中每 30 分钟自动编写，也可以直接在这里写。")
                     .font(WFType.body).foregroundStyle(WFColors.tertiaryText)
                     .padding(.top, WFSpace.sm)
                     .padding(.leading, WFSpace.xs)
@@ -811,7 +872,7 @@ struct MeetingWorkspaceView: View {
             if meeting.minutesIsManual {
                 Text("自动编写已暂停").font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
             } else if store.recordingID == meeting.id {
-                Text("每 5 分钟自动编写").font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
+                Text("每 30 分钟自动编写").font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
             } else if let updated = minutesHeaderTrailing(meeting) {
                 Text(updated).font(WFType.caption).foregroundStyle(WFColors.secondaryText).lineLimit(1)
             }

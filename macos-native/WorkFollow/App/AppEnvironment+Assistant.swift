@@ -35,7 +35,15 @@ extension AppEnvironment {
 
     func refreshAssistantBriefingAutomatically() {
         guard assistantStarted else { return }
+        refreshAssistantToday()
         refreshAssistantBriefing()
+    }
+
+    func refreshAssistantToday() {
+        guard canSeedWelcomeGuide else { return }
+        let snapshot = AssistantTaskSnapshot(tasks: taskWorkspace.tasksInActiveLists,
+            now: taskWorkspace.clock(), calendar: taskWorkspace.calendar)
+        assistantBriefing.updateToday { snapshot.facts() }
     }
 
     func refreshAssistantBriefing(force: Bool = false) {

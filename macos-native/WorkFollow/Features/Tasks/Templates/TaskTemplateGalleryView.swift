@@ -180,8 +180,10 @@ struct TaskTemplateGalleryView: View {
 
     private var header: some View {
         let slotWidth = min(190, max(132, contentSize.width * 0.28))
+        // 右侧 = 搜索框 + 关闭钮；左槽位补上同样的宽度，标题保持光学居中。
+        let closeSlot: CGFloat = 30
         return HStack(spacing: 0) {
-            Color.clear.frame(width: slotWidth, height: 40)
+            Color.clear.frame(width: slotWidth + closeSlot, height: 40)
             Spacer(minLength: 0)
             Text(title)
                 .font(WFType.detailTitle)
@@ -189,8 +191,29 @@ struct TaskTemplateGalleryView: View {
                 .fixedSize()
             Spacer(minLength: 0)
             searchField.frame(width: slotWidth)
+            closeButton
+                .frame(width: closeSlot, height: 40)
         }
         .frame(height: 34)
+    }
+
+    /// 弹层没有标题栏，此前只能靠 Esc 或选完模板关闭；补一个显式关闭钮。
+    private var closeButton: some View {
+        Button {
+            onDismiss()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(WFColors.secondaryText)
+                .frame(width: 26, height: 26)
+                .background(WFColors.content, in: Circle())
+                .overlay(Circle().stroke(WFColors.border))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverTip("关闭")
+        .accessibilityLabel("关闭")
+        .accessibilityIdentifier("task-template-close")
     }
 
     private var searchField: some View {

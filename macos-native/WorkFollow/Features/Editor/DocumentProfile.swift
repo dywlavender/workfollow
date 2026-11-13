@@ -104,6 +104,9 @@ struct DocumentProfile {
     /// 返回 nil 表示该行不是检查项。
     var checklistItem: (Int) -> ChecklistItemMeta? = { _ in nil }
     var setChecklistReminder: (Int, Date?) -> Void = { _, _ in }
+    /// 行内日期悬浮面板的提醒写入（额外同步关联待办任务）。nil = 退回
+    /// `setChecklistReminder` 的本地提醒语义（任务详情等宿主不建关联任务）。
+    var setInlineDateReminder: ((Int, Date?) -> Void)?
     /// 未授权通知时提醒面板底部的说明；nil 不显示。
     var checklistReminderNotice: () -> String? = { nil }
     /// 只有清单任务开启行尾铃铛；笔记/文本里的行内复选框保持原样。

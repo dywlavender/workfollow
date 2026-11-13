@@ -44,6 +44,30 @@ final class NoteFeatureTests: XCTestCase {
         XCTAssertTrue(model.folders.isEmpty)
     }
 
+    func testFolderEditPersistsIconAndNameColor() throws {
+        let model = NotesWorkspaceModel()
+        XCTAssertTrue(model.addFolder("工作"))
+        let id = try XCTUnwrap(model.folderID(named: "工作"))
+        XCTAssertNil(model.folderNodes.first { $0.id == id }?.nameColorHex)
+
+        model.setFolderIcon("briefcase", for: id)
+        model.setFolderNameColor("#0b7bff", for: id)
+        let node = try XCTUnwrap(model.folderNodes.first { $0.id == id })
+        XCTAssertEqual(node.icon, "briefcase")
+        XCTAssertEqual(node.nameColorHex, "#0b7bff")
+
+        // 持久化投影保留图标与颜色；重建模型后仍在。
+        let persisted = model.folderMetadataForPersistence
+        let restored = NotesWorkspaceModel(folderMetadata: persisted)
+        let restoredNode = try XCTUnwrap(restored.folderNodes.first { $0.name == "工作" })
+        XCTAssertEqual(restoredNode.icon, "briefcase")
+        XCTAssertEqual(restoredNode.nameColorHex, "#0b7bff")
+
+        // 恢复默认：颜色置 nil。
+        model.setFolderNameColor(nil, for: id)
+        XCTAssertNil(model.folderNodes.first { $0.id == id }?.nameColorHex)
+    }
+
     func testNoteSlashMatchesFlutterSharedDocumentCommands() {
         let profile = DocumentProfile(noteSlash: true)
         XCTAssertEqual(profile.slashCommands.map(\.title), ["一级标题", "二级标题", "三级标题", "无序列表", "有序列表", "检查项", "引用", "水平分割线", "附件", "流程图（draw.io）"])
@@ -72,15 +96,24 @@ final class NoteFeatureTests: XCTestCase {
         XCTAssertTrue(model.addFolder("会议"))
         XCTAssertFalse(model.addFolder("会议"))
         let folderID = try XCTUnwrap(model.folderID(named: "会议"))
+        let noteID = model.create(folder: "会议", title: "议程")
+        model.setFolderIcon(NoteDirectoryIcon.people.rawValue, for: folderID)
+        model.setNoteIcon(NoteDirectoryIcon.calendar.rawValue, for: noteID)
         let data = try JSONEncoder().encode(NativeWorkspaceSnapshot(
-            tasks: [], notes: [], noteFolders: model.folders,
+            tasks: [], notes: model.notes, noteFolders: model.folders,
             noteFolderMetadata: model.folderMetadataForPersistence))
         let snapshot = try JSONDecoder().decode(NativeWorkspaceSnapshot.self, from: data)
         let reopened = NotesWorkspaceModel(initialNotes: snapshot.notes, folders: snapshot.noteFolders ?? [],
                                            folderMetadata: snapshot.noteFolderMetadata ?? [])
         XCTAssertEqual(reopened.folders, ["会议"])
         XCTAssertEqual(reopened.folderID(named: "会议"), folderID)
-        reopened.create(folder: "会议")
+        XCTAssertEqual(reopened.folderNodes.first?.icon, "person.2")
+        reopened.selectedID = noteID
+        XCTAssertEqual(reopened.selected?.icon, "calendar")
+        let exported = try MigrationSnapshot.exportJSON(from: snapshot, attachmentDirectory: nil)
+        let restored = MigrationSnapshot.replaced(try MigrationSnapshot.parse(exported), attachmentNames: []).0
+        XCTAssertEqual(restored.noteFolderMetadata?.first?.icon, "person.2")
+        XCTAssertEqual(restored.notes.first?.icon, "calendar")
         XCTAssertTrue(reopened.renameFolder("会议", to: "会议记录"))
         XCTAssertEqual(reopened.selected?.folder, "会议记录")
         XCTAssertEqual(reopened.selected?.folderID, folderID)
@@ -290,5 +323,54 @@ final class NoteFeatureTests: XCTestCase {
         Task(id: id, title: title, list: .inbox, priority: .none, schedule: TaskSchedule(),
              parentID: nil, childOrder: 0, createdAt: Date(timeIntervalSince1970: 0),
              updatedAt: Date(timeIntervalSince1970: 0), deletedAt: deletedAt, sourceNoteID: sourceNoteID)
+    }
+
+    // MARK: - 目录栏宽度：独立窄宽度 + 层级自适应
+
+    func testTreePaneWidthDefaultsNarrowClampsAndPersists() {
+        let name = "notes-width-test-" + UUID().uuidString
+        let suite = UserDefaults(suiteName: name)!
+        defer { suite.removePersistentDomain(forName: name) }
+
+        let model = NotesWorkspaceModel(layoutDefaults: suite)
+        XCTAssertEqual(model.treePaneWidth, WFMetrics.notesTreePreferred)
+        XCTAssertEqual(model.requiredTreePaneWidth, WFMetrics.notesTreeMinimum,
+                       "没有文件夹时可见层级只有「未归档 + 笔记」一级，不要求加宽")
+        XCTAssertEqual(model.effectiveTreePaneWidth, WFMetrics.notesTreePreferred)
+
+        // 拖太窄夹到下限；拖太宽夹到上限；重载后保留。
+        model.setTreePaneWidth(120)
+        XCTAssertEqual(model.treePaneWidth, WFMetrics.notesTreeMinimum)
+        model.setTreePaneWidth(999)
+        XCTAssertEqual(model.treePaneWidth, WFMetrics.notesTreeMaximum)
+        model.setTreePaneWidth(236)
+        XCTAssertEqual(NotesWorkspaceModel(layoutDefaults: suite).treePaneWidth, 236)
+    }
+
+    func testTreePaneWidthAutoWidensWithVisibleDepthAndCaps() throws {
+        let model = NotesWorkspaceModel(folders: [])
+        XCTAssertTrue(model.addFolder("工作"))
+        let work = try XCTUnwrap(model.folderID(named: "工作"))
+        model.addFolder("项目复盘", parentID: work)
+        let review = try XCTUnwrap(model.folderID(named: "项目复盘"))
+        model.addFolder("二期", parentID: review)
+        let secondPhase = try XCTUnwrap(model.folderID(named: "二期"))
+        // addFolder 会展开父链；先全部折叠，从「只见顶层」开始推演。
+        for id in [work, review, secondPhase] { model.setFolderExpanded(id, false) }
+        // 「工作」折叠：可见层级仍是「未归档 + 笔记」一级，不加宽。
+        XCTAssertEqual(model.requiredTreePaneWidth, WFMetrics.notesTreeMinimum)
+        model.setFolderExpanded(work, true)
+        // 展开「工作」后「项目复盘」行可见（1 级，其下笔记 2 级），加宽一档。
+        XCTAssertEqual(model.requiredTreePaneWidth,
+                       WFMetrics.notesTreeMinimum + WFMetrics.notesTreeDepthStep)
+        model.setFolderExpanded(review, true)
+        XCTAssertEqual(model.requiredTreePaneWidth,
+                       WFMetrics.notesTreeMinimum + WFMetrics.notesTreeDepthStep * 2)
+        // 有效宽度取「用户值 vs 层级需要」的较大者，但绝不越过上限。
+        XCTAssertLessThanOrEqual(model.effectiveTreePaneWidth, WFMetrics.notesTreeMaximum)
+        // 折回去宽度需求立刻回落（删深层文件夹同理）。
+        model.setFolderExpanded(review, false)
+        XCTAssertEqual(model.requiredTreePaneWidth,
+                       WFMetrics.notesTreeMinimum + WFMetrics.notesTreeDepthStep)
     }
 }

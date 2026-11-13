@@ -39,6 +39,7 @@ extension AppEnvironment {
             else {
                 details = [data["schedule"]?.string ?? "定时任务已保存"]
                 if data["enabled"] == .bool(false) { details.append("已停用") }
+                if data["deliverResult"] == .bool(true) { details.append("结果会出现在今日简报") }
             }
         }
         if details.isEmpty { details.append(request.operation.hasPrefix("note.") ? "笔记已保存" : "已保存") }

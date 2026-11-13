@@ -2,6 +2,9 @@ import SwiftUI
 
 struct AIChatWorkspaceView: View {
     @ObservedObject var store: AIChatStore
+    /// 简报卡收起状态住在 `AssistantBriefingStore`；这里必须直接观察它，
+    /// `AppEnvironment` 是 `let` 不转发，否则卡片收起/恢复不会触发本页重算。
+    @ObservedObject var briefing: AssistantBriefingStore
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.openSettings) private var openSettings
     @State private var historyPresented = false
@@ -59,25 +62,35 @@ struct AIChatWorkspaceView: View {
                 .firstMouseAction { store.newConversation(); historyPresented = false }
                 .accessibilityLabel("新对话").accessibilityIdentifier("ai.chat.new").workflowActionAnchor("ai.chat.new")
                 .padding(.horizontal, 12).padding(.top, 36).padding(.bottom, 24)
-            Text("历史对话").font(WFType.sectionSemibold)
-                .padding(.horizontal, 18).padding(.bottom, 12)
-            ScrollView {
-                LazyVStack(spacing: 4) {
-                    if store.records.isEmpty {
-                        Text("暂无对话").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(12)
-                    }
-                    ForEach(store.records.sorted { $0.updatedAt > $1.updatedAt }) { record in
-                        AIChatHistoryRow(record: record, selected: record.id == store.current.record.id,
-                                         running: store.runningIDs.contains(record.id),
-                                         deleting: store.deletingIDs.contains(record.id)) {
-                            store.select(record.id); historyPresented = false
-                        } onDelete: {
-                            historyPresented = false; deletionTarget = record
-                        }
-                    }
-                }.padding(.horizontal, 8)
-            }.compactScrollbars()
+            ProjectFolderList(projects: $store.projects,
+                              records: store.records.sorted { $0.updatedAt > $1.updatedAt },
+                              selectedID: store.current.record.id, rowSpacing: 4, horizontalInset: 8) { addFolder in
+                HStack {
+                    Text("历史对话").font(WFType.sectionSemibold)
+                    Spacer()
+                    addFolder
+                }
+                .padding(.horizontal, 18).padding(.bottom, 8)
+            } empty: {
+                Text("暂无对话").font(WFType.supporting).foregroundStyle(WFColors.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+            } row: { record, moveMenu in
+                let delete = { historyPresented = false; deletionTarget = record }
+                AIChatHistoryRow(record: record, selected: record.id == store.current.record.id,
+                                 running: store.runningIDs.contains(record.id),
+                                 unviewed: store.unviewedIDs.contains(record.id),
+                                 deleting: store.deletingIDs.contains(record.id)) {
+                    store.select(record.id); historyPresented = false
+                } onDelete: {
+                    delete()
+                }
+                .businessContextMenu {
+                    moveMenu.disabled(store.deletingIDs.contains(record.id))
+                    if !moveMenu.folders.isEmpty { Divider() }
+                    Button("删除对话", systemImage: "trash", role: .destructive, action: delete)
+                        .disabled(store.deletingIDs.contains(record.id))
+                }
+            }
             Divider()
             PiChatModelButton(store: environment.meetingStore, disabled: store.current.isRunning).padding(.horizontal, 8)
             Button(action: showScheduledTasks) {
@@ -105,6 +118,11 @@ struct AIChatWorkspaceView: View {
             .accessibilityIdentifier("ai.chat.history").workflowActionAnchor("ai.chat.history")
     }
 
+    private func reopenBriefing() {
+        do { try briefing.setCardHidden(false) }
+        catch { environment.feedback.show(FeedbackEvent(kind: .error, message: error.localizedDescription)) }
+    }
+
     private func showScheduledTasks() {
         if historyPresented {
             historyPresented = false
@@ -129,6 +147,11 @@ struct AIChatWorkspaceView: View {
                 }
             }, trailing: {
                 WFGlassControlGroup(spacing: 16) {
+                    // 卡片被收起后，页头留一个再打开的入口，不然就找不回来了。
+                    if briefing.cardHidden {
+                        Button("今日简报", systemImage: "sparkles") { reopenBriefing() }
+                            .workflowActionAnchor("assistant.briefing.reopen")
+                    }
                     Button("引用资料", systemImage: "paperclip") { referencesPresented = true }
                         .workflowActionAnchor("ai.chat.reference")
                         .propertyPanelTrigger("ai.chat.references")
@@ -138,7 +161,9 @@ struct AIChatWorkspaceView: View {
             .anchoredPropertyPanel(isPresented: $historyPresented, trigger: "ai.chat.history",
                                    width: PopupMetrics.aiChatHistoryWidth, placement: .vertical,
                                    title: "历史对话") {
-                history.frame(height: 420)
+                // 480：ProjectFolderList 加了「未归档」节头后，420 已经装不下两条
+                // 完整记录，第二条会被滚动视口裁掉一半，点击落点和未读点都会被吃掉。
+                history.frame(height: 480)
             }
             .anchoredPropertyPanel(isPresented: $referencesPresented, trigger: "ai.chat.references",
                                    width: PopupMetrics.aiReferencePickerWidth, placement: .dropdown,
@@ -148,6 +173,12 @@ struct AIChatWorkspaceView: View {
                     if !values.contains(where: { $0.id == reference.id }) { values.append(reference) }
                     store.current.setReferences(values); referencesPresented = false
                 }.environmentObject(environment)
+            }
+            if !briefing.cardHidden {
+                AssistantBriefingCard(store: environment.assistantBriefing, jobs: environment.aiScheduledJobs,
+                                      followUps: environment.meetingFollowUps, conversation: current) {
+                    environment.refreshAssistantBriefing(force: true)
+                }.padding(.horizontal, 24).padding(.bottom, 8)
             }
             if let references = store.current.record.references, !references.isEmpty {
                 ScrollView(.horizontal) {
@@ -166,10 +197,7 @@ struct AIChatWorkspaceView: View {
             }
             AIConversationView(model: current, generate: environment.conversationClient().generator(for: current),
                undoAction: { environment.undoAIAction($0) },
-               canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID },
-               leadingContent: AnyView(AssistantBriefingCard(store: environment.assistantBriefing, conversation: current) {
-                   environment.refreshAssistantBriefing(force: true)
-               })).id(store.current.record.id)
+               canUndoAction: { environment.taskWorkspace.automationUndoID == $0.undoID }).id(store.current.record.id)
                 .disabled(store.deletingIDs.contains(store.current.record.id))
                 .environment(\.openURL, OpenURLAction { url in
                     environment.openResourceLink(url) ? .handled : .systemAction
@@ -183,6 +211,7 @@ private struct AIChatHistoryRow: View {
     let record: AIConversationRecord
     let selected: Bool
     let running: Bool
+    let unviewed: Bool
     let deleting: Bool
     let onSelect: () -> Void
     let onDelete: () -> Void
@@ -192,16 +221,26 @@ private struct AIChatHistoryRow: View {
         HStack(spacing: 0) {
             Button(action: onSelect) {
                 HStack(spacing: 6) {
-                    Text(record.title).font(WFType.supporting).lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // 执行中与未读完成共用标题前的同一格：两者互斥，固定 12pt 槽位
+                    // 保证标题起点不随提示类型漂移。点蓝点等同于点行（查看即清）。
                     if running {
                         ProgressView().controlSize(.small)
                             .tint(WFColors.secondaryText).foregroundStyle(WFColors.secondaryText)
+                            .frame(width: 12)
                             .accessibilityLabel("正在执行")
                             .accessibilityIdentifier("ai.chat.running.\(record.id)")
                             .workflowActionAnchor("ai.chat.running.\(record.id)")
                             .allowsHitTesting(false)
+                    } else if unviewed {
+                        Circle().fill(WFColors.accent).frame(width: 8, height: 8)
+                            .frame(width: 12)
+                            .accessibilityLabel("有未查看的回复")
+                            .accessibilityIdentifier("ai.chat.unviewed.\(record.id)")
+                            .workflowActionAnchor("ai.chat.unviewed.\(record.id)")
+                            .allowsHitTesting(false)
                     }
+                    Text(record.title).font(WFType.supporting).lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }.padding(.leading, 12).padding(.vertical, 12).contentShape(Rectangle())
             }.buttonStyle(.plain)
                 .accessibilityIdentifier("ai.chat.history.\(record.id)")
@@ -219,8 +258,5 @@ private struct AIChatHistoryRow: View {
         }.padding(.trailing, 6)
             .background(selected ? WFColors.selection : Color.clear, in: RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle()).onHover { hovered = $0 }.disabled(deleting)
-            .businessContextMenu {
-                Button("删除对话", systemImage: "trash", role: .destructive, action: onDelete).disabled(deleting)
-            }
     }
 }

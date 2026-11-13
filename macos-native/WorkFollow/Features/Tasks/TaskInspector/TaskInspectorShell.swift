@@ -737,6 +737,11 @@ struct TaskInspectorShell: View {
                 onComplete: { id in
                     if let child = workspace.task(for: id) { _ = workspace.changeStatus(child) }
                 },
+                onDelete: { id in
+                    // 与详情「更多 → 删除」同一条链路：软删 + HUD 一步撤销，
+                    // 并级联该子任务的下级。行尾按钮只做快捷入口，不另加确认。
+                    _ = workspace.delete(id)
+                },
                 onOpen: { id in
                     if inlineChildEditorID != id { workspace.select(id) }
                 },
@@ -898,20 +903,21 @@ struct TaskInspectorShell: View {
         guard let taskID = workspace.selectedTaskID,
               let request = workspace.searchRevealRequest,
               request.targetID == taskID else { return }
-        scheduleSearchReveal(taskID: taskID, query: request.query, attempts: 15)
+        scheduleSearchReveal(request, attempts: 15)
     }
 
-    private func scheduleSearchReveal(taskID: UUID, query: String, attempts: Int) {
+    private func scheduleSearchReveal(_ request: SearchRevealRequest, attempts: Int) {
         DispatchQueue.main.async {
+            let taskID = request.targetID
             guard workspace.selectedTaskID == taskID,
-                  workspace.searchRevealRequest?.targetID == taskID else { return }
-            switch editorHandle.revealSearchMatch(query, documentID: taskID) {
+                  workspace.searchRevealRequest?.token == request.token else { return }
+            switch editorHandle.revealSearchMatch(request.query, documentID: taskID, blockID: request.blockID) {
             case .some:
                 _ = workspace.consumeSearchReveal(for: taskID)
             case .none:
                 guard attempts > 0 else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    scheduleSearchReveal(taskID: taskID, query: query, attempts: attempts - 1)
+                    scheduleSearchReveal(request, attempts: attempts - 1)
                 }
             }
         }

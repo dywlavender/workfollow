@@ -50,7 +50,7 @@ struct TaskRelationPicker: View {
                                 Image(systemName: target.symbol)
                                 VStack(alignment: .leading) {
                                     Text(target.title).lineLimit(1)
-                                    Text(target.subtitle).font(.caption).foregroundStyle(.secondary)
+                                    Text(target.subtitle).font(WFType.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 if case let .note(note) = target, sourceNoteID == note.id {
@@ -64,7 +64,7 @@ struct TaskRelationPicker: View {
                 .compactScrollbars()
             }
             if failed {
-                Text("无法插入关联，请返回正文后重试").font(.caption).foregroundStyle(WFColors.danger)
+                Text("无法插入关联，请返回正文后重试").font(WFType.caption).foregroundStyle(WFColors.danger)
             }
         }.padding(16).frame(width: PopupMetrics.relationPickerWidth, height: 300)
             .coordinateSpace(name: "task-relation-picker")

@@ -6,6 +6,7 @@ struct CommandPaletteView: View {
     @ObservedObject var session: WorkspaceSearchSession
     @ObservedObject var workspace: TaskWorkspaceModel
     @ObservedObject var notes: NotesWorkspaceModel
+    @ObservedObject private var shortcuts = AppShortcutStore.shared
     @Environment(\.workfollowMaterial) private var material
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     private var glassActive: Bool {
@@ -35,8 +36,8 @@ struct CommandPaletteView: View {
                 TextField("搜索内容，或输入问题问 AI…", text: $session.query)
                     .textFieldStyle(.plain)
                     .focused($focused)
-                    .onKeyPress(keys: [.return], phases: .down) { key in
-                        guard key.modifiers.contains(.command) else { return .ignored }
+                    .onKeyPress(phases: .down) { key in
+                        guard shortcuts.chord(for: .createFromSearch).matches(key) else { return .ignored }
                         createFromQuery()
                         return .handled
                     }
@@ -91,7 +92,7 @@ struct CommandPaletteView: View {
                                     }
                                     Spacer(minLength: 0)
                                     if entry.kind == .createTask {
-                                        Text("⌘↵").font(WFType.supporting)
+                                        Text(shortcuts.chord(for: .createFromSearch).label).font(WFType.supporting)
                                             .foregroundStyle(WFColors.secondaryText)
                                     }
                                 }
@@ -137,7 +138,8 @@ struct CommandPaletteView: View {
             }.padding(.horizontal, WFSpace.lg).padding(.vertical, WFSpace.sm)
             // 底部快捷键提示条（Flutter 命令面板对齐）。
             HStack(spacing: WFSpace.sm) {
-                Text(session.askingAI ? "点击引用查看来源 · ↵ 提问 · esc 关闭" : "↑↓ 选择 · ↵ 打开 · ⌘↵ 新建 · esc 关闭")
+                Text(session.askingAI ? "点击引用查看来源 · ↵ 提问 · esc 关闭"
+                     : "↑↓ 选择 · ↵ 打开 · \(shortcuts.chord(for: .createFromSearch).label) 新建 · esc 关闭")
                     .font(WFType.supporting)
                     .foregroundStyle(WFColors.secondaryText)
                 Spacer(minLength: 0)

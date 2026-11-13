@@ -1,7 +1,7 @@
 import './workfollow.css';
 import 'katex/dist/katex.min.css';
 import { Editor, editorViewCtx, rootCtx, defaultValueCtx, editorViewOptionsCtx, nodeViewCtx } from '@milkdown/core';
-import { history } from '@milkdown/plugin-history';
+import { historyProviderConfig, historyProviderPlugin } from '@milkdown/plugin-history';
 import { $prose } from '@milkdown/utils';
 import { Plugin, EditorState, TextSelection } from '@milkdown/prose/state';
 import { Fragment, Slice } from '@milkdown/prose/model';
@@ -13,11 +13,16 @@ import katex from 'katex';
 import hljs from 'highlight.js/lib/common';
 import { schemaPlugins, fromNative, toNative, toNativeBlocks, wireKey, plainText, plainOffset, positionForPlainOffset, selectionDocument, uuid, isList, shiftedBlocks, listNumbers, getSerializeCount } from './schema.js';
 import { HostHistoryStep, hostHistory, historyBoundary, clipboardBoundaries, synchronizeDocument } from './transactions.js';
+import { dropTarget, moveBlock } from './drag.js';
+import { isImeCommitEnter } from './ime.js';
 
 let editor, view, current, loading = false, revision = 0, height = -1, pendingCommit = false;
 let settings = { readOnly: false }, popup, painter, pendingHostToken, lastOperation, lastCommit;
 let numberedDocument, numberedNodes = [], numberedMarkers = new Map();
+const markerRegistry = new Map(); // blockID → 该块 NodeView 的 .wf-marker 元素，随视图生命周期维护
+let numberedMarkerEls = new Map(); // 上次编号写回用过的元素：元素或编号变了才写 DOM
 let syntaxDocument, syntaxDecorations;
+let highlightRuns = 0, highlightAutos = 0; // 测试探针：高亮计算次数 / highlightAuto 全语言扫描次数
 let ghostVersion = 0, renderedGhostVersion = -1, renderedGhostAnchor = -1;
 let ghostTimer, ghostRequest = 0;
 let ghost = { text: '', anchor: -1, documentID: '', epoch: '' };
@@ -26,6 +31,12 @@ let pointerAnchor;
 let hoverTimer, hoveredLink;
 let popupSession = 0;
 const syntaxCache = new Map();
+// 拖拽插入位置提示线：固定定位，不进 #root，避免影响 reportHeight 的滚动高度。
+const dropIndicator = document.createElement('div');
+dropIndicator.id = 'wf-drop-indicator'; dropIndicator.hidden = true;
+document.body.append(dropIndicator);
+let drag = null;
+let imeCommittedAt = 0; // 最近一次 compositionend 的时间，用于识别 IME 确认候选词的回车
 // 行内日期命中区间按块节点缓存：ProseMirror 结构共享，未改动块不再全文重扫正则。
 const dateSpansCache = new WeakMap();
 const emptyBlock = node => node.content.size === 0 || node.content.content.every(child => child.type.name === 'wf_empty');
@@ -33,6 +44,13 @@ const post = message => window.webkit?.messageHandlers?.milkdown?.postMessage({ 
   documentID: current?.documentID, epoch: current?.epoch });
 const action = (name, payload = {}) => post({ event: 'requestAction', action: name, payload });
 const nativeTime = () => Date.now() / 1000 - 978307200;
+// 宿主 JSON 里 Date 走 timeIntervalSinceReferenceDate（相对 2001-01-01 的秒），
+// 与 nativeTime 同一参考点；格式化成 M月d日 HH:mm 供悬浮菜单回显。
+const formatReminderStamp = stamp => {
+  const date = new Date((stamp + 978307200) * 1000);
+  const pad = value => String(value).padStart(2, '0');
+  return `${date.getMonth() + 1}月${date.getDate()}日 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 const blockAt = () => view?.state.selection.$from.parent;
 const editable = () => !!current && !settings.readOnly;
 const button = (text, title, fn) => {
@@ -262,16 +280,47 @@ function applyGhost(payload) {
   view.dispatch(view.state.tr.setMeta('wfGhost', true));
   return true;
 }
+function matchesShortcut(binding, event) {
+  const key = event.key.toLowerCase();
+  return (key === binding.key || key === binding.typedKey)
+    && event.metaKey === binding.meta && event.shiftKey === binding.shift
+    && event.altKey === binding.alt && event.ctrlKey === binding.ctrl;
+}
 function handleKeyDown(_, event) {
+  // 中文输入法确认候选词的回车必须先吞掉：此时文字尚未上屏，空的检查项/列表块
+  // 会被判成「空块回车退出列表」而降级成普通段落，随后文字上屏就成了列表标记消失。
+  // WebKit 上这个 keydown 的 isComposing 与 view.composing 都可能已是 false，
+  // 只能靠 keyCode 229 或紧随 compositionend 的时序来认。
+  if (isImeCommitEnter(event, imeCommittedAt)) {
+    imeCommittedAt = 0;
+    event.preventDefault();
+    return true;
+  }
   if (event.isComposing || view.composing) return false;
+  if (editable()) {
+    const binding = settings.editorShortcuts?.find(item => matchesShortcut(item, event));
+    if (binding) {
+      if (binding.action === 'undo' || binding.action === 'redo') command(binding.action);
+      else format(binding.action);
+      return true;
+    }
+    if (settings.removedEditorShortcuts?.some(item => matchesShortcut(item, event))) return true;
+  }
   if (popup && ['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(event.key)) {
     event.preventDefault(); popupKey(event.key); return true;
   }
-  if (event.key === 'Escape') { if (ghost.text) { clearGhost(); return true; } if (painter) { painter = undefined; return true; } closePopups(); post({ event: 'escapePressed' }); return true; }
+  if (event.key === 'Escape') {
+    if (ghost.text) { clearGhost(); return true; }
+    if (painter) { painter = undefined; return true; }
+    // 选中样式条还开着时，Esc 只收起它，不把「关闭编辑」的语义传给宿主。
+    if (!toolbar.hidden) {
+      dismissedToolbarSelection = view.state.selection;
+      updateToolbar();
+      return true;
+    }
+    closePopups(); post({ event: 'escapePressed' }); return true;
+  }
   if (!editable()) return false;
-  const mod = event.metaKey || event.ctrlKey;
-  if (mod && ['b', 'i', 'u'].includes(event.key.toLowerCase())) { format(({ b: 'bold', i: 'italic', u: 'underline' })[event.key.toLowerCase()]); return true; }
-  if (mod && event.key.toLowerCase() === 'z') { command(event.shiftKey ? 'redo' : 'undo'); return true; }
   if (event.key === 'Tab' && !event.shiftKey && ghost.text && view.state.selection.empty) { acceptGhost(); return true; }
   if (event.key === 'Tab') { adjustIndent(event.shiftKey ? -1 : 1); return true; }
   // 正文第一行行首按左方向键：把焦点交还标题栏，与标题的回车/右方向键接力互补。
@@ -325,6 +374,34 @@ function markdownRules() {
     inline(/\*([^*]+)\*$/, 'italic'), inline(/_([^_]+)_$/, 'italic'), inline(/~([^~]+)~$/, 'underline'), link,
   ] });
 }
+// 代码块高亮按块缓存：highlightAuto 扫几十种语言，缓存键原来只是文本相等，
+// 代码块里每打一个字就全量重跑。检出语言后改用单语法高亮，命中快一个数量级。
+const highlightSpans = (id, text) => {
+  const cached = syntaxCache.get(id);
+  if (cached?.text === text) return cached.spans;
+  highlightRuns += 1;
+  // language：string 已检出；null 试过没检出（不再重扫）；undefined 还没试过。
+  // 短文本不锁语言，避免开头几个字符误检；块长过 32 字符的首次检测才缓存。
+  let language = cached ? cached.language : undefined, value = '';
+  if (language) {
+    try { value = hljs.highlight(text, { language, ignoreIllegals: true }).value; }
+    catch (_) { language = undefined; }
+  }
+  if (!language && language !== null) {
+    highlightAutos += 1;
+    const result = hljs.highlightAuto(text); value = result.value; language = result.language ?? null;
+  }
+  if (text.length < 32) language = undefined;
+  const template = document.createElement('div'); template.innerHTML = value;
+  const spans = []; let offset = 0;
+  const walk = (dom, classes = '') => {
+    if (dom.nodeType === 3) { if (classes && dom.textContent.length) spans.push({ from: offset, to: offset + dom.textContent.length, classes }); offset += dom.textContent.length; }
+    else for (const child of dom.childNodes) walk(child, [classes, dom.className || ''].filter(Boolean).join(' '));
+  };
+  walk(template);
+  syntaxCache.set(id, { text, language, spans });
+  return spans;
+};
 const integration = $prose(() => new Plugin({
   appendTransaction(transactions, old, state) {
     for (const tr of transactions) for (const step of tr.steps) {
@@ -356,6 +433,7 @@ const integration = $prose(() => new Plugin({
         if (hit) view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(hit.pos))));
         Promise.all(Array.from(event.dataTransfer.files).map(file => new Promise(resolve => { const reader = new FileReader(); reader.onload = () => resolve({ name: file.name, data: String(reader.result).split(',')[1] }); reader.readAsDataURL(file); })))
           .then(files => action('dropFiles', { files })); return true; },
+      compositionend: () => { imeCommittedAt = Date.now(); return false; },
       focus: () => { post({ event: 'focusChanged', focused: true }); return false; },
       blur: () => { post({ event: 'focusChanged', focused: false }); return false; },
       contextmenu: (_, event) => { event.preventDefault(); showContextMenu(event.clientX, event.clientY); return true; },
@@ -365,19 +443,9 @@ const integration = $prose(() => new Plugin({
       if (syntaxDocument === state.doc && renderedGhostVersion === ghostVersion && renderedGhostAnchor === head) return syntaxDecorations;
       const decorations = [];
       state.doc.forEach((node, pos) => {
-        if (node.attrs.kind === 'code' && node.textContent.trim()) {
+        if (node.attrs.kind === 'code' && node.textContent.trim() && node.textContent.length <= 100000) {
           try {
-            let cached = syntaxCache.get(node.attrs.id);
-            if (cached?.text !== node.textContent) {
-              const result = hljs.highlightAuto(node.textContent), template = document.createElement('div'); template.innerHTML = result.value;
-              cached = { text: node.textContent, spans: [] }; let offset = 0;
-              const walk = (dom, classes = '') => {
-                if (dom.nodeType === 3) { if (classes && dom.textContent.length) cached.spans.push({ from: offset, to: offset + dom.textContent.length, classes }); offset += dom.textContent.length; }
-                else for (const child of dom.childNodes) walk(child, [classes, dom.className || ''].filter(Boolean).join(' '));
-              };
-              walk(template); syntaxCache.set(node.attrs.id, cached);
-            }
-            for (const span of cached.spans) decorations.push(Decoration.inline(pos + 1 + span.from, pos + 1 + span.to, { class: span.classes }));
+            for (const span of highlightSpans(node.attrs.id, node.textContent)) decorations.push(Decoration.inline(pos + 1 + span.from, pos + 1 + span.to, { class: span.classes }));
           } catch (_) {}
         }
         // 行内日期只加视图层装饰，不进文档模型，也不影响按块差量提交。
@@ -397,7 +465,9 @@ const integration = $prose(() => new Plugin({
             });
             dateSpansCache.set(node, spans);
           }
-          for (const span of spans) decorations.push(Decoration.inline(pos + 1 + span.start, pos + 1 + span.end, { class: 'wf-inline-date' }));
+          // 块上已设提醒（含行内日期所在普通段落）时给日期词加标记，提醒状态在正文里可见。
+          const reminded = node.attrs.checklist?.reminderAt != null ? ' wf-inline-date-reminded' : '';
+          for (const span of spans) decorations.push(Decoration.inline(pos + 1 + span.start, pos + 1 + span.end, { class: 'wf-inline-date' + reminded }));
         }
       });
       if (ghost.text && head === ghost.anchor && ghost.documentID === current?.documentID && ghost.epoch === current?.epoch && !settings.readOnly) {
@@ -406,6 +476,12 @@ const integration = $prose(() => new Plugin({
           element.className = 'wf-ghost'; element.textContent = ghost.text; element.contentEditable = 'false';
           return element;
         }, { side: 1, key: 'wf-ghost', ignoreSelection: true, marks: [] }));
+      }
+      // 顺带清掉已删除代码块的缓存条目：长会话里删块不攒垃圾。
+      if (syntaxCache.size) {
+        const alive = new Set();
+        state.doc.forEach(node => { if (node.attrs.kind === 'code') alive.add(node.attrs.id); });
+        for (const id of syntaxCache.keys()) if (!alive.has(id)) syntaxCache.delete(id);
       }
       syntaxDocument = state.doc; renderedGhostVersion = ghostVersion; renderedGhostAnchor = head;
       syntaxDecorations = DecorationSet.create(state.doc, decorations); return syntaxDecorations;
@@ -429,11 +505,130 @@ function copySelection(event, cutting) {
   return true;
 }
 
+function deleteChecklistBlock(blockView) {
+  if (!editable() || !view) return;
+  const pos = blockView.getPos();
+  const node = typeof pos === 'number' ? view.state.doc.nodeAt(pos) : null;
+  if (!node || node.attrs.kind !== 'checklist') return;
+  const tr = closeHistory(view.state.tr);
+  if (view.state.doc.childCount === 1) {
+    // doc 的内容约束是 wf_block+：删掉唯一的块会得到非法文档。退化成清空这一项
+    // 并降级为普通段落，视觉上等价于「删掉这条检查项、留下一个空行」。
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, id: uuid(), kind: 'paragraph', level: null,
+      checked: null, checklist: null, listStart: null, align: null });
+    tr.delete(pos + 1, pos + 1 + node.content.size);
+    tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 1)));
+  } else {
+    tr.delete(pos, pos + node.nodeSize);
+  }
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
+// 块拖拽重排：块把手同时充当拖拽源。刻意不用 HTML5 DnD —— gutter 是 button，
+// button() 的 mousedown preventDefault 会压掉原生 dragstart；也不复用
+// handleDOMEvents.drop，那条通道专供宿主文件拖入。移动只在 pointerup 提交一次，
+// 期间不改文档，NodeView 不会被重建，指示线坐标始终对应同一份 DOM。
+const DRAG_THRESHOLD = 4;
+let dragClickGuardUntil = 0;
+const consumeDragClick = () => {
+  const swallow = Date.now() < dragClickGuardUntil;
+  dragClickGuardUntil = 0;
+  return swallow;
+};
+function blockRects() {
+  return Array.from(view.dom.querySelectorAll('[data-wf-block]')).map(element => {
+    const rect = element.getBoundingClientRect();
+    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+  });
+}
+function updateDropIndicator(state, y) {
+  const target = dropTarget(blockRects(), y);
+  if (!target) { dropIndicator.hidden = true; state.target = null; return; }
+  state.target = target.index;
+  // 放回原位（自己前面 / 紧跟自己后面）是 no-op，不画线以免误导。
+  const noop = target.index === state.fromIndex || target.index === state.fromIndex + 1;
+  dropIndicator.hidden = noop;
+  if (noop) return;
+  dropIndicator.style.top = `${Math.round(target.lineY)}px`;
+  dropIndicator.style.left = `${Math.round(target.left - 4)}px`;
+  dropIndicator.style.width = `${Math.max(24, Math.round(target.right - target.left + 8))}px`;
+}
+function applyBlockMove(state) {
+  if (!view || state.target == null) return;
+  // 按块 id 重新定位：拖拽期间若宿主同步过文档，索引可能已经偏移。
+  const from = view.state.doc.content.content.findIndex(node => node.attrs.id === state.blockId);
+  if (from < 0) return;
+  const tr = moveBlock(view.state, from, state.target);
+  if (!tr) return;
+  view.dispatch(tr);
+  view.focus();
+}
+function cancelDrag(commit = false) {
+  if (!drag) return;
+  const state = drag; drag = null;
+  state.handle.removeEventListener('pointermove', state.onMove);
+  state.handle.removeEventListener('pointerup', state.onUp);
+  state.handle.removeEventListener('pointercancel', state.onCancel);
+  try { state.handle.releasePointerCapture(state.pointerId); } catch (_) {}
+  state.source.classList.remove('wf-drag-source');
+  document.body.classList.remove('wf-dragging');
+  dropIndicator.hidden = true;
+  // 拖完紧跟的 click 不该再打开块菜单；超时自动失效，避免吃掉下一次正常点击。
+  if (state.moved) dragClickGuardUntil = Date.now() + 300;
+  if (commit && state.moved) applyBlockMove(state);
+}
+function startBlockDrag(event, blockView) {
+  if (!editable() || !view || drag || event.button !== 0 || event.isPrimary === false) return;
+  const pos = blockView.getPos();
+  if (typeof pos !== 'number') return;
+  const nodes = view.state.doc.content.content;
+  let fromIndex = -1, offset = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    if (offset === pos) { fromIndex = i; break; }
+    offset += nodes[i].nodeSize;
+  }
+  if (fromIndex < 0 || nodes.length < 2) return;
+  const handle = blockView.gutter;
+  const state = {
+    handle, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, lastY: event.clientY,
+    fromIndex, blockId: nodes[fromIndex].attrs.id, target: null, moved: false, source: blockView.dom,
+  };
+  state.onMove = e => {
+    if (drag !== state || e.pointerId !== state.pointerId) return;
+    if (!state.moved && Math.hypot(e.clientX - state.startX, e.clientY - state.startY) < DRAG_THRESHOLD) return;
+    e.preventDefault();
+    if (!state.moved) {
+      state.moved = true;
+      // 只在真正进入拖拽时才收菜单：单击把手照旧由 click 打开块菜单，
+      // 不能多发一次 popupChanged 让原生面板闪一下。
+      closePopups();
+      document.body.classList.add('wf-dragging');
+      state.source.classList.add('wf-drag-source');
+    }
+    state.lastY = e.clientY;
+    updateDropIndicator(state, e.clientY);
+  };
+  state.onUp = e => { if (drag === state && e.pointerId === state.pointerId) cancelDrag(true); };
+  state.onCancel = () => {
+    if (drag !== state) return;
+    cancelDrag(false);
+    pointerSelecting = false; updateToolbar();
+  };
+  drag = state;
+  try { handle.setPointerCapture(event.pointerId); } catch (_) { drag = null; return; }
+  handle.addEventListener('pointermove', state.onMove);
+  handle.addEventListener('pointerup', state.onUp);
+  handle.addEventListener('pointercancel', state.onCancel);
+}
+
 class BlockView {
   constructor(node, _, getPos) {
     this.node = node; this.getPos = getPos;
     this.dom = document.createElement('div'); this.dom.dataset.wfBlock = '';
-    this.gutter = button('⋮⋮', '段落操作', () => showBlockMenu(this)); this.gutter.className = 'wf-block-handle';
+    this.gutter = button('⋮⋮', '段落操作', () => { if (!consumeDragClick()) showBlockMenu(this); });
+    this.gutter.className = 'wf-block-handle';
+    this.gutter.addEventListener('pointerdown', event => startBlockDrag(event, this));
     this.marker = button('', '切换检查项', () => {
       if (!editable() || this.node.attrs.kind !== 'checklist') return;
       const checked = !this.node.attrs.checked;
@@ -446,18 +641,28 @@ class BlockView {
       const rect = this.reminder.getBoundingClientRect();
       action('reminder', { blockID: this.node.attrs.id, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
     }); this.reminder.className = 'wf-reminder';
-    this.dom.append(this.gutter, this.marker, this.contentDOM, this.reminder); this.update(node);
+    // 检查项行尾删除：与旧 NativeTextView 的 drawChecklistDeleteGlyph 同一行为契约
+    // （hover 哪一行显示哪一行、点一下删整项、无确认、走编辑器 undo）。删除是通用
+    // 操作，不受 checklistReminders 开关约束——笔记宿主该开关为 false。
+    this.deleteButton = button('', '删除检查事项', () => deleteChecklistBlock(this));
+    this.deleteButton.className = 'wf-delete';
+    this.deleteButton.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M6 4V2.4h4V4M4.2 4l.65 9.1h6.3L11.8 4M6.5 6.6v4.4M9.5 6.6v4.4"/></svg>';
+    this.dom.append(this.gutter, this.marker, this.contentDOM, this.reminder, this.deleteButton); this.update(node);
   }
   update(node) {
     if (node.type.name !== 'wf_block') return false;
     this.node = node;
     const attrs = node.attrs;
+    if (this.boundID !== attrs.id) { if (this.boundID) markerRegistry.delete(this.boundID); this.boundID = attrs.id; }
+    if (attrs.id) markerRegistry.set(attrs.id, this.marker);
     this.dom.dataset.blockId = attrs.id || ''; this.dom.dataset.kind = attrs.kind;
     this.dom.className = `wf-block wf-${attrs.kind}${attrs.checked ? ' wf-checked' : ''}${emptyBlock(node) ? ' wf-is-empty' : ''}`;
     this.dom.style.setProperty('--indent', attrs.indentLevel || 0);
     this.dom.style.textAlign = attrs.align || 'left';
     this.contentDOM.style.fontSize = attrs.kind === 'heading' ? `${attrs.level === 1 ? 18 : attrs.level === 2 ? 16 : 14}px` : attrs.bodySize ? `${attrs.bodySize}px` : '';
-    this.marker.textContent = attrs.kind === 'bullet' ? '•' : attrs.kind === 'checklist' ? (attrs.checked ? '✓' : '') : attrs.kind === 'ordered' ? '1.' : '';
+    // ordered 直接写真值编号：update() 会重置 marker 文本，写已知值就省掉
+    // updateNumbering 在同一帧里的第二次写（以前列表尾部打字每键白写一遍）。
+    this.marker.textContent = attrs.kind === 'bullet' ? '•' : attrs.kind === 'checklist' ? (attrs.checked ? '✓' : '') : attrs.kind === 'ordered' ? `${numberedMarkers.get(attrs.id) ?? 1}.` : '';
     this.marker.disabled = !editable(); this.marker.tabIndex = -1;
     this.marker.setAttribute('role', attrs.kind === 'checklist' ? 'checkbox' : 'presentation');
     this.marker.setAttribute('aria-checked', String(!!attrs.checked));
@@ -466,11 +671,17 @@ class BlockView {
     this.gutter.hidden = !editable();
     this.reminder.hidden = !editable() || attrs.kind !== 'checklist' || !settings.checklistReminders;
     this.reminder.classList.toggle('has-reminder', attrs.checklist?.reminderAt != null);
+    // 只依赖同步的 attrs.kind。不能挂 editable()：NodeView 首次构造可能早于
+    // current/settings 到达，一旦那时被设成 hidden，文档未变时 update() 不会重跑，
+    // 按钮就永久隐藏了（真机上表现为「功能没实现」）。只读由 CSS .wf-readonly 隐藏，
+    // 点击时 deleteChecklistBlock 还有 editable() 兜底。configure() 也会刷新这一项。
+    this.deleteButton.hidden = attrs.kind !== 'checklist';
     this.contentDOM.dataset.placeholder = settings.placeholder || '';
     return true;
   }
   stopEvent(event) { return !!event.target.closest('button'); }
   ignoreMutation(mutation) { return mutation.type !== 'selection' && !this.contentDOM.contains(mutation.target); }
+  destroy() { if (this.boundID && markerRegistry.get(this.boundID) === this.marker) markerRegistry.delete(this.boundID); }
 }
 
 class EmbedView {
@@ -584,36 +795,50 @@ function updateNumbering() {
   for (let index = 0; index < nodes.length; index++) {
     if (nodes[index] !== numberedNodes[index]) { firstChanged = index; break; }
   }
-  const markers = new Map();
+  const markers = new Map(), markerEls = new Map();
   blocks.forEach((attrs, index) => {
     if (numbers[index] == null) return;
     markers.set(attrs.id, numbers[index]);
     if (firstChanged >= 0 && index < firstChanged) return;
-    // 块节点被重建（新插入或 nodeView 重绘）时，即使编号相同也要写回 DOM。
-    if (nodes[index] === numberedNodes[index] && numberedMarkers.get(attrs.id) === numbers[index]) return;
-    const marker = document.querySelector(`[data-block-id="${attrs.id}"] .wf-marker`);
-    if (marker) marker.textContent = `${numbers[index]}.`;
+    // 元素与编号都没变就跳过写 DOM（BlockView.update 已直接写真值编号）；
+    // 元素重建（新插入或 nodeView 重绘）时即使编号相同也要写回。
+    const marker = markerRegistry.get(attrs.id);
+    if (!marker) return;
+    markerEls.set(attrs.id, marker);
+    if (numberedMarkerEls.get(attrs.id) === marker && numberedMarkers.get(attrs.id) === numbers[index]) return;
+    marker.textContent = `${numbers[index]}.`;
   });
-  numberedNodes = nodes.slice(); numberedMarkers = markers;
+  numberedNodes = nodes.slice(); numberedMarkers = markers; numberedMarkerEls = markerEls;
 }
 const toolbar = document.createElement('div'); toolbar.id = 'wf-selection'; toolbar.hidden = true;
 document.body.append(toolbar);
 // 拖动选字期间压住浮条：selectionChanged 在拖动中持续触发，松开鼠标才算选完。
 let pointerSelecting = false;
+let dismissedToolbarSelection;
 function updateToolbar() {
-  if (!view || view.state.selection.empty || !editable() || !settings.selectionToolbar || view.composing || pointerSelecting) { toolbar.hidden = true; reportRegions(); return; }
+  if (dismissedToolbarSelection && !view?.state.selection.eq(dismissedToolbarSelection)) dismissedToolbarSelection = undefined;
+  if (!view || view.state.selection.empty || !editable() || !settings.selectionToolbar || view.composing ||
+      pointerSelecting || dismissedToolbarSelection) { toolbar.hidden = true; reportRegions(); return; }
   toolbar.replaceChildren();
   for (const [text, name, title] of [['B', 'bold', '加粗'], ['I', 'italic', '斜体'], ['U', 'underline', '下划线'], ['S', 'strikethrough', '删除线'], ['▰', 'highlight', '高亮']]) toolbar.append(button(text, title, () => format(name)));
   for (const item of settings.selectionActions || []) toolbar.append(button(item.title, item.title, () => action('selectionAction', { id: item.id, selection: snapshot() })));
   toolbar.hidden = false;
-  const rect = view.coordsAtPos(view.state.selection.from), tail = view.coordsAtPos(view.state.selection.to), bounds = visibleBounds();
-  toolbar.style.left = `${Math.max(4, Math.min(rect.left, innerWidth - toolbar.offsetWidth - 4))}px`;
-  // 第一行选字时上方放不下：翻到选区下方，别钳到容器顶部压住第一行文字。
-  // 跨行选区以末尾行的下沿为锚，浮条不会落在选区中间。
-  const height = toolbar.offsetHeight, above = rect.top - height - 6, below = tail.bottom + 6;
-  const limit = bounds.bottom - height - 4;
-  const preferred = above >= bounds.top + 4 ? Math.min(above, limit) : below;
-  toolbar.style.top = `${Math.max(bounds.top + 4, Math.min(preferred, limit))}px`;
+  const { from, to } = view.state.selection;
+  const start = view.domAtPos(from, 1), end = view.domAtPos(to, -1);
+  const range = document.createRange();
+  range.setStart(start.node, start.offset);
+  range.setEnd(end.node, end.offset);
+  const rect = range.getBoundingClientRect(), bounds = visibleBounds();
+  const topEdge = Math.max(0, bounds.top) + 4, bottomEdge = Math.min(innerHeight, bounds.bottom) - 4;
+  const height = toolbar.offsetHeight, above = rect.top - height - 6, below = rect.bottom + 6;
+  const top = above >= topEdge ? above : below;
+  // 选区两侧都放不下时收起浮条，避免贴着视口边缘盖住选中文字。
+  if (rect.bottom <= topEdge || rect.top >= bottomEdge || top < topEdge || top + height > bottomEdge) {
+    toolbar.hidden = true;
+  } else {
+    toolbar.style.left = `${Math.max(4, Math.min(rect.left, innerWidth - toolbar.offsetWidth - 4))}px`;
+    toolbar.style.top = `${top}px`;
+  }
   reportRegions();
 }
 function visibleBounds() { return settings.viewport || { top: 0, bottom: innerHeight }; }
@@ -699,6 +924,7 @@ function configure(next) {
   }
   const readOnlyChanged = Object.hasOwn(next, 'readOnly') && !!next.readOnly !== !!settings.readOnly;
   settings = { ...settings, ...next };
+  if (settings.readOnly) cancelDrag(false);
   document.body.classList.toggle('wf-grows', !!settings.grows); document.body.classList.toggle('wf-readonly', !!settings.readOnly);
   const css = document.documentElement.style;
   css.setProperty('--wf-body-size', `${settings.bodyFontSize || 14}px`);
@@ -706,6 +932,8 @@ function configure(next) {
   css.setProperty('--wf-marker-left', `${(settings.markerLeft ?? 5) - 5}px`);
   if (settings.textColor) css.setProperty('--wf-text', settings.textColor);
   if (settings.accentColor) css.setProperty('--wf-accent', settings.accentColor);
+  // 行内日期提醒的高亮墨色（设置页可选，默认金黄）。
+  if (settings.reminderInk) css.setProperty('--wf-reminder-ink', settings.reminderInk);
   document.documentElement.dataset.appearance = settings.dark ? 'dark' : 'light';
   if (view) {
     const props = { editable: () => !settings.readOnly,
@@ -721,7 +949,14 @@ function configure(next) {
     const blocks = new Map(view.state.doc.content.content.map(node => [node.attrs.id, node]));
     for (const element of document.querySelectorAll('[data-wf-block]')) {
       const desc = blocks.get(element.dataset.blockId);
-      if (desc) { element.querySelector('.wf-marker').disabled = !!settings.readOnly; element.querySelector('.wf-block-handle').hidden = !!settings.readOnly; element.querySelector('.wf-reminder').hidden = !!settings.readOnly || !settings.checklistReminders || desc.attrs.kind !== 'checklist'; }
+      if (desc) {
+        element.querySelector('.wf-marker').disabled = !!settings.readOnly;
+        element.querySelector('.wf-block-handle').hidden = !!settings.readOnly;
+        element.querySelector('.wf-reminder').hidden = !!settings.readOnly || !settings.checklistReminders || desc.attrs.kind !== 'checklist';
+        // 与上面三项一起刷新：漏掉这一项会让首次构造时被 hidden 的删除按钮永远不再出现。
+        const deleteButton = element.querySelector('.wf-delete');
+        if (deleteButton) deleteButton.hidden = desc.attrs.kind !== 'checklist';
+      }
     }
   }
   reportHeight();
@@ -817,7 +1052,7 @@ function command(name, payload = {}) {
 window.workfollowEditor = {
   load(packet) {
     if (!view) return false;
-    loading = true; pendingCommit = false; closePopups(); painter = undefined;
+    loading = true; pendingCommit = false; closePopups(); painter = undefined; cancelDrag(false);
     clearTimeout(ghostTimer); clearGhost(false);
     sentBlocks = null; sentOrder = null; // 基线作废：下一次提交转全量，原生同步重建块缓存
     const same = current?.documentID === packet.documentID;
@@ -842,6 +1077,7 @@ window.workfollowEditor = {
   ghostState: () => ({ request: ghostRequest, anchor: view?.state.selection.head ?? -1,
     documentID: current?.documentID, epoch: current?.epoch, text: ghost.text }),
   serializeCount: getSerializeCount,
+  highlightCount: () => highlightRuns, highlightAutoCount: () => highlightAutos,
   applyGhost,
   applySelection(payload) {
     if (!editable() || payload.documentID !== current.documentID || payload.epoch !== current.epoch || payload.revision !== revision) return false;
@@ -851,6 +1087,12 @@ window.workfollowEditor = {
     else command('insertText', { text: (payload.inserting ? '\n' : '') + payload.text }); return true;
   },
 };
+// 拖拽把手是 button，焦点未必在编辑器上，Esc 必须在捕获阶段拦住；
+// 同时阻止冒泡，避免 ProseMirror 再把 escapePressed 发给宿主。
+document.addEventListener('keydown', event => {
+  if (!drag || event.key !== 'Escape') return;
+  event.preventDefault(); event.stopPropagation(); cancelDrag(false);
+}, true);
 document.addEventListener('pointerdown', event => {
   if (!event.target.closest('.wf-menu,.wf-block-handle,#wf-selection')) closePopups();
   // 工具条/菜单/块把手自身不算选字起点，否则点击浮条按钮也会压住它。
@@ -866,12 +1108,30 @@ document.addEventListener('pointerover', event => {
   const date = event.target.closest('.wf-inline-date');
   if (date && view && editable() && !popup?.query) {
     const from = view.posAtDOM(date, 0), to = view.posAtDOM(date, date.childNodes.length);
-    const text = date.textContent || '', blockID = view.state.doc.resolve(from).parent.attrs.id;
+    const text = date.textContent || '', parent = view.state.doc.resolve(from).parent;
+    const blockID = parent.attrs.id, reminderAt = parent.attrs.checklist?.reminderAt;
+    const reminderTaskID = parent.attrs.checklist?.reminderTaskID;
     clearTimeout(hoverTimer); hoveredLink = undefined;
     hoverTimer = setTimeout(() => {
       if (!date.isConnected) return;
       const rect = date.getBoundingClientRect();
-      openMenu([{ id: 'setReminder', title: `为「${text}」设置提醒` }], () => date.getBoundingClientRect(), () => {
+      // 已设提醒直接回显在条目里，否则看不出这个日期挂了提醒。
+      const title = reminderAt != null
+        ? `已设提醒 ${formatReminderStamp(reminderAt)}，点击调整`
+        : `为「${text}」设置提醒`;
+      const items = [{ id: 'setReminder', title }];
+      // 关联待办是提醒的可见出口，菜单直达；任务被删后允许从菜单重建。
+      if (reminderTaskID) items.push({ id: 'openReminderTask', title: '打开待办任务' });
+      else if (reminderAt != null && settings.inlineDateTaskLink) items.push({ id: 'createReminderTask', title: '设置待办任务' });
+      openMenu(items, () => date.getBoundingClientRect(), item => {
+        if (item.id === 'openReminderTask') {
+          action('openLink', { url: `workfollow://task/${reminderTaskID}` });
+          return;
+        }
+        if (item.id === 'createReminderTask') {
+          action('inlineDateReminderTask', { text, blockID });
+          return;
+        }
         action('inlineDateReminder', { text, blockID, from, to,
           rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
       });
@@ -909,7 +1169,12 @@ document.addEventListener('pointerup', () => {
   if (painter && view && !view.state.selection.empty) command('applyStyle');
 });
 window.addEventListener('resize', () => { paintMenu(); updateToolbar(); reportHeight(); });
-window.addEventListener('scroll', () => { if (popup && typeof popup.anchor === 'function') paintMenu(); else closePopups(); }, true);
+window.addEventListener('scroll', () => {
+  // 指示线用视口坐标，滚动后要按同一指针位置重算，否则线会停在旧位置。
+  if (drag?.moved) updateDropIndicator(drag, drag.lastY);
+  if (popup && typeof popup.anchor === 'function') paintMenu(); else closePopups();
+  if (view && !view.state.selection.empty) updateToolbar();
+}, true);
 async function boot() {
   try {
     editor = await Editor.make().config(ctx => {
@@ -917,7 +1182,8 @@ async function boot() {
       ctx.set(defaultValueCtx, { type: 'json', value: { type: 'doc', content: [{ type: 'wf_block', attrs: { id: uuid() } }] } });
       ctx.set(editorViewOptionsCtx, { attributes: { role: 'textbox', 'aria-label': '正文编辑器', 'aria-multiline': 'true', spellcheck: 'false' } });
       ctx.set(nodeViewCtx, [['wf_block', (node, owner, getPos) => new BlockView(node, owner, getPos)], ['wf_embed', (node, owner, getPos) => new EmbedView(node, owner, getPos)]]);
-    }).use(schemaPlugins()).use(history).use($prose(markdownRules)).use(integration).create();
+    }).use(schemaPlugins()).use([historyProviderConfig, historyProviderPlugin])
+      .use($prose(markdownRules)).use(integration).create();
     view = editor.ctx.get(editorViewCtx); new ResizeObserver(reportHeight).observe(document.getElementById('root'));
     post({ event: 'ready' }); reportHeight();
   } catch (error) { console.error(error); post({ event: 'error', message: String(error) }); }

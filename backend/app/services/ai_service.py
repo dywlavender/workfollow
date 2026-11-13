@@ -22,7 +22,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 
 from app.ai_runtime.settings import AISettings as Settings
 from app.ai_runtime.protocols import endpoint
-from app.ai_runtime.prompts import MINUTES_RULES
+from app.ai_runtime.prompts import MINUTES_RULES, minutes_input
 from app.ai_runtime.workflows import KNOWLEDGE_RULES, KnowledgeRequest, NoteRewriteRequest, knowledge_result, note_rules
 from app.ai_runtime.failures import model_failure
 from app.schemas.ai import (
@@ -196,7 +196,7 @@ class TextAIService:
 
     async def write_minutes(self, lines):
         usage = self._usage()
-        text = await self._invoke(MINUTES_RULES, {"lines": lines}, usage)
+        text = await self._invoke(MINUTES_RULES, minutes_input(lines), usage)
         return AIGenerateResponse(text=text, usage=usage)
 
     async def answer_knowledge(self, request):

@@ -133,6 +133,32 @@ final class ChecklistEditorInteractionTests: XCTestCase {
             eveningPresets[2].date, now: evening, calendar: calendar), "后天")
     }
 
+    /// 翻页只在原位伸缩：锚点在上方时底边贴住不动向上长，在下方时顶边贴住向下长，
+    /// 不再因日历页更高而翻到另一侧（表现为弹框消失后在别处重新出现）。
+    func testReminderPanelResizeKeepsAnchorSidePinned() {
+        let bounds = NSRect(x: 0, y: 0, width: 800, height: 1000)
+        let safe = bounds.insetBy(dx: 8, dy: 8)
+        let placed = NSRect(x: 400, y: 600, width: 252, height: 240)
+
+        // 锚点在下方（面板悬于锚点上方）：变高时底边不动、向上扩。
+        let grown = ChecklistItemReminderPanel.pinnedFrame(placed: placed,
+            size: CGSize(width: 252, height: 330), side: .above, bounds: bounds)
+        XCTAssertEqual(grown.minY, placed.minY)
+        XCTAssertEqual(grown.maxY, placed.minY + 330)
+        XCTAssertEqual(grown.width, placed.width)
+        // 锚点在上方（面板挂于锚点下方）：变高时顶边不动、向下扩。
+        let below = ChecklistItemReminderPanel.pinnedFrame(placed: placed,
+            size: CGSize(width: 252, height: 330), side: .below, bounds: bounds)
+        XCTAssertEqual(below.maxY, placed.maxY)
+        XCTAssertEqual(below.minY, placed.maxY - 330)
+        // 向上扩越出安全区：整体挤回可视范围，内容仍完整。
+        let clamped = ChecklistItemReminderPanel.pinnedFrame(placed:
+            NSRect(x: 400, y: safe.maxY - 240, width: 252, height: 240),
+            size: CGSize(width: 252, height: 330), side: .above, bounds: bounds)
+        XCTAssertTrue(safe.contains(clamped))
+        XCTAssertEqual(clamped.height, 330)
+    }
+
     func testCalendarSelectionCombinesDayWithHalfHourTime() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!

@@ -2,7 +2,9 @@
 """Build and update the local daily app; task data is never modified here."""
 
 import argparse
+import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import plistlib
@@ -297,9 +299,219 @@ def status(app):
     print(f"签名：{mode}")
 
 
+# ---------------------------------------------------------------------------
+# 发布：local-app.py release
+#
+# 面向「另一台 Apple Silicon Mac」的应用内自更新通道：
+#   dist/manifest.json + 全量包 + 热更包（与上一版发布做文件级 diff）。
+# 客户端（设置 → 软件更新）把更新目录指向这里的同步副本，读 manifest、
+# 校验 sha256 后由 workfollowctl apply-update 落位。
+# ---------------------------------------------------------------------------
+
+
+def file_manifest(app):
+    """Contents/ 下每个文件的相对路径 + SHA-256。符号链接以链接目标串参与
+    哈希——diff 只关心「变没变」，客户端 zip 整包校验，不需要还原链接。"""
+    root = app / "Contents"
+    entries = []
+    for path in sorted(root.rglob("*")):
+        if path.name == ".DS_Store" or not (path.is_symlink() or path.is_file()):
+            continue
+        rel = "Contents/" + path.relative_to(root).as_posix()
+        if path.is_symlink():
+            payload = "symlink:" + os.readlink(path)
+            digest = hashlib.sha256(payload.encode()).hexdigest()
+        else:
+            digest = hashlib.sha256()
+            with path.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            digest = digest.hexdigest()
+        entries.append({"path": rel, "sha256": digest})
+    return entries
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def zip_full(app, output):
+    subprocess.run(["/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent",
+                    str(app), str(output)], check=True)
+
+
+def zip_hot(staging, output):
+    # 不带 --keepParent：zip 内以 Contents/… 开头，与热更清单一致。
+    subprocess.run(["/usr/bin/ditto", "-c", "-k", str(staging), str(output)], check=True)
+
+
+def newest_state(history):
+    """上一版发布状态（用于 diff）。没有 → 首次发布，只出全量包。"""
+    best = None
+    for path in history.glob("state-*.json"):
+        try:
+            state = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        build = state.get("build")
+        if isinstance(build, int) and (best is None or build > best["build"]):
+            best = state
+    return best
+
+
+def publish_release(dist, app, notes):
+    value = info(app)
+    version = value.get("CFBundleShortVersionString", "0.0.0")
+    build = int(value.get("CFBundleVersion", "0"))
+    dist.mkdir(parents=True, exist_ok=True)
+    history = dist / "history"
+    history.mkdir(exist_ok=True)
+    files = file_manifest(app)
+    with tempfile.TemporaryDirectory(prefix="wf-release-") as folder:
+        stage = Path(folder)
+        # 全量包：ditto --keepParent，zip 根是 WorkFollow.app/
+        full_name = f"WorkFollow-{version}-{build}-full.zip"
+        zip_full(app, stage / full_name)
+        full_sha = sha256_file(stage / full_name)
+        full_bytes = (stage / full_name).stat().st_size
+        shutil.copy2(stage / full_name, dist / full_name)
+
+        # 热更包：与上一版发布的文件清单 diff，只带变化的文件。
+        previous = newest_state(history)
+        hot = None
+        if previous:
+            changed = [entry for entry in files
+                       if previous.get("files", {}).get(entry["path"]) != entry["sha256"]]
+            if changed:
+                hot_stage = stage / "hot"
+                for entry in changed:
+                    source = app / entry["path"]
+                    destination = hot_stage / entry["path"]
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    if source.is_symlink():
+                        os.symlink(os.readlink(source), destination)
+                    else:
+                        shutil.copy2(source, destination, follow_symlinks=False)
+                hot_name = f"WorkFollow-{version}-{build}-hot.zip"
+                zip_hot(hot_stage, stage / hot_name)
+                hot = {"file": hot_name,
+                       "bytes": (stage / hot_name).stat().st_size,
+                       "sha256": sha256_file(stage / hot_name),
+                       "fromBuild": previous["build"], "files": changed}
+                shutil.copy2(stage / hot_name, dist / hot_name)
+
+        manifest = {
+            "format": 1,
+            "app": BUNDLE_ID,
+            "version": version,
+            "build": build,
+            "notes": notes or "常规更新。",
+            "releasedAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "packages": {"full": {"file": full_name, "bytes": full_bytes, "sha256": full_sha},
+                         "hot": hot},
+        }
+        (dist / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        (history / f"state-{version}-{build}.json").write_text(json.dumps(
+            {"version": version, "build": build,
+             "files": {entry["path"]: entry["sha256"] for entry in files}}), encoding="utf-8")
+        prune_release(dist, history, current_build=build, keep=3)
+    return manifest
+
+
+def release(args, destination, backup):
+    """发布流程：先像 update 一样给本机装上（狗粮），再产出 dist 发布目录。"""
+    number = args.build_number or next_build(destination)
+    if args.clean_build:
+        archived = archive_derived_data()
+        if archived:
+            print(f"已归档构建缓存：{archived}")
+    require_quit(destination)
+    dist = args.dist_dir.expanduser().absolute()
+    with tempfile.TemporaryDirectory(prefix="workfollow-daily-") as folder:
+        package = build(Path(folder) / "WorkFollow.app", number, args.signing_identity)
+        status(install(package, destination, backup))
+    manifest = publish_release(dist, destination, args.notes)
+    hot = manifest["packages"]["hot"]
+    print(f"发布目录：{dist}")
+    print(f"全量包：{manifest['packages']['full']['file']} "
+          f"({manifest['packages']['full']['bytes'] // (1024 * 1024)}M)")
+    if hot:
+        print(f"热更包：{hot['file']}（{hot['bytes'] // (1024 * 1024)}M，"
+              f"{len(hot['files'])} 个文件，基于 build {hot['fromBuild']}）")
+    else:
+        print("热更包：无（首次发布或内容无差异）")
+    print(f"清单：{dist / 'manifest.json'}")
+
+
+def prune_release(dist, history, current_build, keep=3):
+    """history 只留最近 keep 版状态；zip 按 build 号裁剪，同步目录别越攒越大。"""
+    states = []
+    for path in history.glob("state-*.json"):
+        try:
+            states.append(json.loads(path.read_text()))
+        except (OSError, json.JSONDecodeError):
+            continue
+    states.sort(key=lambda state: state.get("build", 0), reverse=True)
+    for state in states[keep:]:
+        (history / f"state-{state.get('version')}-{state.get('build')}.json").unlink()
+    keep_builds = {state.get("build") for state in states[:keep]} | {current_build}
+    for path in list(dist.glob("WorkFollow-*-full.zip")) + list(dist.glob("WorkFollow-*-hot.zip")):
+        match = re.fullmatch(r"WorkFollow-.*-(\d+)-(full|hot)\.zip", path.name)
+        if match and int(match.group(1)) not in keep_builds:
+            path.unlink()
+
+
+def release(args, destination, backup):
+    """发布流程：先像 update 一样给本机装上（狗粮），再产出 dist 发布目录。"""
+    number = args.build_number or next_build(destination)
+    if args.clean_build:
+        archived = archive_derived_data()
+        if archived:
+            print(f"已归档构建缓存：{archived}")
+    require_quit(destination)
+    dist = args.dist_dir.expanduser().absolute()
+    with tempfile.TemporaryDirectory(prefix="workfollow-daily-") as folder:
+        package = build(Path(folder) / "WorkFollow.app", number, args.signing_identity)
+        status(install(package, destination, backup))
+    manifest = publish_release(dist, destination, args.notes)
+    hot = manifest["packages"]["hot"]
+    print(f"发布目录：{dist}")
+    print(f"全量包：{manifest['packages']['full']['file']} "
+          f"({manifest['packages']['full']['bytes'] // (1024 * 1024)}M)")
+    if hot:
+        print(f"热更包：{hot['file']}（{hot['bytes'] // (1024 * 1024)}M，"
+              f"{len(hot['files'])} 个文件，基于 build {hot['fromBuild']}）")
+    else:
+        print("热更包：无（首次发布或内容无差异）")
+    print(f"清单：{dist / 'manifest.json'}")
+
+
+def prune_release(dist, history, current_build, keep=3):
+    """history 只留最近 keep 版状态；zip 按 build 号裁剪，同步目录别越攒越大。"""
+    states = []
+    for path in history.glob("state-*.json"):
+        try:
+            states.append(json.loads(path.read_text()))
+        except (OSError, json.JSONDecodeError):
+            continue
+    states.sort(key=lambda state: state.get("build", 0), reverse=True)
+    for state in states[keep:]:
+        (history / f"state-{state.get('version')}-{state.get('build')}.json").unlink()
+    keep_builds = {state.get("build") for state in states[:keep]} | {current_build}
+    for path in list(dist.glob("WorkFollow-*-full.zip")) + list(dist.glob("WorkFollow-*-hot.zip")):
+        match = re.fullmatch(r"WorkFollow-.*-(\d+)-(full|hot)\.zip", path.name)
+        if match and int(match.group(1)) not in keep_builds:
+            path.unlink()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["build", "install", "update", "rollback", "status"])
+    parser.add_argument("command", choices=["build", "install", "update", "release", "rollback", "status"])
     parser.add_argument("source", nargs="?", type=Path, help="install 使用的 .app")
     parser.add_argument("--destination", type=Path, default=DESTINATION)
     parser.add_argument("--backup-dir", type=Path, default=UPDATES / "previous")
@@ -308,6 +520,9 @@ def main():
     parser.add_argument("--signing-identity", default="-", help="本机可用的签名证书名称；默认本机签名")
     parser.add_argument("--clean-build", action="store_true",
                         help="把固定构建缓存改名归档，强制全量重编译（旧缓存保留，不删除）")
+    parser.add_argument("--dist-dir", type=Path, default=PROJECT.parent / "dist",
+                        help="发布目录（放进同步盘或手动拷到另一台电脑）")
+    parser.add_argument("--notes", help="本次更新的说明，会出现在另一台电脑的更新提示里")
     args = parser.parse_args()
     destination = args.destination.expanduser().absolute()
     backup = args.backup_dir.expanduser().absolute()
@@ -320,6 +535,8 @@ def main():
             if args.source is None:
                 parser.error("install 需要指定 .app 路径")
             status(install(args.source.expanduser().absolute(), destination, backup))
+        elif args.command == "release":
+            release(args, destination, backup)
         else:
             number = args.build_number or next_build(destination)
             if args.clean_build:
